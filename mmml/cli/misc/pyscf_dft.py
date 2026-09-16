@@ -17,7 +17,7 @@ from pathlib import Path
 
 
 def build_parser() -> argparse.ArgumentParser:
-    from mmml.interfaces.pyscf4gpuInterface.calcs import build_parser as _build_parser
+    from mmml.interfaces.pyscf4gpuInterface.cli_parser import build_parser as _build_parser
 
     return _build_parser()
 

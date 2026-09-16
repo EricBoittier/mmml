@@ -4,7 +4,7 @@ import sys
 
 
 def build_parser():
-    from mmml.models.kernnn.training import build_parser as _bp
+    from mmml.models.kernnn.args import build_train_parser as _bp
 
     return _bp()
 

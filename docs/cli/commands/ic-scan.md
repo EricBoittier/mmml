@@ -3,6 +3,18 @@
 Bond/angle/dihedral scans (1D or N-D) for QM/ML.
 
 
+Set `geometry_mode: constrained-relax` in the YAML for a relaxed scan (active
+torsions held with ASE `FixInternals`, other coordinates FIRE- or
+BFGS-minimized). That mode needs `evaluate: energy` and cannot be combined with
+`--prepare-only`.
+
+```bash
+mmml ic-scan \
+  --config examples/ic_scan/acem_dihedrals_relaxed.yaml \
+  --output artifacts/ic_scan/acem_xtb_relaxed \
+  --overwrite
+```
+
 ## Usage
 
 ```bash
@@ -35,28 +47,16 @@ Other options:
                    evaluate)
 ```
 
-Set `geometry_mode: constrained-relax` in the YAML for a relaxed scan (active
-torsions held with ASE `FixInternals`, other coordinates FIRE- or
-BFGS-minimized). That mode needs `evaluate: energy` and cannot be combined with
-`--prepare-only`. Details: [ic-scan](../../ic-scan-design.md).
-
 ## Visual examples
+
+![ACEM methyl rotor: rigid 1-fold leak vs relaxed 3-fold](../../images/plots/acem-methyl-scan.png)
 
 ![Trialanine PES with force-annotated conformers](../../images/povray-overlays/trialanine_pes_with_povray.png)
 
-Relaxed methyl scans (3-fold ACEM rotor, atom indices): [ic-scan](../../ic-scan-design.md).
+## Related docs
 
-```bash
-mmml ic-scan \
-  --config examples/ic_scan/acem_dihedrals_relaxed.yaml \
-  --output artifacts/ic_scan/acem_xtb_relaxed \
-  --overwrite
-```
-
-## Related
-
-- [Internal-coordinate scans](../../ic-scan-design.md)
-- `examples/ic_scan/acem_dihedrals_relaxed.yaml`
+- [Internal-coordinate scan design](../../ic-scan-design.md)
+- [Scientific code policy](../../scientific-code.md)
 
 ---
 

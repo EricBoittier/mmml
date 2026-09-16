@@ -20,7 +20,11 @@ class CommandSpec:
     removal_date: str | None = None
     note: str | None = None
     parser_module: str | None = None
-    """Import path for ``build_parser`` when different from ``module``."""
+    """Import path for ``build_parser`` when different from ``module``.
+
+    Must be argparse-only. Do not point this at JAX/PySCF training or
+    evaluation modules: ``mmml <cmd> --help`` and docs generation import it.
+    """
 
 
 # Keep in sync with ``mmml.cli.__main__`` dispatch and ``MMML_COMMANDS``.
@@ -80,7 +84,7 @@ COMMAND_REGISTRY: tuple[CommandSpec, ...] = (
         "mmml.cli.misc.prepare_mm_dataset",
         "Assign CGenFF types/charges to a dimer NPZ (hybrid ML/MM)",
     ),
-    CommandSpec("pyscf-dft", "mmml.cli.misc.pyscf_dft", "GPU DFT (energy, gradient, hessian, …)", parser_module="mmml.interfaces.pyscf4gpuInterface.calcs"),
+    CommandSpec("pyscf-dft", "mmml.cli.misc.pyscf_dft", "GPU DFT (energy, gradient, hessian, …)"),
     CommandSpec("pyscf-mp2", "mmml.cli.misc.pyscf_mp2", "GPU MP2"),
     CommandSpec("pyscf-evaluate", "mmml.cli.misc.pyscf_evaluate", "Batch E/F/D/ESP evaluation"),
     CommandSpec("pyscf-evaluate-mp2", "mmml.cli.misc.pyscf_evaluate_mp2", "Batch MP2 evaluation"),
@@ -131,20 +135,18 @@ COMMAND_REGISTRY: tuple[CommandSpec, ...] = (
         "CHARMM PSF charges vs joint ML dipoles/ESP",
     ),
     CommandSpec("cross-check", "mmml.cli.misc.cross_check", "Supplementary QC cross-check"),
-    CommandSpec("efield-train", "mmml.cli.misc.efield_train", "Train external electric-field PhysNet", parser_module="mmml.models.efield.training"),
-    CommandSpec("efield-evaluate", "mmml.cli.misc.efield_evaluate", "Evaluate external electric-field PhysNet", parser_module="mmml.models.efield.evaluate"),
+    CommandSpec("efield-train", "mmml.cli.misc.efield_train", "Train external electric-field PhysNet"),
+    CommandSpec("efield-evaluate", "mmml.cli.misc.efield_evaluate", "Evaluate external electric-field PhysNet"),
     CommandSpec("efield-md", "mmml.cli.misc.efield_md", "MD with external electric-field PhysNet"),
     CommandSpec(
         "kernnn-train",
         "mmml.cli.misc.kernnn_train",
         "Train KerNN kernel Softplus MLP (E/F)",
-        parser_module="mmml.models.kernnn.training",
     ),
     CommandSpec(
         "kernnn-evaluate",
         "mmml.cli.misc.kernnn_evaluate",
         "Evaluate KerNN checkpoint",
-        parser_module="mmml.models.kernnn.evaluate",
     ),
     CommandSpec("active-learning", "mmml.cli.misc.active_learning", "Sample structures for re-labeling"),
     CommandSpec(
@@ -164,7 +166,6 @@ COMMAND_REGISTRY: tuple[CommandSpec, ...] = (
         "sample-diverse-xyz",
         "mmml.generate.sample",
         "Pick diverse structures (SOAP) → NPZ",
-        parser_module="mmml.generate.sample",
     ),
     CommandSpec("gui", "mmml.cli.gui", "Molecular viewer GUI"),
     CommandSpec(

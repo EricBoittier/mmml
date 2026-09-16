@@ -78,6 +78,48 @@ def test_parsers_with_flags_count():
     assert len(parsers_with_flags()) >= 30
 
 
+def test_help_parsers_do_not_import_training_stacks():
+    """Docs/`--help` must not import JAX training modules or gpu4pyscf calcs."""
+    import subprocess
+    import sys
+
+    script = """
+import sys
+from mmml.cli.parser_utils import get_subcommand_parser
+
+for cmd in (
+    "efield-train",
+    "efield-evaluate",
+    "kernnn-train",
+    "kernnn-evaluate",
+    "pyscf-dft",
+):
+    parser = get_subcommand_parser(cmd)
+    assert parser is not None, cmd
+
+banned = (
+    "mmml.models.efield.training",
+    "mmml.models.efield.evaluate",
+    "mmml.models.kernnn.training",
+    "mmml.models.kernnn.evaluate",
+    "mmml.interfaces.pyscf4gpuInterface.calcs",
+)
+loaded = [name for name in banned if name in sys.modules]
+assert not loaded, loaded
+"""
+    proc = subprocess.run(
+        [sys.executable, "-c", script],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert proc.returncode == 0, proc.stderr or proc.stdout
+    assert "CUDA graph capture" not in proc.stdout
+    assert "JAX devices:" not in proc.stdout
+    assert "CUDA graph capture" not in proc.stderr
+    assert "JAX devices:" not in proc.stderr
+
+
 def test_hard_exit_success_uses_system_exit():
     with pytest.raises(SystemExit) as exc:
         cli_main._hard_exit(0)

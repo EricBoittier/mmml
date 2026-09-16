@@ -6,7 +6,6 @@ Optional PhysNet teacher distillation via ``--teacher-checkpoint``.
 
 from __future__ import annotations
 
-import argparse
 import json
 import sys
 import time
@@ -18,6 +17,7 @@ import jax.numpy as jnp
 import numpy as np
 import optax
 
+from mmml.models.kernnn.args import build_train_parser as build_parser
 from mmml.models.kernnn.checkpoint import init_params, save_checkpoint
 from mmml.models.kernnn.dihedrals import h2co_hcoh_dihedral
 from mmml.models.kernnn.distances import (
@@ -35,122 +35,6 @@ from mmml.models.physnetjax.physnetjax.training.distill import blend_regression_
 from mmml.utils.cli_args import exit_if_unknown_long_options
 
 EV_TO_KCAL_MOL = 23.060541945
-
-_TRAIN_DEFAULTS = {
-    "data": None,
-    "train_npz": None,
-    "valid_npz": None,
-    "test_npz": None,
-    "workdir": "artifacts/kernnn",
-    "ntrain": 3200,
-    "nvalid": 400,
-    "seed": 42,
-    "n_hidden": 64,
-    "batch_size": 64,
-    "learning_rate": 0.005,
-    "f_weight": 10.0,
-    "epochs": 1000,
-    "patience": 200,
-    "ema_decay": 0.999,
-    "kernel": "k33",
-    "distance_scheme": "abcc",
-    "architecture": "ffnet",
-    "teacher_checkpoint": None,
-    "distill_alpha": 1.0,
-    "teacher_energy_offset": None,
-    "no_align_teacher_energy": False,
-    "teacher_align_n": 256,
-}
-
-
-def build_parser() -> argparse.ArgumentParser:
-    d = _TRAIN_DEFAULTS
-    p = argparse.ArgumentParser(
-        description="Train KerNN (kernel Softplus MLP) on NPZ (R, E, F)"
-    )
-    p.add_argument(
-        "--data",
-        type=str,
-        default=d["data"],
-        help="Single NPZ with R,E,F (random train/valid/test split)",
-    )
-    p.add_argument("--train-npz", type=str, default=d["train_npz"], help="Train split NPZ")
-    p.add_argument("--valid-npz", type=str, default=d["valid_npz"], help="Valid split NPZ")
-    p.add_argument("--test-npz", type=str, default=d["test_npz"], help="Optional test split NPZ")
-    p.add_argument("--workdir", type=str, default=d["workdir"], help="Output directory")
-    p.add_argument("--ntrain", type=int, default=d["ntrain"], help="Training size when using --data")
-    p.add_argument("--nvalid", type=int, default=d["nvalid"], help="Validation size when using --data")
-    p.add_argument("--seed", type=int, default=d["seed"], help="RNG seed for split/init")
-    p.add_argument("--n-hidden", type=int, default=d["n_hidden"], help="Hidden layer width")
-    p.add_argument("--batch-size", type=int, default=d["batch_size"])
-    p.add_argument("--learning-rate", type=float, default=d["learning_rate"])
-    p.add_argument("--f-weight", type=float, default=d["f_weight"], help="Force loss weight")
-    p.add_argument("--epochs", type=int, default=d["epochs"])
-    p.add_argument(
-        "--patience",
-        type=int,
-        default=d["patience"],
-        help="Early-stop after this many non-improving validation epochs",
-    )
-    p.add_argument("--ema-decay", type=float, default=d["ema_decay"])
-    p.add_argument(
-        "--kernel",
-        type=str,
-        default=d["kernel"],
-        choices=sorted(KERNEL_FNS),
-        help="1D kernel name (default k33)",
-    )
-    p.add_argument(
-        "--list-kernels",
-        action="store_true",
-        help="Print the table of available 1D kernel functions and exit",
-    )
-    p.add_argument(
-        "--distance-scheme",
-        type=str,
-        default=d["distance_scheme"],
-        choices=sorted(DISTANCE_FNS),
-        help="Distance descriptor: abcc, abcc_sym, form (6 atoms), acem (9 atoms)",
-    )
-    p.add_argument(
-        "--architecture",
-        type=str,
-        default=d["architecture"],
-        choices=("ffnet", "dual"),
-        help="ffnet (default) or dual (ABCC + dihedral only)",
-    )
-    p.add_argument(
-        "--teacher-checkpoint",
-        type=str,
-        default=d["teacher_checkpoint"],
-        help="PhysNet checkpoint (JSON/Orbax) used as distillation teacher",
-    )
-    p.add_argument(
-        "--distill-alpha",
-        type=float,
-        default=d["distill_alpha"],
-        help="Blend GT vs teacher: loss = alpha*GT + (1-alpha)*teacher (1=pure GT)",
-    )
-    p.add_argument(
-        "--teacher-energy-offset",
-        type=float,
-        default=d["teacher_energy_offset"],
-        help="Add this constant (eV) to teacher energies before distill loss "
-        "(overrides auto-align). Use when PhysNet atom refs shift the zero.",
-    )
-    p.add_argument(
-        "--no-align-teacher-energy",
-        action="store_true",
-        default=d["no_align_teacher_energy"],
-        help="Do not auto-fit an additive teacher energy offset vs GT",
-    )
-    p.add_argument(
-        "--teacher-align-n",
-        type=int,
-        default=d["teacher_align_n"],
-        help="Number of train structures used to estimate teacher energy offset",
-    )
-    return p
 
 
 def calibrate_teacher_energy_offset(

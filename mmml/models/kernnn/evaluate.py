@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import argparse
 import json
 import sys
 from pathlib import Path
@@ -11,60 +10,13 @@ import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import numpy as np
 
+from mmml.models.kernnn.args import build_evaluate_parser as build_parser
 from mmml.models.kernnn.checkpoint import load_checkpoint
 from mmml.models.kernnn.kernels import print_kernel_table
 from mmml.models.kernnn.model import energy_and_forces
 from mmml.utils.cli_args import exit_if_unknown_long_options
 
 EV_TO_KCAL_MOL = 23.060541945
-
-_EVAL_DEFAULTS = {
-    "checkpoint": "artifacts/kernnn/best.json",
-    "data": "data.npz",
-    "output_dir": "artifacts/kernnn/eval",
-    "split": "test",
-    "seed": 42,
-    "ntrain": 3200,
-    "nvalid": 400,
-    "batch_size": 64,
-}
-
-
-def build_parser() -> argparse.ArgumentParser:
-    d = _EVAL_DEFAULTS
-    p = argparse.ArgumentParser(description="Evaluate KerNN checkpoint (E/F metrics)")
-    p.add_argument("--checkpoint", type=str, default=d["checkpoint"])
-    p.add_argument(
-        "--data",
-        type=str,
-        default=d["data"],
-        help="NPZ with R, E, F (use --split all for a dedicated test NPZ)",
-    )
-    p.add_argument("--output-dir", type=str, default=d["output_dir"])
-    p.add_argument(
-        "--split",
-        type=str,
-        default=d["split"],
-        choices=("train", "valid", "test", "all"),
-        help="Which split to evaluate (seed/ntrain/nvalid define the split; "
-        "use 'all' for a dedicated test NPZ)",
-    )
-    p.add_argument("--seed", type=int, default=d["seed"])
-    p.add_argument("--ntrain", type=int, default=d["ntrain"])
-    p.add_argument("--nvalid", type=int, default=d["nvalid"])
-    p.add_argument("--batch-size", type=int, default=d["batch_size"])
-    p.add_argument(
-        "--split-json",
-        type=str,
-        default=None,
-        help="Optional data_split.json from training (overrides seed/ntrain/nvalid)",
-    )
-    p.add_argument(
-        "--list-kernels",
-        action="store_true",
-        help="Print the table of available 1D kernel functions and exit",
-    )
-    return p
 
 
 def get_args(argv: list[str] | None = None):

@@ -24,10 +24,11 @@ import re
 import sys
 from pathlib import Path
 
-# Rendering a page imports the command module, which initializes JAX. On a busy
-# GPU that import raises, get_subcommand_parser() swallows the error, and the
-# page silently regenerates as a "help could not be loaded" stub — which the
-# pre-commit hook then stages over the real option dump. Docs need argparse only.
+# Rendering a page imports ``build_parser`` for every registry command. Those
+# builders must stay argparse-only (CLI adapters or ``*.args`` / ``cli_parser``
+# modules). Pointing ``parser_module`` at JAX/PySCF training stacks initializes
+# runtimes and prints device banners into docs CI. JAX_PLATFORMS=cpu remains as
+# a backstop for commands whose help still lives next to JAX code.
 os.environ["JAX_PLATFORMS"] = "cpu"
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -252,6 +253,10 @@ COMMAND_FIGURES: dict[str, list[tuple[str, str]]] = {
         ("Dimer force profiles across cutoff policies", "../../images/mlpot-settings/dcm_dimer_forces_cutoffs.png"),
     ],
     "ic-scan": [
+        (
+            "ACEM methyl rotor: rigid 1-fold leak vs relaxed 3-fold",
+            "../../images/plots/acem-methyl-scan.png",
+        ),
         ("Trialanine PES with force-annotated conformers", "../../images/povray-overlays/trialanine_pes_with_povray.png"),
     ],
     "normal-mode-sample": [
@@ -494,6 +499,19 @@ Outputs under `--output-dir` (or CWD):
 
 See the [Diffusion Monte Carlo guide](../../dmc.md) for inputs, units, and
 memory tips.
+""",
+    "ic-scan": """
+Set `geometry_mode: constrained-relax` in the YAML for a relaxed scan (active
+torsions held with ASE `FixInternals`, other coordinates FIRE- or
+BFGS-minimized). That mode needs `evaluate: energy` and cannot be combined with
+`--prepare-only`.
+
+```bash
+mmml ic-scan \\
+  --config examples/ic_scan/acem_dihedrals_relaxed.yaml \\
+  --output artifacts/ic_scan/acem_xtb_relaxed \\
+  --overwrite
+```
 """,
     "orbax-to-json": """
 ## SpookyPhysNet / SO3LR checkpoints

@@ -30,6 +30,9 @@ def test_generate_cli_docs_check_is_clean():
         check=False,
     )
     assert proc.returncode == 0, proc.stderr or proc.stdout
+    combined = f"{proc.stdout}\n{proc.stderr}"
+    assert "CUDA graph capture" not in combined
+    assert "JAX devices:" not in combined
 
 
 def test_mkdocs_has_cli_nav_markers():

@@ -290,6 +290,15 @@ def test_calibrate_teacher_energy_offset():
     assert info["mae_raw_eV"] == pytest.approx(161.5)
 
 
+def test_kernnn_arg_choices_match_runtime_tables():
+    from mmml.models.kernnn.args import DISTANCE_SCHEME_CHOICES, KERNEL_CHOICES
+    from mmml.models.kernnn.distances import DISTANCE_FNS
+    from mmml.models.kernnn.kernels import KERNEL_FNS
+
+    assert set(KERNEL_CHOICES) == set(KERNEL_FNS)
+    assert set(DISTANCE_SCHEME_CHOICES) == set(DISTANCE_FNS)
+
+
 def test_cli_parsers():
     tp = build_train_parser()
     ep = build_eval_parser()
