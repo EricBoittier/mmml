@@ -114,6 +114,7 @@ htmlcov/
 .pytest_cache
 nosetests.xml
 coverage.xml
+generated-docs.patch
 *.cover
 .hypothesis/
 

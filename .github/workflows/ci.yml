@@ -6,34 +6,18 @@ on:
   pull_request:
     branches: [ main ]
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  build:
+  lint:
+    name: Lint
     runs-on: ubuntu-latest
-    # Without this the job inherits the 360-minute default, so one hung test
-    # burns six hours of runner time before anyone sees a red mark.
-    timeout-minutes: 60
-    strategy:
-      fail-fast: false
-      matrix:
-        python-version: ["3.13"]
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v6
-      - name: Set up uv
-        uses: astral-sh/setup-uv@v7
-        with:
-          enable-cache: true
-      - name: Set up Python
-        run: uv python install ${{ matrix.python-version }}
-      # jax-pme-solver is not part of `all-cpu`, and 19 test files gate on
-      # have_jax_pme_package(). Without the extra every one of them skips and
-      # pytest still exits 0, so the whole `--lr-solver jax_pme` backend rode
-      # along untested. Costs one git clone (cached by setup-uv), buys ~63 tests.
-      - name: Install package and dependencies
-        run: uv sync --extra dev --extra all-cpu --extra jax-pme-solver
-      # Lint and the duplicate-definition scan record their result but do not
-      # abort the job: a lint failure used to stop the run before a single test
-      # executed, so a bad merge surfaced one problem per push instead of all of
-      # them at once. The "Lint gate" step below still fails the job.
+      - uses: ./.github/actions/setup-mmml
       - name: Lint
         id: lint
         continue-on-error: true
@@ -48,27 +32,32 @@ jobs:
           uv run python -V
           uv run python -c "import mmml; print('package imports ok')"
           uv run python -c "import mmml.md.energy.terms; print('energy terms import ok')"
-          # Assert the extra above actually landed. have_jax_pme_package() is a
-          # try/except import, so a failed install downgrades 19 files back to
-          # silent skips rather than failing anything.
-          uv run python -c "from jaxpme import PME, P3M, Ewald; print('jax-pme backend importable')"
-      # Part of `make merge-check` but previously absent from CI, so generated
-      # CLI docs / architecture pages could drift on main unnoticed.
-      - name: Generated docs are up to date
+      - name: Lint gate
         if: always()
         run: |
-          uv run python scripts/generate_cli_docs.py --check
-          uv run python scripts/generate_package_architecture.py --check
-      - name: Run tests
-        if: always()
+          fail=0
+          [ "${{ steps.lint.outcome }}" = "failure" ] && { echo "::error::make lint failed"; fail=1; }
+          [ "${{ steps.dupes.outcome }}" = "failure" ] && { echo "::error::make lint-dupes failed (duplicate defs or conflict markers)"; fail=1; }
+          exit "$fail"
+
+  unit:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/setup-mmml
+        with:
+          # jax-pme-solver is not part of all-cpu. Without it, 19 files skip via
+          # have_jax_pme_package() and pytest still exits 0.
+          sync-args: "--extra dev --extra all-cpu --extra jax-pme-solver"
+      - name: jax-pme backend importable
+        run: uv run python -c "from jaxpme import PME, P3M, Ewald; print('jax-pme backend importable')"
+      - name: Run unit tests
         run: |
           mkdir -p .ci-reports
           uv run pytest -v --color=yes --cov=mmml --cov-report=xml \
-            --junitxml=.ci-reports/junit-unit.xml tests/
-      # pytest exits 0 when every selected test skips, so the step above can be
-      # green having validated nothing (a bad install, a missing fixture tree, a
-      # guard that starts returning False for everyone). Assert the run's shape,
-      # not just its exit code.
+            --junitxml=.ci-reports/junit-unit.xml tests/unit
       - name: Unit suite ran for real
         if: always()
         run: |
@@ -76,22 +65,53 @@ jobs:
             --label "unit suite" --min-passed 3000 --max-skipped-frac 0.25
       # Coverage floor, not a coverage target. Roughly 18.7k statements need
       # live CHARMM, 10.9k are plotting and 5.3k need PySCF/torch/GPU, so the
-      # CI-reachable ceiling is near 70% and chasing a percentage here is
-      # pointless. What this catches is a *slide*: a module that stops
-      # importing, a fixture tree that disappears, a large untested subsystem
-      # landing at once. The Codecov status does the same job on PRs, but it is
-      # advisory (`fail_ci_if_error: false`) and needs a token, so it does not
-      # run on forks. Measured 2026-08-01 on a full MMML_DISABLE_CHARMM=1 run:
-      # 45.81%, 55706 of 121608 lines. The floors sit ~3.8pp and ~6.6% below
-      # that, which absorbs CI-vs-local jitter without waving through a
-      # collapse. Raise them as coverage rises, never lower them to go green.
+      # CI-reachable ceiling is near 70%. This catches a *slide*. Measured
+      # 2026-08-01 on a full MMML_DISABLE_CHARMM=1 run: 45.81%, 55706 of
+      # 121608 lines. The floors sit ~3.8pp and ~6.6% below that.
       - name: Coverage floor
         if: always()
         run: |
           uv run python scripts/ci/check_coverage_floor.py coverage.xml \
             --label "unit coverage" --min-percent 42 --min-covered-lines 52000
-      - name: Run CHARMM MPI unit suite
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          files: ./coverage.xml
+          fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}
+
+  extra:
+    name: Functionality tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/setup-mmml
+        with:
+          sync-args: "--extra dev --extra all-cpu --extra jax-pme-solver"
+      - name: Run functionality / misc / integration tests
+        run: |
+          mkdir -p .ci-reports
+          uv run pytest -v --color=yes \
+            --junitxml=.ci-reports/junit-extra.xml \
+            tests/functionality tests/misc tests/integration \
+            -m "not pycharmm"
+      - name: Extra suite ran for real
         if: always()
+        run: |
+          uv run python scripts/ci/check_test_report.py .ci-reports/junit-extra.xml \
+            --label "functionality suite" --min-passed 10 --max-skipped-frac 0.85
+
+  charmm-mpi:
+    name: CHARMM MPI units
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/setup-mmml
+        with:
+          sync-args: "--extra dev --extra all-cpu --extra jax-pme-solver"
+      - name: Run CHARMM MPI unit suite
         run: |
           mkdir -p .ci-reports
           uv run pytest -v --color=yes tests/charmm_mpi/ \
@@ -101,21 +121,9 @@ jobs:
         run: |
           uv run python scripts/ci/check_test_report.py .ci-reports/junit-charmm-mpi.xml \
             --label "charmm_mpi suite" --min-passed 15 --max-skipped 5
-      - name: Lint gate
-        if: always()
-        run: |
-          fail=0
-          [ "${{ steps.lint.outcome }}" = "failure" ] && { echo "::error::make lint failed"; fail=1; }
-          [ "${{ steps.dupes.outcome }}" = "failure" ] && { echo "::error::make lint-dupes failed (duplicate defs or conflict markers)"; fail=1; }
-          exit "$fail"
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
-        with:
-          files: ./coverage.xml
-          fail_ci_if_error: false
-          token: ${{ secrets.CODECOV_TOKEN }}
 
   charmm:
+    name: PyCHARMM smoke
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
@@ -167,7 +175,7 @@ jobs:
       # tests that cold-start boxes then fail with FileNotFoundError.
       - name: Build Packmol
         run: bash scripts/rebuild_packmol.sh
-      # Every live-CHARMM test is guarded by `skipif(not can_import_pycharmm())`,
+      # Every live-CHARMM test is guarded by skipif(not can_import_pycharmm()),
       # and that guard only checks that the .so *file* exists. A library that is
       # present but cannot be dlopen'ed therefore turns this whole 45-minute job
       # into skips that exit 0. Fail here instead, where the cause is obvious.

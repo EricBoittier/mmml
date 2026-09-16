@@ -1,0 +1,24 @@
+name: Setup MMML
+description: Install uv, Python, and the requested extras. Run after checkout.
+
+inputs:
+  python-version:
+    description: CPython version for uv python install
+    default: "3.13"
+  sync-args:
+    description: Arguments forwarded to uv sync
+    default: "--extra dev --extra all-cpu"
+
+runs:
+  using: composite
+  steps:
+    - name: Set up uv
+      uses: astral-sh/setup-uv@v7
+      with:
+        enable-cache: true
+    - name: Set up Python
+      run: uv python install ${{ inputs.python-version }}
+      shell: bash
+    - name: Install package and dependencies
+      run: uv sync ${{ inputs.sync-args }}
+      shell: bash

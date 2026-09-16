@@ -14,7 +14,7 @@ Run the same static check that CI enforces:
 make lint
 ```
 
-Reproduce CI's `build` job on a machine that *has* a CHARMM build:
+Reproduce CI's unit + functionality jobs on a machine that *has* a CHARMM build:
 
 ```bash
 make test-ci
@@ -26,6 +26,26 @@ That target sets `MMML_DISABLE_CHARMM=1`, which makes
 explicit override is treated as stale and silently replaced by the discovered
 `setup/charmm` tree, so live-CHARMM tests keep running locally and the local
 result stops matching CI.
+
+CI splits the CPU suite:
+
+| Job | What it runs |
+|-----|----------------|
+| Lint | `make lint` + `make lint-dupes` + import sanity |
+| Unit tests | `pytest tests/unit` + coverage floor |
+| Functionality tests | `pytest tests/functionality tests/misc tests/integration` (no live PyCHARMM) |
+| CHARMM MPI units | `pytest tests/charmm_mpi -m "charmm_mpi and not pycharmm"` |
+| PyCHARMM smoke | compiled `libcharmm` + live smoke tests |
+
+The Docs workflow has a **Generated content** job that rewrites CLI pages,
+package-architecture counts, and crystal-literature tables, then fails if git
+still sees drift (upload `generated-docs-patch` on failure). MkDocs HTML and
+PDF export run only after that job is green.
+
+```bash
+make docs-check      # same checks as Generated content, no rewrite
+make docs-refresh    # rewrite generated pages
+```
 
 ## Why CI checks the *shape* of a test run
 
@@ -65,8 +85,9 @@ grows so the gate keeps its teeth.
 - Large checkpoints and generated campaign output belong in external storage or
   ignored artifact paths, not in new package source commits.
 
-Unit tests run in the normal CI job. The separate `charmm` CI job is the
-integration boundary for a compiled CHARMM/PyCHARMM runtime.
+Unit tests run in the **Unit tests** CI job. Functionality, misc, and
+integration tests run separately. The **PyCHARMM smoke** job is the integration
+boundary for a compiled CHARMM/PyCHARMM runtime.
 
 ## CLI UX conventions
 
@@ -139,10 +160,8 @@ make docs-build
 Per-command CLI pages are generated from `mmml/cli/registry.py` before each build:
 
 ```bash
-uv run python scripts/generate_cli_docs.py
-uv run python scripts/generate_docs_figures.py
-uv run python scripts/generate_cli_docs.py --check   # CI: fail if stale
-uv run python scripts/generate_docs_figures.py --check
+make docs-refresh
+make docs-check      # CI Generated content job: fail if stale
 ```
 
 Build with the same strict checks used in CI:

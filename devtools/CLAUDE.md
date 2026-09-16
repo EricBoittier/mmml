@@ -17,8 +17,16 @@ uv run python scripts/generate_cli_docs.py
 git add docs/cli/commands
 ```
 
-The Docs workflow runs `generate_cli_docs.py --check` and fails on any stale
-page, so pushing a CLI change without the regenerated docs breaks CI on main.
+Or regenerate every CI-checked generated page:
+
+```bash
+make docs-refresh
+```
+
+The Docs workflow's **Generated content** job runs
+`scripts/ci/refresh_generated_docs.py --diff` and fails if CLI pages,
+`docs/package-architecture.md`, or crystal-literature tables drifted. A
+`generated-docs-patch` artifact is uploaded on failure.
 
 ## Before pushing docs changes
 

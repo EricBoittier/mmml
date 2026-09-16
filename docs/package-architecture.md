@@ -20,8 +20,8 @@ flowchart TB
 
   subgraph mmml_pkg["mmml package"]
     CLI["cli\n127 modules"]
-    IFACE["interfaces\n232 modules"]
-    MODELS["models\n144 modules"]
+    IFACE["interfaces\n233 modules"]
+    MODELS["models\n146 modules"]
     UTILS["utils\n51 modules"]
     DATA["data\n17 modules"]
     GEN["generate\n15 modules"]

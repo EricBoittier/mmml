@@ -1,4 +1,4 @@
-.PHONY: help install install-native install-full doctor install-gpu install-dev install-all install-all-offline-cuda13 install-all-offline-cuda12 install-jupyter-kernel clean test docker-build docker-run micromamba-create micromamba-create-gpu micromamba-create-gpu-cuda13 micromamba-create-full micromamba-update micromamba-remove docker-clean lfs-summary lfs-audit lfs-setup-symlinks lfs-remove-hooks install-hooks docs-build docs-strict docs-pdf docs-serve lint-dupes merge-check test-ci coverage-gate check-prs-landed
+.PHONY: help install install-native install-full doctor install-gpu install-dev install-all install-all-offline-cuda13 install-all-offline-cuda12 install-jupyter-kernel clean test test-unit test-extra docker-build docker-run micromamba-create micromamba-create-gpu micromamba-create-gpu-cuda13 micromamba-create-full micromamba-update micromamba-remove docker-clean lfs-summary lfs-audit lfs-setup-symlinks lfs-remove-hooks install-hooks docs-build docs-strict docs-pdf docs-serve docs-check docs-refresh lint-dupes merge-check test-ci coverage-gate check-prs-landed
 
 help:
 	@echo "MMML - Makefile Commands"
@@ -37,17 +37,21 @@ help:
 	@echo ""
 	@echo "Testing:"
 	@echo "  make test              - Run unit/integration tests (skip live PyCHARMM/GPU/MLpot)"
+	@echo "  make test-unit          - Run tests/unit (CI Unit tests job)"
+	@echo "  make test-extra         - Run functionality/misc/integration (CI Functionality job)"
 	@echo "  make test-all          - Run full pytest suite (needs mpirun for charmm_mpi live tests)"
 	@echo "  make test-quick        - Run quick tests only"
 	@echo "  make test-coverage     - Run tests with coverage report"
 	@echo "  make coverage-gate     - Run tests and enforce CI's coverage floor"
-	@echo "  make test-ci           - Local stand-in for CI's build job (hides libcharmm)"
+	@echo "  make test-ci           - Local stand-in for CI unit+extra jobs (hides libcharmm)"
 	@echo "  make lint-dupes        - Duplicate defs / conflict markers (bad-merge detector)"
-	@echo "  make merge-check       - Pre-merge gate: lint-dupes + lint + imports + docs"
+	@echo "  make merge-check       - Pre-merge gate: lint-dupes + lint + imports + generated docs"
 	@echo "  make deadcode          - Report dead/unused code (Ruff + Vulture)"
 	@echo "  make deadcode-fix      - Auto-fix safe unused-code issues with Ruff"
 	@echo ""
 	@echo "Documentation:"
+	@echo "  make docs-check        - Fail if generated CLI/architecture/figures are stale"
+	@echo "  make docs-refresh      - Rewrite generated CLI/architecture/crystal tables"
 	@echo "  make docs-build        - Build MkDocs HTML site"
 	@echo "  make docs-strict       - Build MkDocs HTML site with strict checks"
 	@echo "  make docs-pdf          - Build PDF docs at site/mmml-docs.pdf"
@@ -205,6 +209,12 @@ docker-clean:
 test:
 	uv run pytest tests -m "not pycharmm and not gpu and not mlpot"
 
+test-unit:
+	uv run pytest tests/unit
+
+test-extra:
+	uv run pytest tests/functionality tests/misc tests/integration -m "not pycharmm"
+
 test-all:
 	uv run pytest tests
 
@@ -272,7 +282,7 @@ lint-dupes:
 	@uv run ruff check --select F811 --quiet tests/ examples/ workflows/ || true
 	@echo "lint-dupes: shipped code has no duplicate definitions; no conflict markers"
 
-# Local stand-in for the CI `build` job on a machine that HAS libcharmm.
+# Local stand-in for the CI unit + extra jobs on a machine that HAS libcharmm.
 # CI installs no libcharmm, so every live-PyCHARMM test self-skips there. Locally
 # they run instead and abort the session inside test_charmm_mpi.py on a native
 # CHARMM exit, truncating the run long before the real failures. Hiding the
@@ -286,15 +296,15 @@ lint-dupes:
 # Run: make test-ci
 test-ci:
 	MMML_DISABLE_CHARMM=1 \
-	  uv run pytest tests/ -q -p no:cacheprovider
+	  uv run pytest tests/unit tests/functionality tests/misc tests/integration tests/charmm_mpi \
+	    -q -p no:cacheprovider -m "not pycharmm"
 
-# Pre-merge gate: everything CI checks first, in the order it fails.
+# Pre-merge gate: lint plus generated-docs check, in the order CI fails first.
 # Run: make merge-check
 merge-check: lint-dupes lint
 	uv run python -c "import mmml.md.energy.terms; print('energy terms import ok')"
-	uv run python scripts/generate_cli_docs.py --check
-	uv run python scripts/generate_package_architecture.py --check
-	@echo "merge-check: OK -- now run 'make test-ci' for the full suite"
+	uv run python scripts/ci/refresh_generated_docs.py --check
+	@echo "merge-check: OK -- now run 'make test-unit' / 'make test-ci' for tests"
 
 format:
 	uv run ruff format mmml/ scripts/
@@ -313,17 +323,21 @@ deadcode-fix:
 # Documentation
 # ==============================================================================
 
+docs-check:
+	uv run python scripts/ci/refresh_generated_docs.py --check
+
+docs-refresh:
+	uv run python scripts/ci/refresh_generated_docs.py --write
+
 docs-build:
-	uv run python scripts/generate_cli_docs.py
+	uv run python scripts/ci/refresh_generated_docs.py --write
 	uv run python scripts/generate_docs_figures.py
-	uv run python scripts/generate_crystal_lit_compare.py
 	uv run python scripts/plot_mlpot_settings.py
 	uv run --extra dev mkdocs build
 
 docs-strict:
-	uv run python scripts/generate_cli_docs.py
+	uv run python scripts/ci/refresh_generated_docs.py --write
 	uv run python scripts/generate_docs_figures.py
-	uv run python scripts/generate_crystal_lit_compare.py
 	uv run python scripts/plot_mlpot_settings.py
 	uv run --extra dev mkdocs build --strict
 
