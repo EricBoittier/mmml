@@ -1271,26 +1271,25 @@ def build_decomposed_mlpot_model(
     defer_jax_until_mlpot_registered: bool = False,
     defer_jax_until_after_sd: bool = False,
 ) -> DecomposedMlpotModel | MetatomicMlpotModel:
-    from mmml.interfaces.pycharmmInterface.mlpot.jax_mm_spoof import jax_mm_spoof_enabled
     from mmml.models.kernnn import is_kernnn_checkpoint
-
-    _spoof = jax_mm_spoof_enabled(args)
-    _ckpt_probe = Path(checkpoint).expanduser() if checkpoint is not None else None
-    if args is not None and getattr(args, "model_restart_path", None) is not None:
-        _ckpt_probe = Path(getattr(args, "model_restart_path")).expanduser()
-    _kernnn = bool(_ckpt_probe) and is_kernnn_checkpoint(_ckpt_probe)
     from mmml.interfaces.pycharmmInterface.mlpot.metatomic_mlpot import (
         build_metatomic_mlpot_model,
         should_use_metatomic_mlpot,
     )
 
+    _ckpt_probe = Path(checkpoint).expanduser() if checkpoint is not None else None
+    if args is not None and getattr(args, "model_restart_path", None) is not None:
+        _ckpt_probe = Path(getattr(args, "model_restart_path")).expanduser()
+    # Do not import jax_mm_spoof (jax_md/flax) before the metatomic return.
+    _spoof = False
+    if args is not None:
+        if bool(getattr(args, "jax_mm_spoof", False)):
+            _spoof = True
+        else:
+            _mode = str(getattr(args, "ml_potential_mode", "") or "").strip().lower()
+            _spoof = _mode in {"jax_mm_clone", "jax-mm-clone", "jax_mm_spoof"}
     _metatomic = (not _spoof) and should_use_metatomic_mlpot(
         _ckpt_probe if _ckpt_probe is not None else checkpoint, args
-    )
-    _ml_mode = (
-        "jax_mm_clone"
-        if _spoof
-        else ("kernnn" if _kernnn else ("metatomic" if _metatomic else "physnet"))
     )
     if _metatomic:
         ckpt = Path(checkpoint).expanduser().resolve()
@@ -1312,6 +1311,8 @@ def build_decomposed_mlpot_model(
             do_ml_dimer=do_ml_dimer,
             do_mm=include_mm,
         )
+    _kernnn = bool(_ckpt_probe) and is_kernnn_checkpoint(_ckpt_probe)
+    _ml_mode = "jax_mm_clone" if _spoof else ("kernnn" if _kernnn else "physnet")
     if _spoof:
         ckpt = Path("/dev/null")
     else:

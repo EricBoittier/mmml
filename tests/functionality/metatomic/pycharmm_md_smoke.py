@@ -279,7 +279,8 @@ def main() -> int:
         report["ok"] = False
         report["error"] = f"{type(exc).__name__}: {exc}"
         _write_report()
-        raise
+        print(f"FAIL: {exc}", file=sys.stderr)
+        return 1
 
 
 if __name__ == "__main__":

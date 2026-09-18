@@ -95,8 +95,9 @@ and versioning process.
   AtomisticModel (`.pt`) as CHARMM USER via `MetatomicMlpotModel`, with the MMML
   fragment ML/MM scheme (`--metatomic-eval-mode fragments`) or a single whole-system
   evaluation. Optional JAX MM stays in an MM-only `setup_calculator` spherical_fn
-  (torch is never jitted). Also wired into `energy_forces` providers, dimer-scan,
-  and ic-scan. Hub smoke (PET-MAD s 1.0.2, PET-MAD xs 1.5.0, PET-MOLS s 1.0.0 from
+  (torch is never jitted). The hybrid MLpot factory returns the metatomic adapter
+  before importing `jax_md` (flax 0.12 / jax 0.11 `HiPrimitive` break). Also wired
+  into `energy_forces` providers, dimer-scan, and ic-scan. Hub smoke (PET-MAD s 1.0.2, PET-MAD xs 1.5.0, PET-MOLS s 1.0.0 from
   `lab-cosmo/upet`) is documented in `tests/functionality/metatomic/`. Serial
   PyCHARMM ENER/SD/NVE smoke is `tests/functionality/metatomic/pycharmm_md_smoke.py`.
   See [`docs/metatomic.md`](docs/metatomic.md).

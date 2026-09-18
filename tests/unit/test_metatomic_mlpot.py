@@ -129,6 +129,32 @@ def test_build_metatomic_mlpot_model_injected_calculator(tmp_path: Path) -> None
     assert calc._cell == pytest.approx(12.0)
 
 
+def test_build_decomposed_mlpot_metatomic_early_return(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from mmml.interfaces.pycharmmInterface.mlpot import hybrid_mlpot
+
+    sentinel = object()
+
+    def _fake_build(*_a, **_k):
+        return sentinel
+
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.metatomic_mlpot.build_metatomic_mlpot_model",
+        _fake_build,
+    )
+    ckpt = tmp_path / "export.pt"
+    ckpt.write_bytes(b"stub")
+    model = hybrid_mlpot.build_decomposed_mlpot_model(
+        ckpt,
+        np.array([8, 1, 8, 1], dtype=int),
+        [2, 2],
+        2,
+        args=Namespace(ml_potential_mode="metatomic", include_mm=False),
+    )
+    assert model is sentinel
+
+
 def test_md_system_parser_accepts_metatomic() -> None:
     from mmml.cli.run.md_system import build_parser, build_pycharmm_command
 

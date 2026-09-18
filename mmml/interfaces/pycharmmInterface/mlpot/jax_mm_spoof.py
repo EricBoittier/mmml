@@ -13,14 +13,12 @@ bonded evaluator, and dimer batches receive an explicit ``N_a`` split so a
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Callable, Mapping, Sequence
+from typing import Any, Callable, Mapping, Sequence
 
 import jax
 import jax.numpy as jnp
 import numpy as np
 from jax import Array
-from jax_md.mm_forcefields.base import BondedParameters, Topology
-from jax_md.mm_forcefields.oplsaa.topology import create_topology
 
 from mmml.interfaces.pycharmmInterface.cgenff_bonded import (
     KCAL_MOL_TO_EV,
@@ -40,8 +38,11 @@ def minimal_chain_bonded_system(
     bond_r0: float = 1.54,
     angle_k: float = 60.0,
     angle_theta0: float = 1.91,
-) -> tuple[Topology, BondedParameters]:
+) -> tuple[Any, Any]:
     """Harmonic chain bonded topology for synthetic toy monomers (no PSF)."""
+    from jax_md.mm_forcefields.base import BondedParameters
+    from jax_md.mm_forcefields.oplsaa.topology import create_topology
+
     if n_atoms < 2:
         raise ValueError(f"n_atoms must be >= 2 for a chain, got {n_atoms}")
     bonds = jnp.stack(
@@ -94,12 +95,14 @@ def _remap_indices(indices: Array | None, start: int) -> Array | None:
 
 
 def _topology_slice_to_local(
-    topology: Topology,
+    topology: Any,
     *,
     start: int,
     n_atoms: int,
-) -> Topology:
+) -> Any:
     """Remap global bonded indices in ``[start, start+n)`` to local ``[0, n)``."""
+    from jax_md.mm_forcefields.base import Topology
+
     return Topology(
         n_atoms=int(n_atoms),
         bonds=_remap_indices(topology.bonds, start),
