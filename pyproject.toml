@@ -28,8 +28,11 @@ dependencies = [
     # flax>=0.12.1 (below) uses jax.Ref instead of jax._src.core.mutable_array,
     # which is gone in JAX 0.10 — that's what actually gates JAX-0.10 compat,
     # not the jax-md version. jax-md>=0.2.29 is just the current PyPI release.
-    "jax>=0.10.0",
-    "jaxlib>=0.10.0",
+    # jax 0.11.2 deleted jax.experimental.hijax.HiPrimitive (renamed HiPrim);
+    # flax 0.12.x still subclasses HiPrimitive when importing nnx, which
+    # jax_md.energy does at import. Cap below 0.11.2 until flax follows.
+    "jax>=0.10.0,<0.11.2",
+    "jaxlib>=0.10.0,<0.11.2",
     "jax-md>=0.2.29",
     "flax>=0.12.1",
     "optax",

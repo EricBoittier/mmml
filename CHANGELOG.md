@@ -172,6 +172,11 @@ and versioning process.
 
 ### Fixed
 
+- CI: cap `jax`/`jaxlib` at `<0.11.2`. JAX 0.11.2 deleted
+  `jax.experimental.hijax.HiPrimitive`; flax 0.12 still subclasses it when
+  `jax_md` imports `flax.nnx`, which aborted unit/functionality collection.
+  `tests/unit/test_jax_flax_hijax.py` pins that import.
+
 - **libcharmm did not link on arm64 (macOS), at any MLpot tier.** `api_func.F90`
   held twelve `max_Npr` integer arrays in static storage — 6.1 GB at
   `max_Npr = 128000000` — which overruns arm64's ±4 GB ADRP reach

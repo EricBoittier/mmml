@@ -103,3 +103,8 @@ def test_detect_model_kind_metatomic_suffix() -> None:
 def test_assert_hybrid_ml_compatible_accepts_metatomic() -> None:
     kind = assert_hybrid_ml_compatible("export.pt", config={})
     assert kind == ProviderKind.METATOMIC
+
+
+def test_build_provider_metatomic_requires_checkpoint() -> None:
+    with pytest.raises(ValueError, match="checkpoint"):
+        build_provider(ProviderSpec(name="metatomic", options={}))

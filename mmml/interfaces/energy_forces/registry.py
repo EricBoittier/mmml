@@ -40,7 +40,6 @@ def build_provider(spec: ProviderSpec) -> EnergyForcesProvider:
 
     if name in ("metatomic", "metatensor"):
         from mmml.interfaces.calculators.metatomic import load_metatomic_calculator
-        from mmml.interfaces.energy_forces.ml import capabilities_for_kind
 
         checkpoint = options.pop("checkpoint", None)
         if checkpoint is None:
