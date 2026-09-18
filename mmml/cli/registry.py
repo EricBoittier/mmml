@@ -101,6 +101,11 @@ COMMAND_REGISTRY: tuple[CommandSpec, ...] = (
         "Reproducible rigid 1D dimer energy/force scan",
     ),
     CommandSpec(
+        "pet-interaction-pes",
+        "mmml.cli.misc.pet_interaction_pes",
+        "PET-MAD interaction slices, surfaces, and trimer many-body leftover",
+    ),
+    CommandSpec(
         "ic-scan",
         "mmml.cli.misc.ic_scan",
         "Bond/angle/dihedral scans (1D or N-D) for QM/ML",

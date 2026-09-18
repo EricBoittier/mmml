@@ -31,12 +31,19 @@ from mmml.analysis.dimer_molecules import (
     orient_molecule,
     rotation_matrix_align_to_z,
 )
+from mmml.analysis.interaction_pes import (
+    SCHEMA_VERSION,
+    dump_interaction_pes_json,
+    load_interaction_pes_json,
+    run_interaction_pes_campaign,
+)
 
 __all__ = [
     "DimerGeometry",
     "MOLECULES",
     "ORIENTED_MONOMERS",
     "PAIR_SCAN_CONFIG",
+    "SCHEMA_VERSION",
     "align_npz_arrays",
     "assign_mol_id",
     "build_rigid_dimer",
@@ -48,14 +55,17 @@ __all__ = [
     "compute_scalar_metrics",
     "distance_scan_geometries",
     "distance_scan_geometries_2d",
+    "dump_interaction_pes_json",
     "evaluate_scan",
     "fragment_index_arrays",
     "geometric_centroid",
+    "load_interaction_pes_json",
     "make_oriented_scan_geometries",
     "make_xtb_calculator",
     "molecule_pair_labels",
     "normalized_vector",
     "orient_molecule",
     "rotation_matrix_align_to_z",
+    "run_interaction_pes_campaign",
     "write_comparison_report",
 ]

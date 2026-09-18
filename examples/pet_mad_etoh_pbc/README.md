@@ -64,3 +64,26 @@ mmml md-system --backend pycharmm \
   --temperature 300 --dt-fs 0.5 \
   --checkpoint "$PET_MAD_CKPT"
 ```
+
+## Interaction slices and surfaces (CHARMM-free)
+
+PET is many-body (transformer over neighbor tokens; PET-MAD xs RF ≈ 9 Å). A
+2-body molecular reconstruction cannot clone it. `mmml pet-interaction-pes`
+scans rigid COM dimers/trimers with the same checkpoint (single points, no MD):
+
+```bash
+export PET_MAD_CKPT=/path/to/pet-mad-xs-v1.5.0.pt
+JAX_PLATFORMS=cpu MMML_METATOMIC_DEVICE=cpu \
+  mmml pet-interaction-pes --checkpoint "$PET_MAD_CKPT"
+# or: ./examples/pet_mad_etoh_pbc/run_interaction_pes.sh
+# replot: FROM_JSON=examples/pet_mad_etoh_pbc/data/interaction_pes.json \
+#   ./examples/pet_mad_etoh_pbc/run_interaction_pes.sh
+```
+
+| Figure | What it shows |
+|--------|----------------|
+| `pet_mad_dimer_slices.png` | Water / ethanol / acetone \(E_\mathrm{int}(r)\) (kcal/mol vs Å), H-bond vs stacked, PET RF line at 9 Å |
+| `pet_mad_dimer_surface.png` | Ethanol \(E_\mathrm{int}(r,\theta)\) heatmap + isolevels |
+| `pet_mad_trimer_mbe.png` | \(E_\mathrm{int}(ABC)\) vs \(\sum E_\mathrm{int}(IJ)\) and residual \(E_3\) |
+
+Pass: JSON schema `mmml.interaction_pes/v1`; far-field \(E_\mathrm{int}\to 0\) past ~9–12 Å; trimer \(|E_3|\) kcal/mol at close spacing and ~0 at 12 Å. Unit tests (dummy calculator, no torch): `uv run pytest tests/unit/test_interaction_pes.py -q`.

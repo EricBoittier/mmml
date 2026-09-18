@@ -114,6 +114,9 @@ and versioning process.
   log (`run_nve.sh`). First-class CLI: `mmml metatomic-pbc-md` (CHARMM-free
   cubic liquid box; ethanol 32 Å / 300 K / 0.5 fs is the default recipe).
   YAML `nve` job is 0.2 ps after mini.
+  Interaction PES: `mmml pet-interaction-pes` writes 1D COM slices, one 2D
+  ethanol surface, and a trimer many-body leftover \(E_3\) (CHARMM-free
+  single points; plots from JSON via the shared ICML style).
   See [`docs/metatomic.md`](docs/metatomic.md).
 
 - `scripts/bench_static_vs_neighbor_pairs.py`: static complete pair list vs

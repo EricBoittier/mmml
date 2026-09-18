@@ -33,6 +33,8 @@ def test_example_files_exist() -> None:
     assert (EXAMPLE / "ase_pbc_md.py").is_file()
     assert (EXAMPLE / "run_smoke.sh").is_file()
     assert (EXAMPLE / "run_nve.sh").is_file()
+    assert (EXAMPLE / "plot_interaction_pes.py").is_file()
+    assert (EXAMPLE / "run_interaction_pes.sh").is_file()
     atoms = ase_read(str(MONOMER))
     assert len(atoms) == 9
     assert set(atoms.get_chemical_symbols()) == {"C", "H", "O"}

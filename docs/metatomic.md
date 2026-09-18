@@ -69,6 +69,7 @@ mmml md-system --backend pycharmm \
 # ASE scans (no CHARMM)
 mmml dimer-scan DCM DCM --calculator metatomic --checkpoint /path/to/export.pt
 mmml ic-scan --calculator metatomic --checkpoint /path/to/export.pt --structure mol.xyz ...
+mmml pet-interaction-pes --checkpoint /path/to/export.pt
 ```
 
 Python:
@@ -101,6 +102,7 @@ uv run pytest \
   tests/unit/test_metatomic_mlpot.py \
   tests/unit/test_energy_forces_providers.py \
   tests/unit/test_dimer_scan_cli.py \
+  tests/unit/test_interaction_pes.py \
   tests/unit/test_md_system_pycharmm_cmd.py \
   -q
 ```
@@ -204,6 +206,17 @@ mmml md-system --config examples/pet_mad_etoh_pbc/yaml/pbc_nvt.yaml \
 is the same 338-molecule count. Do **not** use `fragments` on this box.
 YAML `nve` is 0.2 ps after mini. Details, pass/fail, and YAML:
 [PET-MAD ethanol PBC](examples/pet-mad-etoh-pbc.md).
+
+Interaction PES (CHARMM-free single points; no MD):
+
+```bash
+JAX_PLATFORMS=cpu MMML_METATOMIC_DEVICE=cpu \
+  mmml pet-interaction-pes --checkpoint /path/to/pet-mad-xs-v1.5.0.pt
+```
+
+Writes `E_int(r)` slices (water, ethanol, acetone), an ethanol \(r\times\theta\)
+surface, and a trimer leftover \(E_3\). Plots are ICML-styled and reproducible
+from JSON (`--from-json`). See the [ethanol PBC example](examples/pet-mad-etoh-pbc.md).
 
 ## PET-MAD teacher → PhysNet student (acetone)
 

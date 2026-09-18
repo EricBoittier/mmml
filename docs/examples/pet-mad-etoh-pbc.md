@@ -101,8 +101,37 @@ Unit tests (no torch MD):
 uv run pytest \
   tests/unit/test_box_sizing.py \
   tests/unit/test_pet_mad_etoh_pbc_example.py \
+  tests/unit/test_interaction_pes.py \
   -q
 ```
+
+---
+
+## 2b. Interaction slices and surfaces (no MD)
+
+Rigid COM scans of PET-MAD xs 1.5.0. Interaction energy is
+\(E_\mathrm{int}=E(AB)-E(A)-E(B)\) in kcal/mol. The trimer leftover is
+\(E_3=E_\mathrm{int}(ABC)-\sum E_\mathrm{int}(IJ)\). If PET were 2-body at the
+molecular-fragment level, \(E_3=0\).
+
+```bash
+export PET_MAD_CKPT=/path/to/pet-mad-xs-v1.5.0.pt
+JAX_PLATFORMS=cpu MMML_METATOMIC_DEVICE=cpu \
+  mmml pet-interaction-pes --checkpoint "$PET_MAD_CKPT"
+# or: ./examples/pet_mad_etoh_pbc/run_interaction_pes.sh
+```
+
+| Check | Pass |
+|-------|------|
+| JSON | `schema` is `mmml.interaction_pes/v1`; energies finite |
+| 1D slices | H-bond and stacked \(E_\mathrm{int}(r)\) from 2.5–12 Å; far-field ≈ 0 past the ~9 Å RF |
+| 2D surface | ethanol COM × in-plane rotation; heatmap + isolevels |
+| Trimer | \(|E_3|\) is kcal/mol at close spacing (water ~2.85 Å, ethanol ~4.2 Å) and ≈ 0 at 12 Å |
+
+Replot without PET: `--from-json examples/pet_mad_etoh_pbc/data/interaction_pes.json`.
+Figures land next to that JSON (`pet_mad_dimer_slices.png`,
+`pet_mad_dimer_surface.png`, `pet_mad_trimer_mbe.png`) and under
+`docs/images/plots/` when regenerated.
 
 ---
 

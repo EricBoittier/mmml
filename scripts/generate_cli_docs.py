@@ -86,6 +86,7 @@ CLI_NAV_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
             "verify-esp-alignment",
             "normal-mode-sample",
             "dimer-scan",
+            "pet-interaction-pes",
             "ic-scan",
             "mode-check",
             "compare-npz",
@@ -185,6 +186,11 @@ RELATED_DOCS: dict[str, list[tuple[str, str]]] = {
     "dimer-scan": [
         ("1D dimer scan design", "../../dimer-scan-design.md"),
         ("Scientific code policy", "../../scientific-code.md"),
+    ],
+    "pet-interaction-pes": [
+        ("Metatomic in MMML", "../../metatomic.md"),
+        ("PET-MAD ethanol PBC example", "../../examples/pet-mad-etoh-pbc.md"),
+        ("Plotting style guide", "../../plotting-style-guide.md"),
     ],
     "ic-scan": [
         ("Internal-coordinate scan design", "../../ic-scan-design.md"),
@@ -344,6 +350,20 @@ minimizer, or backend operation is requested. Those operations require
 (`libcharmm.dylib` on macOS). Certified `--from-psf`/`--from-crd` geometry can
 therefore be routed and unit-tested on ordinary CI runners without initializing
 the native CHARMM runtime.
+""",
+    "pet-interaction-pes": """
+CHARMM-free PET-MAD interaction PES: 1D COM slices, one 2D dimer surface, and
+a trimer many-body leftover ``E3 = E_int(ABC) - sum E_int(IJ)``. Energies are
+single-point ASE evaluations (no CHARMM, Packmol, or MD). Plots use the shared
+ICML style and are reproducible from the written JSON.
+
+```bash
+export PET_MAD_CKPT=/path/to/pet-mad-xs-v1.5.0.pt
+JAX_PLATFORMS=cpu MMML_METATOMIC_DEVICE=cpu \\
+  mmml pet-interaction-pes --checkpoint "$PET_MAD_CKPT"
+```
+
+Worked example: [PET-MAD ethanol PBC](../../examples/pet-mad-etoh-pbc.md).
 """,
     "metatomic-pbc-md": """
 CHARMM-free cubic-box ASE MD through a metatomic `.pt` (PET-MAD by default).

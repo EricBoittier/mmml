@@ -5,7 +5,9 @@ forces, dipoles and ESP; rigid dimer and internal-coordinate scans (rigid or con
 NPZ conversion, validation, and splitting steps in between.
 
 How-to: [internal-coordinate scans](../ic-scan-design.md) (`mmml ic-scan`),
-[dimer scans](../functionality/dimer_scans/README.md).
+[dimer scans](../functionality/dimer_scans/README.md),
+[PET-MAD interaction slices](../examples/pet-mad-etoh-pbc.md#2b-interaction-slices-and-surfaces-no-md)
+(`mmml pet-interaction-pes`).
 
 ```bash
 mmml pyscf-evaluate -i traj.npz -o out.npz --EF --esp   # label geometries
@@ -37,7 +39,7 @@ mmml npz2traj data.npz -o traj.traj     # NPZ -> ASE trajectory
   how-to (`mmml ic-scan`). Default is rigid; `geometry_mode: constrained-relax`
   for a methyl rotor.
 
-**Commands** — the `pyscf-*` family, `dimer-scan`, `ic-scan`, `mode-check`,
+**Commands** — the `pyscf-*` family, `dimer-scan`, `pet-interaction-pes`, `ic-scan`, `mode-check`,
 `fix-and-split`, `validate`, plus the ORCA external interface.
 
 ## A note on trust

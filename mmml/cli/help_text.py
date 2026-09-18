@@ -51,6 +51,10 @@ COMMAND_GROUPS: tuple[tuple[str, tuple[CommandInfo, ...]], ...] = (
             CommandInfo("npz2traj", "NPZ → ASE trajectory (E/F/dipole/charges)"),
             CommandInfo("validate", "Validate NPZ against schema"),
             CommandInfo("dimer-scan", "Rigid 1D dimer energy/force scan"),
+            CommandInfo(
+                "pet-interaction-pes",
+                "PET-MAD interaction slices, surfaces, and trimer leftover",
+            ),
             CommandInfo("ic-scan", "Bond/angle/dihedral scans (1D or N-D) for QM/ML"),
             CommandInfo(
                 "mode-check",
@@ -134,6 +138,7 @@ EXAMPLE_BLOCKS: tuple[tuple[str, tuple[str, ...]], ...] = (
             "--n-samples 50 --out-dir charmm_ml_comparison",
             "mmml physnet-train --config train.yaml",
             "mmml pet-physnet-distill --checkpoint pet-mad.pt --out-dir ./acetone_pet_distill --preset smoke",
+            "mmml pet-interaction-pes --checkpoint \"$PET_MAD_CKPT\"",
             "mmml mode-check --composition TIP3:1 --checkpoint \"$MMML_CKPT\" --output-dir ./mode_tip3_1",
             "mmml mode-check --composition TIP3:2 --checkpoint \"$MMML_CKPT\" --output-dir ./mode_tip3_2 --checks minimize,fd,bond-scan,vibrations,kick",
             "mmml mode-check --pbc-fd --checkpoint \"$MMML_CKPT\" --output artifacts/fd_force_check.json",

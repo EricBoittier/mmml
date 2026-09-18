@@ -327,6 +327,10 @@ def main():
         from .misc import pet_physnet_distill
         return pet_physnet_distill.main(args.args)
 
+    elif command == "pet-interaction-pes":
+        from .misc import pet_interaction_pes
+        return pet_interaction_pes.main(args.args)
+
     elif command == "metatomic-pbc-md":
         from .misc import metatomic_pbc_md
         return metatomic_pbc_md.main(args.args)
