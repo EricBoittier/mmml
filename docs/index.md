@@ -14,7 +14,7 @@ usage: mmml [-h] <command> ...
 
 MMML: Machine Learning for Molecular Modeling
 
-Subcommands (66 total). Common:
+Subcommands (67 total). Common:
   md-system      mixed-composition MD (YAML + campaigns)
   physnet-train  train PhysNetJAX from NPZ
   configure      interactive config / Snakemake wizard

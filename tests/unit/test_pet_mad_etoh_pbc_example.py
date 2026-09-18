@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import json
 import numpy as np
 import pytest
 from ase.io import read as ase_read
@@ -102,11 +103,15 @@ def test_pbc_nvt_yaml_defaults() -> None:
     assert defaults["include_mm"] is False
     assert defaults["mlpot_pbc"] is True
     assert "nve_smoke" in cfg["runs"]
+    assert "nve" in cfg["runs"]
     assert "nvt" in cfg["runs"]
     smoke = cfg["runs"]["nve_smoke"]
     assert smoke["setup"] == "pbc_nve"
     assert smoke["ps_nve"] == pytest.approx(0.0025)
     assert smoke["backend"] == "pycharmm"
+    nve = cfg["runs"]["nve"]
+    assert nve["setup"] == "pbc_nve"
+    assert nve["ps_nve"] == pytest.approx(0.2)
     nvt = cfg["runs"]["nvt"]
     assert nvt["setup"] == "pbc_nvt"
     assert defaults["temperature"] == pytest.approx(300.0)
@@ -144,7 +149,7 @@ def test_pbc_nvt_yaml_forwards_metatomic_flags(tmp_path: Path) -> None:
     assert cmd[cmd.index("--box-size") + 1] == "32.0"
 
 
-def _load_ase_pbc_md():
+def test_example_wrapper_reexports_conservation_stats() -> None:
     import importlib.util
 
     path = EXAMPLE / "ase_pbc_md.py"
@@ -152,14 +157,73 @@ def _load_ase_pbc_md():
     assert spec is not None and spec.loader is not None
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
-    return mod
+    from mmml.md.metatomic_pbc import nve_conservation_stats as pkg_stats
+
+    assert mod.nve_conservation_stats is pkg_stats
+
+
+def test_metatomic_pbc_md_parser_etoh_defaults() -> None:
+    from mmml.cli.misc.metatomic_pbc_md import DEFAULT_MONOMER_XYZ, DEFAULT_OUTPUT_DIR, build_parser
+    from mmml.md.metatomic_pbc import n_molecules_for_residue_box
+
+    args = build_parser().parse_args([])
+    assert args.residue == "ETOH"
+    assert args.box_size == pytest.approx(32.0)
+    assert args.dt_fs == pytest.approx(0.5)
+    assert args.temperature == pytest.approx(300.0)
+    assert args.ensemble == "nvt"
+    assert args.n_steps == 5
+    assert args.checkpoint is None
+    assert args.monomer_xyz is None
+    assert args.output_dir == DEFAULT_OUTPUT_DIR
+    assert n_molecules_for_residue_box("ETOH", box_side_A=32.0) == 338
+    nve = build_parser().parse_args(
+        ["--ensemble", "nve", "--minimize-steps", "60", "--n-steps", "400"]
+    )
+    assert nve.ensemble == "nve"
+    assert nve.minimize_steps == 60
+    assert nve.n_steps == 400
+    help_text = build_parser().format_help()
+    assert DEFAULT_MONOMER_XYZ.as_posix() in help_text
+    assert DEFAULT_OUTPUT_DIR.as_posix() in help_text
+    assert str(REPO.resolve()) not in help_text
+
+
+def test_default_etoh_monomer_xyz_is_repo_example() -> None:
+    from mmml.md.metatomic_pbc import default_etoh_monomer_xyz
+
+    path = default_etoh_monomer_xyz()
+    assert path == MONOMER.resolve()
+    assert path.is_file()
+    assert path.name == "etoh.xyz"
+    assert path.parent.name == "pet_mad_etoh_pbc"
+
+
+def test_metatomic_pbc_md_missing_checkpoint(tmp_path: Path) -> None:
+    from mmml.cli.misc.metatomic_pbc_md import main
+
+    rc = main(
+        [
+            "--checkpoint",
+            str(tmp_path / "missing.pt"),
+            "--output-dir",
+            str(tmp_path / "out"),
+            "--json-out",
+            str(tmp_path / "report.json"),
+        ]
+    )
+    assert rc == 2
+    report = json.loads((tmp_path / "report.json").read_text())
+    assert report["ok"] is False
+    assert "missing.pt" in report["checkpoint"]
 
 
 def test_nve_conservation_stats_zero_drift() -> None:
-    mod = _load_ase_pbc_md()
+    from mmml.md.metatomic_pbc import nve_conservation_stats
+
     t = np.array([0.0, 0.1, 0.2, 0.3])
     e = np.array([-10.0, -10.0, -10.0, -10.0])
-    stats = mod.nve_conservation_stats(t, e, n_atoms=100)
+    stats = nve_conservation_stats(t, e, n_atoms=100)
     assert stats["etot_drift_eV"] == pytest.approx(0.0)
     assert stats["drift_eV_per_ps"] == pytest.approx(0.0, abs=1e-12)
     assert stats["etot_span_eV"] == pytest.approx(0.0)
@@ -167,12 +231,26 @@ def test_nve_conservation_stats_zero_drift() -> None:
 
 
 def test_nve_conservation_stats_linear_drift() -> None:
-    mod = _load_ase_pbc_md()
+    from mmml.md.metatomic_pbc import nve_conservation_stats
+
     t = np.array([0.0, 0.5, 1.0])
     e = np.array([0.0, 1.0, 2.0])  # 2 eV/ps
-    stats = mod.nve_conservation_stats(t, e, n_atoms=200)
+    stats = nve_conservation_stats(t, e, n_atoms=200)
     assert stats["drift_eV_per_ps"] == pytest.approx(2.0)
     assert stats["etot_drift_eV"] == pytest.approx(2.0)
     assert stats["drift_meV_per_atom_ps"] == pytest.approx(10.0)
     assert stats["rel_drift_per_ps"] == pytest.approx(2.0)  # mean E = 1
+
+
+def test_nve_conservation_stats_rejects_bad_traces() -> None:
+    from mmml.md.metatomic_pbc import nve_conservation_stats
+
+    with pytest.raises(ValueError, match="length >= 2"):
+        nve_conservation_stats(np.array([0.0]), np.array([1.0]), n_atoms=1)
+    with pytest.raises(ValueError, match="must increase"):
+        nve_conservation_stats(np.array([1.0, 1.0]), np.array([0.0, 1.0]), n_atoms=1)
+    with pytest.raises(ValueError, match="finite"):
+        nve_conservation_stats(
+            np.array([0.0, 1.0]), np.array([0.0, np.nan]), n_atoms=1
+        )
 

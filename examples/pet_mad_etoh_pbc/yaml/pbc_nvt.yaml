@@ -10,6 +10,8 @@
 #   mmml md-system --config examples/pet_mad_etoh_pbc/yaml/pbc_nvt.yaml \
 #     --job-id nve_smoke --checkpoint "$PET_MAD_CKPT"
 #   mmml md-system --config examples/pet_mad_etoh_pbc/yaml/pbc_nvt.yaml \
+#     --job-id nve --checkpoint "$PET_MAD_CKPT"
+#   mmml md-system --config examples/pet_mad_etoh_pbc/yaml/pbc_nvt.yaml \
 #     --job-id nvt --checkpoint "$PET_MAD_CKPT"
 #
 # Prefer a certified MM box first (Packmol + CHARMM MM, no MLpot):
@@ -17,7 +19,8 @@
 #     --target-density-g-cm3 0.789 -o boxes/etoh338_32A
 # then pass --from-psf / --from-crd for the jobs below.
 #
-# CHARMM-free ASE smoke (no Packmol): examples/pet_mad_etoh_pbc/ase_pbc_md.py
+# CHARMM-free ASE smoke (no Packmol): mmml metatomic-pbc-md
+#   (examples/pet_mad_etoh_pbc/ase_pbc_md.py is a thin wrapper)
 # Docs: docs/examples/pet-mad-etoh-pbc.md
 
 defaults:
@@ -49,6 +52,19 @@ runs:
     mini_nstep: 5
     ps_nve: 0.0025
     output_dir: scratch/pet_mad_etoh_pbc/nve_smoke
+    extra_args:
+      - --mlpot-pbc
+      - --no-echeck
+      - --no-include-mm
+
+  nve:
+    description: 32 Å ETOH:338 PET-MAD — mini + 0.2 ps NVE at 0.5 fs (conservation)
+    backend: pycharmm
+    setup: pbc_nve
+    md_stages: mini,nve
+    mini_nstep: 50
+    ps_nve: 0.2
+    output_dir: scratch/pet_mad_etoh_pbc/nve
     extra_args:
       - --mlpot-pbc
       - --no-echeck

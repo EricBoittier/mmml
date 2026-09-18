@@ -42,6 +42,11 @@ COMMAND_REGISTRY: tuple[CommandSpec, ...] = (
         note="Prefer md-system for new MD; run kept for hybrid calculator demos.",
     ),
     CommandSpec("md-system", "mmml.cli.run.md_system", "Mixed-composition MD (ASE/JAX-MD/PyCHARMM)"),
+    CommandSpec(
+        "metatomic-pbc-md",
+        "mmml.cli.misc.metatomic_pbc_md",
+        "CHARMM-free metatomic ASE MD in a cubic liquid box (NVT/NVE)",
+    ),
     CommandSpec("liquid-box", "mmml.cli.run.liquid_box", "Build/certify periodic liquid boxes (MM only)"),
     CommandSpec(
         "md-embedding",

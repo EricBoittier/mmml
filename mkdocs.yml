@@ -116,6 +116,7 @@ nav:
       - Commands:
           # CLI_NAV_START: MD & campaigns
           - md-system: cli/commands/md-system.md
+          - metatomic-pbc-md: cli/commands/metatomic-pbc-md.md
           - run: cli/commands/run.md
           - run-pycharmm: cli/commands/run-pycharmm.md
           - md-embedding: cli/commands/md-embedding.md

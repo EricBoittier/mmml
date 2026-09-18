@@ -327,6 +327,10 @@ def main():
         from .misc import pet_physnet_distill
         return pet_physnet_distill.main(args.args)
 
+    elif command == "metatomic-pbc-md":
+        from .misc import metatomic_pbc_md
+        return metatomic_pbc_md.main(args.args)
+
     elif command == "physnet-md":
         from .misc import physnet_md
         sys.argv = ["mmml physnet-md"] + args.args

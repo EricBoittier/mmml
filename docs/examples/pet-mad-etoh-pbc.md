@@ -50,15 +50,17 @@ xs 1.5.0 is the smoke default. PET-MAD s is the same CLI with a larger `.pt`.
 
 ## 2. CHARMM-free ASE smoke (no Packmol)
 
-Grid-places 338 copies of `examples/pet_mad_etoh_pbc/etoh.xyz` in the 32 Å cell
-and runs Langevin NVT (or VelocityVerlet NVE) through
-`load_metatomic_calculator`. This does **not** go through `setup_calculator`
-(JAX MM) or CHARMM.
+First-class command: **`mmml metatomic-pbc-md`**. Grid-places 338 copies of
+`examples/pet_mad_etoh_pbc/etoh.xyz` in the 32 Å cell and runs Langevin NVT
+(or VelocityVerlet NVE) through `load_metatomic_calculator`. This does **not**
+go through `setup_calculator` (JAX MM) or CHARMM. `examples/pet_mad_etoh_pbc/ase_pbc_md.py`
+is a thin wrapper around the same CLI.
 
 ```bash
 export PET_MAD_CKPT=/path/to/pet-mad-xs-v1.5.0.pt
 JAX_PLATFORMS=cpu MMML_METATOMIC_DEVICE=cpu \
-  ./examples/pet_mad_etoh_pbc/run_smoke.sh
+  mmml metatomic-pbc-md --ensemble nvt --n-steps 5
+# or: ./examples/pet_mad_etoh_pbc/run_smoke.sh
 # or: N_STEPS=2 ENSEMBLE=nve ./examples/pet_mad_etoh_pbc/run_smoke.sh
 ```
 
@@ -80,8 +82,8 @@ Lattice packing leaves |F| ~ 10 eV/Å. Minimize first, then NVE at 0.5 fs:
 
 ```bash
 export PET_MAD_CKPT=/path/to/pet-mad-xs-v1.5.0.pt
-N_STEPS=400 MINI_STEPS=60 \
-  ./examples/pet_mad_etoh_pbc/run_nve.sh
+mmml metatomic-pbc-md --ensemble nve --minimize-steps 60 --n-steps 400
+# or: N_STEPS=400 MINI_STEPS=60 ./examples/pet_mad_etoh_pbc/run_nve.sh
 ```
 
 | Check | Pass |
@@ -125,6 +127,13 @@ exist, inter-monomer contacts above the prep floor (see `REPORT.md`).
 # 5 NVE steps at 0.5 fs (smoke)
 mmml md-system --config examples/pet_mad_etoh_pbc/yaml/pbc_nvt.yaml \
   --job-id nve_smoke \
+  --from-psf boxes/etoh338_32A/model.psf \
+  --from-crd boxes/etoh338_32A/model.crd \
+  --checkpoint "$PET_MAD_CKPT"
+
+# 0.2 ps NVE after mini (conservation)
+mmml md-system --config examples/pet_mad_etoh_pbc/yaml/pbc_nvt.yaml \
+  --job-id nve \
   --from-psf boxes/etoh338_32A/model.psf \
   --from-crd boxes/etoh338_32A/model.crd \
   --checkpoint "$PET_MAD_CKPT"

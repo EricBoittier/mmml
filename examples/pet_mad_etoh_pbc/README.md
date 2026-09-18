@@ -13,7 +13,8 @@ isolated monomers plus dimers on every CHARMM USER call.
 
 ```bash
 export PET_MAD_CKPT=/path/to/pet-mad-xs-v1.5.0.pt
-./examples/pet_mad_etoh_pbc/run_smoke.sh
+mmml metatomic-pbc-md --ensemble nvt --n-steps 5
+# or: ./examples/pet_mad_etoh_pbc/run_smoke.sh
 ```
 
 Pass: `report.json` has `"ok": true`, finite eV energies/forces, `n_molecules=338`,
@@ -26,7 +27,8 @@ at 0.5 fs. Forces are autograd of the energy (`non_conservative=False`).
 
 ```bash
 export PET_MAD_CKPT=/path/to/pet-mad-xs-v1.5.0.pt
-N_STEPS=400 MINI_STEPS=60 ./examples/pet_mad_etoh_pbc/run_nve.sh
+mmml metatomic-pbc-md --ensemble nve --minimize-steps 60 --n-steps 400
+# or: N_STEPS=400 MINI_STEPS=60 ./examples/pet_mad_etoh_pbc/run_nve.sh
 ```
 
 Writes `energy.csv`, `nve_energy.png`, and `report.json` with `drift_eV_per_ps`

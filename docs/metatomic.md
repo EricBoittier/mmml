@@ -182,12 +182,15 @@ RMSD ≈ 0 after SD pass 2 (same criterion as PhysNet MLpot).
 ## Periodic liquid ethanol (32 Å, 300 K, 0.5 fs)
 
 Worked example: neat `ETOH:338` in a 32 Å cube at 0.789 g/cm³ (experimental
-bulk), Langevin/CHARMM NVT at 300 K, Δt = 0.5 fs, **`whole_system`** PET-MAD.
+bulk), **`whole_system`** PET-MAD. CHARMM-free ASE MD is first-class CLI:
 
 ```bash
 export PET_MAD_CKPT=/path/to/pet-mad-xs-v1.5.0.pt
-# CHARMM-free ASE smoke (grid pack, no Packmol)
-./examples/pet_mad_etoh_pbc/run_smoke.sh
+# CHARMM-free ASE (grid pack, no Packmol / CHARMM)
+mmml metatomic-pbc-md --ensemble nvt --n-steps 5
+# NVE conservation: FIRE mini, then VelocityVerlet (0.2 ps default)
+mmml metatomic-pbc-md --ensemble nve --minimize-steps 60 --n-steps 400
+# wrappers: ./examples/pet_mad_etoh_pbc/run_smoke.sh  and  run_nve.sh
 
 # Production: MM-certify the box, then all-ML USER
 mmml liquid-box --composition ETOH:338 --box-size 32 \
@@ -199,9 +202,8 @@ mmml md-system --config examples/pet_mad_etoh_pbc/yaml/pbc_nvt.yaml \
 
 `--box-auto count --composition ETOH:1 --box-size 32 --target-density-g-cm3 0.789`
 is the same 338-molecule count. Do **not** use `fragments` on this box.
-NVE conservation (FIRE mini, then VelocityVerlet, 0.5 fs):
-`./examples/pet_mad_etoh_pbc/run_nve.sh`.
-Details, pass/fail, and YAML: [PET-MAD ethanol PBC](examples/pet-mad-etoh-pbc.md).
+YAML `nve` is 0.2 ps after mini. Details, pass/fail, and YAML:
+[PET-MAD ethanol PBC](examples/pet-mad-etoh-pbc.md).
 
 ## PET-MAD teacher → PhysNet student (acetone)
 

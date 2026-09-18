@@ -57,6 +57,7 @@ CLI_NAV_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
         "MD & campaigns",
         (
             "md-system",
+            "metatomic-pbc-md",
             "run",
             "run-pycharmm",
             "md-embedding",
@@ -209,6 +210,11 @@ RELATED_DOCS: dict[str, list[tuple[str, str]]] = {
         ("Metatomic in MMML", "../../metatomic.md"),
         ("Bayesian PES design", "../../bayesian-pes-design.md"),
     ],
+    "metatomic-pbc-md": [
+        ("Metatomic in MMML", "../../metatomic.md"),
+        ("PET-MAD ethanol PBC example", "../../examples/pet-mad-etoh-pbc.md"),
+        ("Liquid box workflow", "../../liquid-box-workflow.md"),
+    ],
     "neb": [
         ("NEB guide", "../../neb.md"),
         ("Menshutkin example", "../../examples/menshutkin.md"),
@@ -338,6 +344,19 @@ minimizer, or backend operation is requested. Those operations require
 (`libcharmm.dylib` on macOS). Certified `--from-psf`/`--from-crd` geometry can
 therefore be routed and unit-tested on ordinary CI runners without initializing
 the native CHARMM runtime.
+""",
+    "metatomic-pbc-md": """
+CHARMM-free cubic-box ASE MD through a metatomic `.pt` (PET-MAD by default).
+Does **not** call `setup_calculator` or CHARMM. Default recipe: 32 Å ethanol at
+0.789 g/cm³ (ETOH:338), 300 K, 0.5 fs. `--ensemble nve` with FIRE mini is the
+conservation path.
+
+```bash
+export PET_MAD_CKPT=/path/to/pet-mad-xs-v1.5.0.pt
+mmml metatomic-pbc-md --ensemble nve --minimize-steps 60 --n-steps 400
+```
+
+Worked example: [PET-MAD ethanol PBC](../../examples/pet-mad-etoh-pbc.md).
 """,
     "commands": """
 `mmml commands` lists every subcommand grouped by task area — a browsable

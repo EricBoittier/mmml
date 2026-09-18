@@ -25,8 +25,9 @@ if [[ ! -f "$CKPT" ]]; then
 fi
 
 cmd=(
-  uv run python examples/pet_mad_etoh_pbc/ase_pbc_md.py
+  uv run mmml metatomic-pbc-md
   --checkpoint "$CKPT"
+  --residue ETOH
   --box-size 32
   --temperature 300
   --dt-fs 0.5

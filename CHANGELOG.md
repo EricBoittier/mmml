@@ -111,7 +111,9 @@ and versioning process.
   `examples/pet_mad_etoh_pbc/` and
   [`docs/examples/pet-mad-etoh-pbc.md`](docs/examples/pet-mad-etoh-pbc.md).
   ASE NVE conservation path: FIRE mini then VelocityVerlet with a PE/KE/Etot
-  log (`run_nve.sh`).
+  log (`run_nve.sh`). First-class CLI: `mmml metatomic-pbc-md` (CHARMM-free
+  cubic liquid box; ethanol 32 Å / 300 K / 0.5 fs is the default recipe).
+  YAML `nve` job is 0.2 ps after mini.
   See [`docs/metatomic.md`](docs/metatomic.md).
 
 - `scripts/bench_static_vs_neighbor_pairs.py`: static complete pair list vs

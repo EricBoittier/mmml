@@ -26,6 +26,10 @@ COMMAND_GROUPS: tuple[tuple[str, tuple[CommandInfo, ...]], ...] = (
         "MD & campaigns",
         (
             CommandInfo("md-system", "Mixed-composition MD (ASE/JAX-MD/PyCHARMM MLpot)"),
+            CommandInfo(
+                "metatomic-pbc-md",
+                "CHARMM-free metatomic ASE MD in a cubic liquid box",
+            ),
             CommandInfo("run", "MM/ML simulation (ASE + JAX-MD hybrid)"),
             CommandInfo("run-pycharmm", "Pure CHARMM heating/equilibration"),
             CommandInfo("lambda-mbar", "MBAR post-processing for lambda TI"),
@@ -112,6 +116,7 @@ EXAMPLE_BLOCKS: tuple[tuple[str, tuple[str, ...]], ...] = (
             "mmml configure",
             "mmml md-system --setup pbc_npt --composition MEOH:5,TIP3:5 --temperature 300",
             "mmml md-system --config examples/pet_mad_etoh_pbc/yaml/pbc_nvt.yaml --job-id nve_smoke",
+            "mmml metatomic-pbc-md --ensemble nve --minimize-steps 60 --n-steps 400",
             "mmml md-system --config campaign.yaml --run-all",
             "mmml warmup-mlpot-jax --checkpoint \"$MMML_CKPT\" --n-monomers 20",
             "mmml analyze-liquid --campaign-dir artifacts/lj_scales/liquid_dcm -o analysis/",
