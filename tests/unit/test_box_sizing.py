@@ -214,6 +214,25 @@ def test_n_molecules_for_target_density_in_fixed_box_dcm32():
     assert mass / vol_cm3 == pytest.approx(1.326, rel=0.01)
 
 
+def test_n_molecules_for_target_density_in_fixed_box_etoh32():
+    from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import (
+        SOLVENT_BULK_PROPS,
+        n_molecules_for_target_density_in_fixed_box,
+        total_mass_g_for_composition,
+    )
+
+    rho = float(SOLVENT_BULK_PROPS["ETOH"]["rho_g_cm3"])
+    scaled = n_molecules_for_target_density_in_fixed_box(
+        composition={"ETOH": 1},
+        box_side_A=32.0,
+        target_density_g_cm3=rho,
+    )
+    assert scaled == {"ETOH": 338}
+    mass = total_mass_g_for_composition(scaled)
+    vol_cm3 = (32.0 * 1.0e-8) ** 3
+    assert mass / vol_cm3 == pytest.approx(rho, rel=0.01)
+
+
 def test_apply_box_auto_count_composition_mutates_args():
     from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import (
         apply_box_auto_count_composition,

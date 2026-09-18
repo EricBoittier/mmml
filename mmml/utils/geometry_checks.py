@@ -934,6 +934,68 @@ def repack_monomers_clear_overlap(
     return new_pos
 
 
+def tile_monomer_in_cubic_cell(
+    monomer_positions: np.ndarray,
+    n_molecules: int,
+    box_side_A: float,
+    *,
+    seed: int = 0,
+    random_rotations: bool = True,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Place ``n_molecules`` rigid copies of a monomer on a cubic PBC lattice.
+
+    COMs sit on a simple cubic grid that fills the cell (``ceil(N^{1/3})``
+    along each edge). Each copy is optionally rotated about its COM. This is
+    a CHARMM-free starting guess for all-ML liquid MD — production boxes
+    should still come from Packmol / ``mmml liquid-box``.
+    """
+    template = np.asarray(monomer_positions, dtype=float)
+    if template.ndim != 2 or template.shape[1] != 3:
+        raise ValueError(
+            f"monomer_positions must be (n_atoms, 3), got {template.shape}"
+        )
+    n_mol = int(n_molecules)
+    if n_mol <= 0:
+        raise ValueError(f"n_molecules must be positive, got {n_mol}")
+    side = float(box_side_A)
+    if side <= 0.0:
+        raise ValueError(f"box_side_A must be positive, got {side}")
+
+    n_per = int(template.shape[0])
+    com = template.mean(axis=0)
+    internal = template - com
+    n_side = int(np.ceil(n_mol ** (1.0 / 3.0)))
+    step = side / float(n_side)
+    rng = np.random.default_rng(int(seed))
+
+    positions = np.empty((n_mol * n_per, 3), dtype=float)
+    offsets = np.arange(0, n_mol * n_per + 1, n_per, dtype=int)
+    idx = 0
+    for ix in range(n_side):
+        for iy in range(n_side):
+            for iz in range(n_side):
+                if idx >= n_mol:
+                    break
+                center = np.array(
+                    [(ix + 0.5) * step, (iy + 0.5) * step, (iz + 0.5) * step],
+                    dtype=float,
+                )
+                oriented = _oriented_repack_template(
+                    internal,
+                    random_rotations=random_rotations,
+                    rng=rng,
+                )
+                positions[idx * n_per : (idx + 1) * n_per] = oriented + center
+                idx += 1
+            if idx >= n_mol:
+                break
+        if idx >= n_mol:
+            break
+    if idx != n_mol:
+        raise RuntimeError(f"placed {idx} monomers, expected {n_mol}")
+    return positions, offsets
+
+
 def repack_selected_monomers_clear_overlap(
     positions: np.ndarray,
     monomer_offsets: np.ndarray,

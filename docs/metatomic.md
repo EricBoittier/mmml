@@ -179,6 +179,28 @@ Pass: CHARMM `ENER` includes a finite USER term; SD and short NVE complete.
 With `--metatomic-eval-mode fragments` and a monomer `cons_fix`, fixed-monomer
 RMSD ≈ 0 after SD pass 2 (same criterion as PhysNet MLpot).
 
+## Periodic liquid ethanol (32 Å, 300 K, 0.5 fs)
+
+Worked example: neat `ETOH:338` in a 32 Å cube at 0.789 g/cm³ (experimental
+bulk), Langevin/CHARMM NVT at 300 K, Δt = 0.5 fs, **`whole_system`** PET-MAD.
+
+```bash
+export PET_MAD_CKPT=/path/to/pet-mad-xs-v1.5.0.pt
+# CHARMM-free ASE smoke (grid pack, no Packmol)
+./examples/pet_mad_etoh_pbc/run_smoke.sh
+
+# Production: MM-certify the box, then all-ML USER
+mmml liquid-box --composition ETOH:338 --box-size 32 \
+  --target-density-g-cm3 0.789 -o boxes/etoh338_32A
+mmml md-system --config examples/pet_mad_etoh_pbc/yaml/pbc_nvt.yaml \
+  --job-id nvt --from-psf boxes/etoh338_32A/model.psf \
+  --from-crd boxes/etoh338_32A/model.crd --checkpoint "$PET_MAD_CKPT"
+```
+
+`--box-auto count --composition ETOH:1 --box-size 32 --target-density-g-cm3 0.789`
+is the same 338-molecule count. Do **not** use `fragments` on this box.
+Details, pass/fail, and YAML: [PET-MAD ethanol PBC](examples/pet-mad-etoh-pbc.md).
+
 ## PET-MAD teacher → PhysNet student (acetone)
 
 Weight copy is impossible (TorchScript PET vs 19 k-parameter JAX PhysNet).

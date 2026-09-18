@@ -106,6 +106,10 @@ and versioning process.
   PET-MAD teacher → PhysNet student (acetone pool + synthetic augmentations) is
   `mmml pet-physnet-distill`; dummy-teacher tests in
   `tests/unit/test_pet_physnet_distill.py`.
+  Periodic PET-MAD MD example: 32 Å liquid ethanol (ETOH:338 at 0.789 g/cm³,
+  300 K, 0.5 fs, `--metatomic-eval-mode whole_system`) in
+  `examples/pet_mad_etoh_pbc/` and
+  [`docs/examples/pet-mad-etoh-pbc.md`](docs/examples/pet-mad-etoh-pbc.md).
   See [`docs/metatomic.md`](docs/metatomic.md).
 
 - `scripts/bench_static_vs_neighbor_pairs.py`: static complete pair list vs

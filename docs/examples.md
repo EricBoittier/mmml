@@ -22,6 +22,7 @@ mmml health-check --require-gpu
 ```bash
 mmml configure
 mmml md-system --setup pbc_npt --composition MEOH:5,TIP3:5 --temperature 300
+mmml md-system --config examples/pet_mad_etoh_pbc/yaml/pbc_nvt.yaml --job-id nve_smoke
 mmml md-system --config campaign.yaml --run-all
 mmml warmup-mlpot-jax --checkpoint "$MMML_CKPT" --n-monomers 20
 mmml analyze-liquid --campaign-dir artifacts/lj_scales/liquid_dcm -o analysis/

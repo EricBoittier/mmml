@@ -96,3 +96,18 @@ uv run mmml md-system --backend pycharmm \
 ```
 
 `--ps 0.00125` at `--dt-fs 0.25` is 5 NVE steps.
+
+## 32 Å liquid ethanol (PET-MAD, 300 K, 0.5 fs)
+
+CHARMM-free ASE smoke and `md-system` YAML:
+`examples/pet_mad_etoh_pbc/` (docs: `docs/examples/pet-mad-etoh-pbc.md`).
+
+```bash
+export PET_MAD_CKPT=/tmp/mmml-metatomic-models/pet-mad-xs-v1.5.0.pt
+JAX_PLATFORMS=cpu MMML_METATOMIC_DEVICE=cpu \
+  ./examples/pet_mad_etoh_pbc/run_smoke.sh
+```
+
+Pass: `report.json` `"ok": true`, ETOH:338 / 3042 atoms, ρ ≈ 0.789 g/cm³,
+finite eV energy/forces, 5 × 0.5 fs steps at 300 K. Use
+`--metatomic-eval-mode whole_system` for the PyCHARMM path (not `fragments`).

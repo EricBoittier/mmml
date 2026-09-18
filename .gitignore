@@ -224,6 +224,7 @@ build.setup.out
 CHARMMSETUP
 *.xyz
 !mmml/data/molecules/dcm.xyz
+!examples/pet_mad_etoh_pbc/etoh.xyz
 *.png
 !docs/images/**/*.png
 !docs/plot-style-gallery-assets/*.png

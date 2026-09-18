@@ -108,6 +108,7 @@ nav:
           - Peptide φ/ψ scan → umbrella PMF (teaching): examples/tria-phi-psi-scan.md
           - MD embedding (solvated peptide): examples/md-embedding-design.md
           - NMA end-to-end (residue → train → MD): examples/nma-workflow.md
+          - PET-MAD PBC liquid ethanol (32 Å, 300 K): examples/pet-mad-etoh-pbc.md
           - aaa.ama peptide ML workflow: examples/aaa-ama-workflow.md
           - NH₃–CH₃Cl PhysNet results: examples/nh3-ch3cl-results.md
           - Menshutkin reactive ML/MM free energies: examples/menshutkin.md
