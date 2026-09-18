@@ -33,7 +33,7 @@ Pass: each `.pt` loads as `metatomic_ase.MetatomicCalculator`; water monomer and
 dimer energies/forces are finite; dummy `calculate_charmm` kcal/mol matches
 `E_eV * EV_TO_KCAL_MOL`.
 
-CPU cost vs bundled JAX PhysNet (`DESdimers_params.json`), CHARMM-free:
+CPU cost vs bundled JAX PhysNet (`DESdimers_params.json`):
 
 ```bash
 JAX_PLATFORMS=cpu MMML_METATOMIC_DEVICE=cpu \
@@ -41,7 +41,8 @@ JAX_PLATFORMS=cpu MMML_METATOMIC_DEVICE=cpu \
   --out /tmp/metatomic_vs_physnet_cost.json
 ```
 
-See `docs/metatomic.md`.
+On CPU, PET-MAD xs is ~4.5× a sequential PhysNet energy+forces eval on an
+acetone dimer; PET-MAD s / PET-MOLS are ~9×. See `docs/metatomic.md`.
 
 ## Serial PyCHARMM MD
 

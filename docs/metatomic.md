@@ -135,6 +135,33 @@ PET-MAD reports formation-like totals (~−14 eV / water). PET-MOLS reports a mu
 deeper electronic reference (~−2000 eV / water); that is the checkpoint, not a
 unit bug. CHARMM USER will inherit that offset.
 
+## Cost vs bundled JAX PhysNet
+
+PET-MAD / PET-MOLS are much larger than the in-repo PhysNet DES-dimers
+checkpoint (`examples/ckpts_json/DESdimers_params.json`: features=32,
+`max_degree=1`, 2 message-passing iterations, 16 RBF, 6 Å cutoff, ZBL, **~19 k**
+parameters, 680 KB JSON). The Hub PET exports are **~3–4.5 M** parameters
+(14–20 MB `.pt`).
+
+On CPU (no GPU, `JAX_PLATFORMS=cpu`), after ASE-cache reset and a 1e-4 Å
+position jitter, median energy+forces:
+
+| System | PhysNet whole / fragments | PET-MAD xs 1.5.0 | PET-MAD s 1.0.2 / PET-MOLS s |
+|---|---|---|---|
+| Water dimer (6 atoms) | 2.7 ms / 8.4 ms | 9.9 ms / 27 ms (**3.6×**) | 10 ms / 26 ms (**3.7×**) |
+| Acetone dimer (20 atoms) | 3.8 ms / 9.9 ms | 17 ms / 42 ms (**4.5×**) | 34 ms / 63 ms (**9×**) |
+
+`fragments` is three sequential evals (`E(A)+E(B)+s·(E(AB)−E(A)−E(B))`), which
+is what `--metatomic-eval-mode fragments` pays per CHARMM USER call. Production
+PhysNet MLpot batches those fragments in one jitted apply, so the PhysNet USER
+path is cheaper than the sequential numbers above. A GPU would move PET much
+more than this tiny PhysNet. Re-run:
+
+```bash
+JAX_PLATFORMS=cpu MMML_METATOMIC_DEVICE=cpu \
+  uv run python tests/functionality/metatomic/compare_jax_cost.py
+```
+
 Local CHARMM smoke (serial `libcharmm`; `rebuild_charmm_mlpot.sh --no-mpi`):
 
 ```bash

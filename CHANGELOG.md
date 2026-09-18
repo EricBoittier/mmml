@@ -102,6 +102,7 @@ and versioning process.
   and ic-scan. Hub smoke (PET-MAD s 1.0.2, PET-MAD xs 1.5.0, PET-MOLS s 1.0.0 from
   `lab-cosmo/upet`) is documented in `tests/functionality/metatomic/`. Serial
   PyCHARMM ENER/SD/NVE smoke is `tests/functionality/metatomic/pycharmm_md_smoke.py`.
+  CPU cost vs bundled JAX PhysNet is `tests/functionality/metatomic/compare_jax_cost.py`.
   See [`docs/metatomic.md`](docs/metatomic.md).
 
 - `scripts/bench_static_vs_neighbor_pairs.py`: static complete pair list vs

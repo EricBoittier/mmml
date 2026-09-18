@@ -221,7 +221,6 @@ def bench_calculator(label: str, calc, atoms: Atoms, *, atoms_per_monomer: list[
     rec["fragment_over_whole"] = float(rec["fragments"]["median_s"] / rec["whole"]["median_s"])
     rec["ok"] = bool(rec["whole_summary"]["finite"] and rec["fragments_summary"]["finite"])
     rec["cache_bust"] = "reset+1e-4A_jitter"
-    _ = all_changes
     return rec
 
 
