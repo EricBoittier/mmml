@@ -100,6 +100,7 @@ CLI_NAV_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
         "ML training & MD",
         (
             "physnet-train",
+            "pet-physnet-distill",
             "physnet-evaluate",
             "physnet-md",
             "neb",
@@ -202,6 +203,10 @@ RELATED_DOCS: dict[str, list[tuple[str, str]]] = {
         ("DCMNet calculators and ESP", "../../dcmnet_calculators.md"),
     ],
     "pes-design": [
+        ("Bayesian PES design", "../../bayesian-pes-design.md"),
+    ],
+    "pet-physnet-distill": [
+        ("Metatomic in MMML", "../../metatomic.md"),
         ("Bayesian PES design", "../../bayesian-pes-design.md"),
     ],
     "neb": [

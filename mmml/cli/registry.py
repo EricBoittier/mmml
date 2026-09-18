@@ -126,6 +126,11 @@ COMMAND_REGISTRY: tuple[CommandSpec, ...] = (
         "Monomer/cluster FD, X–H stretch, vib, kick (+ PBC FD)",
     ),
     CommandSpec("physnet-train", "mmml.cli.make.make_training", "Train PhysNet message-passing model (E/F)"),
+    CommandSpec(
+        "pet-physnet-distill",
+        "mmml.cli.misc.pet_physnet_distill",
+        "PET-MAD teacher → PhysNet NPZ (acetone dataset + synthetic pool)",
+    ),
     CommandSpec("physnet-md", "mmml.cli.misc.physnet_md", "PhysNet MD sampling"),
     CommandSpec("physnet-evaluate", "mmml.cli.misc.physnet_evaluate", "Evaluate PhysNet checkpoint"),
     CommandSpec("compare-npz", "mmml.cli.misc.compare_npz", "Reference vs model NPZ plots"),

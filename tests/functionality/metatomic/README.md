@@ -44,6 +44,25 @@ JAX_PLATFORMS=cpu MMML_METATOMIC_DEVICE=cpu \
 On CPU, PET-MAD xs is ~4.5× a sequential PhysNet energy+forces eval on an
 acetone dimer; PET-MAD s / PET-MOLS are ~9×. See `docs/metatomic.md`.
 
+## PET → PhysNet student (acetone labels)
+
+```bash
+JAX_PLATFORMS=cpu MMML_METATOMIC_DEVICE=cpu \
+  uv run mmml pet-physnet-distill \
+    --checkpoint /tmp/mmml-metatomic-models/pet-mad-xs-v1.5.0.pt \
+    --out-dir /tmp/acetone_pet_distill --preset smoke
+```
+
+Pass: `train.npz`/`valid.npz` exist with finite eV energies; `report.json`
+records the teacher path. Dummy-teacher unit tests:
+`uv run pytest tests/unit/test_pet_physnet_distill.py -q`.
+
+Then (local GPU/CPU, not in agent sessions):
+
+```bash
+uv run mmml physnet-train --config /tmp/acetone_pet_distill/physnet-train.yaml
+```
+
 ## Serial PyCHARMM MD
 
 ```bash

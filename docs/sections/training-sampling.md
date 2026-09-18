@@ -10,6 +10,16 @@ mmml physnet-train --config train.yaml
 mmml physnet-evaluate --checkpoint ckpts/run --test splits/test.npz
 ```
 
+To distill a small PhysNet from a metatomic PET-MAD teacher on acetone
+(dataset + synthetic noise/scans):
+
+```bash
+mmml pet-physnet-distill --checkpoint pet-mad.pt --out-dir ./acetone_pet_distill
+mmml physnet-train --config ./acetone_pet_distill/physnet-train.yaml
+```
+
+See [Metatomic in MMML](../metatomic.md).
+
 Then sample with the trained model:
 
 ```bash
@@ -31,10 +41,10 @@ mmml dmc --natm 20 --nwalker 512 --stepsize 5e-4 --nstep 5000 --eqstep 1000 \
 - [Diffusion Monte Carlo (DMC)](../dmc.md) — batched PhysNetJax walkers, with a
   longer production example and the output file layout.
 
-**Commands** — `physnet-train` / `-evaluate` / `-md`, the `efield-*` and
-`kernnn-*` families, `neb`, `dmc`, `active-learning`, `pes-design`, `kernel-fit`,
-`train-joint`, and the checkpoint utilities (`orbax-to-json`,
-`extract-checkpoint-metrics`, `diagnose-lc-outliers`).
+**Commands** — `physnet-train` / `-evaluate` / `-md`, `pet-physnet-distill`,
+the `efield-*` and `kernnn-*` families, `neb`, `dmc`, `active-learning`,
+`pes-design`, `kernel-fit`, `train-joint`, and the checkpoint utilities
+(`orbax-to-json`, `extract-checkpoint-metrics`, `diagnose-lc-outliers`).
 
 ## Before you trust a checkpoint
 

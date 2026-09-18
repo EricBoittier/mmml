@@ -178,3 +178,47 @@ with a tiny dimer (`--composition DCM:2` or `--residue ACO --n-molecules 2`,
 Pass: CHARMM `ENER` includes a finite USER term; SD and short NVE complete.
 With `--metatomic-eval-mode fragments` and a monomer `cons_fix`, fixed-monomer
 RMSD ≈ 0 after SD pass 2 (same criterion as PhysNet MLpot).
+
+## PET-MAD teacher → PhysNet student (acetone)
+
+Weight copy is impossible (TorchScript PET vs 19 k-parameter JAX PhysNet).
+This path **labels** acetone geometries with PET and trains the bundled
+PhysNet architecture on those labels.
+
+Pool: bundled ACO PDB + DMC extxyz, Cartesian noise, C=O stretches, random
+relative orientations, and COM scans covering the four PES regions (repulsive /
+well / shoulder / long-range) plus a far-field replica. Default labels are the
+hybrid pieces: monomer `E - E_eq` and unswitched dimer `E(AB)-E(A)-E(B)`
+(forces match). The ML/MM switch is **not** baked into `E`; MLpot applies it
+at MD time.
+
+```bash
+# 1. Label (CHARMM-free). --preset smoke is tiny; md is the MD-oriented mix.
+JAX_PLATFORMS=cpu MMML_METATOMIC_DEVICE=cpu \
+  uv run mmml pet-physnet-distill \
+    --checkpoint /tmp/mmml-metatomic-models/pet-mad-xs-v1.5.0.pt \
+    --out-dir ./acetone_pet_distill --preset smoke
+
+# 2. Train the student (warm-start DESdimers architecture, no live .pt teacher)
+uv run mmml physnet-train --config ./acetone_pet_distill/physnet-train.yaml
+
+# 3. Held-out teacher vs student (same NPZ units, eV)
+uv run mmml physnet-evaluate \
+  --checkpoint ./ckpts/acetone_pet_student \
+  --data ./acetone_pet_distill/valid.npz
+
+# 4. Downstream MD (you run this; not in agent sessions)
+uv run mmml md-system --backend pycharmm \
+  --ml-potential-mode physnet \
+  --checkpoint ./ckpts/acetone_pet_student \
+  --residue ACO --n-molecules 2 --setup pycharmm_minimize
+```
+
+Pass for (1): `train.npz` / `valid.npz` have finite `E`/`F`, `_mmml_units` is
+eV / eV/Å, `report.json` records teacher path and counts.
+Pass for (2–3): valid force MAE well below a raw DESdimers-on-PET baseline.
+Pass for (4): finite USER, short NVE without explosion; with `cons_fix` on one
+monomer, RMSD ≈ 0 after SD pass 2.
+
+Do not pass the PET `.pt` as `--teacher-checkpoint` on `physnet-train` — that
+flag loads a Flax tree. The NPZ *is* the teacher.

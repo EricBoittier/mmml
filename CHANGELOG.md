@@ -103,6 +103,9 @@ and versioning process.
   `lab-cosmo/upet`) is documented in `tests/functionality/metatomic/`. Serial
   PyCHARMM ENER/SD/NVE smoke is `tests/functionality/metatomic/pycharmm_md_smoke.py`.
   CPU cost vs bundled JAX PhysNet is `tests/functionality/metatomic/compare_jax_cost.py`.
+  PET-MAD teacher → PhysNet student (acetone pool + synthetic augmentations) is
+  `mmml pet-physnet-distill`; dummy-teacher tests in
+  `tests/unit/test_pet_physnet_distill.py`.
   See [`docs/metatomic.md`](docs/metatomic.md).
 
 - `scripts/bench_static_vs_neighbor_pairs.py`: static complete pair list vs

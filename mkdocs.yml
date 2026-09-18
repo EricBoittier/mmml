@@ -183,6 +183,7 @@ nav:
       - Commands:
           # CLI_NAV_START: ML training & MD
           - physnet-train: cli/commands/physnet-train.md
+          - pet-physnet-distill: cli/commands/pet-physnet-distill.md
           - physnet-evaluate: cli/commands/physnet-evaluate.md
           - physnet-md: cli/commands/physnet-md.md
           - neb: cli/commands/neb.md
