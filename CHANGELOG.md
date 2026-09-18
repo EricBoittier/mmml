@@ -97,8 +97,9 @@ and versioning process.
   evaluation. Optional JAX MM stays in an MM-only `setup_calculator` spherical_fn
   (torch is never jitted). Also wired into `energy_forces` providers, dimer-scan,
   and ic-scan. Hub smoke (PET-MAD s 1.0.2, PET-MAD xs 1.5.0, PET-MOLS s 1.0.0 from
-  `lab-cosmo/upet`) is documented in `tests/functionality/metatomic/`. See
-  [`docs/metatomic.md`](docs/metatomic.md).
+  `lab-cosmo/upet`) is documented in `tests/functionality/metatomic/`. Serial
+  PyCHARMM ENER/SD/NVE smoke is `tests/functionality/metatomic/pycharmm_md_smoke.py`.
+  See [`docs/metatomic.md`](docs/metatomic.md).
 
 - `scripts/bench_static_vs_neighbor_pairs.py`: static complete pair list vs
   rebuilt neighbour list, on correctness (fixed-configuration parity, build

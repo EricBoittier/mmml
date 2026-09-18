@@ -135,12 +135,19 @@ PET-MAD reports formation-like totals (~−14 eV / water). PET-MOLS reports a mu
 deeper electronic reference (~−2000 eV / water); that is the checkpoint, not a
 unit bug. CHARMM USER will inherit that offset.
 
-Local CHARMM smoke (user machine; not run in the agent):
+Local CHARMM smoke (serial `libcharmm`; `rebuild_charmm_mlpot.sh --no-mpi`):
 
-1. `uv sync --extra metatomic`
-2. Export a metatomic `.pt` (see [metatomic](https://github.com/metatensor/metatomic)).
-3. `md-system --backend pycharmm --ml-potential-mode metatomic --checkpoint export.pt`
-   with a tiny dimer (`--composition DCM:2`, `--setup pycharmm_minimize`).
-4. Pass: CHARMM `ENER` includes a USER term; with `--metatomic-eval-mode fragments`
-   and a monomer `cons_fix`, fixed-monomer RMSD ≈ 0 after SD pass 2 (same criterion
-   as PhysNet MLpot).
+```bash
+export MMML_NO_CHARMM_MPI=1 MMML_NO_MPI_RERUN=1 MMML_METATOMIC_DEVICE=cpu
+uv run python tests/functionality/metatomic/pycharmm_md_smoke.py --run \
+  --checkpoint export.pt --residue ACO --n-molecules 2 --spacing 5.0 \
+  --mini-nstep 3 --nstep 5 --no-echeck
+```
+
+Or `md-system --backend pycharmm --ml-potential-mode metatomic --checkpoint export.pt`
+with a tiny dimer (`--composition DCM:2` or `--residue ACO --n-molecules 2`,
+`--setup pycharmm_minimize` then a few `--ps` of `free_nve`).
+
+Pass: CHARMM `ENER` includes a finite USER term; SD and short NVE complete.
+With `--metatomic-eval-mode fragments` and a monomer `cons_fix`, fixed-monomer
+RMSD ≈ 0 after SD pass 2 (same criterion as PhysNet MLpot).
