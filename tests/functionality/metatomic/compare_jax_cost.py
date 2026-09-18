@@ -171,20 +171,48 @@ def load_metatomic(path: Path):
     }
 
 
+def _nudge(positions: np.ndarray, seed: int, *, sigma: float = 1.0e-4) -> np.ndarray:
+    """Break ASE / model caches without leaving the original geometry."""
+    rng = np.random.default_rng(int(seed))
+    return np.asarray(positions, dtype=np.float64) + rng.normal(0.0, sigma, size=positions.shape)
+
+
+def _reset_calculator(calc) -> None:
+    reset = getattr(calc, "reset", None)
+    if callable(reset):
+        reset()
+    else:
+        calc.results = {}
+        calc.atoms = None
+
+
 def bench_calculator(label: str, calc, atoms: Atoms, *, atoms_per_monomer: list[int], warmup: int, repeats: int) -> dict:
     z = atoms.get_atomic_numbers()
-    r = atoms.get_positions()
+    r0 = np.asarray(atoms.get_positions(), dtype=np.float64)
     rec: dict = {"label": label, "n_atoms": int(len(atoms)), "ok": False}
+    call_i = {"n": 0}
+
+    def _next_pos() -> np.ndarray:
+        call_i["n"] += 1
+        return _nudge(r0, call_i["n"])
 
     def _whole():
-        out = evaluate_whole_system(calc, z, r)
+        _reset_calculator(calc)
+        out = evaluate_whole_system(calc, z, _next_pos())
         return summarize_eval(out.energy_ev, out.forces_ev_per_angstrom)
 
     def _frag():
-        out = evaluate_fragment_hybrid(calc, z, r, atoms_per_monomer, do_ml=True, do_ml_dimer=True)
+        _reset_calculator(calc)
+        out = evaluate_fragment_hybrid(
+            calc, z, _next_pos(), atoms_per_monomer, do_ml=True, do_ml_dimer=True
+        )
         return summarize_eval(out.energy_ev, out.forces_ev_per_angstrom)
 
     t_load0 = time.perf_counter()
+    t_cold = time.perf_counter()
+    cold = _whole()
+    rec["cold_whole_s"] = float(time.perf_counter() - t_cold)
+    rec["cold_whole_summary"] = cold
     rec["whole"] = time_calls(_whole, warmup=warmup, repeats=repeats)
     rec["fragments"] = time_calls(_frag, warmup=max(1, warmup // 2), repeats=max(3, repeats // 2))
     rec["bench_wall_s"] = float(time.perf_counter() - t_load0)
@@ -192,6 +220,8 @@ def bench_calculator(label: str, calc, atoms: Atoms, *, atoms_per_monomer: list[
     rec["fragments_summary"] = rec["fragments"].pop("last")
     rec["fragment_over_whole"] = float(rec["fragments"]["median_s"] / rec["whole"]["median_s"])
     rec["ok"] = bool(rec["whole_summary"]["finite"] and rec["fragments_summary"]["finite"])
+    rec["cache_bust"] = "reset+1e-4A_jitter"
+    _ = all_changes
     return rec
 
 
@@ -219,6 +249,11 @@ def main() -> int:
         nargs="*",
         default=["pet-mad-xs-v1.5.0.pt", "pet-mad-s-v1.0.2.pt", "pet-mols-s-v1.0.0.pt"],
     )
+    parser.add_argument(
+        "--include-spooky",
+        action="store_true",
+        help="Also try the bundled SpookyNet JSON (expected to fail as a PhysNet load).",
+    )
     args = parser.parse_args()
 
     systems = {
@@ -241,15 +276,16 @@ def main() -> int:
         "results": [],
         "notes": [
             "CPU-only; no CHARMM / no MD.",
-            "whole = one energy+forces eval on the dimer.",
-            "fragments = MMML ML/MM USER: E(A)+E(B)+s*(E(AB)-E(A)-E(B)) = 3 model evals.",
+            "whole = one energy+forces eval on the dimer (ASE cache reset + 1e-4 A jitter each sample).",
+            "fragments = MMML ML/MM USER: E(A)+E(B)+s*(E(AB)-E(A)-E(B)) = 3 sequential model evals.",
             "Production PhysNet MLpot batches those fragments in one jitted apply; this script uses sequential ASE evals for both backends so the model-forward cost is comparable.",
             "PET-MAD/PET-MOLS are universal PET TorchScript models; DESdimers PhysNet is a tiny MPNN (features=32, L=1, 2 iterations, 16 RBF, 6 A cutoff, ZBL).",
+            "SpookyNet JSON is bundled but is not a drop-in PhysNet load (embedding 88x64 vs PhysNet 119x32); skipped unless --include-spooky.",
         ],
     }
 
     jax_entries = [("physnet_desdimers", PHYSNET_CKPT)]
-    if SPOOKY_CKPT.is_file():
+    if args.include_spooky and SPOOKY_CKPT.is_file():
         jax_entries.append(("spookynet", SPOOKY_CKPT))
 
     for sys_name, (atoms, per) in systems.items():
