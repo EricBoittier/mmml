@@ -43,7 +43,6 @@ from mmml.analysis.interaction_pes_geom import (
     ORIENTATION_STACKED,
     PLANE_XZ,
     PLANE_YZ,
-    TRIMER_MOTIFS,
     cyclic_hbond_trimer,
     dimer_acceptor_acceptor,
     dimer_dha_deg,
