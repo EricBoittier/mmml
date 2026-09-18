@@ -406,7 +406,9 @@ def dimer_oh_o(
     gamma = polar_angle_for_dha(float(r_oo), r_oh, float(dha_deg))
     o_a_pos = _plane_coords(gamma, float(r_oo), plane)
     h_pos = np.asarray(donor.get_positions(), dtype=np.float64)[h_d]
-    normal = np.array([0.0, 1.0, 0.0]) if plane == PLANE_XZ else np.array([1.0, 0.0, 0.0])
+    # γ = 0 is on-axis: use the donor-plane flatten so 1D / xz / yz 180° match.
+    flat_plane = PLANE_XZ if abs(gamma) < 1.0e-8 else plane
+    normal = np.array([0.0, 1.0, 0.0]) if flat_plane == PLANE_XZ else np.array([1.0, 0.0, 0.0])
     acceptor = _orient_acceptor_at(monomer, o_a_pos, h_pos, normal)
     dimer = combine_fragments(donor, acceptor)
     return _apply_acceptor_flap(dimer, float(acceptor_flap_deg))

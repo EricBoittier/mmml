@@ -153,6 +153,9 @@ def test_bent_oh_o_recovers_requested_dha() -> None:
     assert dimer_dha_deg(dimer) == pytest.approx(150.0, abs=0.8)
     dimer_yz = dimer_oh_o(_water(), 2.90, dha_deg=140.0, plane="yz")
     assert dimer_dha_deg(dimer_yz) == pytest.approx(140.0, abs=0.8)
+    linear_xz = dimer_oh_o(_water(), 2.90, dha_deg=180.0, plane="xz")
+    linear_yz = dimer_oh_o(_water(), 2.90, dha_deg=180.0, plane="yz")
+    assert np.allclose(linear_xz.get_positions(), linear_yz.get_positions(), atol=1e-6)
 
 
 def test_polar_angle_limits() -> None:

@@ -154,15 +154,16 @@ def plot_dimer_slices(
         ax.set_ylim(y_lo, y_hi)
         _add_wall_inset(ax, slices, system, ori_pair, colors)
         ax.legend(frameon=False, loc="upper right", fontsize=10)
-    axes[0][0].set_ylabel(_eint_ylabel())
+    axes[0][0].set_ylabel(r"$E_{\mathrm{int}}$ (kcal/mol)")
     fig.text(
         0.01,
         0.01,
-        "PET-MAD xs 1.5.0 (PBEsol). Water-dimer CCSD(T) ≈ −5 kcal/mol is context only.",
+        r"$E_{\mathrm{int}}=E(AB)-E(A)-E(B)$. PET-MAD xs 1.5.0 (PBEsol); "
+        r"water-dimer CCSD(T) $\approx-5$ kcal/mol is context only.",
         fontsize=9,
         color="0.35",
     )
-    fig.tight_layout(rect=(0.0, 0.04, 1.0, 1.0))
+    fig.subplots_adjust(left=0.08, right=0.99, bottom=0.18, top=0.88, wspace=0.28)
     return _save(fig, Path(output), write_pdf=write_pdf)
 
 
@@ -200,10 +201,9 @@ def _add_wall_inset(
     inset.axhline(0.0, color="0.7", linewidth=0.6)
     inset.set_xlim(2.15, WALL_INSET_R_MAX_A)
     inset.set_ylim(-0.5, min(max(y_hi * 1.05, 4.0), 40.0))
-    inset.set_title("wall", fontsize=9, pad=2)
-    inset.tick_params(labelsize=8)
-    inset.set_xlabel("Å", fontsize=8)
-    inset.set_ylabel("kcal/mol", fontsize=8)
+    inset.set_title("wall", fontsize=8, pad=1)
+    inset.tick_params(labelsize=7, length=2)
+    inset.set_xticks([2.2, 2.8, 3.3])
 
 
 def plot_dimer_angular(
@@ -253,7 +253,7 @@ def plot_dimer_angular(
             title += f" = {float(r_e):.2f} Å"
         ax.set_title(title)
         ax.legend(frameon=False, loc="best", fontsize=10)
-    axes[0][0].set_ylabel(_eint_ylabel())
+    axes[0][0].set_ylabel(r"$E_{\mathrm{int}}$ (kcal/mol)")
     fig.tight_layout()
     return _save(fig, Path(output), write_pdf=write_pdf)
 
@@ -334,18 +334,20 @@ def plot_trimer_mbe(
         raise ValueError("document has no trimer_slices")
     systems = list(dict.fromkeys(row["system"] for row in rows))
     n_col = len(systems)
-    fig, axes = plt.subplots(2, n_col, figsize=(4.6 * n_col, 6.4), squeeze=False, sharex="col")
+    fig, axes = plt.subplots(2, n_col, figsize=(4.6 * n_col, 6.2), squeeze=False, sharex="col")
     rf = _rf(document)
     energy_style = {
         MOTIF_LINEAR: {
             "e_int": (palette[5], "-"),
             "pair": (palette[1], "--"),
             "e3": (palette[6], "-."),
+            "short": "linear",
         },
         MOTIF_CYCLIC: {
             "e_int": (palette[2], "-"),
             "pair": (palette[3], "--"),
             "e3": (palette[7], "-."),
+            "short": "cyclic",
         },
     }
     by_sys: dict[str, list[dict[str, Any]]] = {name: [] for name in systems}
@@ -354,83 +356,60 @@ def plot_trimer_mbe(
     for col, system in enumerate(systems):
         ax = axes[0][col]
         ax_f = axes[1][col]
-        ref_r = None
         ref_note = None
         for row in by_sys[system]:
             motif = row.get("motif", MOTIF_CYCLIC)
             sty = energy_style.get(motif, energy_style[MOTIF_CYCLIC])
             r = np.asarray(row["r_angstrom"], dtype=np.float64)
-            tag = row.get("motif_label", motif)
-            ax.plot(
-                r,
-                row["e_int_kcal_mol"],
-                color=sty["e_int"][0],
-                linestyle=sty["e_int"][1],
-                marker="o",
-                markersize=3.0,
-                label=rf"$E_\mathrm{{int}}$ ({tag})",
-            )
-            ax.plot(
-                r,
-                row["e_pair_sum_kcal_mol"],
-                color=sty["pair"][0],
-                linestyle=sty["pair"][1],
-                marker="o",
-                markersize=3.0,
-                label=rf"$\sum E_\mathrm{{int}}(IJ)$ ({tag})",
-            )
-            ax.plot(
-                r,
-                row["e3_kcal_mol"],
-                color=sty["e3"][0],
-                linestyle=sty["e3"][1],
-                marker="s",
-                markersize=3.0,
-                label=rf"$E_3$ ({tag})",
-            )
+            short = sty["short"]
+            e_int = np.asarray(row["e_int_kcal_mol"], dtype=np.float64)
+            pair = np.asarray(row["e_pair_sum_kcal_mol"], dtype=np.float64)
+            e3 = np.asarray(row["e3_kcal_mol"], dtype=np.float64)
+            ax.plot(r, _clip_trace(e_int), color=sty["e_int"][0], linestyle="-", marker="o", markersize=3.0, label=rf"$E_\mathrm{{int}}$ {short}")
+            ax.plot(r, _clip_trace(pair), color=sty["pair"][0], linestyle="--", marker="o", markersize=3.0, label=rf"$\sum IJ$ {short}")
+            ax.plot(r, _clip_trace(e3), color=sty["e3"][0], linestyle="-.", marker="s", markersize=3.0, label=rf"$E_3$ {short}")
             frac = np.asarray(row.get("e3_over_eint", []), dtype=np.float64)
             if frac.size:
-                ax_f.plot(
-                    r,
-                    100.0 * frac,
-                    color=sty["e3"][0],
-                    linestyle=sty["e3"][1],
-                    marker="s",
-                    markersize=3.0,
-                    label=tag,
-                )
-            if ref_note is None and row.get("ref_e3_kcal_mol") is not None:
+                shown = 100.0 * frac
+                shown[np.abs(e_int) < 1.0] = np.nan
+                shown[np.abs(shown) > 250.0] = np.nan
+                ax_f.plot(r, shown, color=sty["e3"][0], linestyle="-.", marker="s", markersize=3.0, label=short)
+            if motif == MOTIF_LINEAR or ref_note is None:
                 ref_r = row.get("ref_r_angstrom")
-                ref_e3 = float(row["ref_e3_kcal_mol"])
+                ref_e3 = float(row.get("ref_e3_kcal_mol", np.nan))
                 ref_eint = float(row.get("ref_e_int_kcal_mol") or np.nan)
-                ref_note = (motif, ref_r, ref_e3, ref_eint)
-                ax.scatter([ref_r], [ref_e3], s=42, marker="D", color=sty["e3"][0], zorder=5)
+                ref_note = (short, ref_r, ref_e3, ref_eint, sty["e3"][0])
+        if ref_note is not None:
+            short, ref_r, ref_e3, ref_eint, color = ref_note
+            ax.scatter([ref_r], [ref_e3], s=42, marker="D", color=color, zorder=5)
         ax.axhline(0.0, color="0.7", linewidth=0.8)
         ax_f.axhline(0.0, color="0.7", linewidth=0.8)
         _mark_rf(ax, rf)
         _mark_rf(ax_f, rf)
         ax.set_title(f"{system} trimer")
         ax.set_ylabel("Energy (kcal/mol)" if col == 0 else "")
+        ax.set_ylim(-16.0, 22.0)
         ax_f.set_xlabel(r"O–O $r$ (Å)")
         ax_f.set_ylabel(r"$E_3/E_{\mathrm{int}}$ (%)" if col == 0 else "")
+        ax_f.set_ylim(-150.0, 150.0)
         if ref_note is not None:
-            _motif, ref_r, ref_e3, ref_eint = ref_note
-            ax.text(
-                0.97,
-                0.05,
-                f"at {float(ref_r):.2f} Å: $E_3$={ref_e3:.2f} kcal/mol\n"
-                f"2-body misses $E_3$={ref_e3:.2f}"
-                + (f" ({100 * ref_e3 / ref_eint:.0f}% of $E_\\mathrm{{int}}$)" if np.isfinite(ref_eint) and abs(ref_eint) > 1e-6 else ""),
-                transform=ax.transAxes,
-                ha="right",
-                va="bottom",
-                fontsize=10,
-                color="0.15",
-            )
-        ax.legend(frameon=False, loc="best", fontsize=8)
+            short, ref_r, ref_e3, ref_eint, _color = ref_note
+            if abs(ref_e3) >= 1.0:
+                extra = "pairwise sum has the wrong sign" if np.isfinite(ref_eint) and ref_eint * ref_e3 < 0 else f"2-body misses $E_3$={ref_e3:.2f}"
+                text = f"{short} at {float(ref_r):.2f} Å: $E_3$={ref_e3:.2f} kcal/mol\n{extra}"
+            else:
+                text = f"{short} at {float(ref_r):.2f} Å: $E_3$={ref_e3:.2f} kcal/mol\nnearly pairwise"
+            ax.text(0.97, 0.04, text, transform=ax.transAxes, ha="right", va="bottom", fontsize=10, color="0.15")
+        ax.legend(frameon=False, loc="upper right", fontsize=7, ncol=2)
         ax_f.legend(frameon=False, loc="best", fontsize=9)
     fig.tight_layout()
     return _save(fig, Path(output), write_pdf=write_pdf)
+
+
+def _clip_trace(values: np.ndarray, cap: float = 30.0) -> np.ndarray:
+    y = np.asarray(values, dtype=np.float64).copy()
+    y[np.abs(y) > cap] = np.nan
+    return y
 
 
 def write_interaction_pes_figures(
