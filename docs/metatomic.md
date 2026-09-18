@@ -113,6 +113,28 @@ uv run pytest \
 - `--ml-potential-mode metatomic` and `--metatomic-eval-mode` parse and forward
   through `build_pycharmm_command`.
 
+## Hub models (PET-MAD / UPET)
+
+Export a TorchScript `.pt` from the [lab-cosmo/upet](https://huggingface.co/lab-cosmo/upet)
+or [lab-cosmo/pet-mad](https://huggingface.co/lab-cosmo/pet-mad) checkpoints with
+metatrain (`mtt export`), then pass that file as `--checkpoint`.
+
+```bash
+uv sync --extra metatomic
+uv pip install 'metatrain[pet]' huggingface_hub
+mtt export lab-cosmo/upet models/pet-mad-s-v1.0.2.ckpt -o pet-mad-s-v1.0.2.pt
+mtt export lab-cosmo/upet models/pet-mad-xs-v1.5.0.ckpt -o pet-mad-xs-v1.5.0.pt
+mtt export lab-cosmo/upet models/pet-mols-s-v1.0.0.ckpt -o pet-mols-s-v1.0.0.pt
+```
+
+Smoke (ASE water dimer, CHARMM-free) is `tests/functionality/metatomic/eval_hub_models.py`.
+Pass: finite eV energies/forces, fragment hybrid matches `s(r)·(E_AB−E_A−E_B)`,
+dummy `calculate_charmm` kcal/mol equals `E_ev * EV_TO_KCAL_MOL`.
+
+PET-MAD reports formation-like totals (~−14 eV / water). PET-MOLS reports a much
+deeper electronic reference (~−2000 eV / water); that is the checkpoint, not a
+unit bug. CHARMM USER will inherit that offset.
+
 Local CHARMM smoke (user machine; not run in the agent):
 
 1. `uv sync --extra metatomic`
