@@ -7,7 +7,7 @@ import sys
 import time
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, Literal, Optional, Sequence, Union
+from typing import TYPE_CHECKING, Any, Literal, Optional, Sequence, Union
 
 import jax
 import jax.numpy as jnp
@@ -28,6 +28,9 @@ from mmml.interfaces.pycharmmInterface.jax_device_policy import (
     mlpot_jax_device_context,
 )
 from mmml.utils.jax_gpu_warmup import ensure_xla_gpu_warmed
+
+if TYPE_CHECKING:
+    from mmml.interfaces.pycharmmInterface.mlpot.metatomic_mlpot import MetatomicMlpotModel
 
 __all__ = [
     "resolve_ml_batch_size",
@@ -1267,7 +1270,7 @@ def build_decomposed_mlpot_model(
     ml_compute_dtype: str | None = None,
     defer_jax_until_mlpot_registered: bool = False,
     defer_jax_until_after_sd: bool = False,
-) -> DecomposedMlpotModel:
+) -> DecomposedMlpotModel | MetatomicMlpotModel:
     from mmml.interfaces.pycharmmInterface.mlpot.jax_mm_spoof import jax_mm_spoof_enabled
     from mmml.models.kernnn import is_kernnn_checkpoint
 
@@ -1276,7 +1279,39 @@ def build_decomposed_mlpot_model(
     if args is not None and getattr(args, "model_restart_path", None) is not None:
         _ckpt_probe = Path(getattr(args, "model_restart_path")).expanduser()
     _kernnn = bool(_ckpt_probe) and is_kernnn_checkpoint(_ckpt_probe)
-    _ml_mode = "jax_mm_clone" if _spoof else ("kernnn" if _kernnn else "physnet")
+    from mmml.interfaces.pycharmmInterface.mlpot.metatomic_mlpot import (
+        build_metatomic_mlpot_model,
+        should_use_metatomic_mlpot,
+    )
+
+    _metatomic = (not _spoof) and should_use_metatomic_mlpot(
+        _ckpt_probe if _ckpt_probe is not None else checkpoint, args
+    )
+    _ml_mode = (
+        "jax_mm_clone"
+        if _spoof
+        else ("kernnn" if _kernnn else ("metatomic" if _metatomic else "physnet"))
+    )
+    if _metatomic:
+        ckpt = Path(checkpoint).expanduser().resolve()
+        do_ml = True if args is None else bool(getattr(args, "do_ml", True))
+        include_mm = True if args is None else bool(getattr(args, "include_mm", True))
+        skip_dimers = bool(getattr(args, "skip_ml_dimers", False)) if args is not None else False
+        do_ml_dimer = (
+            True if args is None else bool(getattr(args, "do_ml_dimer", True))
+        ) and not skip_dimers
+        return build_metatomic_mlpot_model(
+            ckpt,
+            atomic_numbers,
+            atoms_per_monomer,
+            int(n_monomers),
+            cell=cell,
+            verbose=verbose,
+            args=args,
+            do_ml=do_ml,
+            do_ml_dimer=do_ml_dimer,
+            do_mm=include_mm,
+        )
     if _spoof:
         ckpt = Path("/dev/null")
     else:

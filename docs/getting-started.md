@@ -16,6 +16,7 @@ Optional extras:
 uv sync --extra dev    # tests + MkDocs
 uv sync --extra cli    # shell tab completion (argcomplete)
 uv sync --extra gpu    # JAX CUDA 13 + CuPy (GPU nodes)
+uv sync --extra metatomic  # TorchScript AtomisticModel ASE + CHARMM MLpot
 ```
 
 ### Using `pip`

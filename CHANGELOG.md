@@ -91,6 +91,13 @@ and versioning process.
 
 ### Added
 
+- Metatomic ASE / PyCHARMM MLpot path (`uv sync --extra metatomic`): TorchScript
+  AtomisticModel (`.pt`) as CHARMM USER via `MetatomicMlpotModel`, with the MMML
+  fragment ML/MM scheme (`--metatomic-eval-mode fragments`) or a single whole-system
+  evaluation. Optional JAX MM stays in an MM-only `setup_calculator` spherical_fn
+  (torch is never jitted). Also wired into `energy_forces` providers, dimer-scan,
+  and ic-scan. See [`docs/metatomic.md`](docs/metatomic.md).
+
 - `scripts/bench_static_vs_neighbor_pairs.py`: static complete pair list vs
   rebuilt neighbour list, on correctness (fixed-configuration parity, build
   cutoff sensitivity, staleness under drift) and speed vs system size. Runs on

@@ -739,6 +739,7 @@ def setup_calculator(
             "jax-mm-clone",
             "jax_mm_spoof",
             "kernnn",
+            "metatomic",
         }:
             raise ValueError("model_restart_path must be provided")
 
@@ -942,6 +943,13 @@ def setup_calculator(
                 _ml_mode_norm = "kernnn"
         except Exception:
             pass
+        try:
+            from mmml.interfaces.calculators.metatomic import is_metatomic_checkpoint
+
+            if is_metatomic_checkpoint(restart_path):
+                _ml_mode_norm = "metatomic"
+        except Exception:
+            pass
     _jax_mm_spoof_mode = _ml_mode_norm in {
         "jax_mm_clone",
         "jax-mm-clone",
@@ -957,6 +965,14 @@ def setup_calculator(
         "bonded_intra_ml_inter",
     }
     _kernnn_mode = _ml_mode_norm == "kernnn"
+    _metatomic_mode = _ml_mode_norm == "metatomic"
+    _non_physnet_ml = _jax_mm_spoof_mode or _kernnn_mode or _metatomic_mode
+    if _metatomic_mode and (doML or doML_dimer):
+        raise ValueError(
+            "setup_calculator(ml_potential_mode='metatomic') builds the JAX MM "
+            "spherical_fn only. Pass doML=False and doML_dimer=False; metatomic "
+            "ML terms are evaluated by MetatomicMlpotCalculator."
+        )
     if _jax_mm_spoof_mode:
         setup_rows.append(("ml_backend", "JAX CGenFF bonded clone (spoof PhysNet)"))
         if restart_path is not None:
@@ -966,6 +982,9 @@ def setup_calculator(
         setup_rows.append(("model_restart_path", restart_path.resolve() if restart_path else "(missing)"))
     elif _kernnn_mode:
         setup_rows.append(("ml_backend", "KerNN (kernel Softplus MLP)"))
+        setup_rows.append(("model_restart_path", restart_path.resolve() if restart_path else "(missing)"))
+    elif _metatomic_mode:
+        setup_rows.append(("ml_backend", "metatomic (MM-only spherical_fn)"))
         setup_rows.append(("model_restart_path", restart_path.resolve() if restart_path else "(missing)"))
     else:
         setup_rows.append(("model_restart_path", restart_path.resolve()))
@@ -987,7 +1006,7 @@ def setup_calculator(
     # Check if this is a JSON checkpoint (params.json in dir, or path to .json file)
     is_json_checkpoint = False
     is_joint_checkpoint = False
-    if not _jax_mm_spoof_mode and not _kernnn_mode and restart_path is not None:
+    if not _non_physnet_ml and restart_path is not None:
         is_json_checkpoint = (
             (restart_path.is_file() and restart_path.suffix == ".json")
             or ((restart_path / "params.json").exists())
@@ -1067,6 +1086,25 @@ def setup_calculator(
         checkpoint_meta = {
             "Checkpoint": str(ckpt_file.resolve()),
             "name": ckpt_file.name,
+            "epoch": "—",
+            "best_loss": "—",
+            "Save Time": "—",
+        }
+    elif _metatomic_mode:
+        class _MetatomicMmOnlyStub:
+            charges = False
+            max_padded_atoms = max_atoms
+            cutoff = 6.0
+            use_pbc = False
+
+        MODEL = _MetatomicMmOnlyStub()
+        params = None
+        is_spooky_model = False
+        is_json_checkpoint = False
+        is_joint_checkpoint = False
+        checkpoint_meta = {
+            "Checkpoint": str(restart_path.resolve()) if restart_path is not None else "metatomic",
+            "name": restart_path.name if restart_path is not None else "metatomic",
             "epoch": "—",
             "best_loss": "—",
             "Save Time": "—",
@@ -1233,7 +1271,7 @@ def setup_calculator(
             restart, natoms=max_atoms, quiet=True, return_meta=True, prefer_ema=ml_use_ema
         )
         params = cast_pytree_to_ml_dtype(params, dtype=ml_jnp_dtype)
-    if not _jax_mm_spoof_mode and not _kernnn_mode:
+    if not _non_physnet_ml:
         MODEL.max_padded_atoms = max_atoms
 
     from mmml.interfaces.pycharmmInterface.mm_charge_correction import (
@@ -1257,7 +1295,7 @@ def setup_calculator(
     )
     _model_has_charges = bool(
         getattr(MODEL, "charges", False)
-        if not _jax_mm_spoof_mode and not _kernnn_mode
+        if not _non_physnet_ml
         else False
     )
     assert_mm_charge_mode_dimer_supported(
@@ -1494,7 +1532,7 @@ def setup_calculator(
         # forces near ±L/2 and breaks minimization / NVE.
         use_smooth_mic = False
 
-    if cell and not _jax_mm_spoof_mode and not _kernnn_mode:
+    if cell and not _non_physnet_ml:
         MODEL.use_pbc = True
         cell_arr = jnp.asarray(cell)
         if cell_arr.ndim == 0:
@@ -1510,7 +1548,7 @@ def setup_calculator(
         pbc_cell = cell
         do_pbc_map = False
         pbc_map = None
-    elif cell and (_jax_mm_spoof_mode or _kernnn_mode):
+    elif cell and _non_physnet_ml:
         # Alternate ML backends still need a numeric box for PBC neighbor lists.
         cell_arr = jnp.asarray(cell)
         if cell_arr.ndim == 0:
@@ -1590,14 +1628,18 @@ def setup_calculator(
             _cell_side = float(np.asarray(pbc_cell)[0, 0])
         except Exception:
             _cell_side = None
-    _zbl_map = collect_zbl_cutoff_mapping(MODEL) if MODEL is not None else None
-    if (_jax_mm_spoof_mode or _kernnn_mode) and _zbl_map is None:
+    _zbl_map = None if _metatomic_mode else (collect_zbl_cutoff_mapping(MODEL) if MODEL is not None else None)
+    if _non_physnet_ml and _zbl_map is None:
         _zbl_map = {
             "enabled": False,
             "note": (
-                "n/a (KerNN; no PhysNet ZBL)"
-                if _kernnn_mode
-                else "n/a (jax_mm_clone spoof; no PhysNet ZBL)"
+                "n/a (metatomic; ASE ML, JAX MM only)"
+                if _metatomic_mode
+                else (
+                    "n/a (KerNN; no PhysNet ZBL)"
+                    if _kernnn_mode
+                    else "n/a (jax_mm_clone spoof; no PhysNet ZBL)"
+                )
             ),
         }
     _mm_charge_mode_dashboard = next(
@@ -1656,9 +1698,13 @@ def setup_calculator(
                 "Hybrid ML/MM (KerNN)"
                 if _kernnn_mode
                 else (
-                    "Hybrid ML/MM (SpookyPhysNet spherical cutoff)"
-                    if _is_spooky_model
-                    else "Hybrid ML/MM (PhysNet spherical cutoff)"
+                    "Hybrid MM (metatomic ML is ASE USER, not this spherical_fn)"
+                    if _metatomic_mode
+                    else (
+                        "Hybrid ML/MM (SpookyPhysNet spherical cutoff)"
+                        if _is_spooky_model
+                        else "Hybrid ML/MM (PhysNet spherical cutoff)"
+                    )
                 )
             )
         ),
@@ -2549,6 +2595,12 @@ def setup_calculator(
                     batches["N"],
                     batches.get("N_a"),
                 )
+            if _metatomic_mode:
+                npos = positions.shape[0]
+                return {
+                    "energy": ml_zeros((1,), dtype=ml_jnp_dtype),
+                    "forces": ml_zeros((npos, 3), dtype=ml_jnp_dtype),
+                }
             if _do_chunked:
                 R_full = positions.reshape(_effective_batch_size, max_atoms, 3)
                 Z_full = atomic_numbers.reshape(_effective_batch_size, max_atoms)

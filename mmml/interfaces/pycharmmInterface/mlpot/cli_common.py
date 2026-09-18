@@ -4790,13 +4790,23 @@ def add_mlpot_lr_nonbond_args(parser: argparse.ArgumentParser) -> None:
         "--ml-potential-mode",
         type=str,
         default=None,
-        choices=("physnet", "kernnn", "jax_mm_clone", "jax_mm_spoof", "bonded_intra"),
+        choices=("physnet", "kernnn", "jax_mm_clone", "jax_mm_spoof", "bonded_intra", "metatomic"),
         help=(
-            "Which potential supplies the ML terms. 'bonded_intra' keeps PhysNet "
-            "for the dimer interaction but hands the internal monomer energy to "
-            "CGenFF bonded, which requires --jax-mm-spoof-psf. Use it when the ML "
-            "model was trained on rigid monomers and so carries no restoring force "
-            "for intramolecular coordinates. See docs/hybrid-bonded-intra.md."
+            "Which potential supplies the ML terms. 'metatomic' uses an ASE "
+            "AtomisticModel (.pt) for CHARMM MLpot fragment ML/MM. 'bonded_intra' "
+            "keeps PhysNet for the dimer interaction but hands the internal "
+            "monomer energy to CGenFF bonded, which requires --jax-mm-spoof-psf. "
+            "See docs/metatomic.md and docs/hybrid-bonded-intra.md."
+        ),
+    )
+    group.add_argument(
+        "--metatomic-eval-mode",
+        type=str,
+        default=None,
+        choices=("fragments", "whole_system"),
+        help=(
+            "Metatomic CHARMM evaluation: fragments (default; ML/MM monomer+dimer "
+            "scheme) or whole_system (one eval on the ML selection)."
         ),
     )
 

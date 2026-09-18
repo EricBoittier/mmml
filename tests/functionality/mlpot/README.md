@@ -11,7 +11,9 @@ Runnable scripts to bring up `pycharmm.MLpot` alongside the existing ASE PhysNet
   out-of-tree CHARMM. Check with `mmml doctor`.
 - PyCHARMM importable (`import_pycharmm` path)
 - JAX, e3x, ASE
-- A PhysNet checkpoint (same as other mmml tests)
+- A PhysNet checkpoint (same as other mmml tests), **or** a metatomic `.pt`
+  with `uv sync --extra metatomic` and `--ml-potential-mode metatomic`
+  (see `docs/metatomic.md`; CHARMM smoke is local, not the unit suite)
 
 ```bash
 export MMML_CKPT=/path/to/DESdimers   # or examples/ckpts_json/DESdimers_params.json

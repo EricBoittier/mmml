@@ -105,6 +105,13 @@ nvalchemiops-pme = [
     "nvalchemi-toolkit-ops[jax]",
 ]
 
+# Metatomic (TorchScript AtomisticModel) ASE calculator + CHARMM MLpot adapter.
+# Optional: CI does not install this extra. Device via MMML_METATOMIC_DEVICE.
+metatomic = [
+    "metatomic-ase>=0.1.1",
+    "metatomic-torch>=0.1.12",
+]
+
 # jax-pme long-range Coulomb backend (--lr-solver jax_pme). The native
 # "mic"/ewald path is the default and does not need this; pick_lr_solver() falls
 # back cleanly to mic/nvalchemiops_pme/scafacos when jax-pme isn't installed.

@@ -746,6 +746,7 @@ def wizard_interaction_policy(out_dir: Path) -> list[Path]:
         [
             ("physnet", "PhysNet", "PhysNet or joint checkpoint"),
             ("spookynet", "SpookyNet", "Charge/spin-aware SpookyNet checkpoint"),
+            ("metatomic", "metatomic", "TorchScript AtomisticModel (.pt)"),
         ],
         default_index=0,
     )
@@ -853,6 +854,7 @@ def wizard_interaction_policy(out_dir: Path) -> list[Path]:
             [
                 ("physnet", "PhysNet", "Use the configured ML checkpoint"),
                 ("spookynet", "SpookyNet", "Use the configured ML checkpoint"),
+                ("metatomic", "metatomic", "Use a metatomic .pt AtomisticModel"),
                 ("xtb", "xTB", "Semiempirical reference scan"),
                 ("pyscf", "PySCF", "Ab initio reference scan"),
             ],
@@ -867,7 +869,7 @@ def wizard_interaction_policy(out_dir: Path) -> list[Path]:
         companion_data = {
             "residues": dimer_residues,
             "calculator": calculator,
-            "checkpoint": ml_checkpoint if calculator in {"physnet", "spookynet"} else None,
+            "checkpoint": ml_checkpoint if calculator in {"physnet", "spookynet", "metatomic"} else None,
             "distances_angstrom": distances,
             "energy_definition": "interaction",
             "failure_policy": "fail",

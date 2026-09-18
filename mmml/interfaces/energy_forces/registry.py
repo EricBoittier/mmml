@@ -38,6 +38,23 @@ def build_provider(spec: ProviderSpec) -> EnergyForcesProvider:
     if name in ("ml", "physnet", "checkpoint", "joint", "efield"):
         return build_ml_provider(options)
 
+    if name in ("metatomic", "metatensor"):
+        from mmml.interfaces.calculators.metatomic import load_metatomic_calculator
+        from mmml.interfaces.energy_forces.ml import capabilities_for_kind
+
+        checkpoint = options.pop("checkpoint", None)
+        if checkpoint is None:
+            raise ValueError("metatomic provider requires 'checkpoint' in options.")
+        calc = load_metatomic_calculator(
+            checkpoint,
+            device=options.pop("device", None),
+        )
+        return AseCalculatorProvider(
+            calc,
+            capabilities=capabilities_for_kind(ProviderKind.METATOMIC),
+            **options,
+        )
+
     if name == "ase":
         calculator = options.pop("calculator", None)
         if calculator is None:
@@ -46,7 +63,9 @@ def build_provider(spec: ProviderSpec) -> EnergyForcesProvider:
 
     builder = _QC_BUILDERS.get(name)
     if builder is None:
-        supported = sorted(set(_QC_BUILDERS) | {"ml", "physnet", "checkpoint", "ase"})
+        supported = sorted(
+            set(_QC_BUILDERS) | {"ml", "physnet", "checkpoint", "ase", "metatomic"}
+        )
         raise ValueError(f"Unknown provider {spec.name!r}. Supported: {', '.join(supported)}")
 
     evaluator = builder(options)

@@ -1,6 +1,12 @@
 # MLpot workflows (`mmml.interfaces.pycharmmInterface.mlpot`)
 
-Helpers for **PhysNet + CHARMM MLpot**, based on the validated scripts in `tests/functionality/mlpot/`.
+Helpers for **CHARMM MLpot** (PhysNet, KerNN, or metatomic AtomisticModel), based
+on the validated scripts in `tests/functionality/mlpot/`.
+
+**Metatomic:** `uv sync --extra metatomic`, then `--ml-potential-mode metatomic`
+with a `.pt` export. Fragment ML/MM (`--metatomic-eval-mode fragments`, default)
+or whole-system USER. Torch is not placed inside the JAX spherical_fn. See
+[`docs/metatomic.md`](../../../../docs/metatomic.md).
 
 **Nonbond lists:** how CHARMM and MMML neighbor lists interact, update frequencies, and NVE stability — see [NONBOND_LISTS.md](NONBOND_LISTS.md).
 

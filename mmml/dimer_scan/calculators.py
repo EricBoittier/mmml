@@ -162,6 +162,19 @@ def calculator_factory(config: DimerScanConfig) -> Callable[[], Calculator]:
             return KerNNCalculator(config.checkpoint)
 
         return create_kernnn
+    if config.calculator == "metatomic":
+        if config.checkpoint is None:
+            raise ValueError("the metatomic calculator requires --checkpoint")
+        checkpoint = config.checkpoint.resolve()
+        if not checkpoint.exists():
+            raise FileNotFoundError(f"checkpoint does not exist: {checkpoint}")
+
+        def create_metatomic() -> Calculator:
+            from mmml.interfaces.calculators.metatomic import load_metatomic_calculator
+
+            return load_metatomic_calculator(checkpoint)
+
+        return create_metatomic
     if config.calculator == "dftb3-d4":
         if config.slako_dir is None:
             raise ValueError("dftb3-d4 requires --slako-dir")

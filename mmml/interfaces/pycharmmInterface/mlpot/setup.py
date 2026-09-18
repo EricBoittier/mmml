@@ -1967,9 +1967,27 @@ def load_physnet_mlpot_bundle(
     args: Any | None = None,
     defer_jax_until_after_sd: bool = False,
 ) -> tuple[Any, Any, Any]:
-    """Load PhysNet for MLpot. Multi-monomer clusters use monomer/dimer batches."""
+    """Load PhysNet / KerNN / metatomic for MLpot. Multi-monomer uses fragment batches."""
     ckpt = Path(checkpoint).expanduser().resolve()
     z = np.asarray(ase_atoms.get_atomic_numbers(), dtype=int)
+
+    from mmml.interfaces.pycharmmInterface.mlpot.metatomic_mlpot import (
+        build_metatomic_mlpot_model,
+        should_use_metatomic_mlpot,
+    )
+
+    if int(n_monomers) <= 1 and should_use_metatomic_mlpot(ckpt, args):
+        per = list(atoms_per_monomer) if atoms_per_monomer is not None else [int(n_atoms)]
+        pyCModel = build_metatomic_mlpot_model(
+            ckpt,
+            z,
+            per,
+            max(1, int(n_monomers)),
+            cell=float(cell) if cell is not None else False,
+            verbose=verbose,
+            args=args,
+        )
+        return None, None, pyCModel
 
     if int(n_monomers) > 1:
         from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import (

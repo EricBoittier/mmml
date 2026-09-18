@@ -1745,13 +1745,27 @@ def build_parser() -> argparse.ArgumentParser:
         "--ml-potential-mode",
         type=str,
         default=None,
-        choices=("physnet", "kernnn", "jax_mm_clone", "jax_mm_spoof", "bonded_intra"),
+        choices=("physnet", "kernnn", "jax_mm_clone", "jax_mm_spoof", "bonded_intra", "metatomic"),
         help=(
-            "Which potential supplies the ML terms. 'bonded_intra' keeps PhysNet "
-            "for the dimer interaction but hands the internal monomer energy to "
-            "CGenFF bonded (requires --jax-mm-spoof-psf). Use it when the model "
-            "was trained on rigid monomers and carries no restoring force for "
-            "intramolecular coordinates. See docs/hybrid-bonded-intra.md."
+            "Which potential supplies the ML terms. 'metatomic' uses an ASE "
+            "AtomisticModel (.pt) for CHARMM MLpot fragment ML/MM. 'bonded_intra' "
+            "keeps PhysNet for the dimer interaction but hands the internal "
+            "monomer energy to CGenFF bonded (requires --jax-mm-spoof-psf). "
+            "Use bonded_intra when the model was trained on rigid monomers and "
+            "carries no restoring force for intramolecular coordinates. "
+            "See docs/metatomic.md and docs/hybrid-bonded-intra.md."
+        ),
+    )
+    parser.add_argument(
+        "--metatomic-eval-mode",
+        type=str,
+        default=None,
+        choices=("fragments", "whole_system"),
+        help=(
+            "How a metatomic model is evaluated in CHARMM MLpot. Default is "
+            "'fragments' (the MMML ML/MM scheme: isolated monomers plus "
+            "switched dimer interaction). 'whole_system' is one evaluation on "
+            "the ML selection (all-ML USER term)."
         ),
     )
     parser.add_argument(
@@ -3464,6 +3478,10 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
     if bool(getattr(args, "jax_mm_spoof", False)):
         cmd.append("--jax-mm-spoof")
     _append_optional(cmd, "--jax-mm-spoof-psf", getattr(args, "jax_mm_spoof_psf", None))
+    _append_optional(cmd, "--ml-potential-mode", getattr(args, "ml_potential_mode", None))
+    _append_optional(
+        cmd, "--metatomic-eval-mode", getattr(args, "metatomic_eval_mode", None)
+    )
     _append_optional(
         cmd,
         "--bonded-intra-damp-onset",
