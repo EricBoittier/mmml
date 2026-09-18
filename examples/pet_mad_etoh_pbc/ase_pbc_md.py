@@ -27,10 +27,21 @@ from pathlib import Path
 
 import numpy as np
 from ase import Atoms, units
+from ase.constraints import FixCom
 from ase.io import read as ase_read
 from ase.io import write as ase_write
-from ase.md.velocitydistribution import MaxwellBoltzmannDistribution, Stationary
 from ase.md.verlet import VelocityVerlet
+
+try:
+    from ase.md.velocitydistribution import Stationary, thermalize_momenta
+except ImportError:  # ASE < 3.29
+    from ase.md.velocitydistribution import (  # type: ignore[no-redef]
+        MaxwellBoltzmannDistribution,
+        Stationary,
+    )
+
+    def thermalize_momenta(atoms, temperature_K, *, rng=None, **_kwargs):
+        MaxwellBoltzmannDistribution(atoms, temperature_K=temperature_K, rng=rng)
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 EXAMPLE_DIR = Path(__file__).resolve().parent
@@ -249,7 +260,7 @@ def main(argv: list[str] | None = None) -> int:
     report["load_s"] = time.perf_counter() - t_load
 
     rng = np.random.default_rng(int(args.seed))
-    MaxwellBoltzmannDistribution(
+    thermalize_momenta(
         atoms,
         temperature_K=float(args.temperature),
         rng=rng,
@@ -275,11 +286,13 @@ def main(argv: list[str] | None = None) -> int:
     if args.ensemble == "nvt":
         from ase.md.langevin import Langevin
 
+        atoms.set_constraint(FixCom())
         dyn = Langevin(
             atoms,
             timestep=float(args.dt_fs) * units.fs,
             temperature_K=float(args.temperature),
             friction=float(args.friction),
+            fixcm=False,
             rng=rng,
         )
     else:
