@@ -41,7 +41,7 @@ from mmml.utils.ase_structure_plot import (
     save_structure_figure as _save_structure_figure,
     use_matplotlib_agg as _use_agg,
 )
-from mmml.utils.plotting.styles import OKABE_ITO_PALETTE, apply_plot_style, comparison_colors
+from mmml.utils.plotting.styles import apply_plot_style, OKABE_ITO_PALETTE, comparison_colors
 
 if TYPE_CHECKING:
     from ase import Atoms

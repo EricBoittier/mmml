@@ -443,3 +443,60 @@ def should_use_metatomic_mlpot(
     if mode in {"metatomic", "metatensor"}:
         return True
     return is_metatomic_checkpoint(checkpoint)
+
+
+def _jax_mm_spoof_requested(args: Any | None) -> bool:
+    """True when the hybrid factory must stay on the JAX CGenFF-clone path."""
+    if args is None:
+        return False
+    if bool(getattr(args, "jax_mm_spoof", False)):
+        return True
+    mode = str(getattr(args, "ml_potential_mode", "") or "").strip().lower()
+    return mode in {"jax_mm_clone", "jax-mm-clone", "jax_mm_spoof"}
+
+
+def maybe_build_metatomic_mlpot_model(
+    checkpoint: Path | str | None,
+    atomic_numbers: np.ndarray,
+    atoms_per_monomer: Sequence[int],
+    n_monomers: int,
+    *,
+    cell: float | bool = False,
+    verbose: bool = False,
+    args: Any | None = None,
+) -> MetatomicMlpotModel | None:
+    """Return the metatomic CHARMM adapter, or None to keep the JAX hybrid factory.
+
+    Must not import ``jax_mm_spoof`` (jax_md/flax) — flax 0.12 still subclasses
+    ``HiPrimitive``, which JAX 0.11.2 removed.
+    """
+    if _jax_mm_spoof_requested(args):
+        return None
+    probe = Path(checkpoint).expanduser() if checkpoint is not None else None
+    if args is not None and getattr(args, "model_restart_path", None) is not None:
+        probe = Path(getattr(args, "model_restart_path")).expanduser()
+    if not should_use_metatomic_mlpot(
+        probe if probe is not None else checkpoint, args
+    ):
+        return None
+    ckpt = Path(checkpoint).expanduser().resolve()
+    do_ml = True if args is None else bool(getattr(args, "do_ml", True))
+    include_mm = True if args is None else bool(getattr(args, "include_mm", True))
+    skip_dimers = (
+        bool(getattr(args, "skip_ml_dimers", False)) if args is not None else False
+    )
+    do_ml_dimer = (
+        True if args is None else bool(getattr(args, "do_ml_dimer", True))
+    ) and not skip_dimers
+    return build_metatomic_mlpot_model(
+        ckpt,
+        atomic_numbers,
+        atoms_per_monomer,
+        int(n_monomers),
+        cell=cell,
+        verbose=verbose,
+        args=args,
+        do_ml=do_ml,
+        do_ml_dimer=do_ml_dimer,
+        do_mm=include_mm,
+    )

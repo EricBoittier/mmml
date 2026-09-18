@@ -14,6 +14,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.metatomic_mlpot import (
     MetatomicMlpotCalculator,
     MetatomicMlpotModel,
     build_metatomic_mlpot_model,
+    maybe_build_metatomic_mlpot_model,
     resolve_metatomic_eval_mode,
     should_use_metatomic_mlpot,
 )
@@ -199,6 +200,80 @@ def test_md_system_parser_accepts_metatomic() -> None:
     parsed = pycharmm_mlpot.parse_args(cmd)
     assert parsed.ml_potential_mode == "metatomic"
     assert parsed.metatomic_eval_mode == "fragments"
+
+
+def test_maybe_build_metatomic_skips_spoof_and_non_metatomic(tmp_path: Path) -> None:
+    ckpt = tmp_path / "export.pt"
+    ckpt.write_bytes(b"stub")
+    z = np.array([8, 1], dtype=int)
+    assert (
+        maybe_build_metatomic_mlpot_model(
+            ckpt, z, [1, 1], 2, args=Namespace(jax_mm_spoof=True)
+        )
+        is None
+    )
+    json_ckpt = tmp_path / "params.json"
+    json_ckpt.write_text("{}")
+    assert (
+        maybe_build_metatomic_mlpot_model(
+            json_ckpt, z, [1, 1], 2, args=Namespace(ml_potential_mode="physnet")
+        )
+        is None
+    )
+
+
+def test_maybe_build_metatomic_returns_adapter(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    sentinel = object()
+
+    def _fake_build(*_a, **_k):
+        return sentinel
+
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.metatomic_mlpot.build_metatomic_mlpot_model",
+        _fake_build,
+    )
+    ckpt = tmp_path / "export.pt"
+    ckpt.write_bytes(b"stub")
+    model = maybe_build_metatomic_mlpot_model(
+        ckpt,
+        np.array([8, 1, 8, 1], dtype=int),
+        [2, 2],
+        2,
+        args=Namespace(ml_potential_mode="metatomic", include_mm=False),
+    )
+    assert model is sentinel
+
+
+def test_resolve_hybrid_ml_backend_mode_metatomic(tmp_path: Path) -> None:
+    from mmml.interfaces.pycharmmInterface.mmml_calculator import (
+        MetatomicMmOnlyStub,
+        metatomic_mm_only_model_bundle,
+        resolve_hybrid_ml_backend_mode,
+    )
+
+    backend = resolve_hybrid_ml_backend_mode(
+        "metatomic", None, do_ml=False, do_ml_dimer=False
+    )
+    assert backend.metatomic
+    assert backend.non_physnet_ml
+    with pytest.raises(ValueError, match="MetatomicMlpotCalculator"):
+        resolve_hybrid_ml_backend_mode("metatomic", None, do_ml=True, do_ml_dimer=False)
+    pt = tmp_path / "model.pt"
+    pt.write_bytes(b"stub")
+    detected = resolve_hybrid_ml_backend_mode(
+        "physnet", pt, do_ml=False, do_ml_dimer=False
+    )
+    assert detected.metatomic
+    model, params, spooky, json_ckpt, joint, meta = metatomic_mm_only_model_bundle(
+        6, pt
+    )
+    assert isinstance(model, MetatomicMmOnlyStub)
+    assert model.max_padded_atoms == 6
+    assert params is None
+    assert not (spooky or json_ckpt or joint)
+    assert "model.pt" in meta["name"]
 
 
 def test_setup_calculator_metatomic_rejects_do_ml() -> None:

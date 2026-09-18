@@ -1271,46 +1271,66 @@ def build_decomposed_mlpot_model(
     defer_jax_until_mlpot_registered: bool = False,
     defer_jax_until_after_sd: bool = False,
 ) -> DecomposedMlpotModel | MetatomicMlpotModel:
+    """CHARMM MLpot factory: metatomic ASE adapter or JAX PhysNet/KerNN hybrid."""
+    from mmml.interfaces.pycharmmInterface.mlpot.metatomic_mlpot import (
+        maybe_build_metatomic_mlpot_model,
+    )
+
+    metatomic_model = maybe_build_metatomic_mlpot_model(
+        checkpoint,
+        atomic_numbers,
+        atoms_per_monomer,
+        int(n_monomers),
+        cell=cell,
+        verbose=verbose,
+        args=args,
+    )
+    if metatomic_model is not None:
+        return metatomic_model
+    return _build_jax_decomposed_mlpot_model(
+        checkpoint,
+        atomic_numbers,
+        atoms_per_monomer,
+        n_monomers,
+        ml_batch_size=ml_batch_size,
+        ml_gpu_count=ml_gpu_count,
+        ml_max_active_dimers=ml_max_active_dimers,
+        ml_spatial_mpi=ml_spatial_mpi,
+        cell=cell,
+        verbose=verbose,
+        args=args,
+        ml_compute_dtype=ml_compute_dtype,
+        defer_jax_until_mlpot_registered=defer_jax_until_mlpot_registered,
+        defer_jax_until_after_sd=defer_jax_until_after_sd,
+    )
+
+
+def _build_jax_decomposed_mlpot_model(
+    checkpoint: Path | str,
+    atomic_numbers: np.ndarray,
+    atoms_per_monomer: Sequence[int],
+    n_monomers: int,
+    *,
+    ml_batch_size: Optional[int] = None,
+    ml_gpu_count: Optional[int] = None,
+    ml_max_active_dimers: Optional[int] = None,
+    ml_spatial_mpi: bool | None = None,
+    cell: Union[float, bool] = False,
+    verbose: bool = False,
+    args: Any | None = None,
+    ml_compute_dtype: str | None = None,
+    defer_jax_until_mlpot_registered: bool = False,
+    defer_jax_until_after_sd: bool = False,
+) -> DecomposedMlpotModel:
     from mmml.models.kernnn import is_kernnn_checkpoint
     from mmml.interfaces.pycharmmInterface.mlpot.metatomic_mlpot import (
-        build_metatomic_mlpot_model,
-        should_use_metatomic_mlpot,
+        _jax_mm_spoof_requested,
     )
 
     _ckpt_probe = Path(checkpoint).expanduser() if checkpoint is not None else None
     if args is not None and getattr(args, "model_restart_path", None) is not None:
         _ckpt_probe = Path(getattr(args, "model_restart_path")).expanduser()
-    # Do not import jax_mm_spoof (jax_md/flax) before the metatomic return.
-    _spoof = False
-    if args is not None:
-        if bool(getattr(args, "jax_mm_spoof", False)):
-            _spoof = True
-        else:
-            _mode = str(getattr(args, "ml_potential_mode", "") or "").strip().lower()
-            _spoof = _mode in {"jax_mm_clone", "jax-mm-clone", "jax_mm_spoof"}
-    _metatomic = (not _spoof) and should_use_metatomic_mlpot(
-        _ckpt_probe if _ckpt_probe is not None else checkpoint, args
-    )
-    if _metatomic:
-        ckpt = Path(checkpoint).expanduser().resolve()
-        do_ml = True if args is None else bool(getattr(args, "do_ml", True))
-        include_mm = True if args is None else bool(getattr(args, "include_mm", True))
-        skip_dimers = bool(getattr(args, "skip_ml_dimers", False)) if args is not None else False
-        do_ml_dimer = (
-            True if args is None else bool(getattr(args, "do_ml_dimer", True))
-        ) and not skip_dimers
-        return build_metatomic_mlpot_model(
-            ckpt,
-            atomic_numbers,
-            atoms_per_monomer,
-            int(n_monomers),
-            cell=cell,
-            verbose=verbose,
-            args=args,
-            do_ml=do_ml,
-            do_ml_dimer=do_ml_dimer,
-            do_mm=include_mm,
-        )
+    _spoof = _jax_mm_spoof_requested(args)
     _kernnn = bool(_ckpt_probe) and is_kernnn_checkpoint(_ckpt_probe)
     _ml_mode = "jax_mm_clone" if _spoof else ("kernnn" if _kernnn else "physnet")
     if _spoof:

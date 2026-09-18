@@ -178,6 +178,11 @@ and versioning process.
 
 ### Fixed
 
+- CI unit tests: extract metatomic MM-only helpers from `setup_calculator` and
+  split `build_decomposed_mlpot_model` so the function-size ratchet stays
+  inside grace / the 500-line club does not gain a member. Docs figure script
+  imports `apply_plot_style` in the shared form the plot-style guard checks.
+
 - CI: cap `jax`/`jaxlib` at `<0.11.2`. JAX 0.11.2 deleted
   `jax.experimental.hijax.HiPrimitive`; flax 0.12 still subclasses it when
   `jax_md` imports `flax.nnx`, which aborted unit/functionality collection.

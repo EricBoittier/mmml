@@ -24,7 +24,7 @@ import time
 import warnings
 from functools import partial
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
+from typing import Any, Callable, Dict, List, NamedTuple, Optional, Sequence, Tuple, Union
 
 import numpy as np
 import pandas as pd
@@ -574,6 +574,140 @@ def bonded_intra_bundle(
     return jnp.sum(e_bonded), forces, damping
 
 
+class HybridMlBackend(NamedTuple):
+    """Resolved ML backend for ``setup_calculator`` (PhysNet, KerNN, spoof, metatomic)."""
+
+    mode: str
+    jax_mm_spoof: bool
+    bonded_intra: bool
+    kernnn: bool
+    metatomic: bool
+
+    @property
+    def non_physnet_ml(self) -> bool:
+        return self.jax_mm_spoof or self.kernnn or self.metatomic
+
+
+class MetatomicMmOnlyStub:
+    """Placeholder MODEL when ``setup_calculator`` builds JAX MM only for metatomic USER."""
+
+    charges = False
+    use_pbc = False
+
+    def __init__(self, max_padded_atoms: int, cutoff: float = 6.0) -> None:
+        self.max_padded_atoms = int(max_padded_atoms)
+        self.cutoff = float(cutoff)
+
+
+def resolve_hybrid_ml_backend_mode(
+    ml_potential_mode: str | None,
+    restart_path: Path | None,
+    *,
+    do_ml: bool,
+    do_ml_dimer: bool,
+) -> HybridMlBackend:
+    """Detect KerNN/metatomic checkpoints and reject metatomic + JAX ML flags."""
+    mode = str(ml_potential_mode or "physnet").strip().lower()
+    if mode == "physnet" and restart_path is not None:
+        try:
+            from mmml.models.kernnn import is_kernnn_checkpoint
+
+            if is_kernnn_checkpoint(restart_path):
+                mode = "kernnn"
+        except Exception:
+            pass
+        try:
+            from mmml.interfaces.calculators.metatomic import is_metatomic_checkpoint
+
+            if is_metatomic_checkpoint(restart_path):
+                mode = "metatomic"
+        except Exception:
+            pass
+    jax_mm_spoof = mode in {"jax_mm_clone", "jax-mm-clone", "jax_mm_spoof"}
+    bonded_intra = mode in {
+        "bonded_intra",
+        "bonded-intra",
+        "bonded_intra_ml_inter",
+    }
+    kernnn = mode == "kernnn"
+    metatomic = mode == "metatomic"
+    if metatomic and (do_ml or do_ml_dimer):
+        raise ValueError(
+            "setup_calculator(ml_potential_mode='metatomic') builds the JAX MM "
+            "spherical_fn only. Pass doML=False and doML_dimer=False; metatomic "
+            "ML terms are evaluated by MetatomicMlpotCalculator."
+        )
+    return HybridMlBackend(mode, jax_mm_spoof, bonded_intra, kernnn, metatomic)
+
+
+def metatomic_mm_only_model_bundle(
+    max_atoms: int, restart_path: Path | None
+) -> tuple[MetatomicMmOnlyStub, None, bool, bool, bool, dict[str, Any]]:
+    """MODEL stub + checkpoint dashboard fields for the metatomic MM-only path."""
+    model = MetatomicMmOnlyStub(max_atoms)
+    checkpoint_meta = {
+        "Checkpoint": str(restart_path.resolve()) if restart_path is not None else "metatomic",
+        "name": restart_path.name if restart_path is not None else "metatomic",
+        "epoch": "—",
+        "best_loss": "—",
+        "Save Time": "—",
+    }
+    return model, None, False, False, False, checkpoint_meta
+
+
+def hybrid_ml_backend_zbl_map(
+    *,
+    metatomic: bool,
+    kernnn: bool,
+    jax_mm_spoof: bool,
+    model: Any,
+) -> dict[str, Any] | None:
+    """ZBL dashboard mapping; non-PhysNet backends have no PhysNet ZBL table."""
+    from mmml.utils.rich_report import collect_zbl_cutoff_mapping
+
+    zbl_map = None
+    if not metatomic and model is not None:
+        zbl_map = collect_zbl_cutoff_mapping(model)
+    if (metatomic or kernnn or jax_mm_spoof) and zbl_map is None:
+        if metatomic:
+            note = "n/a (metatomic; ASE ML, JAX MM only)"
+        elif kernnn:
+            note = "n/a (KerNN; no PhysNet ZBL)"
+        else:
+            note = "n/a (jax_mm_clone spoof; no PhysNet ZBL)"
+        zbl_map = {"enabled": False, "note": note}
+    return zbl_map
+
+
+def hybrid_ml_backend_model_type(
+    *,
+    jax_mm_spoof: bool,
+    kernnn: bool,
+    metatomic: bool,
+    is_spooky_model: bool,
+) -> str:
+    if jax_mm_spoof:
+        return "Hybrid ML/MM (jax_mm_clone spoof)"
+    if kernnn:
+        return "Hybrid ML/MM (KerNN)"
+    if metatomic:
+        return "Hybrid MM (metatomic ML is ASE USER, not this spherical_fn)"
+    if is_spooky_model:
+        return "Hybrid ML/MM (SpookyPhysNet spherical cutoff)"
+    return "Hybrid ML/MM (PhysNet spherical cutoff)"
+
+
+def metatomic_zero_fragment_output(
+    positions: Array, *, dtype: Any
+) -> Dict[str, Array]:
+    """Zero ML energy/forces when this spherical_fn is MM-only for metatomic USER."""
+    npos = positions.shape[0]
+    return {
+        "energy": ml_zeros((1,), dtype=dtype),
+        "forces": ml_zeros((npos, 3), dtype=dtype),
+    }
+
+
 def setup_calculator(
     ATOMS_PER_MONOMER: Union[int, List[int], Sequence[int]],
     N_MONOMERS: int = 2,
@@ -930,49 +1064,22 @@ def setup_calculator(
     N_MONOMERS + len(dimer_perms)  # Number of systems per batch
     # print(BATCH_SIZE)
     restart_path = Path(model_restart_path) if type(model_restart_path) == str else model_restart_path
-    _ml_mode_norm = str(ml_potential_mode or "physnet").strip().lower()
-    # Auto-detect KerNN JSON checkpoints even when mode defaults to physnet.
-    if (
-        _ml_mode_norm == "physnet"
-        and restart_path is not None
-    ):
-        try:
-            from mmml.models.kernnn import is_kernnn_checkpoint
-
-            if is_kernnn_checkpoint(restart_path):
-                _ml_mode_norm = "kernnn"
-        except Exception:
-            pass
-        try:
-            from mmml.interfaces.calculators.metatomic import is_metatomic_checkpoint
-
-            if is_metatomic_checkpoint(restart_path):
-                _ml_mode_norm = "metatomic"
-        except Exception:
-            pass
-    _jax_mm_spoof_mode = _ml_mode_norm in {
-        "jax_mm_clone",
-        "jax-mm-clone",
-        "jax_mm_spoof",
-    }
     # Bonded-intra: CGenFF bonded owns the internal monomer energy, the ML model
-    # owns only the dimer interaction. Unlike the spoof modes above this KEEPS the
-    # ML model. It does NOT repair the interaction term, which is extrapolation
+    # owns only the dimer interaction. Unlike jax_mm_spoof this KEEPS the ML
+    # model. It does NOT repair the interaction term, which is extrapolation
     # noise below ~0.85 A. See docs/hybrid-bonded-intra.md.
-    _bonded_intra_mode = _ml_mode_norm in {
-        "bonded_intra",
-        "bonded-intra",
-        "bonded_intra_ml_inter",
-    }
-    _kernnn_mode = _ml_mode_norm == "kernnn"
-    _metatomic_mode = _ml_mode_norm == "metatomic"
-    _non_physnet_ml = _jax_mm_spoof_mode or _kernnn_mode or _metatomic_mode
-    if _metatomic_mode and (doML or doML_dimer):
-        raise ValueError(
-            "setup_calculator(ml_potential_mode='metatomic') builds the JAX MM "
-            "spherical_fn only. Pass doML=False and doML_dimer=False; metatomic "
-            "ML terms are evaluated by MetatomicMlpotCalculator."
-        )
+    _ml_backend = resolve_hybrid_ml_backend_mode(
+        ml_potential_mode,
+        restart_path,
+        do_ml=doML,
+        do_ml_dimer=doML_dimer,
+    )
+    _ml_mode_norm = _ml_backend.mode
+    _jax_mm_spoof_mode = _ml_backend.jax_mm_spoof
+    _bonded_intra_mode = _ml_backend.bonded_intra
+    _kernnn_mode = _ml_backend.kernnn
+    _metatomic_mode = _ml_backend.metatomic
+    _non_physnet_ml = _ml_backend.non_physnet_ml
     if _jax_mm_spoof_mode:
         setup_rows.append(("ml_backend", "JAX CGenFF bonded clone (spoof PhysNet)"))
         if restart_path is not None:
@@ -1091,24 +1198,14 @@ def setup_calculator(
             "Save Time": "—",
         }
     elif _metatomic_mode:
-        class _MetatomicMmOnlyStub:
-            charges = False
-            max_padded_atoms = max_atoms
-            cutoff = 6.0
-            use_pbc = False
-
-        MODEL = _MetatomicMmOnlyStub()
-        params = None
-        is_spooky_model = False
-        is_json_checkpoint = False
-        is_joint_checkpoint = False
-        checkpoint_meta = {
-            "Checkpoint": str(restart_path.resolve()) if restart_path is not None else "metatomic",
-            "name": restart_path.name if restart_path is not None else "metatomic",
-            "epoch": "—",
-            "best_loss": "—",
-            "Save Time": "—",
-        }
+        (
+            MODEL,
+            params,
+            is_spooky_model,
+            is_json_checkpoint,
+            is_joint_checkpoint,
+            checkpoint_meta,
+        ) = metatomic_mm_only_model_bundle(max_atoms, restart_path)
     elif is_joint_checkpoint:
         from mmml.interfaces.calculators.checkpoint_loading import load_physnet_for_hybrid_mlpot
 
@@ -1372,7 +1469,6 @@ def setup_calculator(
 
     from mmml.utils.rich_report import (
         collect_ml_energy_terms_mapping,
-        collect_zbl_cutoff_mapping,
         emit_md_system_calculator_report,
         emit_tagged,
     )
@@ -1628,20 +1724,12 @@ def setup_calculator(
             _cell_side = float(np.asarray(pbc_cell)[0, 0])
         except Exception:
             _cell_side = None
-    _zbl_map = None if _metatomic_mode else (collect_zbl_cutoff_mapping(MODEL) if MODEL is not None else None)
-    if _non_physnet_ml and _zbl_map is None:
-        _zbl_map = {
-            "enabled": False,
-            "note": (
-                "n/a (metatomic; ASE ML, JAX MM only)"
-                if _metatomic_mode
-                else (
-                    "n/a (KerNN; no PhysNet ZBL)"
-                    if _kernnn_mode
-                    else "n/a (jax_mm_clone spoof; no PhysNet ZBL)"
-                )
-            ),
-        }
+    _zbl_map = hybrid_ml_backend_zbl_map(
+        metatomic=_metatomic_mode,
+        kernnn=_kernnn_mode,
+        jax_mm_spoof=_jax_mm_spoof_mode,
+        model=MODEL,
+    )
     _mm_charge_mode_dashboard = next(
         (label for key, label in setup_rows if key == "mm_charge_mode"),
         _mm_charge_mode.value,
@@ -1691,22 +1779,11 @@ def setup_calculator(
             include_lj=include_lj,
         ),
         cutoff_params=cutoff_params,
-        model_type=(
-            "Hybrid ML/MM (jax_mm_clone spoof)"
-            if _jax_mm_spoof_mode
-            else (
-                "Hybrid ML/MM (KerNN)"
-                if _kernnn_mode
-                else (
-                    "Hybrid MM (metatomic ML is ASE USER, not this spherical_fn)"
-                    if _metatomic_mode
-                    else (
-                        "Hybrid ML/MM (SpookyPhysNet spherical cutoff)"
-                        if _is_spooky_model
-                        else "Hybrid ML/MM (PhysNet spherical cutoff)"
-                    )
-                )
-            )
+        model_type=hybrid_ml_backend_model_type(
+            jax_mm_spoof=_jax_mm_spoof_mode,
+            kernnn=_kernnn_mode,
+            metatomic=_metatomic_mode,
+            is_spooky_model=_is_spooky_model,
         ),
         n_monomers=n_monomers,
         n_atoms=total_atoms,
@@ -2596,11 +2673,9 @@ def setup_calculator(
                     batches.get("N_a"),
                 )
             if _metatomic_mode:
-                npos = positions.shape[0]
-                return {
-                    "energy": ml_zeros((1,), dtype=ml_jnp_dtype),
-                    "forces": ml_zeros((npos, 3), dtype=ml_jnp_dtype),
-                }
+                return metatomic_zero_fragment_output(
+                    positions, dtype=ml_jnp_dtype
+                )
             if _do_chunked:
                 R_full = positions.reshape(_effective_batch_size, max_atoms, 3)
                 Z_full = atomic_numbers.reshape(_effective_batch_size, max_atoms)
