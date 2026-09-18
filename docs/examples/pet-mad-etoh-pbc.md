@@ -74,6 +74,25 @@ JAX_PLATFORMS=cpu MMML_METATOMIC_DEVICE=cpu \
 GPU: `MMML_METATOMIC_DEVICE=cuda`. On CPU, a 3042-atom PET-MAD step is seconds
 to tens of seconds; keep `--n-steps` small for a smoke.
 
+### NVE conservation (FIRE + VelocityVerlet)
+
+Lattice packing leaves |F| ~ 10 eV/Å. Minimize first, then NVE at 0.5 fs:
+
+```bash
+export PET_MAD_CKPT=/path/to/pet-mad-xs-v1.5.0.pt
+N_STEPS=400 MINI_STEPS=60 \
+  ./examples/pet_mad_etoh_pbc/run_nve.sh
+```
+
+| Check | Pass |
+|-------|------|
+| FIRE | finite E, |F|_max drops vs the lattice start |
+| `energy.csv` | PE, KE, Etot, T every step |
+| Etot | finite; no T explosion (> 5000 K fails) |
+| `drift_eV_per_ps` | reported in `report.json` (judge conservation from the trace) |
+
+400 steps at 0.5 fs is **0.2 ps**. GPU recommended for longer traces.
+
 Unit tests (no torch MD):
 
 ```bash

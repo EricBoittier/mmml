@@ -111,3 +111,12 @@ JAX_PLATFORMS=cpu MMML_METATOMIC_DEVICE=cpu \
 Pass: `report.json` `"ok": true`, ETOH:338 / 3042 atoms, ρ ≈ 0.789 g/cm³,
 finite eV energy/forces, 5 × 0.5 fs steps at 300 K. Use
 `--metatomic-eval-mode whole_system` for the PyCHARMM path (not `fragments`).
+
+NVE conservation (FIRE then VelocityVerlet, default 400 × 0.5 fs = 0.2 ps):
+
+```bash
+N_STEPS=400 MINI_STEPS=60 ./examples/pet_mad_etoh_pbc/run_nve.sh
+```
+
+Pass: finite Etot, T does not explode, `energy.csv` + `drift_eV_per_ps` in
+`report.json`.

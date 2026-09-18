@@ -199,6 +199,8 @@ mmml md-system --config examples/pet_mad_etoh_pbc/yaml/pbc_nvt.yaml \
 
 `--box-auto count --composition ETOH:1 --box-size 32 --target-density-g-cm3 0.789`
 is the same 338-molecule count. Do **not** use `fragments` on this box.
+NVE conservation (FIRE mini, then VelocityVerlet, 0.5 fs):
+`./examples/pet_mad_etoh_pbc/run_nve.sh`.
 Details, pass/fail, and YAML: [PET-MAD ethanol PBC](examples/pet-mad-etoh-pbc.md).
 
 ## PET-MAD teacher → PhysNet student (acetone)

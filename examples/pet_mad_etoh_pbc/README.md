@@ -19,6 +19,19 @@ export PET_MAD_CKPT=/path/to/pet-mad-xs-v1.5.0.pt
 Pass: `report.json` has `"ok": true`, finite eV energies/forces, `n_molecules=338`,
 `density_g_cm3 ≈ 0.789`, 5 × 0.5 fs steps at 300 K.
 
+## CHARMM-free NVE conservation
+
+FIRE-minimize the lattice box, assign 300 K velocities, then VelocityVerlet
+at 0.5 fs. Forces are autograd of the energy (`non_conservative=False`).
+
+```bash
+export PET_MAD_CKPT=/path/to/pet-mad-xs-v1.5.0.pt
+N_STEPS=400 MINI_STEPS=60 ./examples/pet_mad_etoh_pbc/run_nve.sh
+```
+
+Writes `energy.csv`, `nve_energy.png`, and `report.json` with `drift_eV_per_ps`
+and `drift_meV_per_atom_ps`. Default 400 steps is 0.2 ps.
+
 ## PyCHARMM (`md-system`)
 
 Certify the box under MM, then all-ML PET-MAD USER:

@@ -31,6 +31,7 @@ def test_example_files_exist() -> None:
     assert MONOMER.is_file()
     assert (EXAMPLE / "ase_pbc_md.py").is_file()
     assert (EXAMPLE / "run_smoke.sh").is_file()
+    assert (EXAMPLE / "run_nve.sh").is_file()
     atoms = ase_read(str(MONOMER))
     assert len(atoms) == 9
     assert set(atoms.get_chemical_symbols()) == {"C", "H", "O"}
@@ -141,3 +142,37 @@ def test_pbc_nvt_yaml_forwards_metatomic_flags(tmp_path: Path) -> None:
     assert cmd[cmd.index("--temperature") + 1] == "300.0"
     assert "ETOH:338" in cmd
     assert cmd[cmd.index("--box-size") + 1] == "32.0"
+
+
+def _load_ase_pbc_md():
+    import importlib.util
+
+    path = EXAMPLE / "ase_pbc_md.py"
+    spec = importlib.util.spec_from_file_location("pet_mad_etoh_ase_pbc_md", path)
+    assert spec is not None and spec.loader is not None
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def test_nve_conservation_stats_zero_drift() -> None:
+    mod = _load_ase_pbc_md()
+    t = np.array([0.0, 0.1, 0.2, 0.3])
+    e = np.array([-10.0, -10.0, -10.0, -10.0])
+    stats = mod.nve_conservation_stats(t, e, n_atoms=100)
+    assert stats["etot_drift_eV"] == pytest.approx(0.0)
+    assert stats["drift_eV_per_ps"] == pytest.approx(0.0, abs=1e-12)
+    assert stats["etot_span_eV"] == pytest.approx(0.0)
+    assert stats["time_span_ps"] == pytest.approx(0.3)
+
+
+def test_nve_conservation_stats_linear_drift() -> None:
+    mod = _load_ase_pbc_md()
+    t = np.array([0.0, 0.5, 1.0])
+    e = np.array([0.0, 1.0, 2.0])  # 2 eV/ps
+    stats = mod.nve_conservation_stats(t, e, n_atoms=200)
+    assert stats["drift_eV_per_ps"] == pytest.approx(2.0)
+    assert stats["etot_drift_eV"] == pytest.approx(2.0)
+    assert stats["drift_meV_per_atom_ps"] == pytest.approx(10.0)
+    assert stats["rel_drift_per_ps"] == pytest.approx(2.0)  # mean E = 1
+
