@@ -33,6 +33,14 @@ Pass: each `.pt` loads as `metatomic_ase.MetatomicCalculator`; water monomer and
 dimer energies/forces are finite; dummy `calculate_charmm` kcal/mol matches
 `E_eV * EV_TO_KCAL_MOL`.
 
+CPU cost vs bundled JAX PhysNet (`DESdimers_params.json`), CHARMM-free:
+
+```bash
+JAX_PLATFORMS=cpu MMML_METATOMIC_DEVICE=cpu \
+  uv run python tests/functionality/metatomic/compare_jax_cost.py \
+  --out /tmp/metatomic_vs_physnet_cost.json
+```
+
 See `docs/metatomic.md`.
 
 ## Serial PyCHARMM MD
