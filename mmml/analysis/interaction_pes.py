@@ -59,6 +59,10 @@ PET_MAD_XS_RECEPTIVE_FIELD_A = PET_MAD_XS_LAYER_CUTOFF_A * PET_MAD_XS_N_GNN_LAYE
 TRIMER_WATER_REF_A = 2.85
 TRIMER_ETHANOL_REF_A = 4.2
 FAR_FIELD_CONTROL_A = 12.0
+# Hide nuclear-overlap samples in summaries/plots (same floor as dimer-scan design).
+DEFAULT_MIN_CONTACT_PLOT_A = 2.0
+# Trimer E3 peak ignores nuclear-overlap walls (|E_int| above this).
+TRIMER_E3_PEAK_MAX_ABS_EINT_KCAL = 40.0
 
 OH_BOND_MAX_A = 1.25
 COM_VECTOR_MIN_A = 1.0e-8
@@ -355,10 +359,7 @@ def scan_dimer_slice(
             dimer.get_positions()[idx_a], dimer.get_positions()[idx_b]
         )
     e_int_kcal = np.asarray(_ev_to_kcal(e_int), dtype=np.float64)
-    well_index = int(np.nanargmin(e_int_kcal))
-    far_mask = np.isclose(r_vals, FAR_FIELD_CONTROL_A, atol=1.0e-6)
-    far_kcal = float(e_int_kcal[far_mask][0]) if np.any(far_mask) else float(e_int_kcal[-1])
-    return {
+    row = {
         "system": system,
         "orientation": orientation,
         "r_angstrom": r_vals.tolist(),
@@ -368,10 +369,12 @@ def scan_dimer_slice(
         "e_a_ev": float(e_a if e_a is not None else np.nan),
         "e_b_ev": float(e_b if e_b is not None else np.nan),
         "min_contact_angstrom": min_contact.tolist(),
-        "well_r_angstrom": float(r_vals[well_index]),
-        "well_kcal_mol": float(e_int_kcal[well_index]),
-        "far_field_kcal_mol": far_kcal,
     }
+    well_kcal, well_r, far_kcal = _well_from_slice(row)
+    row["well_r_angstrom"] = well_r
+    row["well_kcal_mol"] = well_kcal
+    row["far_field_kcal_mol"] = far_kcal
+    return row
 
 
 def scan_dimer_surface(
@@ -450,18 +453,55 @@ def scan_trimer_slice(
     }
 
 
+def mask_clash_energy(
+    energy: np.ndarray,
+    min_contact_angstrom: np.ndarray,
+    *,
+    min_contact_A: float = DEFAULT_MIN_CONTACT_PLOT_A,
+) -> np.ndarray:
+    """Copy of ``energy`` with clash samples set to NaN."""
+    masked = np.asarray(energy, dtype=np.float64).copy()
+    contact = np.asarray(min_contact_angstrom, dtype=np.float64)
+    masked[contact < float(min_contact_A)] = np.nan
+    return masked
+
+
+def _well_from_slice(row: Mapping[str, Any]) -> tuple[float, float, float]:
+    """Return ``(well_kcal, well_r, far_kcal)`` ignoring clash geometries."""
+    r_vals = np.asarray(row["r_angstrom"], dtype=np.float64)
+    energy = mask_clash_energy(row["e_int_kcal_mol"], row["min_contact_angstrom"])
+    if not np.any(np.isfinite(energy)):
+        return float("nan"), float("nan"), float("nan")
+    well_index = int(np.nanargmin(energy))
+    far_mask = np.isclose(r_vals, FAR_FIELD_CONTROL_A, atol=1.0e-6)
+    far_vals = energy[far_mask]
+    far_kcal = float(far_vals[0]) if far_vals.size and np.isfinite(far_vals[0]) else float(energy[np.isfinite(energy)][-1])
+    return float(energy[well_index]), float(r_vals[well_index]), far_kcal
+
+
 def summarize_campaign(document: Mapping[str, Any]) -> dict[str, Any]:
     """Pull well depths, far-field, and peak ``E3`` into a flat summary."""
     summary: dict[str, Any] = {}
     for slice_row in document.get("dimer_slices", []):
         key = f"{slice_row['system']}_{slice_row['orientation']}"
-        summary[f"{key}_well_kcal_mol"] = slice_row["well_kcal_mol"]
-        summary[f"{key}_well_r_angstrom"] = slice_row["well_r_angstrom"]
-        summary[f"{key}_far_field_kcal_mol"] = slice_row["far_field_kcal_mol"]
+        well_kcal, well_r, far_kcal = _well_from_slice(slice_row)
+        summary[f"{key}_well_kcal_mol"] = well_kcal
+        summary[f"{key}_well_r_angstrom"] = well_r
+        summary[f"{key}_far_field_kcal_mol"] = far_kcal
     for tri in document.get("trimer_slices", []):
         key = tri["system"]
-        summary[f"{key}_trimer_e3_peak_kcal_mol"] = tri["e3_peak_kcal_mol"]
-        summary[f"{key}_trimer_e3_peak_r_angstrom"] = tri["e3_peak_r_angstrom"]
+        e3 = np.asarray(tri["e3_kcal_mol"], dtype=np.float64)
+        e_int = np.asarray(tri["e_int_kcal_mol"], dtype=np.float64)
+        r_vals = np.asarray(tri["r_angstrom"], dtype=np.float64)
+        keep = np.abs(e_int) <= TRIMER_E3_PEAK_MAX_ABS_EINT_KCAL
+        if np.any(keep):
+            masked = np.where(keep, e3, np.nan)
+            peak = int(np.nanargmax(np.abs(masked)))
+            summary[f"{key}_trimer_e3_peak_kcal_mol"] = float(e3[peak])
+            summary[f"{key}_trimer_e3_peak_r_angstrom"] = float(r_vals[peak])
+        else:
+            summary[f"{key}_trimer_e3_peak_kcal_mol"] = tri["e3_peak_kcal_mol"]
+            summary[f"{key}_trimer_e3_peak_r_angstrom"] = tri["e3_peak_r_angstrom"]
         summary[f"{key}_trimer_e3_far_kcal_mol"] = tri["e3_far_kcal_mol"]
     return summary
 

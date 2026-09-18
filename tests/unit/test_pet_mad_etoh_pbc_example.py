@@ -35,6 +35,8 @@ def test_example_files_exist() -> None:
     assert (EXAMPLE / "run_nve.sh").is_file()
     assert (EXAMPLE / "plot_interaction_pes.py").is_file()
     assert (EXAMPLE / "run_interaction_pes.sh").is_file()
+    data = EXAMPLE / "data" / "interaction_pes.json"
+    assert data.is_file()
     atoms = ase_read(str(MONOMER))
     assert len(atoms) == 9
     assert set(atoms.get_chemical_symbols()) == {"C", "H", "O"}

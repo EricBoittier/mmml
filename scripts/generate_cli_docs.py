@@ -269,6 +269,11 @@ COMMAND_FIGURES: dict[str, list[tuple[str, str]]] = {
     "dimer-scan": [
         ("Dimer force profiles across cutoff policies", "../../images/mlpot-settings/dcm_dimer_forces_cutoffs.png"),
     ],
+    "pet-interaction-pes": [
+        ("PET-MAD dimer interaction slices", "../../images/plots/pet_mad_dimer_slices.png"),
+        ("PET-MAD ethanol $E_\\mathrm{int}(r,\\theta)$", "../../images/plots/pet_mad_dimer_surface.png"),
+        ("PET-MAD trimer many-body leftover", "../../images/plots/pet_mad_trimer_mbe.png"),
+    ],
     "ic-scan": [
         (
             "ACEM methyl rotor: rigid 1-fold leak vs relaxed 3-fold",

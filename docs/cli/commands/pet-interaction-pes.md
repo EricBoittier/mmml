@@ -77,6 +77,13 @@ output:
   --prefix PREFIX
 ```
 
+## Visual examples
+
+![PET-MAD dimer interaction slices](../../images/plots/pet_mad_dimer_slices.png)
+
+![PET-MAD ethanol $E_\mathrm{int}(r,\theta)$](../../images/plots/pet_mad_dimer_surface.png)
+
+![PET-MAD trimer many-body leftover](../../images/plots/pet_mad_trimer_mbe.png)
 
 ## Related docs
 

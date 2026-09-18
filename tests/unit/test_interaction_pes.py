@@ -239,7 +239,15 @@ def test_cli_from_json_replots(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) 
     assert Path(report["figures"]["slices"]).is_file()
 
 
-def test_kcal_conversion_matches_units_module() -> None:
+def test_mask_clash_energy_nans_short_contacts() -> None:
+    from mmml.analysis.interaction_pes import mask_clash_energy
+
+    energy = np.array([-3.0, 1e4, 0.1])
+    contact = np.array([2.2, 0.3, 2.5])
+    masked = mask_clash_energy(energy, contact, min_contact_A=2.0)
+    assert masked[0] == pytest.approx(-3.0)
+    assert np.isnan(masked[1])
+    assert masked[2] == pytest.approx(0.1)
     monomer = _water()
     row = scan_dimer_slice(
         monomer,
@@ -250,6 +258,19 @@ def test_kcal_conversion_matches_units_module() -> None:
         system=SYSTEM_WATER,
     )
     assert row["e_int_kcal_mol"][0] == pytest.approx(row["e_int_ev"][0] * EV_TO_KCAL_MOL)
+
+
+def test_committed_campaign_json_schema() -> None:
+    path = REPO / "examples" / "pet_mad_etoh_pbc" / "data" / "interaction_pes.json"
+    document = load_interaction_pes_json(path)
+    assert document["schema"] == SCHEMA_VERSION
+    assert document["energy_definition"] == "interaction"
+    assert document["units"]["energy"] == "kcal/mol"
+    systems = {row["system"] for row in document["dimer_slices"]}
+    assert {"water", "ethanol", "acetone"} <= systems
+    assert document["summary"]["water_hbond_far_field_kcal_mol"] == pytest.approx(0.0, abs=1e-3)
+    assert document["summary"]["ethanol_hbond_far_field_kcal_mol"] == pytest.approx(0.0, abs=1e-3)
+    assert abs(document["summary"]["ethanol_trimer_e3_peak_kcal_mol"]) > 1.0
 
 
 def test_cli_is_registered() -> None:

@@ -129,9 +129,10 @@ JAX_PLATFORMS=cpu MMML_METATOMIC_DEVICE=cpu \
 | Trimer | \(|E_3|\) is kcal/mol at close spacing (water ~2.85 Å, ethanol ~4.2 Å) and ≈ 0 at 12 Å |
 
 Replot without PET: `--from-json examples/pet_mad_etoh_pbc/data/interaction_pes.json`.
-Figures land next to that JSON (`pet_mad_dimer_slices.png`,
-`pet_mad_dimer_surface.png`, `pet_mad_trimer_mbe.png`) and under
-`docs/images/plots/` when regenerated.
+
+![PET-MAD dimer interaction slices](../images/plots/pet_mad_dimer_slices.png)
+![PET-MAD ethanol interaction surface](../images/plots/pet_mad_dimer_surface.png)
+![PET-MAD trimer many-body leftover](../images/plots/pet_mad_trimer_mbe.png)
 
 ---
 
