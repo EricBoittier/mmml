@@ -155,6 +155,25 @@ def test_build_decomposed_mlpot_metatomic_early_return(
     assert model is sentinel
 
 
+def test_warmup_decomposed_mlpot_skips_metatomic_model(tmp_path: Path) -> None:
+    from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import (
+        warmup_decomposed_mlpot,
+    )
+
+    ckpt = tmp_path / "export.pt"
+    ckpt.write_bytes(b"stub")
+    dummy = DummyAseCalculator()
+    model = build_metatomic_mlpot_model(
+        ckpt,
+        np.array([1, 1], dtype=int),
+        [1, 1],
+        2,
+        calculator=dummy,
+        do_mm=False,
+    )
+    warmup_decomposed_mlpot(model, np.zeros((2, 3)), verbose=False)
+
+
 def test_md_system_parser_accepts_metatomic() -> None:
     from mmml.cli.run.md_system import build_parser, build_pycharmm_command
 

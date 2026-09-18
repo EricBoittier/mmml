@@ -2122,10 +2122,19 @@ def warmup_decomposed_mlpot(
     a separate ``warmup_hybrid_spherical_cutoff`` pass that would duplicate XLA
     work (slice/mul/scatter/PhysNet/jax-pme compiled twice).
     """
+    from mmml.interfaces.pycharmmInterface.mlpot.metatomic_mlpot import MetatomicMlpotModel
     from mmml.utils.jax_gpu_warmup import (
         ensure_xla_gpu_warmed,
         maybe_sanitize_process_env_for_ptxas,
     )
+
+    if isinstance(model, MetatomicMlpotModel):
+        if verbose:
+            print(
+                "Metatomic MLpot: skipping JAX warmup (torch ASE adapter)",
+                flush=True,
+            )
+        return
 
     maybe_sanitize_process_env_for_ptxas()
     if getattr(model, "_jax_warmup_done", False) and model._spherical_fn is not None:

@@ -372,6 +372,23 @@ def test_maybe_auto_warmup_skips_under_mpirun(monkeypatch):
         assert wm.maybe_auto_warmup_mlpot_jax_from_md_system(args) is None
 
 
+def test_maybe_auto_warmup_skips_metatomic(monkeypatch, capsys):
+    args = argparse.Namespace(
+        skip_jit_warmup=False,
+        auto_warmup_mlpot_jax=True,
+        composition="ACO:2",
+        residue="ACO",
+        n_molecules=2,
+        checkpoint=Path("/tmp/export.pt"),
+        ml_potential_mode="metatomic",
+        quiet=False,
+        verbose=False,
+    )
+    monkeypatch.delenv("MMML_NO_AUTO_WARMUP_MLPOT_JAX", raising=False)
+    assert wm.maybe_auto_warmup_mlpot_jax_from_md_system(args) is None
+    assert "metatomic USER is a torch ASE adapter" in capsys.readouterr().out
+
+
 def test_maybe_auto_warmup_runs_serial(monkeypatch):
     args = argparse.Namespace(
         skip_jit_warmup=False,

@@ -462,6 +462,21 @@ def maybe_auto_warmup_mlpot_jax_from_md_system(args: argparse.Namespace) -> int 
 
     if not auto_warmup_mlpot_jax_enabled(args):
         return None
+    from mmml.interfaces.pycharmmInterface.mlpot.metatomic_mlpot import (
+        should_use_metatomic_mlpot,
+    )
+
+    _ckpt = getattr(args, "checkpoint", None) or os.environ.get("MMML_CKPT") or os.environ.get(
+        "MMML_CHECKPOINT"
+    )
+    if should_use_metatomic_mlpot(_ckpt, args):
+        if not getattr(args, "quiet", False):
+            print(
+                "mmml: auto warmup-mlpot-jax skipped "
+                "(metatomic USER is a torch ASE adapter, not a JAX spherical_fn)",
+                flush=True,
+            )
+        return None
     if _under_mpirun():
         return None
     warmup_ns = build_warmup_namespace_from_md_system(args)
