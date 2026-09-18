@@ -1,7 +1,8 @@
 """PET-MAD (or any ASE calculator) interaction slices, surfaces, and trimer MBE.
 
 CHARMM-free single-point scans. Default recipe: PET-MAD xs 1.5.0 on water /
-ethanol (acetone 1D optional) with ``E_int = E(AB)-E(A)-E(B)``.
+ethanol (acetone 1D optional) with ``E_int = E(AB)-E(A)-E(B)``. Orientations
+are internal-axis H-bonds (linear OH···O vs acceptor–acceptor), not COM copies.
 
 Example::
 
@@ -27,6 +28,7 @@ from mmml.analysis.interaction_pes import (
     DEFAULT_R_MIN_A,
     DEFAULT_SURFACE_SYSTEM,
     DEFAULT_THETA_MAX_DEG,
+    DEFAULT_THETA_MIN_DEG,
     DEFAULT_WATER_XYZ,
     SCHEMA_VERSION,
     SYSTEM_ACETONE,
@@ -36,6 +38,7 @@ from mmml.analysis.interaction_pes import (
 
 DEFAULT_OUTPUT_DIR = Path("scratch") / "pet_interaction_pes"
 DEFAULT_JSON_NAME = "interaction_pes.json"
+DEFAULT_NPZ_NAME = "interaction_pes.npz"
 
 
 def _default_checkpoint() -> Path | None:
@@ -55,7 +58,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="mmml pet-interaction-pes",
         description=(
-            "Rigid dimer interaction slices/surfaces and trimer many-body leftover "
+            "Rigid OH···O interaction slices/surfaces and trimer many-body leftover "
             "for a metatomic PET checkpoint (CHARMM-free single points)."
         ),
     )
@@ -88,18 +91,34 @@ def build_parser() -> argparse.ArgumentParser:
         "--include-acetone",
         action=argparse.BooleanOptionalAction,
         default=True,
-        help="Add acetone 1D slices from the distill monomer PDB.",
+        help="Add acetone 1D slices (C=O acceptor vs methyl–methyl).",
     )
     grids = parser.add_argument_group("scan grid")
     grids.add_argument("--r-min", type=float, default=DEFAULT_R_MIN_A, metavar="ANGSTROM")
     grids.add_argument("--r-max", type=float, default=DEFAULT_R_MAX_A, metavar="ANGSTROM")
-    grids.add_argument("--n-r", type=int, default=DEFAULT_N_R_1D)
+    grids.add_argument(
+        "--n-r",
+        type=int,
+        default=DEFAULT_N_R_1D,
+        help="Uniform 1D count; 0 uses a piecewise well/far grid.",
+    )
     grids.add_argument("--r-2d-min", type=float, default=DEFAULT_R_2D_MIN_A, metavar="ANGSTROM")
     grids.add_argument("--r-2d-max", type=float, default=DEFAULT_R_2D_MAX_A, metavar="ANGSTROM")
-    grids.add_argument("--n-r-2d", type=int, default=DEFAULT_N_R_2D)
+    grids.add_argument(
+        "--n-r-2d",
+        type=int,
+        default=DEFAULT_N_R_2D,
+        help="Uniform 2D r count; 0 uses the default well window.",
+    )
     grids.add_argument("--n-theta", type=int, default=DEFAULT_N_THETA_2D)
+    grids.add_argument("--theta-min", type=float, default=DEFAULT_THETA_MIN_DEG, metavar="DEG")
     grids.add_argument("--theta-max", type=float, default=DEFAULT_THETA_MAX_DEG, metavar="DEG")
-    grids.add_argument("--n-r-trimer", type=int, default=DEFAULT_N_R_TRIMER)
+    grids.add_argument(
+        "--n-r-trimer",
+        type=int,
+        default=DEFAULT_N_R_TRIMER,
+        help="Uniform trimer count; 0 uses the default O–O grid.",
+    )
     grids.add_argument("--surface-system", default=DEFAULT_SURFACE_SYSTEM)
     outputs = parser.add_argument_group("output")
     outputs.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
@@ -113,6 +132,14 @@ def _write_report(path: Path, payload: dict) -> None:
 
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+
+
+def _grid_or_default(n: int, start: float, stop: float, default_fn):
+    from mmml.analysis.interaction_pes import linspace_angstrom
+
+    if int(n) >= 2:
+        return linspace_angstrom(start, stop, int(n))
+    return default_fn()
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -151,14 +178,15 @@ def main(argv: list[str] | None = None) -> int:
     from mmml.analysis.dimer_scans import centered_atoms
     from mmml.analysis.interaction_pes import (
         dump_interaction_pes_json,
-        linspace_angstrom,
+        dump_interaction_pes_npz,
+        default_dha_deg,
+        default_r_1d_angstrom,
+        default_r_2d_angstrom,
+        default_r_trimer_angstrom,
         load_monomer_xyz,
-        merge_grid,
+        linspace_angstrom,
         run_interaction_pes_campaign,
         sha256_file,
-        FAR_FIELD_CONTROL_A,
-        TRIMER_ETHANOL_REF_A,
-        TRIMER_WATER_REF_A,
     )
     from mmml.analysis.interaction_pes_plot import write_interaction_pes_figures
     from mmml.interfaces.calculators.metatomic import load_metatomic_calculator
@@ -178,16 +206,18 @@ def main(argv: list[str] | None = None) -> int:
     def factory():
         return load_metatomic_calculator(ckpt)
 
+    theta = (
+        linspace_angstrom(args.theta_min, args.theta_max, args.n_theta)
+        if args.n_theta >= 2
+        else default_dha_deg()
+    )
     document = run_interaction_pes_campaign(
         calculator_factory=factory,
         systems=systems,
-        r_1d=linspace_angstrom(args.r_min, args.r_max, args.n_r),
-        r_2d=linspace_angstrom(args.r_2d_min, args.r_2d_max, args.n_r_2d),
-        theta_deg=linspace_angstrom(0.0, args.theta_max, args.n_theta),
-        r_trimer=merge_grid(
-            linspace_angstrom(args.r_min, args.r_max, args.n_r_trimer),
-            (TRIMER_WATER_REF_A, TRIMER_ETHANOL_REF_A, FAR_FIELD_CONTROL_A),
-        ),
+        r_1d=_grid_or_default(args.n_r, args.r_min, args.r_max, default_r_1d_angstrom),
+        r_2d=_grid_or_default(args.n_r_2d, args.r_2d_min, args.r_2d_max, default_r_2d_angstrom),
+        theta_deg=theta,
+        r_trimer=_grid_or_default(args.n_r_trimer, args.r_min, args.r_max, default_r_trimer_angstrom),
         slice_systems=slice_systems,
         surface_system=args.surface_system,
         trimer_systems=(SYSTEM_WATER, SYSTEM_ETHANOL),
@@ -196,6 +226,7 @@ def main(argv: list[str] | None = None) -> int:
         checkpoint_sha256=sha256_file(ckpt),
     )
     dump_interaction_pes_json(document, json_out)
+    dump_interaction_pes_npz(document, json_out.with_name(DEFAULT_NPZ_NAME))
     figures = write_interaction_pes_figures(document, output_dir, prefix=args.prefix)
     _write_report(
         output_dir / "report.json",
@@ -204,6 +235,7 @@ def main(argv: list[str] | None = None) -> int:
             "schema": SCHEMA_VERSION,
             "json": str(json_out.resolve()),
             "checkpoint": str(ckpt),
+            "checkpoint_sha256": document.get("checkpoint_sha256"),
             "figures": {name: str(path) for name, path in figures.items()},
             "summary": document["summary"],
             "n_cached_energies": document["n_cached_energies"],

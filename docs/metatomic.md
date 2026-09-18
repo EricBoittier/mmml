@@ -214,9 +214,11 @@ JAX_PLATFORMS=cpu MMML_METATOMIC_DEVICE=cpu \
   mmml pet-interaction-pes --checkpoint /path/to/pet-mad-xs-v1.5.0.pt
 ```
 
-Writes `E_int(r)` slices (water, ethanol, acetone), an ethanol \(r\times\theta\)
-surface, and a trimer leftover \(E_3\). Plots are ICML-styled and reproducible
-from JSON (`--from-json`). See the [ethanol PBC example](examples/pet-mad-etoh-pbc.md).
+Writes linear OH···O vs acceptor–acceptor \(E_\mathrm{int}(r)\) slices
+(O–O; acetone is C=O vs methyl–methyl), an angular cut at \(r_e\), an ethanol
+\(r\times\theta\) surface (\(\theta\) = donor–H–acceptor), and a linear/cyclic
+trimer leftover \(E_3\). Plots are ICML-styled and reproducible from JSON
+(`--from-json`). See the [ethanol PBC example](examples/pet-mad-etoh-pbc.md).
 
 ## PET-MAD teacher → PhysNet student (acetone)
 

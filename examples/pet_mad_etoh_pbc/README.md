@@ -69,7 +69,7 @@ mmml md-system --backend pycharmm \
 
 PET is many-body (transformer over neighbor tokens; PET-MAD xs RF ≈ 9 Å). A
 2-body molecular reconstruction cannot clone it. `mmml pet-interaction-pes`
-scans rigid COM dimers/trimers with the same checkpoint (single points, no MD):
+scans rigid OH···O dimers/trimers (O–O, Cs acceptor flap) with the same checkpoint (single points, no MD):
 
 ```bash
 export PET_MAD_CKPT=/path/to/pet-mad-xs-v1.5.0.pt
@@ -82,8 +82,9 @@ JAX_PLATFORMS=cpu MMML_METATOMIC_DEVICE=cpu \
 
 | Figure | What it shows |
 |--------|----------------|
-| `pet_mad_dimer_slices.png` | Water / ethanol / acetone \(E_\mathrm{int}(r)\) (kcal/mol vs Å), H-bond vs stacked, PET RF line at 9 Å |
-| `pet_mad_dimer_surface.png` | Ethanol \(E_\mathrm{int}(r,\theta)\) heatmap + isolevels |
-| `pet_mad_trimer_mbe.png` | \(E_\mathrm{int}(ABC)\) vs \(\sum E_\mathrm{int}(IJ)\) and residual \(E_3\) |
+| `pet_mad_dimer_slices.png` | Water / ethanol / acetone \(E_\mathrm{int}(r)\) vs O–O (kcal/mol vs Å); linear OH···O vs acceptor–acceptor (acetone: C=O vs methyl); wall inset; PET RF at 9 Å |
+| `pet_mad_dimer_angular.png` | \(E_\mathrm{int}(\theta)\) at \(r_e\); \(\theta\) = donor–H–acceptor (in-plane vs out-of-plane) |
+| `pet_mad_dimer_surface.png` | Ethanol \(E_\mathrm{int}(r,\theta)\) heatmap + isolevels + marked minimum |
+| `pet_mad_trimer_mbe.png` | Linear vs cyclic: \(E_\mathrm{int}(ABC)\), \(\sum E_\mathrm{int}(IJ)\), residual \(E_3\), and \(E_3/E_\mathrm{int}\) |
 
-Pass: JSON schema `mmml.interaction_pes/v1`; far-field \(E_\mathrm{int}\to 0\) past ~9–12 Å; trimer \(|E_3|\) kcal/mol at close spacing and ~0 at 12 Å. Unit tests (dummy calculator, no torch): `uv run pytest tests/unit/test_interaction_pes.py -q`.
+Pass: JSON schema `mmml.interaction_pes/v2`; far-field \(E_\mathrm{int}\to 0\) past ~9–12 Å; trimer \(|E_3|\) kcal/mol at close O–O and ~0 at 12 Å. Unit tests (dummy calculator, no torch): `uv run pytest tests/unit/test_interaction_pes.py -q`.

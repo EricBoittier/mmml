@@ -3,8 +3,10 @@
 PET-MAD interaction slices, surfaces, and trimer many-body leftover.
 
 
-CHARMM-free PET-MAD interaction PES: 1D COM slices, one 2D dimer surface, and
-a trimer many-body leftover ``E3 = E_int(ABC) - sum E_int(IJ)``. Energies are
+CHARMM-free PET-MAD interaction PES: linear OH···O vs acceptor–acceptor 1D
+slices (O–O, not COM copies), an angular cut at ``r_e``, one 2D
+``E_int(r, theta)`` surface (``theta`` = donor–H–acceptor), and a trimer
+many-body leftover ``E3 = E_int(ABC) - sum E_int(IJ)``. Energies are
 single-point ASE evaluations (no CHARMM, Packmol, or MD). Plots use the shared
 ICML style and are reproducible from the written JSON.
 
@@ -32,13 +34,13 @@ usage: mmml pet-interaction-pes [-h] [--checkpoint CHECKPOINT]
                                 [--r-min ANGSTROM] [--r-max ANGSTROM]
                                 [--n-r N_R] [--r-2d-min ANGSTROM]
                                 [--r-2d-max ANGSTROM] [--n-r-2d N_R_2D]
-                                [--n-theta N_THETA] [--theta-max DEG]
-                                [--n-r-trimer N_R_TRIMER]
+                                [--n-theta N_THETA] [--theta-min DEG]
+                                [--theta-max DEG] [--n-r-trimer N_R_TRIMER]
                                 [--surface-system SURFACE_SYSTEM]
                                 [--output-dir OUTPUT_DIR] [--json-out JSON_OUT]
                                 [--prefix PREFIX]
 
-Rigid dimer interaction slices/surfaces and trimer many-body leftover for a
+Rigid OH···O interaction slices/surfaces and trimer many-body leftover for a
 metatomic PET checkpoint (CHARMM-free single points).
 
 options:
@@ -57,18 +59,20 @@ input:
                         Ethanol monomer xyz (default:
                         examples/pet_mad_etoh_pbc/etoh.xyz).
   --include-acetone, --no-include-acetone
-                        Add acetone 1D slices from the distill monomer PDB.
+                        Add acetone 1D slices (C=O acceptor vs methyl–methyl).
 
 scan grid:
   --r-min ANGSTROM
   --r-max ANGSTROM
-  --n-r N_R
+  --n-r N_R             Uniform 1D count; 0 uses a piecewise well/far grid.
   --r-2d-min ANGSTROM
   --r-2d-max ANGSTROM
-  --n-r-2d N_R_2D
+  --n-r-2d N_R_2D       Uniform 2D r count; 0 uses the default well window.
   --n-theta N_THETA
+  --theta-min DEG
   --theta-max DEG
   --n-r-trimer N_R_TRIMER
+                        Uniform trimer count; 0 uses the default O–O grid.
   --surface-system SURFACE_SYSTEM
 
 output:
@@ -80,6 +84,8 @@ output:
 ## Visual examples
 
 ![PET-MAD dimer interaction slices](../../images/plots/pet_mad_dimer_slices.png)
+
+![PET-MAD angular slice at $r_e$](../../images/plots/pet_mad_dimer_angular.png)
 
 ![PET-MAD ethanol $E_\mathrm{int}(r,\theta)$](../../images/plots/pet_mad_dimer_surface.png)
 

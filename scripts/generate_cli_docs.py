@@ -271,6 +271,7 @@ COMMAND_FIGURES: dict[str, list[tuple[str, str]]] = {
     ],
     "pet-interaction-pes": [
         ("PET-MAD dimer interaction slices", "../../images/plots/pet_mad_dimer_slices.png"),
+        ("PET-MAD angular slice at $r_e$", "../../images/plots/pet_mad_dimer_angular.png"),
         ("PET-MAD ethanol $E_\\mathrm{int}(r,\\theta)$", "../../images/plots/pet_mad_dimer_surface.png"),
         ("PET-MAD trimer many-body leftover", "../../images/plots/pet_mad_trimer_mbe.png"),
     ],
@@ -357,8 +358,10 @@ therefore be routed and unit-tested on ordinary CI runners without initializing
 the native CHARMM runtime.
 """,
     "pet-interaction-pes": """
-CHARMM-free PET-MAD interaction PES: 1D COM slices, one 2D dimer surface, and
-a trimer many-body leftover ``E3 = E_int(ABC) - sum E_int(IJ)``. Energies are
+CHARMM-free PET-MAD interaction PES: linear OH···O vs acceptor–acceptor 1D
+slices (O–O, not COM copies), an angular cut at ``r_e``, one 2D
+``E_int(r, theta)`` surface (``theta`` = donor–H–acceptor), and a trimer
+many-body leftover ``E3 = E_int(ABC) - sum E_int(IJ)``. Energies are
 single-point ASE evaluations (no CHARMM, Packmol, or MD). Plots use the shared
 ICML style and are reproducible from the written JSON.
 

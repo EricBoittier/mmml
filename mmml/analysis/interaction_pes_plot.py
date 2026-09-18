@@ -8,40 +8,53 @@ from typing import Any, Mapping
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.colors import LinearSegmentedColormap, TwoSlopeNorm
+from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 
 from mmml.analysis.interaction_pes import (
-    DEFAULT_R_MAX_A,
-    DEFAULT_R_MIN_A,
-    ORIENTATION_HBOND,
-    ORIENTATION_STACKED,
+    ORIENTATION_ACCEPTOR_ACCEPTOR,
+    ORIENTATION_CARBONYL,
+    ORIENTATION_LINEAR_OH_O,
+    ORIENTATION_METHYL,
     PET_MAD_XS_RECEPTIVE_FIELD_A,
-    mask_clash_energy,
 )
+from mmml.analysis.interaction_pes_geom import MOTIF_CYCLIC, MOTIF_LINEAR, ORIENTATION_LABELS
 from mmml.utils.plotting.styles import apply_plot_style, comparison_colors
 
-# Okabe–Ito blue → grey → vermillion (interaction energy has a true zero).
 OKABE_DIVERGING = LinearSegmentedColormap.from_list(
     "okabe_int",
     ["#0072B2", "#7FB4D3", "#E8E8E6", "#EBA07A", "#D55E00"],
 )
 
-SURFACE_CONTOUR_LEVELS_KCAL = (-2.0, -1.0, 1.0, 2.0)
-SURFACE_COLOR_MAX_KCAL = 6.0
-SLICE_Y_MAX_KCAL = 15.0
-TRIMER_EINT_DISPLAY_MAX_KCAL = 40.0
+SURFACE_CONTOUR_LEVELS_KCAL = (-4.0, -2.0, -1.0, 1.0, 2.0, 4.0)
+SURFACE_COLOR_MAX_KCAL = 8.0
+SLICE_Y_WELL_PAD_KCAL = 0.8
+SLICE_Y_TOP_KCAL = 3.0
+WALL_INSET_R_MAX_A = 3.3
 
 
 def _style():
     return apply_plot_style("icml")
 
 
-def _save(fig, path: Path) -> Path:
+def _save(fig, path: Path, *, write_pdf: bool = True) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(path, dpi=300, bbox_inches="tight")
-    pdf = path.with_suffix(".pdf")
-    fig.savefig(pdf, bbox_inches="tight")
+    if write_pdf:
+        fig.savefig(path.with_suffix(".pdf"), bbox_inches="tight")
     plt.close(fig)
     return path
+
+
+def _rf(document: Mapping[str, Any]) -> float:
+    return float(document.get("pet_receptive_field_angstrom", PET_MAD_XS_RECEPTIVE_FIELD_A))
+
+
+def _mark_rf(ax, rf: float, *, label: str | None = None) -> None:
+    ax.axvline(rf, color="0.45", linewidth=0.9, linestyle=":", label=label)
+
+
+def _eint_ylabel() -> str:
+    return r"$E_{\mathrm{int}}=E(AB)-E(A)-E(B)$ (kcal/mol)"
 
 
 def _slice_lookup(document: Mapping[str, Any]) -> dict[tuple[str, str], dict[str, Any]]:
@@ -51,50 +64,208 @@ def _slice_lookup(document: Mapping[str, Any]) -> dict[tuple[str, str], dict[str
     }
 
 
-def plot_dimer_slices(document: Mapping[str, Any], output: Path | str) -> Path:
-    """1D ``E_int(r)`` for each system: H-bond vs stacked, with the PET RF line."""
+def _systems_in_slices(document: Mapping[str, Any]) -> list[str]:
+    return list(dict.fromkeys(row["system"] for row in document.get("dimer_slices", [])))
+
+
+def _pair_orientations(system: str) -> tuple[str, str]:
+    if system == "acetone":
+        return ORIENTATION_CARBONYL, ORIENTATION_METHYL
+    return ORIENTATION_LINEAR_OH_O, ORIENTATION_ACCEPTOR_ACCEPTOR
+
+
+def _orientation_legend(orientation: str) -> str:
+    return ORIENTATION_LABELS.get(orientation, orientation).replace("$", "")
+
+
+def plot_dimer_slices(
+    document: Mapping[str, Any],
+    output: Path | str,
+    *,
+    write_pdf: bool = True,
+) -> Path:
+    """1D ``E_int(r)`` with a visible repulsive limb, well markers, and PET RF."""
     style = _style()
-    colors = comparison_colors(style, n=2)
+    palette = comparison_colors(style, n=8)
+    colors = (palette[5], palette[6])  # blue, vermillion (skip black)
     slices = _slice_lookup(document)
-    systems = list(dict.fromkeys(row["system"] for row in document.get("dimer_slices", [])))
+    systems = _systems_in_slices(document)
     if not systems:
         raise ValueError("document has no dimer_slices")
     n_col = len(systems)
-    fig, axes = plt.subplots(1, n_col, figsize=(4.4 * n_col, 3.6), squeeze=False, sharey=False)
-    rf = float(document.get("pet_receptive_field_angstrom", PET_MAD_XS_RECEPTIVE_FIELD_A))
+    fig, axes = plt.subplots(1, n_col, figsize=(4.5 * n_col, 3.8), squeeze=False, sharey=False)
+    rf = _rf(document)
     for ax, system in zip(axes[0], systems, strict=True):
+        ori_pair = _pair_orientations(system)
+        well_pts: list[tuple[float, float]] = []
+        r_min, r_max = np.inf, 0.0
+        all_energy: list[np.ndarray] = []
         for orientation, color, ls in (
-            (ORIENTATION_HBOND, colors[0], "-"),
-            (ORIENTATION_STACKED, colors[1], "--"),
+            (ori_pair[0], colors[0], "-"),
+            (ori_pair[1], colors[1], "--"),
         ):
             row = slices.get((system, orientation))
             if row is None:
                 continue
-            energy = mask_clash_energy(row["e_int_kcal_mol"], row["min_contact_angstrom"])
+            r = np.asarray(row["r_angstrom"], dtype=np.float64)
+            energy = np.asarray(row["e_int_kcal_mol"], dtype=np.float64)
+            all_energy.append(energy)
+            r_min = min(r_min, float(np.min(r)))
+            r_max = max(r_max, float(np.max(r)))
             ax.plot(
-                row["r_angstrom"],
+                r,
                 energy,
                 color=color,
                 linestyle=ls,
                 marker="o",
-                markersize=3.5,
-                label=orientation,
+                markersize=3.2,
+                label=ORIENTATION_LABELS.get(orientation, orientation),
             )
+            well_r = row.get("well_r_angstrom")
+            well_e = row.get("well_kcal_mol")
+            if well_r is not None and well_e is not None and np.isfinite(well_e) and well_e < 0.0:
+                ax.scatter([well_r], [well_e], color=color, s=36, zorder=5, marker="*")
+                well_pts.append((float(well_r), float(well_e)))
         ax.axhline(0.0, color="0.7", linewidth=0.8)
-        ax.axvline(rf, color="0.45", linewidth=0.9, linestyle=":", label=f"PET RF ({rf:.0f} Å)")
-        ax.set_xlim(DEFAULT_R_MIN_A, DEFAULT_R_MAX_A)
-        ax.set_xlabel("COM distance (Å)")
+        _mark_rf(ax, rf, label=f"PET RF ({rf:.0f} Å)")
+        ax.set_xlim(min(r_min, 2.2), max(r_max, 12.0))
+        scan_name = "O–O" if system != "acetone" else "site–site"
+        ax.set_xlabel(f"{scan_name} $r$ (Å)")
         ax.set_title(f"{system} dimer")
-        y0, y1 = ax.get_ylim()
-        ax.set_ylim(min(y0, -1.0), min(max(y1, 1.0), SLICE_Y_MAX_KCAL))
-        ax.legend(frameon=False, loc="best")
-    axes[0][0].set_ylabel(r"$E_{\mathrm{int}}$ (kcal/mol)")
+        finite = np.concatenate(all_energy) if all_energy else np.array([])
+        finite = finite[np.isfinite(finite)]
+        y_lo = float(np.min(finite)) - SLICE_Y_WELL_PAD_KCAL if finite.size else -1.0
+        y_hi = SLICE_Y_TOP_KCAL
+        if finite.size:
+            y_hi = max(SLICE_Y_TOP_KCAL, min(float(np.max(finite)) * 1.05, 10.0))
+        if well_pts:
+            r_e, e_min = min(well_pts, key=lambda p: p[1])
+            ax.text(
+                0.97,
+                0.05,
+                f"$r_e$={r_e:.2f} Å\n$E_\\mathrm{{min}}$={e_min:.2f}",
+                transform=ax.transAxes,
+                ha="right",
+                va="bottom",
+                fontsize=11,
+                color="0.15",
+            )
+            y_lo = min(y_lo, min(p[1] for p in well_pts) - SLICE_Y_WELL_PAD_KCAL)
+        ax.set_ylim(y_lo, y_hi)
+        _add_wall_inset(ax, slices, system, ori_pair, colors)
+        ax.legend(frameon=False, loc="upper right", fontsize=10)
+    axes[0][0].set_ylabel(_eint_ylabel())
+    fig.text(
+        0.01,
+        0.01,
+        "PET-MAD xs 1.5.0 (PBEsol). Water-dimer CCSD(T) ≈ −5 kcal/mol is context only.",
+        fontsize=9,
+        color="0.35",
+    )
+    fig.tight_layout(rect=(0.0, 0.04, 1.0, 1.0))
+    return _save(fig, Path(output), write_pdf=write_pdf)
+
+
+def _add_wall_inset(
+    ax,
+    slices: Mapping[tuple[str, str], Mapping[str, Any]],
+    system: str,
+    ori_pair: tuple[str, str],
+    colors: tuple[str, str],
+) -> None:
+    """Show the repulsive limb that the well-focused y-limits clip away."""
+    inset = inset_axes(ax, width="37%", height="32%", loc="upper left", borderpad=0.6)
+    drew = False
+    y_hi = 1.0
+    for orientation, color, ls in (
+        (ori_pair[0], colors[0], "-"),
+        (ori_pair[1], colors[1], "--"),
+    ):
+        row = slices.get((system, orientation))
+        if row is None:
+            continue
+        r = np.asarray(row["r_angstrom"], dtype=np.float64)
+        energy = np.asarray(row["e_int_kcal_mol"], dtype=np.float64)
+        mask = r <= WALL_INSET_R_MAX_A
+        if not np.any(mask):
+            continue
+        inset.plot(r[mask], energy[mask], color=color, linestyle=ls, marker="o", markersize=2.4)
+        finite = energy[mask][np.isfinite(energy[mask])]
+        if finite.size:
+            y_hi = max(y_hi, float(np.max(finite)))
+            drew = True
+    if not drew:
+        inset.remove()
+        return
+    inset.axhline(0.0, color="0.7", linewidth=0.6)
+    inset.set_xlim(2.15, WALL_INSET_R_MAX_A)
+    inset.set_ylim(-0.5, min(max(y_hi * 1.05, 4.0), 40.0))
+    inset.set_title("wall", fontsize=9, pad=2)
+    inset.tick_params(labelsize=8)
+    inset.set_xlabel("Å", fontsize=8)
+    inset.set_ylabel("kcal/mol", fontsize=8)
+
+
+def plot_dimer_angular(
+    document: Mapping[str, Any],
+    output: Path | str,
+    *,
+    write_pdf: bool = True,
+) -> Path:
+    """Angular slice at fixed $r_e$: in-plane vs out-of-plane donor–H–acceptor."""
+    style = _style()
+    palette = comparison_colors(style, n=8)
+    colors = {"xz": palette[5], "yz": palette[6]}
+    rows = document.get("dimer_angular", [])
+    if not rows:
+        raise ValueError("document has no dimer_angular")
+    systems = list(dict.fromkeys(row["system"] for row in rows))
+    fig, axes = plt.subplots(1, len(systems), figsize=(4.5 * len(systems), 3.8), squeeze=False)
+    by_key = {(row["system"], row.get("plane", "xz")): row for row in rows}
+    for ax, system in zip(axes[0], systems, strict=True):
+        r_e = None
+        for plane, ls, label in (
+            ("xz", "-", "in-plane"),
+            ("yz", "--", "out-of-plane"),
+        ):
+            row = by_key.get((system, plane))
+            if row is None:
+                continue
+            r_e = row["r_angstrom"]
+            ax.plot(
+                row["theta_deg"],
+                row["e_int_kcal_mol"],
+                color=colors[plane],
+                linestyle=ls,
+                marker="o",
+                markersize=3.2,
+                label=label,
+            )
+            well_th = row.get("well_theta_deg")
+            well_e = row.get("well_kcal_mol")
+            if well_th is not None and well_e is not None:
+                ax.scatter([well_th], [well_e], color=colors[plane], s=36, zorder=5, marker="*")
+        ax.axhline(0.0, color="0.7", linewidth=0.8)
+        ax.axvline(180.0, color="0.45", linewidth=0.8, linestyle=":", label="linear OH···O")
+        ax.set_xlabel(r"donor–H–acceptor $\theta$ (deg)")
+        title = f"{system} at $r_e$"
+        if r_e is not None:
+            title += f" = {float(r_e):.2f} Å"
+        ax.set_title(title)
+        ax.legend(frameon=False, loc="best", fontsize=10)
+    axes[0][0].set_ylabel(_eint_ylabel())
     fig.tight_layout()
-    return _save(fig, Path(output))
+    return _save(fig, Path(output), write_pdf=write_pdf)
 
 
-def plot_dimer_surface(document: Mapping[str, Any], output: Path | str, *, index: int = 0) -> Path:
-    """Heatmap + isolevels of one 2D ``E_int(r, theta)`` surface."""
+def plot_dimer_surface(
+    document: Mapping[str, Any],
+    output: Path | str,
+    *,
+    index: int = 0,
+    write_pdf: bool = True,
+) -> Path:
+    """Heatmap + isolevels of one 2D ``E_int(r, θ)`` surface with the minimum marked."""
     _style()
     surfaces = document.get("dimer_surfaces", [])
     if not surfaces:
@@ -102,12 +273,12 @@ def plot_dimer_surface(document: Mapping[str, Any], output: Path | str, *, index
     surface = surfaces[index]
     r = np.asarray(surface["r_angstrom"], dtype=np.float64)
     theta = np.asarray(surface["theta_deg"], dtype=np.float64)
-    z = mask_clash_energy(surface["e_int_kcal_mol"], surface["min_contact_angstrom"])
+    z = np.asarray(surface["e_int_kcal_mol"], dtype=np.float64)
     finite = z[np.isfinite(z)]
     if finite.size == 0:
-        raise ValueError("surface has no non-clash samples")
+        raise ValueError("surface has no finite samples")
     span = min(SURFACE_COLOR_MAX_KCAL, max(float(np.max(np.abs(finite))), 1.0))
-    fig, ax = plt.subplots(figsize=(5.2, 4.2))
+    fig, ax = plt.subplots(figsize=(5.4, 4.4))
     mesh = ax.pcolormesh(
         r,
         theta,
@@ -123,47 +294,143 @@ def plot_dimer_surface(document: Mapping[str, Any], output: Path | str, *, index
     ]
     if present:
         ax.contour(r, theta, np.ma.masked_invalid(z), levels=present, colors="0.15", linewidths=0.7)
+    well_r = surface.get("well_r_angstrom")
+    well_th = surface.get("well_theta_deg")
+    well_e = surface.get("well_kcal_mol")
+    if well_r is not None and well_th is not None:
+        ax.scatter([well_r], [well_th], s=70, marker="*", color="0.05", zorder=5, label="min")
     cbar = fig.colorbar(mesh, ax=ax)
     cbar.set_label(r"$E_{\mathrm{int}}$ (kcal/mol)")
-    ax.set_xlabel("COM distance (Å)")
-    ax.set_ylabel("In-plane rotation of B (deg)")
+    ax.set_xlabel(r"O–O $r$ (Å)")
+    ax.set_ylabel(r"donor–H–acceptor $\theta$ (deg)")
     ax.set_title(f"{surface['system']} dimer $E_\\mathrm{{int}}(r,\\theta)$")
+    if well_e is not None and well_r is not None:
+        ax.text(
+            0.03,
+            0.04,
+            f"$r_e$={float(well_r):.2f} Å, $\\theta_e$={float(well_th):.0f}°\n"
+            f"$E_\\mathrm{{min}}$={float(well_e):.2f} kcal/mol",
+            transform=ax.transAxes,
+            ha="left",
+            va="bottom",
+            fontsize=11,
+            color="0.1",
+        )
     fig.tight_layout()
-    return _save(fig, Path(output))
+    return _save(fig, Path(output), write_pdf=write_pdf)
 
 
-def plot_trimer_mbe(document: Mapping[str, Any], output: Path | str) -> Path:
-    """Trimer ``E_int``, pairwise reconstruction, and residual ``E3`` vs side length."""
+def plot_trimer_mbe(
+    document: Mapping[str, Any],
+    output: Path | str,
+    *,
+    write_pdf: bool = True,
+) -> Path:
+    """Trimer ``E_int``, pairwise reconstruction, residual ``E3``, and ``E3/E_int``."""
     style = _style()
-    colors = comparison_colors(style, n=3)
+    palette = comparison_colors(style, n=8)
     rows = document.get("trimer_slices", [])
     if not rows:
         raise ValueError("document has no trimer_slices")
-    n_col = len(rows)
-    fig, axes = plt.subplots(1, n_col, figsize=(4.4 * n_col, 3.6), squeeze=False)
-    rf = float(document.get("pet_receptive_field_angstrom", PET_MAD_XS_RECEPTIVE_FIELD_A))
-    labels = (
-        (r"$E_{\mathrm{int}}(ABC)$", "e_int_kcal_mol", colors[0], "-"),
-        (r"$\sum E_{\mathrm{int}}(IJ)$", "e_pair_sum_kcal_mol", colors[1], "--"),
-        (r"$E_3$", "e3_kcal_mol", colors[2], "-."),
-    )
-    for ax, row in zip(axes[0], rows, strict=True):
-        r = np.asarray(row["r_angstrom"], dtype=np.float64)
-        e_int = np.asarray(row["e_int_kcal_mol"], dtype=np.float64)
-        keep = np.abs(e_int) <= TRIMER_EINT_DISPLAY_MAX_KCAL
-        for label, key, color, ls in labels:
-            y = np.asarray(row[key], dtype=np.float64).copy()
-            y[~keep] = np.nan
-            ax.plot(r, y, color=color, linestyle=ls, marker="o", markersize=3.5, label=label)
+    systems = list(dict.fromkeys(row["system"] for row in rows))
+    n_col = len(systems)
+    fig, axes = plt.subplots(2, n_col, figsize=(4.6 * n_col, 6.4), squeeze=False, sharex="col")
+    rf = _rf(document)
+    energy_style = {
+        MOTIF_LINEAR: {
+            "e_int": (palette[5], "-"),
+            "pair": (palette[1], "--"),
+            "e3": (palette[6], "-."),
+        },
+        MOTIF_CYCLIC: {
+            "e_int": (palette[2], "-"),
+            "pair": (palette[3], "--"),
+            "e3": (palette[7], "-."),
+        },
+    }
+    by_sys: dict[str, list[dict[str, Any]]] = {name: [] for name in systems}
+    for row in rows:
+        by_sys[row["system"]].append(row)
+    for col, system in enumerate(systems):
+        ax = axes[0][col]
+        ax_f = axes[1][col]
+        ref_r = None
+        ref_note = None
+        for row in by_sys[system]:
+            motif = row.get("motif", MOTIF_CYCLIC)
+            sty = energy_style.get(motif, energy_style[MOTIF_CYCLIC])
+            r = np.asarray(row["r_angstrom"], dtype=np.float64)
+            tag = row.get("motif_label", motif)
+            ax.plot(
+                r,
+                row["e_int_kcal_mol"],
+                color=sty["e_int"][0],
+                linestyle=sty["e_int"][1],
+                marker="o",
+                markersize=3.0,
+                label=rf"$E_\mathrm{{int}}$ ({tag})",
+            )
+            ax.plot(
+                r,
+                row["e_pair_sum_kcal_mol"],
+                color=sty["pair"][0],
+                linestyle=sty["pair"][1],
+                marker="o",
+                markersize=3.0,
+                label=rf"$\sum E_\mathrm{{int}}(IJ)$ ({tag})",
+            )
+            ax.plot(
+                r,
+                row["e3_kcal_mol"],
+                color=sty["e3"][0],
+                linestyle=sty["e3"][1],
+                marker="s",
+                markersize=3.0,
+                label=rf"$E_3$ ({tag})",
+            )
+            frac = np.asarray(row.get("e3_over_eint", []), dtype=np.float64)
+            if frac.size:
+                ax_f.plot(
+                    r,
+                    100.0 * frac,
+                    color=sty["e3"][0],
+                    linestyle=sty["e3"][1],
+                    marker="s",
+                    markersize=3.0,
+                    label=tag,
+                )
+            if ref_note is None and row.get("ref_e3_kcal_mol") is not None:
+                ref_r = row.get("ref_r_angstrom")
+                ref_e3 = float(row["ref_e3_kcal_mol"])
+                ref_eint = float(row.get("ref_e_int_kcal_mol") or np.nan)
+                ref_note = (motif, ref_r, ref_e3, ref_eint)
+                ax.scatter([ref_r], [ref_e3], s=42, marker="D", color=sty["e3"][0], zorder=5)
         ax.axhline(0.0, color="0.7", linewidth=0.8)
-        ax.axvline(rf, color="0.45", linewidth=0.9, linestyle=":")
-        ax.set_xlim(DEFAULT_R_MIN_A, DEFAULT_R_MAX_A)
-        ax.set_xlabel("Trimer side / COM (Å)")
-        ax.set_title(f"{row['system']} trimer")
-        ax.legend(frameon=False, loc="best")
-    axes[0][0].set_ylabel("Energy (kcal/mol)")
+        ax_f.axhline(0.0, color="0.7", linewidth=0.8)
+        _mark_rf(ax, rf)
+        _mark_rf(ax_f, rf)
+        ax.set_title(f"{system} trimer")
+        ax.set_ylabel("Energy (kcal/mol)" if col == 0 else "")
+        ax_f.set_xlabel(r"O–O $r$ (Å)")
+        ax_f.set_ylabel(r"$E_3/E_{\mathrm{int}}$ (%)" if col == 0 else "")
+        if ref_note is not None:
+            _motif, ref_r, ref_e3, ref_eint = ref_note
+            ax.text(
+                0.97,
+                0.05,
+                f"at {float(ref_r):.2f} Å: $E_3$={ref_e3:.2f} kcal/mol\n"
+                f"2-body misses $E_3$={ref_e3:.2f}"
+                + (f" ({100 * ref_e3 / ref_eint:.0f}% of $E_\\mathrm{{int}}$)" if np.isfinite(ref_eint) and abs(ref_eint) > 1e-6 else ""),
+                transform=ax.transAxes,
+                ha="right",
+                va="bottom",
+                fontsize=10,
+                color="0.15",
+            )
+        ax.legend(frameon=False, loc="best", fontsize=8)
+        ax_f.legend(frameon=False, loc="best", fontsize=9)
     fig.tight_layout()
-    return _save(fig, Path(output))
+    return _save(fig, Path(output), write_pdf=write_pdf)
 
 
 def write_interaction_pes_figures(
@@ -171,13 +438,24 @@ def write_interaction_pes_figures(
     output_dir: Path | str,
     *,
     prefix: str = "pet_mad",
+    write_pdf: bool = True,
 ) -> dict[str, Path]:
-    """Write the three campaign figures (PNG + PDF) under ``output_dir``."""
+    """Write campaign figures (PNG, optional PDF) under ``output_dir``."""
     out = Path(output_dir)
     paths = {
-        "slices": plot_dimer_slices(document, out / f"{prefix}_dimer_slices.png"),
-        "trimer": plot_trimer_mbe(document, out / f"{prefix}_trimer_mbe.png"),
+        "slices": plot_dimer_slices(
+            document, out / f"{prefix}_dimer_slices.png", write_pdf=write_pdf
+        ),
+        "trimer": plot_trimer_mbe(
+            document, out / f"{prefix}_trimer_mbe.png", write_pdf=write_pdf
+        ),
     }
+    if document.get("dimer_angular"):
+        paths["angular"] = plot_dimer_angular(
+            document, out / f"{prefix}_dimer_angular.png", write_pdf=write_pdf
+        )
     if document.get("dimer_surfaces"):
-        paths["surface"] = plot_dimer_surface(document, out / f"{prefix}_dimer_surface.png")
+        paths["surface"] = plot_dimer_surface(
+            document, out / f"{prefix}_dimer_surface.png", write_pdf=write_pdf
+        )
     return paths

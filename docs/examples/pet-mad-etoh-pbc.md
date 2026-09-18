@@ -109,7 +109,8 @@ uv run pytest \
 
 ## 2b. Interaction slices and surfaces (no MD)
 
-Rigid COM scans of PET-MAD xs 1.5.0. Interaction energy is
+Rigid OH···O scans of PET-MAD xs 1.5.0 (O–O, not COM copies). Linear
+OH···O uses the textbook Cs acceptor flap (57°). Interaction energy is
 \(E_\mathrm{int}=E(AB)-E(A)-E(B)\) in kcal/mol. The trimer leftover is
 \(E_3=E_\mathrm{int}(ABC)-\sum E_\mathrm{int}(IJ)\). If PET were 2-body at the
 molecular-fragment level, \(E_3=0\).
@@ -123,14 +124,16 @@ JAX_PLATFORMS=cpu MMML_METATOMIC_DEVICE=cpu \
 
 | Check | Pass |
 |-------|------|
-| JSON | `schema` is `mmml.interaction_pes/v1`; energies finite |
-| 1D slices | H-bond and stacked \(E_\mathrm{int}(r)\) from 2.5–12 Å; far-field ≈ 0 past the ~9 Å RF |
-| 2D surface | ethanol COM × in-plane rotation; heatmap + isolevels |
-| Trimer | \(|E_3|\) is kcal/mol at close spacing (water ~2.85 Å, ethanol ~4.2 Å) and ≈ 0 at 12 Å |
+| JSON | `schema` is `mmml.interaction_pes/v2`; energies finite |
+| 1D slices | Linear OH···O vs acceptor–acceptor \(E_\mathrm{int}(r)\) (O–O) to 12 Å; wall visible; far-field ≈ 0 past the ~9 Å RF |
+| Angular | \(E_\mathrm{int}(\theta)\) at \(r_e\); \(\theta\) is donor–H–acceptor |
+| 2D surface | ethanol O–O × donor–H–acceptor; heatmap + isolevels + marked minimum |
+| Trimer | linear vs cyclic; \(|E_3|\) is kcal/mol at 2.85 Å (water) / 4.2 Å (ethanol) and ≈ 0 at 12 Å |
 
 Replot without PET: `--from-json examples/pet_mad_etoh_pbc/data/interaction_pes.json`.
 
 ![PET-MAD dimer interaction slices](../images/plots/pet_mad_dimer_slices.png)
+![PET-MAD angular slice at \(r_e\)](../images/plots/pet_mad_dimer_angular.png)
 ![PET-MAD ethanol interaction surface](../images/plots/pet_mad_dimer_surface.png)
 ![PET-MAD trimer many-body leftover](../images/plots/pet_mad_trimer_mbe.png)
 
