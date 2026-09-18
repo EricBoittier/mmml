@@ -194,6 +194,11 @@ def test_md_system_parser_accepts_metatomic() -> None:
     assert "metatomic" in cmd
     assert "--metatomic-eval-mode" in cmd
     assert "fragments" in cmd
+    from mmml.cli.run.md_pbc_suite import pycharmm_mlpot
+
+    parsed = pycharmm_mlpot.parse_args(cmd)
+    assert parsed.ml_potential_mode == "metatomic"
+    assert parsed.metatomic_eval_mode == "fragments"
 
 
 def test_setup_calculator_metatomic_rejects_do_ml() -> None:

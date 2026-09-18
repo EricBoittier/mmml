@@ -4809,6 +4809,24 @@ def add_mlpot_lr_nonbond_args(parser: argparse.ArgumentParser) -> None:
             "scheme) or whole_system (one eval on the ML selection)."
         ),
     )
+    group.add_argument(
+        "--bonded-intra-damp-onset",
+        type=float,
+        default=None,
+        help=(
+            "Taper the ML dimer interaction as CGenFF bonded energy rises from "
+            "this value (kcal/mol) to --bonded-intra-damp-cutoff. Off unless set."
+        ),
+    )
+    group.add_argument(
+        "--bonded-intra-damp-cutoff",
+        type=float,
+        default=15.0,
+        help=(
+            "Bonded energy (kcal/mol) at which the ML dimer interaction is fully "
+            "damped. Ignored unless --bonded-intra-damp-onset is set."
+        ),
+    )
 
 
 def resolve_dyn_inbfrq(args: argparse.Namespace) -> int | None:
