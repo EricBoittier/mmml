@@ -152,6 +152,11 @@ def test_md_system_parser_accepts_metatomic() -> None:
 
 
 def test_setup_calculator_metatomic_rejects_do_ml() -> None:
+    try:
+        from jax_md import space as _jax_md_space
+    except Exception as exc:
+        pytest.skip(f"jax_md import unavailable ({exc})")
+    del _jax_md_space
     from mmml.interfaces.pycharmmInterface.mmml_calculator import setup_calculator
 
     with pytest.raises(ValueError, match="MetatomicMlpotCalculator"):
