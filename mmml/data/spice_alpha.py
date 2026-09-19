@@ -79,14 +79,40 @@ def classify_units_map(units_map: Mapping[str, Any] | None) -> UnitsKind:
     return "unknown"
 
 
+def _unwrap_h5_attr(raw: Any) -> Any:
+    """Unwrap numpy / 0-d HDF5 attribute scalars to a Python value."""
+    if raw is None:
+        return None
+    if isinstance(raw, np.ndarray):
+        if raw.size == 0:
+            return None
+        if raw.shape == () or raw.size == 1:
+            raw = raw.reshape(-1)[0]
+    if isinstance(raw, np.generic):
+        raw = raw.item()
+    return raw
+
+
 def parse_units_attr(raw: Any) -> dict[str, str]:
-    """Decode an HDF5 ``units_map`` attribute (JSON string or mapping)."""
+    """Decode an HDF5 ``units_map`` attribute (JSON string or mapping).
+
+    Real SPICE-α files can store an empty string, ``numpy.bytes_``, or other
+    non-JSON scalars. Those are treated as missing (``{}`` / unknown units)
+    instead of raising ``JSONDecodeError``.
+    """
+    raw = _unwrap_h5_attr(raw)
     if raw is None:
         return {}
     if isinstance(raw, bytes):
         raw = raw.decode("utf-8", errors="replace")
     if isinstance(raw, str):
-        loaded = json.loads(raw)
+        text = raw.strip().lstrip("\ufeff")
+        if not text:
+            return {}
+        try:
+            loaded = json.loads(text)
+        except json.JSONDecodeError:
+            return {}
         if isinstance(loaded, dict):
             return {str(k): str(v) for k, v in loaded.items()}
         return {}

@@ -63,6 +63,23 @@ def test_parse_units_attr_json_bytes_and_dict():
     assert parse_units_attr(None) == {}
 
 
+def test_parse_units_attr_empty_invalid_and_numpy_scalars():
+    payload = {"dft_total_energy": "eV"}
+    encoded = json.dumps(payload)
+    assert parse_units_attr("") == {}
+    assert parse_units_attr("   ") == {}
+    assert parse_units_attr("\ufeff") == {}
+    assert parse_units_attr(b"") == {}
+    assert parse_units_attr("not-json") == {}
+    assert parse_units_attr(np.bytes_(b"")) == {}
+    assert parse_units_attr(np.str_("")) == {}
+    assert parse_units_attr(np.bytes_(encoded.encode())) == payload
+    assert parse_units_attr(np.str_(encoded)) == payload
+    assert parse_units_attr(np.array(encoded)) == payload
+    assert parse_units_attr(np.array(b"")) == {}
+    assert parse_units_attr(np.array([], dtype=object)) == {}
+
+
 def test_iter_frames_flips_gradient_and_skips_non_molecule_groups(tmp_path):
     path = _write_spice_h5(tmp_path / "spice.hdf5")
     with h5py.File(path, "r") as handle:
@@ -295,6 +312,28 @@ def test_missing_units_attr_is_unknown(tmp_path):
     src = _write_spice_h5(tmp_path / "spice.hdf5", units=None, extra_group=False)
     with h5py.File(src, "r") as handle:
         assert classify_units_map(read_units_map(handle)) == "unknown"
+
+
+def test_empty_file_units_map_converts_as_unknown(tmp_path):
+    src = tmp_path / "empty_units.hdf5"
+    _write_spice_h5(src, extra_group=False)
+    with h5py.File(src, "a") as handle:
+        handle.attrs["units_map"] = ""
+    with h5py.File(src, "r") as handle:
+        raw = handle.attrs.get("units_map")
+        assert parse_units_attr(raw) == {}
+        assert classify_units_map(read_units_map(handle)) == "unknown"
+    data = convert_spice_alpha_hdf5([src], tmp_path / "out.npz", max_frames=1)
+    assert data["E"][0] == pytest.approx(-100.0)
+
+
+def test_invalid_json_units_map_converts_as_unknown(tmp_path):
+    src = tmp_path / "bad_units.hdf5"
+    _write_spice_h5(src, extra_group=False)
+    with h5py.File(src, "a") as handle:
+        handle.attrs["units_map"] = np.bytes_(b"")
+    data = convert_spice_alpha_hdf5([src], tmp_path / "out.npz", max_frames=1)
+    assert data["E"][0] == pytest.approx(-100.0)
 
 
 def test_bad_conformations_rank_is_an_error(tmp_path):

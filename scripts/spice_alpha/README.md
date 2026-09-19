@@ -13,6 +13,8 @@ Do not source that prolog for this job. No CHARMM.
 
 ```bash
 # 1. Inner HDF5 + NPZ splits (256 frames = smoke)
+# Published DES370K HDF5 may have an empty units_map; convert treats that
+# as unknown and still writes Å/eV labels from the SPICE-α README.
 scripts/spice_alpha/prepare_efield_dataset.sh ~/data/spicealpha ./spice_mmml 256
 python scripts/spice_alpha/check_efield_npz.py \
   ./spice_mmml/splits_des_mono/energies_forces_dipoles_{train,valid}.npz
