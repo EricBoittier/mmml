@@ -21,5 +21,10 @@ REPO = Path(__file__).resolve().parents[2]
 )
 def test_docs_image_publishers_use_shared_icml_style(relative_path: str):
     source = (REPO / relative_path).read_text(encoding="utf-8")
-    assert "from mmml.utils.plotting.styles import apply_plot_style" in source
+    # Combined imports are fine (`apply_plot_style, comparison_colors`); the
+    # Sep 16 CI failure required the name to be the first imported symbol.
+    assert "from mmml.utils.plotting.styles import" in source
+    imported = source.split("from mmml.utils.plotting.styles import", 1)[1]
+    imported = imported.split("\n", 1)[0]
+    assert "apply_plot_style" in imported
     assert 'apply_plot_style("icml")' in source

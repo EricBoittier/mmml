@@ -420,3 +420,107 @@ def test_all_ml_registration_combined_skipe_bonded_and_vdw_keeps_user(
     assert "SKIPE VDW IMNB" in scripts
     assert applied == ["vdw"]
     assert "USER" not in joined
+
+
+def test_unknown_zero_energy_term_is_rejected():
+    from mmml.interfaces.pycharmmInterface.mlpot.charmm_energy_policy import (
+        resolve_charmm_energy_term_policies,
+    )
+
+    args = argparse.Namespace(
+        periodic_charmm_vdw=True,
+        charmm_zero_energy_terms="elec,not-a-term",
+    )
+    with pytest.raises(ValueError, match="Unknown"):
+        resolve_charmm_energy_term_policies(args)
+
+
+def test_empty_term_list_and_periodic_vdw_keeps_no_policies():
+    from mmml.interfaces.pycharmmInterface.mlpot.charmm_energy_policy import (
+        resolve_charmm_energy_term_policies,
+    )
+
+    args = argparse.Namespace(
+        mm_nonbond_mode="periodic_external",
+        periodic_charmm_vdw=True,
+        charmm_zero_energy_terms="  ,  ",
+    )
+    assert resolve_charmm_energy_term_policies(args) == []
+    assert resolve_charmm_energy_term_policies(None) == []
+
+
+def test_summarize_policy_energy_terms_keeps_finite_keys_only():
+    from mmml.interfaces.pycharmmInterface.mlpot.charmm_energy_policy import (
+        POLICY_REGISTRY,
+        summarize_policy_energy_terms,
+    )
+
+    out = summarize_policy_energy_terms(
+        [POLICY_REGISTRY["vdw"], POLICY_REGISTRY["elec"]],
+        {"VDW": 0.0, "IMNB": float("nan"), "ELEC": 1.25, "USER": -9.0},
+    )
+    assert out == {"ELEC": 1.25, "VDW": 0.0}
+
+
+def test_enforce_skips_probe_when_mlpot_user_is_active(monkeypatch):
+    from mmml.interfaces.pycharmmInterface.mlpot import charmm_energy_policy as cep
+
+    called = []
+    monkeypatch.setattr(cep, "_run_silent_ener", lambda: called.append("ener"))
+    applied = cep.enforce_charmm_energy_term_policies(
+        argparse.Namespace(
+            periodic_charmm_vdw=False,
+            charmm_zero_energy_terms=None,
+            quiet=True,
+        ),
+        ml_selection=object(),
+        use_pbc=False,
+        cubic_box_side_A=None,
+        skip_ener_probe=True,
+    )
+    assert applied == []
+    assert called == []
+
+
+def test_policy_scratch_dir_defaults_and_uses_output_dir(tmp_path: Path):
+    from mmml.interfaces.pycharmmInterface.mlpot.charmm_energy_policy import (
+        _policy_scratch_dir,
+    )
+
+    assert _policy_scratch_dir(None) == Path("charmm_energy_policy")
+    args = argparse.Namespace(output_dir=tmp_path)
+    assert _policy_scratch_dir(args) == tmp_path / "charmm_energy_policy"
+
+
+def test_post_remediation_policy_loosens_only_vdw():
+    from mmml.interfaces.pycharmmInterface.mlpot.charmm_energy_policy import (
+        POLICY_REGISTRY,
+        _post_remediation_policy,
+    )
+
+    vdw = _post_remediation_policy(POLICY_REGISTRY["vdw"])
+    assert vdw.tolerance_kcal == pytest.approx(1.0)
+    elec = _post_remediation_policy(POLICY_REGISTRY["elec"])
+    assert elec is POLICY_REGISTRY["elec"]
+
+
+def test_enforce_hbond_has_no_prm_remediation(monkeypatch):
+    from mmml.interfaces.pycharmmInterface.mlpot import charmm_energy_policy as cep
+
+    monkeypatch.setattr(
+        cep,
+        "measure_charmm_energy_terms",
+        lambda: {"HBON": 2.0, "IMHB": 0.0},
+    )
+    monkeypatch.setattr(cep, "_run_silent_ener", lambda: None)
+    with pytest.raises(RuntimeError, match="no PSF/.prm remediation"):
+        cep.enforce_charmm_energy_term_policies(
+            argparse.Namespace(
+                periodic_charmm_vdw=True,
+                charmm_zero_energy_terms="hbond",
+                quiet=True,
+            ),
+            ml_selection=object(),
+            use_pbc=False,
+            cubic_box_side_A=None,
+        )

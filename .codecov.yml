@@ -5,6 +5,11 @@
 # meant total coverage could halve while the status stayed green. A check that
 # cannot go red is a false positive, so both are tightened here.
 coverage:
+  # CI-reachable ceiling is ~70% (live CHARMM / plotting / GPU). 48% is above
+  # the 42% floor; the default 70…100 scale painted that as failure-red.
+  range: 40...70
+  precision: 2
+  round: down
   status:
     # New/changed lines. Informational for now -- it annotates the PR with the
     # patch number but does not block, so the signal appears before the gate
