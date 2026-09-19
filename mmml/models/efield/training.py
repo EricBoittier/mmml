@@ -1577,6 +1577,14 @@ def train_model(key, model, train_data, valid_data, num_epochs, learning_rate, b
                 f"    ✓ Best valid checkpoint: {best_path.name} "
                 f"(weighted loss={float(best_valid_loss):.6f}, epoch {best_epoch})"
             )
+            for link_name, target in (
+                ("params-best.json", best_path.name),
+                ("best-valid.json", metrics_path.name),
+            ):
+                link = _ckpt_dir / link_name
+                if link.exists() or link.is_symlink():
+                    link.unlink()
+                link.symlink_to(target)
         
         # Early stopping check
         if early_stopping_patience is not None and patience_counter >= early_stopping_patience:

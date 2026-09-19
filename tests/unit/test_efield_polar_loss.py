@@ -57,6 +57,7 @@ def test_train_model_logs_compile_and_step_heartbeats():
     assert "compiling train_step" in src
     assert "log_every_n_steps" in src
     assert "block_until_ready" in src
+    assert 'symlink_to(target)' in src or 'params-best.json' in src
 
 
 def test_require_drop_last_batches_rejects_valid_smaller_than_batch():
