@@ -24,6 +24,9 @@ from mmml.interfaces.pycharmmInterface.mlpot.mlpot_batch_policy import (
     resolve_ml_batch_size,
     resolve_mlpot_mm_skin_A,
 )
+from mmml.interfaces.pycharmmInterface.mlpot.callback_failstop import (
+    failstop_calculate_charmm,
+)
 from mmml.interfaces.pycharmmInterface.mlpot.setup import physnet_ml_atomic_numbers
 from mmml.interfaces.pycharmmInterface.mlpot.mlpot_gpu_policy import resolve_ml_gpu_count
 from mmml.interfaces.pycharmmInterface.jax_device_policy import (
@@ -714,6 +717,7 @@ class DecomposedMlpotCalculator:
         out[:n] = wrapped
         return out
 
+    @failstop_calculate_charmm
     def calculate_charmm(
         self,
         Natom: int,
@@ -1013,6 +1017,7 @@ class _DeferredDecomposedMlpotCalculator:
         )
         return self._real
 
+    @failstop_calculate_charmm
     def calculate_charmm(self, *args, **kwargs) -> float:
         return self._ensure_real().calculate_charmm(*args, **kwargs)
 

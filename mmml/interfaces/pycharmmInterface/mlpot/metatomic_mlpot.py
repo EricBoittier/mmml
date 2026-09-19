@@ -40,6 +40,9 @@ from mmml.interfaces.pycharmmInterface.cutoffs import (
     CutoffParameters,
     cutoff_parameters_from_args,
 )
+from mmml.interfaces.pycharmmInterface.mlpot.callback_failstop import (
+    failstop_calculate_charmm,
+)
 
 MmEnergyFn = Callable[..., tuple[float, np.ndarray]]
 
@@ -175,6 +178,7 @@ class MetatomicMlpotCalculator:
             energy, forces = mm_fn(pos_ml)
         return float(np.asarray(energy).reshape(-1)[0]), np.asarray(forces, dtype=np.float64)
 
+    @failstop_calculate_charmm
     def calculate_charmm(
         self,
         Natom: int,
