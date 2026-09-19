@@ -20,6 +20,19 @@ MINIMAL_RESTART_HEADER = (
 )
 
 
+def restart_stub_text(step: int) -> str:
+    """Minimal restart whose global step lives in ``JHSTRT`` (not the REST header).
+
+    The REST header is ``(A4,2I6)`` = HDR, IVERS, LDYNA; restart patchers only
+    touch the ``!NATOM`` counter line (#219), so stubs need that line.
+    """
+    return (
+        "REST    48     1\n"
+        " !NATOM,NPRIV,NSTEP,NSAVC,NSAVV,JHSTRT,NDEGF,SEED,NSAVL\n"
+        f"{2:>10d}{0:>10d}{int(step):>10d}{1:>10d}{0:>10d}{int(step):>10d}{0:>10d}\n"
+    )
+
+
 def write_minimal_restart(path: Path, *, content: str | None = None) -> Path:
     """Write a CHARMM restart stub that passes ``_valid_restart_file``."""
     path.write_text(content or MINIMAL_RESTART_HEADER, encoding="utf-8")
