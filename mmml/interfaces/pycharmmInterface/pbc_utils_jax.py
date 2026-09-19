@@ -40,7 +40,24 @@ def _smooth_frac_to_mic(frac: Array, k: float = SMOOTH_MIC_K) -> Array:
 
 
 def cell_inverse(cell: Array) -> Array:
-    """Inverse of a 3×3 cell. Diagonal boxes use ``1/L`` (no LU / trsm)."""
+    """Inverse of a 3×3 cell. Diagonal boxes use ``1/L`` (no LU / trsm).
+
+    The ``solve``/``inv`` replacements below are implemented. Whether they
+    account for the gpu09 ``trsm_left_kernel<double>`` hotspot (~96 launches /
+    step) is still unverified — re-count launches after this lands.
+
+    Sites that used a per-call cell solve or inverse:
+
+    * ``mpnn_kernels.pair_displacements`` — ``solve(cell.T, dR.T)`` when
+      ``use_pbc`` (whole-box PhysNet; fragment ML/MM is usually vacuum).
+    * ``frac_coords`` / ``mic_displacement`` / ``wrap_dimer_monomer_b`` —
+      this inverse; pass ``inv_cell`` so a vmap does not invert per pair.
+    * ``mm_energy_forces`` Verlet reuse and the COM filter.
+    * ``mm_system_energy`` pair VDW/Coulomb ``vmap(mic_displacement)``.
+
+    Recompute when NPT changes the box; keep the incoming dtype (do not
+    downcast the Verlet check to float32).
+    """
     cell = _cell_as_matrix(cell)
     diag = jnp.diag(cell)
     off = cell - jnp.diag(diag)
@@ -229,10 +246,11 @@ def wrap_dimer_monomer_b(
     n_b_safe = jnp.maximum(jnp.sum(mask_b), jnp.asarray(1e-10, dtype=dtype))
     com_a = jnp.sum(pos_di * mask_a[:, None], axis=0) / n_a_safe
     com_b = jnp.sum(pos_di * mask_b[:, None], axis=0) / n_b_safe
+    inv = None if smooth else cell_inverse(cell)
     d = (
         mic_displacement_smooth(com_a, com_b, cell, k=k)
         if smooth
-        else mic_displacement(com_a, com_b, cell)
+        else mic_displacement(com_a, com_b, cell, inv_cell=inv)
     )
     shift_b = com_a + d - com_b
     if detach_shift:
