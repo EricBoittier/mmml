@@ -1415,6 +1415,11 @@ def _reload_pre_mlpot_topology(
         )
 
         read_psf_card_file(Path(topology_psf).expanduser().resolve())
+    from mmml.interfaces.pycharmmInterface.mlpot.cgenff_prm_swap import (
+        clear_ml_torsions_deleted,
+    )
+
+    clear_ml_torsions_deleted()
     sync_charmm_positions(current_positions)
     charmm_side = getattr(ctx, "charmm_cubic_box_side_A", None) or (
         ctx.cubic_box_side_A if ctx.use_pbc else None
