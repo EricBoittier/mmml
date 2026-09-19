@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ast
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -84,6 +85,35 @@ def test_efield_train_wrapper_disables_x64():
     sbatch = (_REPO / "scripts" / "spice_alpha" / "train_efield_polar.sbatch").read_text()
     assert "JAX_ENABLE_X64=0" in sbatch
     assert "scicore_env.sh" in sbatch
+
+
+def test_efield_train_wrapper_keeps_splits_dir(tmp_path):
+    """`${1:?...{train,valid}...}` closes at the inner `}` and appends `.npz}`."""
+    script = _REPO / "scripts" / "spice_alpha" / "train_efield_polar.sh"
+    assign = next(
+        line for line in script.read_text().splitlines() if line.startswith("SPLITS=")
+    )
+    assert "{train" not in assign
+    assert "${1:?splits directory with train and valid NPZs}" in assign
+    splits = tmp_path / "splits_des_mono"
+    splits.mkdir()
+    (splits / "energies_forces_dipoles_train.npz").write_bytes(b"x")
+    (splits / "energies_forces_dipoles_valid.npz").write_bytes(b"x")
+    snippet = r"""
+set -euo pipefail
+SPLITS="${1:?splits directory with train and valid NPZs}"
+if [[ ! -d "$SPLITS" ]]; then
+  echo "SPLITS is not a directory: $SPLITS" >&2
+  exit 1
+fi
+printf '%s\n' "$SPLITS"
+"""
+    got = subprocess.check_output(
+        ["bash", "-c", snippet, "train_efield_polar.sh", str(splits)],
+        text=True,
+    ).strip()
+    assert got == str(splits)
+    assert not got.endswith(".npz}")
 
 
 def test_workflow_selects_marker_and_forbids_dataset_pulls():

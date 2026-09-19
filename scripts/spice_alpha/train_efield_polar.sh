@@ -6,9 +6,15 @@
 
 set -euo pipefail
 
-SPLITS="${1:?directory with energies_forces_dipoles_{train,valid}.npz}"
+# Do not put a closing brace inside `${1:?...}` (bash ends the expansion
+# there). A train/valid brace list made SPLITS `.../splits_des_mono.npz}`.
+SPLITS="${1:?splits directory with train and valid NPZs}"
 CKPT="${2:-./ckpts/spice_des_mono_efield_polar}"
 EPOCHS="${3:-100}"
+if [[ ! -d "$SPLITS" ]]; then
+  echo "SPLITS is not a directory: $SPLITS" >&2
+  exit 1
+fi
 
 # SciCORE prolog defaults JAX_ENABLE_X64=1. e3x Embed stays float32 while
 # MessagePass promotes, and EFieldPhysNet.init raises in e3x.nn.add.
