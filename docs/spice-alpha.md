@@ -145,8 +145,9 @@ mkdir -p artifacts/spice_ef_polar
 sbatch scripts/spice_alpha/train_efield_polar.sbatch
 
 # 3. After smoke writes params-*.json and logs "polar mae"
+# 256-frame extract has valid n=13; B=64 drop_last → 0 valid batches
 sbatch --partition=rtx4090 --qos=rtx4090-6hours --time=06:00:00 \
-  --export=ALL,MODE=full,EPOCHS=100 \
+  --export=ALL,MODE=full,EPOCHS=100,BATCH_SIZE=8 \
   scripts/spice_alpha/train_efield_polar.sbatch
 ```
 

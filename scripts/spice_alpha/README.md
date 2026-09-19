@@ -25,7 +25,9 @@ scripts/spice_alpha/prepare_efield_dataset.sh ~/data/spicealpha ./spice_mmml 0
 
 # 3. GPU smoke, then full
 sbatch scripts/spice_alpha/train_efield_polar.sbatch
-sbatch --time=06:00:00 --qos=rtx4090-6hours --export=ALL,MODE=full \
+# 256-frame extract: BATCH_SIZE=8 (valid n=13; B=64 → 0 valid batches)
+sbatch --time=06:00:00 --qos=rtx4090-6hours \
+  --export=ALL,MODE=full,EPOCHS=100,BATCH_SIZE=8 \
   scripts/spice_alpha/train_efield_polar.sbatch
 ```
 

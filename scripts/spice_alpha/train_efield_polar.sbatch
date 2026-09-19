@@ -2,7 +2,11 @@
 # GPU efield-train + polar loss (SPICE-α, Ef=0).
 #
 # Smoke (default): 2 epochs, small model — prove polar MAE prints and params write.
-# Full:  sbatch --time=12:00:00 --export=ALL,MODE=full scripts/spice_alpha/train_efield_polar.sbatch
+# Full on the 256-frame extract (valid n=13): BATCH_SIZE must be <= 13
+#   sbatch --time=06:00:00 --qos=rtx4090-6hours \
+#     --export=ALL,MODE=full,EPOCHS=100,BATCH_SIZE=8 \
+#     scripts/spice_alpha/train_efield_polar.sbatch
+# Full DES after max_frames=0: BATCH_SIZE=64 is fine.
 #
 # Do not source scripts/scicore_env.sh for this job: it sets JAX_ENABLE_X64=1
 # and EFieldPhysNet.init fails (e3x Embed float32 vs MessagePass float64).
