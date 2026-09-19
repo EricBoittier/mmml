@@ -51,6 +51,17 @@ def cell_matrix_3x3(cell: np.ndarray) -> np.ndarray:
     raise ValueError(f"cell must be scalar, (3,), or (3,3); got shape {c.shape}")
 
 
+def unique_mic_orthorhombic(cell: np.ndarray, cutoff: float) -> bool:
+    """True only when each pair can have at most one image with ``d < cutoff``.
+
+    Uses the strict geometric test ``min(L) > 2*cutoff``. Equality is the
+    boundary where two images can sit at ``L/2 = cutoff``; that case must keep
+    Vesin's shift list, the distance filter, and sort/dedup.
+    """
+    cell_mat = cell_matrix_3x3(cell)
+    return float(np.min(np.diag(cell_mat))) > 2.0 * float(cutoff)
+
+
 def monomer_id_from_offsets(monomer_offsets: Sequence[int], n_atoms: int) -> np.ndarray:
     """Build per-atom monomer index from cumulative offsets."""
     offsets = np.asarray(monomer_offsets, dtype=np.int32)
@@ -404,32 +415,23 @@ def vesin_mic_pair_arrays(
     R = np.asarray(positions, dtype=np.float64)
     cell_mat = cell_matrix_3x3(cell)
     cutoff = float(cutoff)
-    unique_mic = float(np.min(np.diag(cell_mat))) >= 2.0 * cutoff
+    # Unique-MIC (strict L > 2c): skip image-shift fetch. Still filter
+    # ``dist < cutoff``, force ``i < j``, and sort/dedup — Vesin does not
+    # promise that orientation or order.
+    unique_mic = unique_mic_orthorhombic(cell_mat, cutoff)
     calculator = VesinNeighborList(cutoff=cutoff, full_list=False)
-    # Unique-MIC boxes: Vesin's half list is already one image per pair; skip
-    # shifts/distances and the sort-dedup. L < 2*cutoff can emit two images.
-    if unique_mic:
-        i, j = calculator.compute(
-            points=R,
-            box=cell_mat,
-            periodic=True,
-            quantities="ij",
-        )
-        i = np.asarray(i, dtype=np.int64)
-        j = np.asarray(j, dtype=np.int64)
-        ok = i < j
-        i, j = i[ok], j[ok]
-    else:
-        i, j, _shifts, dist = calculator.compute(
-            points=R,
-            box=cell_mat,
-            periodic=True,
-            quantities="ijSd",
-        )
-        i = np.asarray(i, dtype=np.int64)
-        j = np.asarray(j, dtype=np.int64)
-        ok = (np.asarray(dist, dtype=np.float64) < cutoff) & (i < j)
-        i, j = i[ok], j[ok]
+    quantities = "ijd" if unique_mic else "ijSd"
+    computed = calculator.compute(
+        points=R,
+        box=cell_mat,
+        periodic=True,
+        quantities=quantities,
+    )
+    i = np.asarray(computed[0], dtype=np.int64)
+    j = np.asarray(computed[1], dtype=np.int64)
+    dist = np.asarray(computed[-1], dtype=np.float64)
+    ok = (dist < cutoff) & (i < j)
+    i, j = i[ok], j[ok]
     keep = mm_pair_filter_mask(
         i,
         j,
@@ -441,9 +443,6 @@ def vesin_mic_pair_arrays(
     )
     i, j = i[keep], j[keep]
     key = i * (int(R.shape[0]) + 1) + j
-    if unique_mic:
-        order = np.argsort(key, kind="stable")
-        return i[order], j[order]
     key = np.sort(key)
     if key.size:
         key = key[np.concatenate(([True], key[1:] != key[:-1]))]
