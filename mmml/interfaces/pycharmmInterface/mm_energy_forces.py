@@ -2471,17 +2471,13 @@ def decompose_mlpot_mm_nb_eterms_kcalmol(
     Primary pairs have zero MIC lattice shift; image pairs use a non-zero translation.
     """
     from mmml.interfaces.pycharmmInterface.cutoffs import GAMMA_OFF, GAMMA_ON
-    from mmml.interfaces.pycharmmInterface.mlpot.mlpot_sparse_dimer_policy import (
-        _mic_lattice_shift_numpy,
-        mic_displacement_numpy,
-    )
 
-    def _np_sharpstep(r: float, x0: float, x1: float, gamma: float) -> float:
+    def _np_sharpstep(r: np.ndarray, x0: float, x1: float, gamma: float) -> np.ndarray:
         denom = x1 - x0
         if abs(denom) < 1e-12:
-            return 1.0 if r >= x0 else 0.0
+            return (r >= x0).astype(np.float64)
         s = np.clip((r - x0) / denom, 0.0, 1.0) ** gamma
-        return float(s * s * (3.0 - 2.0 * s))
+        return s * s * (3.0 - 2.0 * s)
 
     pos = np.asarray(positions_A, dtype=np.float64)
     n_atoms = int(pos.shape[0])
@@ -2495,82 +2491,69 @@ def decompose_mlpot_mm_nb_eterms_kcalmol(
         & (pi < n_atoms)
         & (pj < n_atoms)
     )
+    zeros = {
+        "vdw_primary": 0.0,
+        "vdw_image": 0.0,
+        "elec_primary": 0.0,
+        "elec_image": 0.0,
+        "mm_total": 0.0,
+    }
     if not np.any(mask):
-        zeros = {
-            "vdw_primary": 0.0,
-            "vdw_image": 0.0,
-            "elec_primary": 0.0,
-            "elec_image": 0.0,
-            "mm_total": 0.0,
-        }
         return zeros
 
     cell = None if pbc_cell is None else np.asarray(pbc_cell, dtype=np.float64)
     if cell is not None and cell.ndim == 1:
         cell = np.diag(cell)
 
-    vdw_pri = vdw_im = elec_pri = elec_im = 0.0
     charges = np.asarray(charges_e, dtype=np.float64)
     rmins = np.asarray(rmins_A, dtype=np.float64)
     eps = np.asarray(epsilons_kcal, dtype=np.float64)
     mid = np.asarray(monomer_id, dtype=np.int64)
 
-    for k in np.where(mask)[0]:
-        i = int(pi[k])
-        j = int(pj[k])
-        if mid[i] == mid[j]:
-            continue
-        ri = pos[i]
-        rj = pos[j]
-        if cell is not None:
-            shift = _mic_lattice_shift_numpy(ri, rj, cell)
-            is_primary = bool(np.all(shift == 0))
-            dr = mic_displacement_numpy(ri, rj, cell)
-        else:
-            is_primary = True
-            dr = rj - ri
-        r = float(np.linalg.norm(dr))
-        if r < 1e-12:
-            continue
+    # Vectorized over pairs; same arithmetic as the former per-pair loop.
+    k = np.nonzero(mask)[0]
+    k = k[mid[pi[k]] != mid[pj[k]]]
+    i, j = pi[k], pj[k]
+    d = pos[j] - pos[i]
+    if cell is not None:
+        frac = d @ np.linalg.inv(cell.T).T
+        shift = np.round(frac)
+        is_primary = np.all(shift == 0, axis=1)
+        d = (frac - shift) @ cell
+    else:
+        is_primary = np.ones(len(k), dtype=bool)
+    r = np.linalg.norm(d, axis=1)
+    keep = r >= 1e-12
+    k, i, j, r, is_primary = k[keep], i[keep], j[keep], r[keep], is_primary[keep]
+    if len(k) == 0:
+        return zeros
 
-        if pair_dimer_idx is not None and com_distances_A is not None:
-            di = int(pair_dimer_idx[k])
-            if di >= 0:
-                r_com = float(com_distances_A[di])
-            else:
-                r_com = r
-        else:
-            r_com = r
+    r_com = r.copy()
+    if pair_dimer_idx is not None and com_distances_A is not None:
+        di = np.asarray(pair_dimer_idx, dtype=np.int64)[k]
+        has = di >= 0
+        r_com[has] = np.asarray(com_distances_A, dtype=np.float64)[di[has]]
 
-        if complementary_handoff:
-            handoff = _np_sharpstep(r_com, mm_switch_on - ml_switch_width, mm_switch_on, GAMMA_ON)
-            taper = 1.0 - _np_sharpstep(
-                r_com, mm_switch_on, mm_switch_on + mm_switch_width, GAMMA_OFF
-            )
-            mm_scale = handoff * taper
-        else:
-            mm_on = _np_sharpstep(r_com, mm_switch_on, mm_switch_on + mm_switch_width, GAMMA_ON)
-            mm_off = _np_sharpstep(
-                r_com,
-                mm_switch_on + mm_switch_width,
-                mm_switch_on + 2.0 * mm_switch_width,
-                GAMMA_OFF,
-            )
-            mm_scale = mm_on * (1.0 - mm_off)
+    if complementary_handoff:
+        handoff = _np_sharpstep(r_com, mm_switch_on - ml_switch_width, mm_switch_on, GAMMA_ON)
+        taper = 1.0 - _np_sharpstep(r_com, mm_switch_on, mm_switch_on + mm_switch_width, GAMMA_OFF)
+        mm_scale = handoff * taper
+    else:
+        mm_on = _np_sharpstep(r_com, mm_switch_on, mm_switch_on + mm_switch_width, GAMMA_ON)
+        mm_off = _np_sharpstep(
+            r_com, mm_switch_on + mm_switch_width, mm_switch_on + 2.0 * mm_switch_width, GAMMA_OFF
+        )
+        mm_scale = mm_on * (1.0 - mm_off)
 
-        rm = float(rmins[i] + rmins[j])
-        ep = float((eps[i] * eps[j]) ** 0.5)
-        sig = rm / (2.0 ** (1.0 / 6.0))
-        vdw = ep * ((sig / r) ** 12 - 2.0 * (sig / r) ** 6)
-        elec = 332.063711 * charges[i] * charges[j] / r
-        vdw *= mm_scale
-        elec *= mm_scale
-        if is_primary:
-            vdw_pri += vdw
-            elec_pri += elec
-        else:
-            vdw_im += vdw
-            elec_im += elec
+    rm = rmins[i] + rmins[j]
+    ep = np.sqrt(eps[i] * eps[j])
+    sig = rm / (2.0 ** (1.0 / 6.0))
+    vdw = ep * ((sig / r) ** 12 - 2.0 * (sig / r) ** 6) * mm_scale
+    elec = 332.063711 * charges[i] * charges[j] / r * mm_scale
+    vdw_pri = float(vdw[is_primary].sum())
+    vdw_im = float(vdw[~is_primary].sum())
+    elec_pri = float(elec[is_primary].sum())
+    elec_im = float(elec[~is_primary].sum())
 
     mm_total = vdw_pri + vdw_im + elec_pri + elec_im
     return {
