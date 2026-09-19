@@ -377,6 +377,22 @@ def mm_pair_update_positions(
     return np.asarray(positions_cart, dtype=np.float64) @ inv_cell
 
 
+def refresh_mm_pairs_from_cartesian(
+    update_fn: Any,
+    positions_cart: Any,
+    box: Optional[Any],
+    *,
+    fractional_coordinates: bool,
+) -> Any:
+    """Call ``update_fn`` in the frame it was built for.
+
+    Cartesian FIRE / calculator-like sites must go through this so NpT
+    pair lists are not rebuilt from box-scaled coordinates.
+    """
+    framed = mm_pair_update_positions(positions_cart, box, fractional_coordinates)
+    return update_fn(framed, box=box)
+
+
 def _validate_dynamic_pair_contract(
     pair_idx: Array,
     pair_mask: Array,
