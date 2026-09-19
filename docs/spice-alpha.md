@@ -79,9 +79,17 @@ convert_spice_alpha_hdf5(["DES370K_Monomers.hdf5"], "spice_des_mono.npz")
 Default `fix-and-split` assumes Hartree / Hartree/Bohr / Debye and will
 **destroy** this dataset. The converter refuses a Bohr/Hartree `units_map`
 unless you pass `--allow-atomic-units` (then use default `fix-and-split`
-plus `--flip-forces` instead). An empty or non-JSON `units_map` (seen on
-the published DES370K HDF5 files) is treated as missing: convert proceeds
-and writes `_mmml_units` from the SPICE-α README (Å / eV / eV/Å).
+plus `--flip-forces` instead). Units metadata is resolved as:
+
+- non-empty file-level `units_map` wins, unless the first molecule group
+  also has a known map of a different kind (canonical vs atomic) — that
+  contradiction is an error
+- empty file-level `units_map` (published DES370K) falls through to the
+  **first molecule group** only (no full-file scan)
+- missing or empty at both levels: convert assumes the SPICE-α README
+  units (Å / eV / eV/Å) and writes `_mmml_units` from that
+- a non-empty string that is not a JSON object is malformed and is an
+  error, not a silent eV/Å fallback
 
 Synthetic contract tests (no Zenodo download): `pytest -m data_loading`
 or `make test-data-loading`. CI: `.github/workflows/data-loading.yml`.

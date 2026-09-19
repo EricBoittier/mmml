@@ -95,11 +95,11 @@ def _unwrap_h5_attr(raw: Any) -> Any:
 
 
 def parse_units_attr(raw: Any) -> dict[str, str]:
-    """Decode an HDF5 ``units_map`` attribute (JSON string or mapping).
+    """Decode an HDF5 ``units_map`` attribute (JSON object or mapping).
 
-    Real SPICE-α files can store an empty string, ``numpy.bytes_``, or other
-    non-JSON scalars. Those are treated as missing (``{}`` / unknown units)
-    instead of raising ``JSONDecodeError``.
+    Empty / missing values (published DES370K empty strings, empty bytes)
+    are missing metadata (``{}``). A non-empty string that is not a JSON
+    object is malformed and raises ``ValueError``.
     """
     raw = _unwrap_h5_attr(raw)
     if raw is None:
@@ -112,35 +112,65 @@ def parse_units_attr(raw: Any) -> dict[str, str]:
             return {}
         try:
             loaded = json.loads(text)
-        except json.JSONDecodeError:
-            return {}
+        except json.JSONDecodeError as exc:
+            raise ValueError(
+                f"malformed units_map (not JSON): {text[:80]!r}"
+            ) from exc
         if isinstance(loaded, dict):
             return {str(k): str(v) for k, v in loaded.items()}
-        return {}
+        raise ValueError(
+            f"malformed units_map (JSON must be an object, got {type(loaded).__name__})"
+        )
     if isinstance(raw, Mapping):
         return {str(k): str(v) for k, v in raw.items()}
     return {}
 
 
-def read_units_map(h5: Any) -> dict[str, str]:
-    """File-level ``units_map`` if present, else the first non-empty group's.
-
-    A present but empty file-level attribute (published DES370K HDF5) must
-    not trigger a scan of every molecule group — that is minutes of random
-    HDF5 reads on a shared login filesystem.
-    """
-    attrs = getattr(h5, "attrs", None)
-    if attrs is not None and "units_map" in attrs:
-        return parse_units_attr(attrs.get("units_map"))
+def _first_molecule_units_map(h5: Any) -> dict[str, str]:
+    """``units_map`` on the first molecule group only — never a full-file scan."""
     for name in h5.keys():
         group = h5[name]
+        try:
+            if "conformations" not in group:
+                continue
+        except TypeError:
+            continue
         group_attrs = getattr(group, "attrs", None)
         if group_attrs is None or "units_map" not in group_attrs:
-            continue
-        parsed = parse_units_attr(group_attrs.get("units_map"))
-        if parsed:
-            return parsed
+            return {}
+        return parse_units_attr(group_attrs.get("units_map"))
     return {}
+
+
+def read_units_map(h5: Any) -> dict[str, str]:
+    """File-level non-empty ``units_map``, else the first molecule group's.
+
+    An empty file-level attribute (published DES370K) does **not** discard
+    explicit group metadata. Only the first molecule group is inspected so
+    a large HDF5 does not pay a full attribute scan. When both levels are
+    present and classify as different known kinds, raise rather than pick
+    one silently.
+    """
+    root: dict[str, str] = {}
+    attrs = getattr(h5, "attrs", None)
+    if attrs is not None and "units_map" in attrs:
+        root = parse_units_attr(attrs.get("units_map"))
+    group = _first_molecule_units_map(h5)
+    if root and group:
+        root_kind = classify_units_map(root)
+        group_kind = classify_units_map(group)
+        if (
+            root_kind != "unknown"
+            and group_kind != "unknown"
+            and root_kind != group_kind
+        ):
+            raise ValueError(
+                "contradictory units_map: file-level is "
+                f"{root_kind} but first molecule group is {group_kind}"
+            )
+    if root:
+        return root
+    return group
 
 
 @dataclass(frozen=True)
@@ -458,6 +488,13 @@ def convert_spice_alpha_hdf5(
                 raise ValueError(
                     f"{path}: units_map looks like original SPICE (Bohr/Hartree). "
                     "Use fix-and-split defaults + --flip-forces, not this converter."
+                )
+            if kind == "unknown":
+                print(
+                    "convert: units_map missing or empty; assuming SPICE-α "
+                    "README units (Å, eV, eV/Å) and writing _mmml_units from that",
+                    file=sys.stderr,
+                    flush=True,
                 )
             for frame in iter_spice_alpha_frames(
                 handle,

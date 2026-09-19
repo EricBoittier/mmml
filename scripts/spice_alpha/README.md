@@ -13,8 +13,10 @@ Do not source that prolog for this job. No CHARMM.
 
 ```bash
 # 1. Inner HDF5 + NPZ splits (256 frames = smoke; skips the 1.3 GB dimers)
-# Published DES370K HDF5 may have an empty units_map; convert treats that
-# as unknown and still writes Å/eV labels from the SPICE-α README.
+# Published DES370K HDF5 may have an empty file-level units_map; convert
+# still reads the first molecule group, then (if that is also empty)
+# assumes SPICE-α README Å/eV units. Explicit Hartree/Bohr on that group
+# is refused unless --allow-atomic-units.
 scripts/spice_alpha/prepare_efield_dataset.sh ~/data/spicealpha ./spice_mmml 256
 # dimers later: INCLUDE_DIMERS=1 scripts/spice_alpha/prepare_efield_dataset.sh ... 0
 python scripts/spice_alpha/check_efield_npz.py \
