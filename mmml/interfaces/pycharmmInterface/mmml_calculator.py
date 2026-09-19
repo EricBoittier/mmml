@@ -733,6 +733,22 @@ def _resolve_ml_chunk_layout(ml_sparse_dimers, _max_active_dimers, n_dimers_tota
     return _ml_chunk_layout
 
 
+def _scaled_live_psf_charges(total_atoms, mm_charge_scale):
+    """Read live PSF charges and apply the configured MM charge scale."""
+    from mmml.interfaces.pycharmmInterface.mm_energy_forces import (
+        _get_actual_psf_charges,
+        apply_mm_charge_scale,
+    )
+
+    q_np = apply_mm_charge_scale(
+        np.asarray(
+            _get_actual_psf_charges(total_atoms)[:total_atoms], dtype=np.float64
+        ),
+        mm_charge_scale,
+    )
+    return q_np
+
+
 def setup_calculator(
     ATOMS_PER_MONOMER: Union[int, List[int], Sequence[int]],
     N_MONOMERS: int = 2,
@@ -2056,17 +2072,7 @@ def setup_calculator(
                 from mmml.interfaces.pycharmmInterface.long_range_backend import (
                     per_atom_monomer_ids,
                 )
-                from mmml.interfaces.pycharmmInterface.mm_energy_forces import (
-                    _get_actual_psf_charges,
-                    apply_mm_charge_scale,
-                )
-
-                q_np = apply_mm_charge_scale(
-                    np.asarray(
-                        _get_actual_psf_charges(total_atoms)[:total_atoms], dtype=np.float64
-                    ),
-                    mm_charge_scale,
-                )
+                q_np = _scaled_live_psf_charges(total_atoms, mm_charge_scale)
                 mid_np = per_atom_monomer_ids(
                     total_atoms, monomer_offsets, n_monomers
                 )
