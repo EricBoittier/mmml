@@ -1137,6 +1137,14 @@ def set_up_nhc_sim_routine(
     box_init = jnp.array([L_cell, L_cell, L_cell], dtype=_JAXMD_DTYPE) if L_cell else None
     box_nl = np.array([L_cell, L_cell, L_cell], dtype=np.float64) if L_cell else None
     pbc_box_nl = box_nl  # Capture for run_sim PBC minimization (avoids UnboundLocalError from later box_nl assignments)
+
+    def _cart_nl_positions(pos_cart):
+        """Cartesian FIRE positions -> update_fn frame (fractional under NpT)."""
+        from mmml.interfaces.pycharmmInterface.mm_energy_forces import (
+            mm_pair_update_positions,
+        )
+
+        return mm_pair_update_positions(np.asarray(pos_cart), pbc_box_nl, is_npt)
     if update_fn is not None and use_pbc:
         if getattr(args, "debug", False):
             print("[nbr] Initial neighbor list update (PBC)")
@@ -1773,7 +1781,7 @@ def set_up_nhc_sim_routine(
                 initial_pos = _wrap_monomers(initial_pos, _cell_fire)
                 if update_fn is not None:
                     fire_pair_idx, fire_pair_mask = update_fn(
-                        np.asarray(initial_pos), box=pbc_box_nl
+                        _cart_nl_positions(initial_pos), box=pbc_box_nl
                     )
                     _pbc_state["pair_idx"] = fire_pair_idx
                     _pbc_state["pair_mask"] = fire_pair_mask
@@ -1894,7 +1902,7 @@ def set_up_nhc_sim_routine(
 
                     def _fire_nl_refresh(pos):
                         if use_pbc and update_fn is not None:
-                            pair_i, pair_m = update_fn(np.asarray(pos), box=pbc_box_nl)
+                            pair_i, pair_m = update_fn(_cart_nl_positions(pos), box=pbc_box_nl)
                             _pbc_state["pair_idx"] = pair_i
                             _pbc_state["pair_mask"] = pair_m
 
@@ -2018,7 +2026,7 @@ def set_up_nhc_sim_routine(
                 pbc_start_pos = _wrap_monomers(jnp.asarray(minimized_pos), _cell_jax)
             if update_fn is not None:
                 pbc_pair_idx, pbc_pair_mask = update_fn(
-                    np.asarray(pbc_start_pos), box=pbc_box_nl
+                    _cart_nl_positions(pbc_start_pos), box=pbc_box_nl
                 )
                 _pbc_state["pair_idx"] = pbc_pair_idx
                 _pbc_state["pair_mask"] = pbc_pair_mask
@@ -2065,7 +2073,7 @@ def set_up_nhc_sim_routine(
 
                 def _pbc_nl_refresh(pos):
                     if update_fn is not None:
-                        pair_i, pair_m = update_fn(np.asarray(pos), box=pbc_box_nl)
+                        pair_i, pair_m = update_fn(_cart_nl_positions(pos), box=pbc_box_nl)
                         _pbc_state["pair_idx"] = pair_i
                         _pbc_state["pair_mask"] = pair_m
 
