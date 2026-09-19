@@ -69,6 +69,35 @@ def test_predicted_polar_at_zero_field_is_scaled_identity():
     np.testing.assert_allclose(np.asarray(pred[1]), expected, rtol=1e-5)
 
 
+@pytest.mark.parametrize("batch_size", [1, 2])
+def test_polar_loss_gradients_flow(batch_size):
+    """``dL/d(scale)`` through ``dμ/dEf`` must be finite and nonzero for B=1 and B>1."""
+    params = {"scale": jnp.float32(2.0)}
+    field_scale = 0.001
+    n_atoms = 2
+    target = jnp.eye(3, dtype=jnp.float32)
+    batch = {
+        "atomic_numbers": jnp.ones((batch_size * n_atoms,), dtype=jnp.int32),
+        "positions": jnp.zeros((batch_size * n_atoms, 3), dtype=jnp.float32),
+        "electric_field": jnp.zeros((batch_size, 3), dtype=jnp.float32),
+        "dst_idx_flat": jnp.zeros((batch_size * n_atoms * (n_atoms - 1),), dtype=jnp.int32),
+        "src_idx_flat": jnp.zeros((batch_size * n_atoms * (n_atoms - 1),), dtype=jnp.int32),
+        "batch_segments": jnp.repeat(jnp.arange(batch_size), n_atoms),
+        "polar": jnp.stack([target] * batch_size),
+    }
+
+    def loss(params_):
+        mse, _mae = polarizability_loss_and_mae(
+            _dummy_apply, params_, batch, batch_size, field_scale=field_scale, at_zero_field=True
+        )
+        return mse
+
+    grads = jax.grad(loss)(params)
+    scale_grad = float(grads["scale"])
+    assert np.isfinite(scale_grad)
+    assert abs(scale_grad) > 0.0
+
+
 def test_polarizability_loss_zero_when_target_matches():
     params = {"scale": jnp.float32(2.0)}
     field_scale = 0.001

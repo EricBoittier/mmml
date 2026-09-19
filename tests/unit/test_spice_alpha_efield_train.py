@@ -13,6 +13,7 @@ from mmml.models.efield.training import (
     EFieldPhysNet,
     eval_step,
     load_ef_npz,
+    polarizability_loss_and_mae,
     prepare_batches,
     train_model,
     train_step,
@@ -110,6 +111,92 @@ def test_spice_alpha_efield_npz_feeds_load_and_batches(tmp_path):
     assert batch["polar"].shape == (BATCH_SIZE, 3, 3)
     assert batch["electric_field"].shape == (BATCH_SIZE, 3)
     assert "dipoles" in batch
+
+
+def _max_abs_leaves(tree) -> float:
+    vals = [
+        float(np.abs(np.asarray(leaf)).max())
+        for leaf in jax.tree_util.tree_leaves(tree)
+        if np.asarray(leaf).size
+    ]
+    return max(vals) if vals else 0.0
+
+
+def _max_abs_delta(left, right) -> float:
+    deltas = [
+        float(np.abs(np.asarray(a) - np.asarray(b)).max())
+        for a, b in zip(jax.tree_util.tree_leaves(left), jax.tree_util.tree_leaves(right), strict=True)
+        if np.asarray(a).size
+    ]
+    return max(deltas) if deltas else 0.0
+
+
+def _adam_state(params, learning_rate=1e-2):
+    optimizer = optax.chain(optax.clip_by_global_norm(10.0), optax.adam(learning_rate))
+    transform = optax.contrib.reduce_on_plateau(
+        patience=5,
+        cooldown=5,
+        factor=0.9,
+        rtol=1e-4,
+        accumulation_size=5,
+        min_scale=0.01,
+    )
+    return optimizer, optimizer.init(params), transform.init(params)
+
+
+@pytest.mark.parametrize("batch_size", [1, 2])
+def test_spice_alpha_efield_polar_gradients_flow(tmp_path, batch_size):
+    """Polar MSE must backprop through ``dμ/dEf`` at B=1 and B>1; train_step must move params."""
+    written = _spice_efield_splits(tmp_path)
+    train = load_ef_npz(written["train"])
+    model = _tiny_model()
+    params = _init_params(model, train, jax.random.PRNGKey(1))
+    batch = prepare_batches(
+        jax.random.PRNGKey(2),
+        train,
+        batch_size=batch_size,
+        shuffle=False,
+        rot_augment=False,
+    )[0]
+
+    def polar_mse(params_):
+        mse, _mae = polarizability_loss_and_mae(
+            model.apply,
+            params_,
+            batch,
+            batch_size,
+            field_scale=0.001,
+            at_zero_field=True,
+        )
+        return mse
+
+    grads = jax.grad(polar_mse)(params)
+    leaves = [np.asarray(leaf) for leaf in jax.tree_util.tree_leaves(grads)]
+    assert leaves
+    assert all(np.isfinite(leaf).all() for leaf in leaves)
+    assert _max_abs_leaves(grads) > 0.0
+
+    optimizer, opt_state, transform_state = _adam_state(params)
+    new_params, *_rest = train_step(
+        model_apply=model.apply,
+        optimizer_update=optimizer.update,
+        batch=batch,
+        batch_size=batch_size,
+        opt_state=opt_state,
+        params=params,
+        ema_params=params,
+        transform_state=transform_state,
+        ema_decay=0.5,
+        energy_weight=0.0,
+        forces_weight=0.0,
+        dipole_weight=0.0,
+        charge_weight=0.0,
+        polar_weight=1.0,
+        field_scale=0.001,
+        polar_at_zero_field=True,
+    )
+    assert all(np.isfinite(np.asarray(leaf)).all() for leaf in jax.tree_util.tree_leaves(new_params))
+    assert _max_abs_delta(new_params, params) > 0.0
 
 
 def test_spice_alpha_efield_train_step_polar_finite(tmp_path):
