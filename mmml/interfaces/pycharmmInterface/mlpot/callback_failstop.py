@@ -36,6 +36,13 @@ failure. The guard therefore terminates the process itself. It does not depend
 on whether ``pytest`` is imported (CuPy imports ``pytest`` via ``cupy.testing``,
 so production MD processes often have it in ``sys.modules``).
 
+``_CallbackPairListUnavailable`` is handled inside ``calculate_charmm``. During
+setup it still returns 0.0 so ``assert_mlpot_user_active``'s recovery ladder
+can rebind and rebuild lists. Once that check verifies USER, it calls
+:func:`set_mlpot_dynamics_armed` and a lost pair list raises into the guard
+(exit 86). Extent errors and other unexpected exceptions are always fatal.
+The deferred-probe path (PBC + MPI-linked CHARMM) stays disarmed.
+
 ``MMML_MLPOT_CALLBACK_FAIL_EXIT_CODE`` (1..255) changes the exit code for tests
 only; production runs should leave it unset.
 """
@@ -283,12 +290,24 @@ class MlpotCallbackAborted(RuntimeError):
 
 
 _first_error: BaseException | None = None
+_dynamics_armed = False
 
 
 def reset_mlpot_callback_failstop() -> None:
-    """Clear the sticky fatal flag (unit tests)."""
-    global _first_error
+    """Clear the sticky fatal flag and the dynamics arm (unit tests)."""
+    global _first_error, _dynamics_armed
     _first_error = None
+    _dynamics_armed = False
+
+
+def set_mlpot_dynamics_armed(armed: bool) -> None:
+    """``True`` once USER is verified: an empty ML/MM pair list becomes fatal."""
+    global _dynamics_armed
+    _dynamics_armed = bool(armed)
+
+
+def mlpot_dynamics_armed() -> bool:
+    return _dynamics_armed
 
 
 def mlpot_callback_failstop_error() -> BaseException | None:
@@ -333,6 +352,8 @@ __all__ = [
     "failstop_calculate_charmm",
     "mlpot_callback_failstop_error",
     "reset_mlpot_callback_failstop",
+    "set_mlpot_dynamics_armed",
+    "mlpot_dynamics_armed",
     "fail_closed_callback",
     "flush_all_streams",
     "install_fail_closed_energy_func",

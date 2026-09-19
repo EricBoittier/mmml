@@ -15,8 +15,8 @@ Each case runs ``mmml md-system`` (3 ethanol, vacuum, CPU) in a child process:
   ``Nmlmmp = 0`` with MM on for a multi-monomer system, so the real
   ``_resolve_mm_pairs_from_callback`` raises ``_CallbackPairListUnavailable``.
 * ``pairs_genuine``: ``--mm-pair-source charmm_callback`` on an all-ML system,
-  whose Fortran ML/MM list is empty; the first MLpot energy call fails
-  without any injection.
+  whose Fortran ML/MM list is empty. The first ENER probe is still disarmed,
+  so USER = 0 and recovery runs; dynamics is refused. Not exit 86.
 * ``control``: no fault; proves the harness reaches dynamics and that the
   artifacts checked for absence are written by a successful run.
 
@@ -230,13 +230,26 @@ def test_stale_pair_list_inside_dynamics_exits_86(tmp_path: Path) -> None:
     assert "WARN: Decomposed MLpot: charmm_callback returned zero" not in proc.stdout
 
 
-def test_zero_callback_pairs_without_injection_exits_86(tmp_path: Path) -> None:
-    """All-ML system with the Fortran pair source: Nmlmmp = 0 from the first call."""
+def test_zero_callback_pairs_without_injection_refuses_before_dynamics(
+    tmp_path: Path,
+) -> None:
+    """All-ML + Fortran pair source: first ENER probe is disarmed (USER = 0).
+
+    Recovery cannot invent pairs; ``assert_mlpot_user_active`` refuses dynamics.
+    Exit 86 is for an empty list after USER was already verified.
+    """
     proc, lines = _run_case(tmp_path, "none", 0, "--mm-pair-source", "charmm_callback")
-    call_lines = _assert_failed_closed(tmp_path, proc, lines, inject_line=None)
-    assert len(call_lines) == 1, _diag(proc, lines)
-    assert "returned zero ML/MM pairs" in proc.stdout
-    assert "DYNA>" not in proc.stdout
+    out = proc.stdout
+    assert proc.returncode != 0, _diag(proc, lines)
+    assert proc.returncode != EXIT_CODE, _diag(proc, lines)
+    assert BANNER not in out, _diag(proc, lines)
+    assert "DYNA>" not in out, _diag(proc, lines)
+    assert "NVE complete" not in out
+    assert "returned zero ML/MM pairs" in out or "USER term" in out
+    for rel in _DONE_ARTIFACTS:
+        assert not (tmp_path / rel).exists(), f"{rel} written after refuse\n" + _diag(
+            proc, lines
+        )
 
 
 def test_control_run_completes_and_writes_done_artifacts(tmp_path: Path) -> None:

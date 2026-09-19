@@ -60,10 +60,10 @@ _DEFAULT_MM_PAIR_SOURCE: MmPairSource = "charmm_callback"
 class _CallbackPairListUnavailable(RuntimeError):
     """Raised when CHARMM callback pair lists are unusable.
 
-    Fails closed: it propagates out of ``calculate_charmm`` into the guarded
-    ctypes entry point (``callback_failstop.fail_closed_callback``), which ends
-    the process with exit code 86. Returning 0.0 used to let CHARMM integrate
-    with a zero USER energy and zero ML/MM forces.
+    During setup (guard disarmed) ``calculate_charmm`` still returns 0.0 so
+    ``assert_mlpot_user_active`` can rebind and rebuild. Once that check arms
+    the guard, this exception propagates into
+    ``callback_failstop.fail_closed_callback`` and the process exits 86.
     """
 
 
@@ -783,8 +783,14 @@ class DecomposedMlpotCalculator:
                     if parent is not None:
                         parent._last_callback_error = msg
                         parent._last_ml_forces = self.last_ml_forces
-                    if not _callback_opt_out(ALLOW_MISSING_CALLBACK_PAIRS_ENV):
-                        # Fail closed: the guarded entry point ends the process.
+                    from mmml.interfaces.pycharmmInterface.mlpot.callback_failstop import (
+                        mlpot_dynamics_armed,
+                    )
+
+                    if mlpot_dynamics_armed() and not _callback_opt_out(
+                        ALLOW_MISSING_CALLBACK_PAIRS_ENV
+                    ):
+                        # Dynamics: fail closed. The guarded entry point exits 86.
                         raise
                     if not self._callback_pair_warned:
                         print(

@@ -214,7 +214,7 @@ What now fails closed inside the callback:
 | Condition | Before | Now |
 |-----------|--------|-----|
 | Molecule extent exceeds the MM pair-list assumption (`ValueError`) | swallowed by ctypes, dynamics continued | exit 86 |
-| Fortran ML/MM pair list empty with MM on (`_CallbackPairListUnavailable`) | `WARN`, USER = 0, zero forces | exit 86 |
+| Fortran ML/MM pair list empty with MM on (`_CallbackPairListUnavailable`) | `WARN`, USER = 0, zero forces | setup (disarmed): USER = 0 so recovery can rebind; after USER is verified: exit 86 |
 | Non-finite ML energy or forces (metatomic, plain PhysNet `PyCharmm_Calculator`) | returned 0 / passed through | exit 86 |
 | Periodic Coulomb (jax-pme / ScaFaCoS) failure | `WARN`, ML-only USER | exit 86 |
 

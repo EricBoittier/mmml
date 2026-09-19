@@ -20,7 +20,9 @@ from mmml.interfaces.pycharmmInterface.mlpot.callback_failstop import (
     last_mlpot_callback_failure,
     mlpot_callback_failstop_error,
     mlpot_callback_failure_exit_code,
+    mlpot_dynamics_armed,
     reset_mlpot_callback_failstop,
+    set_mlpot_dynamics_armed,
 )
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -49,6 +51,14 @@ def test_exit_code_is_documented_value(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_exit_code_env_override_stays_nonzero(monkeypatch: pytest.MonkeyPatch, raw: str, expected: int) -> None:
     monkeypatch.setenv(EXIT_CODE_ENV, raw)
     assert mlpot_callback_failure_exit_code() == expected
+
+
+def test_dynamics_arm_starts_off_and_reset_clears_it() -> None:
+    assert mlpot_dynamics_armed() is False
+    set_mlpot_dynamics_armed(True)
+    assert mlpot_dynamics_armed() is True
+    reset_mlpot_callback_failstop()
+    assert mlpot_dynamics_armed() is False
 
 
 def test_success_passes_return_value_through() -> None:

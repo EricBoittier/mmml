@@ -1365,7 +1365,7 @@ def _call_zero_pair_callback(calc):
 
 
 def test_charmm_callback_zero_pairs_fails_closed_inside_callback(monkeypatch):
-    """Missing ML/MM pairs raise out of calculate_charmm (into the exit-86 guard)."""
+    """Armed (dynamics): missing ML/MM pairs raise into the exit-86 guard."""
     from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import (
         ALLOW_MISSING_CALLBACK_PAIRS_ENV,
         _CallbackPairListUnavailable,
@@ -1373,9 +1373,11 @@ def test_charmm_callback_zero_pairs_fails_closed_inside_callback(monkeypatch):
 
     from mmml.interfaces.pycharmmInterface.mlpot.callback_failstop import (
         MlpotCallbackAborted,
+        set_mlpot_dynamics_armed,
     )
 
     monkeypatch.delenv(ALLOW_MISSING_CALLBACK_PAIRS_ENV, raising=False)
+    set_mlpot_dynamics_armed(True)
     calc, spherical_fn = _zero_pair_callback_calc()
     with pytest.raises(MlpotCallbackAborted, match="returned zero ML/MM pairs") as info:
         _call_zero_pair_callback(calc)
@@ -1384,12 +1386,37 @@ def test_charmm_callback_zero_pairs_fails_closed_inside_callback(monkeypatch):
     spherical_fn.assert_not_called()
 
 
+def test_charmm_callback_zero_pairs_disarmed_returns_zero_for_setup(monkeypatch):
+    """Disarmed (setup): assert_mlpot_user_active's recovery ladder needs USER = 0."""
+    from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import (
+        ALLOW_MISSING_CALLBACK_PAIRS_ENV,
+    )
+
+    from mmml.interfaces.pycharmmInterface.mlpot.callback_failstop import (
+        set_mlpot_dynamics_armed,
+    )
+
+    monkeypatch.delenv(ALLOW_MISSING_CALLBACK_PAIRS_ENV, raising=False)
+    set_mlpot_dynamics_armed(False)
+    calc, spherical_fn = _zero_pair_callback_calc()
+    user = _call_zero_pair_callback(calc)
+    assert user == pytest.approx(0.0)
+    assert "returned zero ML/MM pairs" in calc._last_callback_error
+    assert calc._last_callback_user_return_kcal == pytest.approx(0.0)
+    spherical_fn.assert_not_called()
+
+
 def test_charmm_callback_zero_pairs_test_opt_out_returns_zero(monkeypatch):
     from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import (
         ALLOW_MISSING_CALLBACK_PAIRS_ENV,
     )
 
+    from mmml.interfaces.pycharmmInterface.mlpot.callback_failstop import (
+        set_mlpot_dynamics_armed,
+    )
+
     monkeypatch.setenv(ALLOW_MISSING_CALLBACK_PAIRS_ENV, "1")
+    set_mlpot_dynamics_armed(True)
     calc, spherical_fn = _zero_pair_callback_calc()
     user = _call_zero_pair_callback(calc)
     assert user == pytest.approx(0.0)

@@ -228,9 +228,11 @@ and versioning process.
   86** (`os._exit`, so nothing is written afterwards). This builds on
   `e3eab95e6`, whose default CHARMM `STOP` exits with status 0 and whose
   `raise` mode was active in production whenever CuPy had imported `pytest`.
-  An empty ML/MM callback pair list with MM on, non-finite metatomic/PhysNet
-  energies and periodic Coulomb failures now also fail closed instead of
-  returning 0 or an ML-only USER term. See `docs/mlpot-settings.md`.
+  An empty ML/MM callback pair list with MM on fails closed **after** USER is
+  verified (dynamics armed); during setup it still returns 0 so
+  `assert_mlpot_user_active` can recover. Non-finite metatomic/PhysNet
+  energies and periodic Coulomb failures fail closed. See
+  `docs/mlpot-settings.md`. Combines #247 (arming) and #250 (ctypes exit 86).
 
 - CI unit tests: extract metatomic MM-only helpers from `setup_calculator` and
   split `build_decomposed_mlpot_model` so the function-size ratchet stays
