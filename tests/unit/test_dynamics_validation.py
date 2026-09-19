@@ -1497,3 +1497,32 @@ def test_assert_stage_warns_when_chunk_frames_below_global_cadence(tmp_path, cap
     out = capsys.readouterr().out
     assert "fewer than the 4 global saves" in out
     assert "PROD complete" in out
+
+
+def test_read_restart_positions_uses_xold_of_leapfrog_restart():
+    """NVE (leap-frog) restarts: positions are XOLD; X, Y, Z holds the ~1e-3 A step displacement."""
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        _restart_section_values,
+        read_restart_positions,
+    )
+
+    stub = Path(__file__).resolve().parents[1] / "functionality/mlpot/output/dynamics/nve_stub.res"
+    pos = read_restart_positions(stub)
+    xold = np.asarray(_restart_section_values(stub, "!XOLD, YOLD, ZOLD")[:60]).reshape(20, 3)
+    assert pos is not None and np.allclose(pos, xold)
+    assert np.ptp(pos) > 1.0
+    assert pos[0, 0] == pytest.approx(-2.32520167626342)
+
+
+def test_read_restart_positions_coordinate_only_restart(tmp_path):
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import read_restart_positions
+
+    pos = np.array([[1.25, -2.5, 3.75], [-7.5, 11.25, -13.5]])
+    body = "".join("".join(f"{v:22.15E}".replace("E", "D") for v in row) + "\n" for row in pos)
+    res = tmp_path / "baseline.res"
+    res.write_text(
+        "REST    37     1\n\n !NATOM,NPRIV,NSTEP,NSAVC,NSAVV,JHSTRT,NDEGF,SEED,NSAVL\n"
+        "           2           1           0           0           0           0"
+        "           6           1           0\n !X, Y, Z\n" + body
+    )
+    assert np.allclose(read_restart_positions(res), pos)
