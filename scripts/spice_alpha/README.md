@@ -52,6 +52,8 @@ sbatch --time=06:00:00 --qos=rtx4090-6hours \
 sbatch --partition=rtx4090 --qos=rtx4090-6hours --time=06:00:00 \
   --export=ALL,MODE=big,EPOCHS=100,BATCH_SIZE=4,SPLITS=$HOME/data/spicealpha/mmml_efield_full/splits_des_mono,CKPT=$HOME/mmml/ckpts/spice_ef_polar_big \
   scripts/spice_alpha/train_efield_polar.sbatch
+# after a TIMEOUT: new CKPT dir, same weights
+# RESTART=$HOME/mmml/ckpts/spice_ef_polar_big/params-best-441a9161-9eca-4563-9957-04c9d2ec5a34.json
 ```
 
 Interactive GPU (after an allocation):

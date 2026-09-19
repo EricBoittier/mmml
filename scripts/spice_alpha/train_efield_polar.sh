@@ -53,6 +53,9 @@ fi
 if [[ -n "${SAVE_EVERY:-}" ]]; then
   EXTRA+=(--save-every "$SAVE_EVERY")
 fi
+if [[ -n "${RESTART:-}" ]]; then
+  EXTRA+=(--restart "$RESTART")
+fi
 
 mmml efield-train \
   --train-npz "$SPLITS/energies_forces_dipoles_train.npz" \

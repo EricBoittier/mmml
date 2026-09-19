@@ -97,6 +97,7 @@ def test_efield_train_wrapper_disables_x64():
     assert "xla_gpu_autotune_level=0" in text
     assert "xla_gpu_autotune_level=0" in sbatch
     assert "--save-format" in text
+    assert '--restart "$RESTART"' in text
 
 
 def test_efield_train_wrapper_keeps_splits_dir(tmp_path):
