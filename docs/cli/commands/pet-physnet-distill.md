@@ -25,6 +25,7 @@ usage: mmml pet-physnet-distill [-h] [--checkpoint CHECKPOINT] --out-dir OUT_DIR
                                 [--dimer-r-bins DIMER_R_BINS]
                                 [--max-monomers-per-frame MAX_MONOMERS_PER_FRAME]
                                 [--max-dimers-per-frame MAX_DIMERS_PER_FRAME]
+                                [--include-dimer-fragments]
                                 [--valid-fraction VALID_FRACTION]
                                 [--teacher-backend {torchscript,ase}]
                                 [--max-atoms-per-batch MAX_ATOMS_PER_BATCH]
@@ -89,6 +90,9 @@ Other options:
                         Å bin edges for an even dimer draw per frame
   --max-monomers-per-frame MAX_MONOMERS_PER_FRAME
   --max-dimers-per-frame MAX_DIMERS_PER_FRAME
+  --include-dimer-fragments
+                        Also store each dimer's A and B as monomer samples
+                        (matched triples for MLpot E_int)
   --valid-fraction VALID_FRACTION
   --student-yaml, --no-student-yaml
                         Write physnet-train.yaml next to the NPZ (warm-start

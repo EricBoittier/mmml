@@ -115,6 +115,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument("--max-monomers-per-frame", type=int, default=8)
     p.add_argument("--max-dimers-per-frame", type=int, default=24)
+    p.add_argument(
+        "--include-dimer-fragments",
+        action="store_true",
+        help="Also store each dimer's A and B as monomer samples (matched triples for MLpot E_int)",
+    )
     p.add_argument("--valid-fraction", type=float, default=0.15)
     p.add_argument(
         "--teacher-backend",
@@ -264,13 +269,19 @@ def run(args: argparse.Namespace) -> dict:
 
         evaluator = load_metatomic_calculator(args.checkpoint)
     t_label = time.perf_counter()
-    labeled = label_geometries(evaluator, geos, energy_mode=str(args.energy_mode))
+    labeled = label_geometries(
+        evaluator,
+        geos,
+        energy_mode=str(args.energy_mode),
+        include_dimer_fragments=bool(args.include_dimer_fragments),
+    )
     label_s = time.perf_counter() - t_label
     teacher = Path(args.checkpoint).resolve()
     metadata = {
         "teacher": str(teacher),
         "teacher_size_bytes": int(teacher.stat().st_size),
         "teacher_backend": str(args.teacher_backend),
+        "include_dimer_fragments": bool(args.include_dimer_fragments),
         "label_s": float(label_s),
         "energy_mode": str(args.energy_mode),
         "preset": str(args.preset),

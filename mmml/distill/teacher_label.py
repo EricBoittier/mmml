@@ -88,12 +88,18 @@ def label_geometries(
     geometries: list[Geometry],
     *,
     energy_mode: str = ENERGY_MODE_MLMM,
+    include_dimer_fragments: bool = False,
 ) -> list[LabeledSample]:
     """Evaluate the teacher on each geometry. ``energy_mode`` selects the stored E/F.
 
     ``teacher`` is an ASE calculator (one call per structure) or anything with
     ``evaluate(structures)`` such as :class:`BatchedMetatomicTeacher`. All
     monomers, dimers and dimer fragments go to the teacher in one request.
+
+    ``include_dimer_fragments`` also emits each dimer's A and B as monomer
+    samples (source ``<dimer source>:frag``) right after the dimer. The
+    student then sees matched AB/A/B triples, which is what MLpot differences
+    into ``E_int``. Costs no extra teacher calls.
     """
     mode = str(energy_mode).strip().lower()
     if mode not in ENERGY_MODES:
@@ -157,4 +163,24 @@ def label_geometries(
                 energy_int_eV=e_int,
             )
         )
+        if include_dimer_fragments:
+            z_a, r_a, z_b, r_b = _split_dimer(geo)
+            for z_m, r_m, (e_m, f_m) in ((z_a, r_a, (e_a, f_a)), (z_b, r_b, (e_b, f_b))):
+                frag = Geometry(
+                    numbers=z_m,
+                    positions=r_m,
+                    kind="monomer",
+                    source=f"{geo.source}:frag",
+                    r_com_A=None,
+                    atoms_per_monomer=(int(len(z_m)),),
+                )
+                labeled.append(
+                    LabeledSample(
+                        geometry=frag,
+                        energy_eV=float(e_m if mode == ENERGY_MODE_TOTAL else e_m - e_ref),
+                        forces_ev_per_angstrom=np.asarray(f_m, dtype=np.float64),
+                        energy_total_eV=float(e_m),
+                        energy_int_eV=None,
+                    )
+                )
     return labeled

@@ -26,6 +26,7 @@ mmml metatomic-pbc-md --help
 ```text
 usage: mmml metatomic-pbc-md [-h] [--checkpoint CHECKPOINT] [--residue RESIDUE]
                              [--monomer-xyz MONOMER_XYZ] [--box-size BOX_SIZE]
+                             [--initial-structure INITIAL_STRUCTURE]
                              [--target-density-g-cm3 TARGET_DENSITY_G_CM3]
                              [--n-molecules N_MOLECULES]
                              [--temperature TEMPERATURE] [--dt-fs DT_FS]
@@ -45,6 +46,10 @@ Input & configuration:
                         $PET_MAD_CKPT.
   --residue RESIDUE     CGenFF residue name for bulk-density count (default:
                         ETOH).
+  --initial-structure INITIAL_STRUCTURE
+                        Start from this structure (e.g. liquid-box model.pdb)
+                        instead of a tiled box; cubic --box-size cell, pbc on.
+                        Keeps the PSF atom order.
 
 Scientific model:
   --target-density-g-cm3 TARGET_DENSITY_G_CM3

@@ -82,6 +82,15 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--box-size", type=float, default=DEFAULT_BOX_A)
     parser.add_argument(
+        "--initial-structure",
+        type=Path,
+        default=None,
+        help=(
+            "Start from this structure (e.g. liquid-box model.pdb) instead of a "
+            "tiled box; cubic --box-size cell, pbc on. Keeps the PSF atom order."
+        ),
+    )
+    parser.add_argument(
         "--target-density-g-cm3",
         type=float,
         default=None,
@@ -263,12 +272,27 @@ def main(argv: list[str] | None = None) -> int:
     report["checkpoint_sha256"] = _sha256(ckpt)
 
     t_pack = time.perf_counter()
-    atoms = build_tiled_cubic_liquid(
-        monomer_xyz=monomer_xyz,
-        box_side_A=float(args.box_size),
-        n_molecules=n_mol,
-        seed=int(args.seed),
-    )
+    if args.initial_structure is not None:
+        from ase.io import read as ase_read
+
+        atoms = ase_read(str(args.initial_structure))
+        atoms.set_cell([float(args.box_size)] * 3)
+        atoms.set_pbc(True)
+        atoms.wrap()
+        if len(atoms) % n_mol:
+            print(
+                f"FAIL: {len(atoms)} atoms is not a multiple of n_molecules={n_mol}",
+                file=sys.stderr,
+            )
+            _write()
+            return 2
+    else:
+        atoms = build_tiled_cubic_liquid(
+            monomer_xyz=monomer_xyz,
+            box_side_A=float(args.box_size),
+            n_molecules=n_mol,
+            seed=int(args.seed),
+        )
     atoms_per_monomer = int(len(atoms) // n_mol)
     report["pack_s"] = time.perf_counter() - t_pack
     report["n_atoms"] = int(len(atoms))

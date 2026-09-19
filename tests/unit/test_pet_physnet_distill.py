@@ -300,3 +300,19 @@ def test_stratified_pick_fills_every_bin() -> None:
     got = r[picked]
     assert np.sum(got < 3.5) == 2  # the whole sparse bin
     assert np.sum(got > 6.0) == 3  # full quota
+
+
+def test_include_dimer_fragments_emits_matched_triples() -> None:
+    from mmml.distill.teacher_label import ENERGY_MODE_MLMM
+
+    geos = build_acetone_pool(_tiny_pool())
+    calc = PairwiseDistanceCalculator()
+    got = label_geometries(calc, geos, energy_mode=ENERGY_MODE_MLMM, include_dimer_fragments=True)
+    n_dimers = sum(g.kind == "dimer" for g in geos)
+    assert len(got) == len(geos) + 2 * n_dimers
+    for k, s in enumerate(got):
+        if s.geometry.kind != "dimer":
+            continue
+        a, b = got[k + 1], got[k + 2]
+        assert a.geometry.source == b.geometry.source == f"{s.geometry.source}:frag"
+        assert s.energy_eV - a.energy_eV - b.energy_eV == pytest.approx(s.energy_int_eV)
