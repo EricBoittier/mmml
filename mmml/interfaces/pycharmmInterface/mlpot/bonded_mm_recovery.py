@@ -1418,8 +1418,12 @@ def _reload_pre_mlpot_topology(
     from mmml.interfaces.pycharmmInterface.mlpot.cgenff_prm_swap import (
         clear_ml_torsions_deleted,
     )
+    from mmml.interfaces.pycharmmInterface.mlpot.ml_type_copies import (
+        clear_ml_type_copies,
+    )
 
     clear_ml_torsions_deleted()
+    clear_ml_type_copies()
     sync_charmm_positions(current_positions)
     charmm_side = getattr(ctx, "charmm_cubic_box_side_A", None) or (
         ctx.cubic_box_side_A if ctx.use_pbc else None

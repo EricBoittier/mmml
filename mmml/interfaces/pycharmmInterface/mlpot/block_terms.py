@@ -56,21 +56,23 @@ def zero_mlpot_psf_mm_terms(
     verbose: bool = False,
     periodic_external: bool = False,
 ) -> str:
-    """Disable CHARMM MM on ML atoms via zeroed CGENFF params (PSF connectivity kept).
+    """Disable CHARMM MM on ML atoms (PSF connectivity kept).
 
-    - Re-reads a **bonded-only** zeroed CGENFF .prm (BOND/ANGL/DIHE/IMPR/UREY-b → 0;
-      NONBOND/NBFIX/HBOND omitted so READ PARAM APPEND does not clear exclusion lists).
+    - All-ML: re-reads a **bonded-only** zeroed CGENFF .prm (BOND/ANGL/DIHE/IMPR/
+      UREY-b -> 0; NONBOND/NBFIX/HBOND omitted so READ PARAM APPEND does not
+      clear exclusion lists) and SKIPEs the CHARMM bonded terms.
+    - Hybrid ML+MM: the zeroed file is keyed by atom type and would also zero
+      MM molecules of the same types (#225). ML atoms are moved to copies of
+      their types with zero bond/angle force constants instead
+      (:mod:`~mmml.interfaces.pycharmmInterface.mlpot.ml_type_copies`); MM
+      parameters are untouched.
     - Zeros partial charges on ML atoms (ELEC off; MLpot supplies ML electrostatics).
     - Deletes PSF dihedrals/impropers/CMAP that touch ML atoms
-      (:func:`delete_ml_torsion_terms`): the APPEND leaves the other terms of
-      multi-term CGenFF dihedrals live. Bonds and angles stay in the PSF (no
+      (:func:`delete_ml_torsion_terms`). Bonds and angles stay in the PSF (no
       ``delete_connectivity``), so nonbond exclusions are unchanged.
 
-    Hybrid ML+MM may still need legacy BLOCK (``MMML_MLPOT_USE_BLOCK=1``): the
-    zeroed APPEND works by atom type, so it also zeroes BOND/ANGL/UREY/IMPR and
-    one term of every dihedral of MM molecules that use CGenFF types (multi-term
-    dihedrals keep the rest). BLOCK is also needed for
-    ML–MM cross VDW when not using periodic CHARMM VDW.
+    BLOCK (``MMML_MLPOT_USE_BLOCK=1``) is still needed for ML–MM cross VDW
+    when not using periodic CHARMM VDW.
     """
     if float(mm_internal_scale) > 0.0:
         raise ValueError(
@@ -103,31 +105,29 @@ def zero_mlpot_psf_mm_terms(
         n_mm = n_total - n_ml
         vdw_note = ", CHARMM VDW on MM" if periodic_external else ""
         summary = (
-            f"MLpot zeroed CGENFF: hybrid ({n_ml} ML + {n_mm} MM; "
+            f"MLpot hybrid ({n_ml} ML + {n_mm} MM; "
             f"ML bonded zeroed, PSF bonds={n_bond_before}{vdw_note})"
         )
 
-    apply_zeroed_cgenff_params(bonded_only=True, verbose=verbose)
-    # READ PARAM APPEND zeroes BOND/ANGL/UREY/IMPR but overwrites only one
-    # term of each multi-term CGenFF dihedral, so the rest stay live (ETOH:181
-    # box: DIHE 170.8 -> 133.8 kcal/mol). ML torsions are therefore deleted
-    # from the PSF below, in both cases. All-ML also skips every CHARMM bonded
-    # term (covers bonded types the zeroed file lacks, e.g. extra PRMs; SKIPE
-    # accumulates, so this composes with the energy policy's SKIPE VDW IMNB).
-    # Hybrid: SKIPE would also drop the MM molecules' bonded terms.
+    # All-ML: the zeroed APPEND zeroes BOND/ANGL/UREY/IMPR but overwrites only
+    # one term of each multi-term CGenFF dihedral, so ML torsions are also
+    # deleted from the PSF below. SKIPE covers bonded types the zeroed file
+    # lacks (extra PRMs); SKIPE accumulates, so this composes with the energy
+    # policy's SKIPE VDW IMNB. Hybrid: both are keyed globally (type / term),
+    # so ML atoms get zero-bonded copies of their types instead (#225).
     if tag == "all":
+        apply_zeroed_cgenff_params(bonded_only=True, verbose=verbose)
         pycharmm.lingo.charmm_script("SKIPE " + " ".join(ALL_ML_SKIPE_BONDED))
         summary += f"; SKIPE {' '.join(ALL_ML_SKIPE_BONDED)}"
     else:
-        import warnings
+        from mmml.interfaces.pycharmmInterface.mlpot.ml_type_copies import (
+            apply_ml_type_copies,
+        )
 
-        warnings.warn(
-            "MLpot hybrid PSF registration: the zeroed-CGenFF READ PARAM APPEND "
-            "works by atom type, so MM molecules that use CGenFF types also lose "
-            "BOND/ANGL/UREY/IMPR and keep only part of their multi-term dihedrals "
-            "(ML torsions are deleted from the PSF). SHAKE-rigid TIP3 is "
-            "unaffected; use --mlpot-use-block for flexible MM molecules.",
-            stacklevel=2,
+        copied = apply_ml_type_copies(ml_indices, tag, pycharmm=pycharmm)
+        summary += (
+            f"; ML type copies ({copied['types']} types, {copied['bonds']} bond / "
+            f"{copied['angles']} angle rows zeroed)"
         )
 
     charges = list(pycharmm.psf.get_charges())

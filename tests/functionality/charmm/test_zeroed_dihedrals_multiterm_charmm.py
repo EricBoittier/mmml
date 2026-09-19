@@ -15,7 +15,8 @@ atoms. These tests pin down:
   the all-ML ``SKIPE`` of bonded terms lifted;
 * deleting ML torsions leaves VDW/ELEC unchanged (exclusions and 1-4 pairs are
   built from the bond list, which is kept);
-* the hybrid case: only the ML molecule's torsions are deleted.
+* the hybrid case (#225): ML atoms move to zero-bonded copies of their atom
+  types, so MM molecules of the same types keep all bonded terms.
 
 Each case runs in a fresh Python process, so every case starts from a clean
 CHARMM state.
@@ -78,29 +79,51 @@ spec = json.loads(sys.argv[2])
 nmol = int(spec["nmol"])
 
 read_cgenff_toppar()
+n_aco = int(spec.get("n_aco", 0))
 with charmm_relaxed_bomlev():
-    read.sequence_string(" ".join(["ETOH"] * nmol))
+    read.sequence_string(" ".join(["ETOH"] * nmol + ["ACO"] * n_aco))
     gen.new_segment(seg_name="LIG", setup_ic=True)
 xs, ys, zs = [], [], []
 for m in range(nmol):
     xs += [v + 6.0 * m for v in spec["x"]]
     ys += list(spec["y"])
     zs += list(spec["z"])
-coor.set_positions(pd.DataFrame({"x": xs, "y": ys, "z": zs}))
+pos = coor.get_positions()
+pos.iloc[: len(xs)] = list(zip(xs, ys, zs))
+coor.set_positions(pos)
+if n_aco:
+    # Acetone (shares CG331/HGA3 with ethanol, has an improper) built from IC.
+    import pycharmm.ic as ic
+
+    with charmm_relaxed_bomlev():
+        ic.prm_fill(replace_all=False)
+        ic.seed(nmol + 1, "C2", nmol + 1, "C1", nmol + 1, "C3")
+        ic.build()
+    pos = coor.get_positions()
+    pos.iloc[len(xs) :, 1] += 6.0
+    coor.set_positions(pos)
 
 NBONDS = "NBONDS CUTNB 14.0 CTOFNB 12.0 CTONNB 10.0 NBXMOD 5 ATOM CDIE VATOM VSWITCH SWITCH"
 TERMS = ("BOND", "ANGL", "UREY", "DIHE", "IMPR", "CMAP", "VDW", "ELEC")
+
+
+natom = int(pycharmm.psf.get_natom())
+n_ml_atoms = int(spec["n_ml_atoms"])
 
 
 def ener():
     # READ PARAM resets the nonbond options; re-issue them before every ENER.
     pycharmm.lingo.charmm_script(NBONDS)
     energy.show()
-    return {k: float(energy.get_term_by_name(k)) for k in TERMS}
+    out = {k: float(energy.get_term_by_name(k)) for k in TERMS}
+    # Bonded terms inside the ML and inside the MM region (no ML-MM bonds).
+    for region, sel in (("ml", f"1:{n_ml_atoms}"), ("mm", f"{n_ml_atoms + 1}:{natom}")):
+        if region == "mm" and n_ml_atoms >= natom:
+            continue
+        pycharmm.lingo.charmm_script(f"INTE SELE BYNUM {sel} END SELE BYNUM {sel} END")
+        out[region] = {k: float(energy.get_term_by_name(k)) for k in TERMS[:6]}
+    return out
 
-
-natom = int(pycharmm.psf.get_natom())
-n_ml_atoms = int(spec["n_ml_atoms"])
 ml = pycharmm.SelectAtoms(selection=tuple(i < n_ml_atoms for i in range(natom)))
 
 from mmml.interfaces.pycharmmInterface.mlpot import block_terms
@@ -120,7 +143,7 @@ elif case == "append_then_delete":
     out["append"] = ener()
     out["removed"] = block_terms.delete_ml_torsion_terms(ml, all_ml=n_ml_atoms >= natom)
     out["after"] = ener()
-elif case == "registration":
+elif case.startswith("registration"):
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
         tag = block_terms.zero_mlpot_psf_mm_terms(ml)
@@ -131,15 +154,26 @@ elif case == "registration":
     # the zeroed params + PSF torsion deletion alone give zero.
     pycharmm.lingo.charmm_script("SKIPE NONE")
     out["after_noskip"] = ener()
+    if case == "registration_restore":
+        from mmml.interfaces.pycharmmInterface.mlpot.cgenff_prm_swap import (
+            apply_full_cgenff_params,
+        )
+
+        apply_full_cgenff_params(force=True)
+        out["restored"] = ener()
+    elif case == "registration_twice":
+        block_terms.zero_mlpot_psf_mm_terms(ml)
+        out["again"] = ener()
 else:
     raise SystemExit(f"unknown case {case}")
 print("RESULT " + json.dumps(out), flush=True)
 """
 
 
-def _run_case(case: str, *, nmol: int, n_ml_mol: int) -> dict:
+def _run_case(case: str, *, nmol: int, n_ml_mol: int, n_aco: int = 0) -> dict:
     spec = {
         "nmol": nmol,
+        "n_aco": n_aco,
         "n_ml_atoms": 9 * n_ml_mol,
         "x": _ETOH_X,
         "y": _ETOH_Y,
@@ -226,26 +260,45 @@ def test_hybrid_registration_deletes_only_ml_torsions() -> None:
         assert res["after"][key] == pytest.approx(res["append"][key], abs=1e-8), key
 
 
-def test_hybrid_registration_warns_and_zeroes_ml_share() -> None:
-    res = _run_case("registration", nmol=2, n_ml_mol=1)
-    assert res["tag"] != "all"
-    assert any("hybrid" in msg for msg in res["warnings"])
-    # Only the MM molecule's APPEND leftover remains: ML DIHE share is zero.
-    assert res["after"]["DIHE"] == pytest.approx(DIHE_AFTER_APPEND_ETOH, abs=1e-4)
-    assert res["after_noskip"]["DIHE"] == pytest.approx(res["after"]["DIHE"], abs=1e-8)
+def _assert_bonded(got: dict, want: dict | float, keys=_BONDED[:5]) -> None:
+    for key in keys:
+        ref = want if isinstance(want, float) else want[key]
+        assert got[key] == pytest.approx(ref, abs=1e-6), key
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "Known limitation: the zeroed-CGenFF APPEND is keyed by atom type, so "
-        "an MM molecule sharing CGenFF types with the ML molecule also loses "
-        "its BOND/ANGL/UREY and one term of each dihedral. Hybrid systems with "
-        "flexible CGenFF MM molecules need --mlpot-use-block."
-    ),
-)
 def test_hybrid_registration_keeps_mm_bonded_terms() -> None:
+    """#225: ML bonded terms zero, the MM molecule's terms exactly unchanged."""
     res = _run_case("registration", nmol=2, n_ml_mol=1)
     full, after = res["full"], res["after"]
-    for key in ("BOND", "ANGL", "UREY", "DIHE"):
-        assert after[key] == pytest.approx(full[key] / 2.0, abs=1e-4), key
+    assert res["tag"] != "all"
+    assert res["warnings"] == []
+    _assert_bonded(after["ml"], 0.0)
+    _assert_bonded(after["mm"], full["mm"])
+    assert after["mm"]["DIHE"] == pytest.approx(DIHE_FULL_ETOH, abs=1e-4)
+    assert after["VDW"] == pytest.approx(full["VDW"], abs=1e-8)
+    # Only ML charges change ELEC; no SKIPE in the hybrid case.
+    assert after["ELEC"] != pytest.approx(full["ELEC"], abs=1e-3)
+    assert res["after_noskip"] == after
+
+
+def test_hybrid_registration_other_molecule_types_keep_bonded_terms() -> None:
+    """ML ethanol + MM ethanol + MM acetone (shares CG331/HGA3, has an IMPR)."""
+    res = _run_case("registration", nmol=2, n_ml_mol=1, n_aco=1)
+    full, after = res["full"], res["after"]
+    assert full["mm"]["IMPR"] > 1e-4
+    _assert_bonded(after["ml"], 0.0)
+    _assert_bonded(after["mm"], full["mm"])
+    assert after["VDW"] == pytest.approx(full["VDW"], abs=1e-8)
+
+
+def test_hybrid_registration_restore_and_reregister() -> None:
+    """Bonded restore brings ML bonds/angles back (not torsions); re-registration is idempotent."""
+    res = _run_case("registration_restore", nmol=2, n_ml_mol=1)
+    full, restored = res["full"], res["restored"]
+    _assert_bonded(restored["ml"], full["ml"], keys=("BOND", "ANGL", "UREY"))
+    assert restored["ml"]["DIHE"] == pytest.approx(0.0, abs=1e-8)
+    _assert_bonded(restored["mm"], full["mm"])
+    assert restored["VDW"] == pytest.approx(full["VDW"], abs=1e-8)
+
+    res = _run_case("registration_twice", nmol=2, n_ml_mol=1)
+    assert res["again"] == res["after"]

@@ -42,6 +42,9 @@ def _run_registration(sel, pycharmm, counts=None):
     ) as zero_prm_fn, mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.cgenff_prm_swap.assert_psf_bonds_present",
         return_value=400,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.ml_type_copies.apply_ml_type_copies",
+        return_value={"types": 3, "bonds": 2, "angles": 1},
     ), mock.patch.object(block_terms, "_import_pycharmm", return_value=pycharmm), mock.patch.object(
         block_terms, "_psf_torsion_counts", side_effect=counts
     ):
@@ -82,7 +85,7 @@ def test_zero_mlpot_psf_mm_terms_deletes_ml_torsions_after_zeroed_append():
     assert cgenff_prm_swap.ml_torsions_deleted()
 
 
-def test_zero_mlpot_psf_mm_terms_hybrid_deletes_ml_only_and_warns():
+def test_zero_mlpot_psf_mm_terms_hybrid_deletes_ml_torsions_without_warning():
     sel = mock.Mock()
     sel.get_atom_indexes.return_value = [0, 1, 2]
     sel.store.return_value = "mmml_ml"
@@ -91,13 +94,15 @@ def test_zero_mlpot_psf_mm_terms_hybrid_deletes_ml_only_and_warns():
         {"dihedrals": 24, "impropers": 0, "cmaps": 0},
         {"dihedrals": 12, "impropers": 0, "cmaps": 0},
     ]
-    with pytest.warns(UserWarning, match="hybrid PSF registration"):
-        tag, _ = _run_registration(sel, pycharmm, counts)
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        tag, zero_prm_fn = _run_registration(sel, pycharmm, counts)
 
     assert tag == "mmml_ml"
     pycharmm.psf.delete_dihedrals.assert_called_once_with(sel, sel)
-    # SKIPE would drop the MM molecules' bonded terms as well.
+    # SKIPE and the type-keyed zeroed APPEND would hit the MM molecules too.
     pycharmm.lingo.charmm_script.assert_not_called()
+    zero_prm_fn.assert_not_called()
     charges = pycharmm.psf.set_charge.call_args.args[0]
     assert charges == [0.0, 0.0, 0.0, 0.1, 0.1, 0.1]
 
