@@ -28,6 +28,8 @@ from mmml.models.physnetjax.physnetjax.data.read_h5 import (
     _subset_flat_dataset,
 )
 
+pytestmark = pytest.mark.data_loading
+
 _KEY_KWARGS = dict(
     natoms=8,
     energy_key="formation_energy",

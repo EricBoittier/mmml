@@ -26,6 +26,8 @@ from mmml.data.npz_schema import (
     validate_npz,
 )
 
+pytestmark = pytest.mark.data_loading
+
 
 def _good_dataset(n_structures: int = 3, n_atoms: int = 5) -> dict[str, np.ndarray]:
     """A minimal dataset that satisfies every required rule."""
