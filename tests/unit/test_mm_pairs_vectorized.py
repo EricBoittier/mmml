@@ -405,12 +405,25 @@ def test_auto_falls_back_to_cpu_without_cupy_or_jax_gpu(monkeypatch):
     assert not nl_gpu.gpu_nl_path_available()
 
 
+def _f64_below_that_float32_crosses(threshold: float) -> float:
+    """Host float64 ``x < threshold`` whose float32 value is ``>= threshold``."""
+    t = np.float64(threshold)
+    x = np.nextafter(t, 0.0)
+    for _ in range(200_000):
+        if x < t and float(np.float32(x)) >= float(t):
+            return float(x)
+        x = np.nextafter(x, 0.0)
+    raise AssertionError(f"no float32-crossing host value below {threshold}")
+
+
 def test_float32_roundtrip_crosses_pair_and_com_thresholds():
     """The x64-off trap: host float64 values that flip membership after float32."""
-    assert np.float64(12.4699999) < 12.47
-    assert float(np.float32(12.4699999)) >= 12.47
-    assert np.float64(4.0499999) < 4.05
-    assert float(np.float32(4.0499999)) >= 4.05
+    cutoff = _f64_below_that_float32_crosses(12.47)
+    rmin = _f64_below_that_float32_crosses(4.05)
+    assert cutoff < 12.47 <= float(np.float32(cutoff))
+    assert rmin < 4.05 <= float(np.float32(rmin))
+    # Review reproduction: 12.4699999 → 12.470000267, which crosses 12.47.
+    assert np.float64(12.4699999) < 12.47 <= float(np.float32(12.4699999))
 
 
 def test_is_device_positions_rejects_numpy_host():
@@ -423,16 +436,18 @@ def test_is_device_positions_rejects_numpy_host():
 
 def _threshold_probe_frame():
     """3 monomers: atom pair just below 12.47 Å; dimer COM just below 4.05 Å."""
+    atom_d = _f64_below_that_float32_crosses(12.47)
+    com_d = _f64_below_that_float32_crosses(4.05)
     R = np.zeros((9, 3), dtype=np.float64)
     R[0] = [0.0, 0.0, 0.0]
     R[1] = [0.2, 0.0, 0.0]
     R[2] = [0.4, 0.0, 0.0]
-    R[3] = [12.4699999, 0.0, 0.0]
-    R[4] = [12.6699999, 0.0, 0.0]
-    R[5] = [12.8699999, 0.0, 0.0]
-    R[6] = [0.1, 4.0499999, 0.0]
-    R[7] = [0.2, 4.0499999, 0.0]
-    R[8] = [0.3, 4.0499999, 0.0]
+    R[3] = [atom_d, 0.0, 0.0]
+    R[4] = [atom_d + 0.2, 0.0, 0.0]
+    R[5] = [atom_d + 0.4, 0.0, 0.0]
+    R[6] = [0.1, com_d, 0.0]
+    R[7] = [0.2, com_d, 0.0]
+    R[8] = [0.3, com_d, 0.0]
     mid = np.repeat(np.arange(3), 3)
     offs = np.arange(0, 10, 3)
     return R, mid, offs
