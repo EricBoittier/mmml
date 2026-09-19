@@ -348,6 +348,35 @@ def _fractional_positions_for_jax_md_neighbor_list(
     return R_frac, box_diag
 
 
+def mm_pair_update_positions(
+    positions_cart: Any,
+    box: Optional[Any],
+    fractional_coordinates: bool,
+) -> Any:
+    """Map Cartesian positions to the frame ``update_mm_pairs`` expects.
+
+    ``update_mm_pairs`` built with ``fractional_coordinates=True`` (NpT) takes
+    fractional positions plus the current ``box``; with ``False`` it takes
+    Cartesian positions. Callers that hold Cartesian coordinates (the ASE
+    calculator, Cartesian FIRE minimization) must convert before calling it,
+    otherwise the pair list is built for positions scaled by the box length.
+    Returns ``positions_cart`` unchanged when no conversion applies.
+    """
+    if not fractional_coordinates or box is None:
+        return positions_cart
+    box_np = np.asarray(box, dtype=np.float64)
+    if box_np.ndim == 0 or box_np.shape == (1,):
+        cell_3x3 = np.diag([float(box_np.reshape(-1)[0])] * 3)
+    elif box_np.ndim == 1:
+        cell_3x3 = np.diag(box_np)
+    else:
+        cell_3x3 = box_np
+    inv_cell = np.linalg.inv(cell_3x3)
+    if isinstance(positions_cart, jax.Array):
+        return positions_cart @ jnp.asarray(inv_cell, dtype=positions_cart.dtype)
+    return np.asarray(positions_cart, dtype=np.float64) @ inv_cell
+
+
 def _validate_dynamic_pair_contract(
     pair_idx: Array,
     pair_mask: Array,
