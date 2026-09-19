@@ -1114,11 +1114,12 @@ def _configure_equi_dynamics_start(
     restart_path = Path(io.restart_read) if io.restart_read is not None else None
     if restart_path is not None and not coords_in_memory:
         from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
-            read_restart_coordinates,
+            read_restart_positions,
         )
         from mmml.interfaces.pycharmmInterface.mlpot.setup import sync_charmm_positions
 
-        pos = read_restart_coordinates(restart_path)
+        # positions, not the leap-frog step displacement (X, Y, Z) of an NVE restart
+        pos = read_restart_positions(restart_path)
         if pos is None:
             raise RuntimeError(
                 f"EQUI CPT start: no finite coordinates in restart {restart_path}"

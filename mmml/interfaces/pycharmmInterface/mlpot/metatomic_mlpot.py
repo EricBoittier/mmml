@@ -214,6 +214,11 @@ class MetatomicMlpotCalculator:
         forces_ev = ml.forces_ev_per_angstrom + f_mm
         energy_kcal = float(energy_ev) * EV_TO_KCAL_MOL
         forces_kcal = np.asarray(forces_ev, dtype=np.float64) * EV_TO_KCAL_MOL
+        if not (np.isfinite(energy_kcal) and np.all(np.isfinite(forces_kcal))):
+            # Raised into the fail-closed ctypes guard (process exits 86).
+            raise FloatingPointError(
+                f"Metatomic MLpot: non-finite energy/forces (E={energy_kcal!r} kcal/mol)"
+            )
         self.last_ml_forces = forces_kcal
         self._last_ml_forces = forces_kcal
         for local_i, atom_i in enumerate(ml_idx):
@@ -456,12 +461,13 @@ def build_metatomic_mlpot_model(
             if spherical_fn is not None:
                 mm_fn = _mm_fn_from_spherical(spherical_fn, cutoff_params)
         except Exception as exc:
-            if verbose:
-                print(
-                    f"Metatomic MLpot: JAX MM spherical_fn unavailable ({exc!r}); "
-                    "USER term is ML-only. Keep CHARMM ELEC/VDW or pass do_mm=False.",
-                    flush=True,
-                )
+            # Setup time, not the callback: printed unconditionally because the
+            # USER term silently losing its MM part changes the Hamiltonian.
+            print(
+                f"WARNING: Metatomic MLpot: JAX MM spherical_fn unavailable ({exc!r}); "
+                "USER term is ML-only. Keep CHARMM ELEC/VDW or pass do_mm=False.",
+                flush=True,
+            )
             mm_fn = None
             get_update_fn = None
     if verbose:
