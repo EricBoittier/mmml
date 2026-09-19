@@ -139,13 +139,16 @@ def prepare_bench_env(
         "JAX_ENABLE_X64": os.environ.get("JAX_ENABLE_X64", x64),
         "OMP_NUM_THREADS": os.environ.get("OMP_NUM_THREADS", "1"),
     }
-    ckpt = os.environ.get("MMML_CKPT") or os.environ.get("MMML_BENCH_CKPT")
-    if ckpt:
-        planned["MMML_CKPT"] = ckpt
-        bench_ckpt = os.environ.get("MMML_BENCH_CKPT")
-        if bench_ckpt:
-            planned["MMML_BENCH_CKPT"] = bench_ckpt
-    else:
+    mmml_ckpt = os.environ.get("MMML_CKPT")
+    bench_ckpt = os.environ.get("MMML_BENCH_CKPT")
+    # Keep the two names distinct. Benches prefer MMML_BENCH_CKPT then
+    # MMML_CKPT; copying a bench-only override into MMML_CKPT used to
+    # poison later checkpoint resolution (and apply=True leaked it).
+    if mmml_ckpt:
+        planned["MMML_CKPT"] = mmml_ckpt
+    if bench_ckpt:
+        planned["MMML_BENCH_CKPT"] = bench_ckpt
+    if not mmml_ckpt and not bench_ckpt:
         default = Path(repo_root) / "examples" / "ckpts_json" / "DESdimers_params.json"
         planned["MMML_CKPT"] = str(default)
     if not allow_cpu:

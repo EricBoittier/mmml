@@ -208,6 +208,7 @@ def test_prepare_bench_env_sets_gpu_defaults(monkeypatch, tmp_path: Path):
         "OMP_NUM_THREADS",
         "JAX_PLATFORMS",
         "MMML_CKPT",
+        "MMML_BENCH_CKPT",
     ):
         monkeypatch.delenv(key, raising=False)
     ckpt = tmp_path / "examples" / "ckpts_json" / "DESdimers_params.json"
@@ -232,6 +233,19 @@ def test_prepare_bench_env_does_not_leak_mmml_ckpt(monkeypatch, tmp_path: Path):
     monkeypatch.delenv("MMML_BENCH_CKPT", raising=False)
     prepare_bench_env(tmp_path, allow_cpu=True)
     assert "MMML_CKPT" not in os.environ
+
+
+def test_prepare_bench_env_keeps_bench_ckpt_off_mmml_ckpt(monkeypatch, tmp_path: Path):
+    monkeypatch.delenv("MMML_CKPT", raising=False)
+    monkeypatch.setenv("MMML_BENCH_CKPT", "/bench/only.json")
+    env = prepare_bench_env(tmp_path, allow_cpu=True)
+    assert env["MMML_BENCH_CKPT"] == "/bench/only.json"
+    assert "MMML_CKPT" not in env
+
+    monkeypatch.setenv("MMML_CKPT", "/general/ckpt.json")
+    env_both = prepare_bench_env(tmp_path, allow_cpu=True)
+    assert env_both["MMML_CKPT"] == "/general/ckpt.json"
+    assert env_both["MMML_BENCH_CKPT"] == "/bench/only.json"
 
 
 def test_latest_asv_result_files_skips_metadata(tmp_path: Path):
