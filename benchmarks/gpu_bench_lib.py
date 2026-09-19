@@ -594,28 +594,26 @@ def run_correctness_checks(
 
 def check_physnet_energy_forces() -> CheckResult:
     """Tiny PhysNet forward+backward: finite energy and non-zero finite forces."""
-    # bench_ml_physnet does `from ._common import ...`, so it must be imported
-    # as part of the `benchmarks.benchmarks` package (not as a bare top-level
-    # module via _import_asv_helpers' sys.path hack) or that relative import
-    # fails with "attempted relative import with no known parent package".
     from benchmarks.benchmarks._common import default_checkpoint
-    from benchmarks.benchmarks.bench_ml_physnet import PhysNetSystemSize
-
-    bench = PhysNetSystemSize()
-    bench.setup(20)
-    # PhysNet zero-initializes its energy readout layer (model.py: the final
-    # `nn.Dense` uses `kernel_init=jax.nn.initializers.zeros`), so the random
-    # params from `model.init()` trivially produce zero energy/forces — that
-    # passes "non-zero" for the wrong reason no matter what the model does.
-    # Swap in the bundled trained checkpoint so this check actually exercises
-    # the forward+backward pass.
-    from mmml.cli.base import load_physnet_params_and_ef_model
-
-    params, _trained_model = load_physnet_params_and_ef_model(
-        default_checkpoint(), natoms=20
+    from benchmarks.benchmarks.bench_ml_physnet import _dense_inputs
+    from mmml.cli.base import (
+        load_physnet_params_and_ef_model,
+        resolve_checkpoint_paths,
     )
-    energy = bench.energy_fn(params, bench.traced)
-    forces = bench.forces_fn(params, bench.traced)
+
+    # Use the checkpoint's architecture, not the synthetic scaling benchmark's
+    # fixed architecture. In particular, feature width and message-pass depth
+    # can differ for an MMML_BENCH_CKPT override.
+    checkpoint = default_checkpoint().expanduser()
+    if checkpoint.is_dir() and (checkpoint / "params.json").is_file():
+        checkpoint = checkpoint / "params.json"
+    resolved, epoch = resolve_checkpoint_paths(checkpoint)
+    params, model = load_physnet_params_and_ef_model(
+        resolved, natoms=20, orbax_epoch_dir=epoch
+    )
+    inputs = _dense_inputs(20)
+    energy = model.apply(params, compute_forces=False, **inputs)
+    forces = model.apply(params, compute_forces=True, **inputs)
     if hasattr(energy, "energy"):
         energy_arr = energy.energy
     elif isinstance(energy, Mapping):

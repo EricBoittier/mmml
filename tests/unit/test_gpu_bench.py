@@ -480,3 +480,57 @@ def test_run_gpu_benchmark_checks_only_skips_timing(monkeypatch, tmp_path: Path)
     )
     assert rc == 0
     assert called == []
+
+
+@pytest.mark.parametrize("layout", ["json", "json_directory", "orbax"])
+def test_physnet_probe_uses_checkpoint_model_and_resolves_epoch(tmp_path, monkeypatch, layout):
+    from benchmarks import gpu_bench_lib
+    from benchmarks.benchmarks import _common, bench_ml_physnet
+    from mmml.cli import base
+
+    if layout == "json":
+        checkpoint = tmp_path / "different_architecture.json"
+        checkpoint.write_text("{}")
+        resolved = epoch = checkpoint
+    elif layout == "json_directory":
+        checkpoint = tmp_path / "portable"
+        checkpoint.mkdir()
+        resolved = epoch = checkpoint / "params.json"
+        resolved.write_text("{}")
+    else:
+        checkpoint = tmp_path / "experiment"
+        epoch = checkpoint / "epoch-7"
+        epoch.mkdir(parents=True)
+        (epoch / "manifest.ocdbt").touch()
+        resolved = checkpoint
+
+    monkeypatch.setattr(_common, "default_checkpoint", lambda: checkpoint)
+    inputs = {"positions": np.ones((20, 3)), "batch_size": 1}
+    monkeypatch.setattr(bench_ml_physnet, "_dense_inputs", lambda n: inputs)
+    # This object stands for a checkpoint architecture incompatible with BASE_ARCH.
+    # Only its apply method accepts the corresponding parameter object.
+    params = object()
+    calls = []
+
+    class CheckpointModel:
+        def apply(self, supplied, *, compute_forces, **kwargs):
+            assert supplied is params
+            assert kwargs["positions"] is inputs["positions"]
+            assert kwargs["batch_size"] == 1
+            calls.append(compute_forces)
+            return {"energy": np.array([2.0]), "forces": np.ones((20, 3))}
+
+    def load(path, natoms, *, orbax_epoch_dir):
+        assert path == resolved
+        assert natoms == 20
+        assert orbax_epoch_dir == epoch
+        return params, CheckpointModel()
+
+    monkeypatch.setattr(base, "load_physnet_params_and_ef_model", load)
+    # Fail explicitly if the old fixed-architecture benchmark gets constructed.
+    def forbidden(*args, **kwargs):
+        raise AssertionError("Do not instantiate the fixed benchmark architecture")
+    monkeypatch.setattr(bench_ml_physnet, "PhysNetSystemSize", forbidden)
+    result = gpu_bench_lib.check_physnet_energy_forces()
+    assert result.passed
+    assert calls == [False, True]
