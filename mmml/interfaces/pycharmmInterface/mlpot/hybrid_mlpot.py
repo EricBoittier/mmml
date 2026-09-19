@@ -52,6 +52,8 @@ _DUMMY_MM_PAIR_MASK = jnp.zeros((1,), dtype=jnp.bool_)
 
 MmPairSource = Literal["jax", "charmm_callback"]
 _DEFAULT_MM_PAIR_SOURCE: MmPairSource = "charmm_callback"
+# forward_fn(..., ml_eval_chunks=<this>) means "use the owner's chunk budget".
+_BUDGET_DEFAULT = object()
 
 
 class _CallbackPairListUnavailable(RuntimeError):
@@ -348,6 +350,11 @@ class DecomposedMlpotCalculator:
 
         Matches the ASE calculator path (``backprop=False``). ``jax.value_and_grad`` on the
         energy scalar can disagree with ``out.forces`` when sparse MM pair lists are used.
+
+        Returns ``(energy, forces, n_active_dimers)``. The keyword ``ml_eval_chunks``
+        (static) defaults to the owner's :class:`MlChunkBudget` when the factory
+        exposes a sparse chunk layout, so the chunk loop has a compile-time trip
+        count; ``calculate_charmm`` checks the returned count against it.
         """
         dtype = resolve_ml_compute_dtype(self._ml_compute_dtype)
         box_present = box_jax is not None
@@ -371,6 +378,23 @@ class DecomposedMlpotCalculator:
         do_mm = self.do_mm
         do_ml = self.do_ml
         do_ml_dimer = self.do_ml_dimer
+        from mmml.interfaces.pycharmmInterface.mlpot.ml_chunk_budget import (
+            MlChunkBudget,
+            ml_chunk_budget_enabled,
+        )
+
+        layout = getattr(spherical_fn, "ml_chunk_layout", None)
+        budget = (
+            MlChunkBudget(layout)
+            if layout is not None and do_ml and do_ml_dimer and ml_chunk_budget_enabled()
+            else None
+        )
+        owner._ml_chunk_budget = budget
+
+        def _budget_chunks(ml_eval_chunks):
+            if ml_eval_chunks is _BUDGET_DEFAULT:
+                return budget.current if budget is not None else None
+            return ml_eval_chunks
 
         if box_present:
 
@@ -383,7 +407,8 @@ class DecomposedMlpotCalculator:
                 spatial_monomer_indices: jnp.ndarray,
                 spatial_dimer_indices: jnp.ndarray,
                 use_spatial: bool,
-            ) -> tuple[jnp.ndarray, jnp.ndarray]:
+                ml_eval_chunks: int | None = None,
+            ) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]:
                 kwargs: dict[str, Any] = dict(
                     positions=positions,
                     atomic_numbers=atomic_numbers_jax,
@@ -400,10 +425,18 @@ class DecomposedMlpotCalculator:
                 if use_spatial:
                     kwargs["spatial_monomer_indices"] = spatial_monomer_indices
                     kwargs["spatial_dimer_indices"] = spatial_dimer_indices
+                if ml_eval_chunks is not None:
+                    kwargs["ml_eval_chunks"] = ml_eval_chunks
                 out = spherical_fn(**kwargs)
-                return jnp.reshape(out.energy, (-1,))[0], out.forces
+                return (
+                    jnp.reshape(out.energy, (-1,))[0],
+                    out.forces,
+                    jnp.asarray(getattr(out, "ml_n_active_dimers", -1), dtype=jnp.int32),
+                )
 
-            fn = jax.jit(forward_fn, static_argnums=(4, 7))
+            fn = jax.jit(
+                forward_fn, static_argnums=(4, 7), static_argnames=("ml_eval_chunks",)
+            )
 
             def wrapper(
                 positions,
@@ -413,6 +446,7 @@ class DecomposedMlpotCalculator:
                 spatial_monomer_indices,
                 spatial_dimer_indices,
                 use_spatial,
+                ml_eval_chunks=_BUDGET_DEFAULT,
             ):
                 current_box = getattr(self, "_current_box", None)
                 if current_box is None:
@@ -426,6 +460,7 @@ class DecomposedMlpotCalculator:
                     spatial_monomer_indices,
                     spatial_dimer_indices,
                     use_spatial,
+                    ml_eval_chunks=_budget_chunks(ml_eval_chunks),
                 )
 
             owner._spherical_forward_fn = wrapper
@@ -439,7 +474,8 @@ class DecomposedMlpotCalculator:
                 spatial_monomer_indices: jnp.ndarray,
                 spatial_dimer_indices: jnp.ndarray,
                 use_spatial: bool,
-            ) -> tuple[jnp.ndarray, jnp.ndarray]:
+                ml_eval_chunks: int | None = None,
+            ) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]:
                 kwargs: dict[str, Any] = dict(
                     positions=positions,
                     atomic_numbers=atomic_numbers_jax,
@@ -455,10 +491,23 @@ class DecomposedMlpotCalculator:
                 if use_spatial:
                     kwargs["spatial_monomer_indices"] = spatial_monomer_indices
                     kwargs["spatial_dimer_indices"] = spatial_dimer_indices
+                if ml_eval_chunks is not None:
+                    kwargs["ml_eval_chunks"] = ml_eval_chunks
                 out = spherical_fn(**kwargs)
-                return jnp.reshape(out.energy, (-1,))[0], out.forces
+                return (
+                    jnp.reshape(out.energy, (-1,))[0],
+                    out.forces,
+                    jnp.asarray(getattr(out, "ml_n_active_dimers", -1), dtype=jnp.int32),
+                )
 
-            owner._spherical_forward_fn = jax.jit(forward_fn, static_argnums=(3, 6))
+            fn_nobox = jax.jit(
+                forward_fn, static_argnums=(3, 6), static_argnames=("ml_eval_chunks",)
+            )
+
+            def wrapper_nobox(*args, ml_eval_chunks=_BUDGET_DEFAULT):
+                return fn_nobox(*args, ml_eval_chunks=_budget_chunks(ml_eval_chunks))
+
+            owner._spherical_forward_fn = wrapper_nobox
 
         owner._forward_cache_key = cache_key
         return owner._spherical_forward_fn
@@ -591,6 +640,34 @@ class DecomposedMlpotCalculator:
         )
         self._note_mm_pair_capacity(pair_idx)
         return jnp.asarray(pair_idx), jnp.asarray(pair_mask), True
+
+    def _check_ml_chunk_budget(self, budget, forward_fn, fwd_args, fwd_out):
+        """Validate this step's static chunk budget; re-run once if it was too small.
+
+        The active-dimer count comes back with the forces (the host waits for
+        those anyway), so this adds no device round trip inside the forward.
+        """
+        n_active = int(jax.device_get(fwd_out[2]))
+        e_raw, forces_ev = fwd_out[0], fwd_out[1]
+        if n_active < 0:  # dense or spatial batch this step: nothing was skipped
+            return e_raw, forces_ev
+        msg = budget.note_saturation(n_active)
+        if msg:
+            print(msg, flush=True)
+        if not budget.covers(n_active):
+            # Rare (the budget keeps spare slots): grow and redo the step exactly.
+            budget.update(n_active)
+            self._ml_chunk_budget_reruns = getattr(self, "_ml_chunk_budget_reruns", 0) + 1
+            print(
+                f"MLpot chunk budget: {n_active} active dimers need "
+                f"{budget.needed(n_active)} PhysNet chunks; re-evaluating the step "
+                f"with {budget.current} (re-run #{self._ml_chunk_budget_reruns})",
+                flush=True,
+            )
+            fwd_out = forward_fn(*fwd_args, ml_eval_chunks=budget.current)
+            e_raw, forces_ev = fwd_out[0], fwd_out[1]
+        budget.update(n_active)
+        return e_raw, forces_ev
 
     def _mlpot_eval_device_context(self):
         """CPU while MPI defer keeps the JAX factory off-GPU; else configured device."""
@@ -780,7 +857,7 @@ class DecomposedMlpotCalculator:
                     )
                     mono_jax = jnp.asarray(batch_idx.owned_monomers, dtype=jnp.int32)
                     dimer_jax = jnp.asarray(batch_idx.active_dimer_indices, dtype=jnp.int32)
-                e_raw, forces_ev = forward_fn(
+                fwd_args = (
                     positions_jax,
                     mm_pair_idx,
                     mm_pair_mask,
@@ -789,6 +866,13 @@ class DecomposedMlpotCalculator:
                     dimer_jax,
                     use_spatial,
                 )
+                fwd_out = forward_fn(*fwd_args)
+                e_raw, forces_ev = fwd_out[0], fwd_out[1]
+                budget = getattr(self._grad_cache_owner(), "_ml_chunk_budget", None)
+                if budget is not None and len(fwd_out) > 2:
+                    e_raw, forces_ev = self._check_ml_chunk_budget(
+                        budget, forward_fn, fwd_args, fwd_out
+                    )
                 e_raw = jnp.where(jnp.isfinite(e_raw), e_raw, 0.0)
                 forces_ev = jnp.where(jnp.isfinite(forces_ev), forces_ev, 0.0)
                 e_kcal = float(jax.device_get(e_raw)) * self.ev2kcal
