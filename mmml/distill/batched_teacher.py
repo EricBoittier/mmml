@@ -51,7 +51,7 @@ def pack_batches(
 
 
 class BatchedMetatomicTeacher:
-    """Evaluate a metatomic ``.pt`` on many non-periodic structures per forward."""
+    """Evaluate a metatomic ``.pt`` on many structures per forward (gas phase or PBC)."""
 
     def __init__(
         self,
@@ -100,7 +100,16 @@ class BatchedMetatomicTeacher:
         from metatomic.torch import System
 
         systems = []
-        for numbers, positions in structures:
+        for item in structures:
+            numbers, positions = item[0], item[1]
+            cell_np = item[2] if len(item) > 2 else None
+            periodic = cell_np is not None and abs(np.linalg.det(cell_np)) > 1e-9
+            if periodic:
+                cell = torch.tensor(
+                    np.asarray(cell_np, dtype=np.float64), dtype=self.dtype, device=self.device
+                )
+            else:  # zero cell + pbc False: gas-phase structure
+                cell = torch.zeros((3, 3), dtype=self.dtype, device=self.device)
             pos = torch.tensor(
                 np.asarray(positions, dtype=np.float64),
                 dtype=self.dtype,
@@ -113,9 +122,8 @@ class BatchedMetatomicTeacher:
                         np.asarray(numbers, dtype=np.int32), device=self.device
                     ),
                     positions=pos,
-                    # zero cell + pbc False: gas-phase structure
-                    cell=torch.zeros((3, 3), dtype=self.dtype, device=self.device),
-                    pbc=torch.zeros(3, dtype=torch.bool, device=self.device),
+                    cell=cell,
+                    pbc=torch.full((3,), bool(periodic), dtype=torch.bool, device=self.device),
                 )
             )
         return systems
@@ -144,7 +152,11 @@ class BatchedMetatomicTeacher:
     def evaluate(
         self, structures: Sequence[tuple[np.ndarray, np.ndarray]]
     ) -> list[tuple[float, np.ndarray]]:
-        """Return ``(E eV, F eV/Å)`` per ``(numbers, positions)`` in input order."""
+        """Return ``(E eV, F eV/Å)`` per structure, in input order.
+
+        A structure is ``(numbers, positions)`` (gas phase) or
+        ``(numbers, positions, cell)`` with a (3, 3) cell in Å (fully periodic).
+        """
         order = sorted(range(len(structures)), key=lambda i: len(structures[i][0]))
         n_atoms = [len(structures[i][0]) for i in order]
         results: list[tuple[float, np.ndarray] | None] = [None] * len(structures)

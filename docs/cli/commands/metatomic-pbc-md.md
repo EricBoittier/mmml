@@ -33,8 +33,8 @@ usage: mmml metatomic-pbc-md [-h] [--checkpoint CHECKPOINT] [--residue RESIDUE]
                              [--ensemble {nve,nvt}] [--friction FRICTION]
                              [--minimize-steps MINIMIZE_STEPS]
                              [--minimize-fmax MINIMIZE_FMAX]
-                             [--log-every LOG_EVERY] [--output-dir OUTPUT_DIR]
-                             [--json-out JSON_OUT]
+                             [--log-every LOG_EVERY] [--traj-every TRAJ_EVERY]
+                             [--output-dir OUTPUT_DIR] [--json-out JSON_OUT]
 
 CHARMM-free metatomic ASE MD in a cubic liquid box. Default: 32 Å ethanol at
 experimental density, 300 K, 0.5 fs.
@@ -64,6 +64,11 @@ Output & artifacts:
   --log-every LOG_EVERY
                         Record PE/KE/Etot every N MD steps (always includes step
                         0).
+  --traj-every TRAJ_EVERY
+                        Write a labelled periodic frame (E, F, cell) to <output-
+                        dir>/traj.extxyz every N MD steps (0 = off). Training
+                        data for metatrain / pet-physnet-distill --from-box-
+                        extxyz.
   --output-dir OUTPUT_DIR
                         Output directory (default:
                         scratch/pet_mad_etoh_pbc/ase_smoke).

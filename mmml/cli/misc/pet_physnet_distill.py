@@ -25,6 +25,7 @@ from dataclasses import replace
 from pathlib import Path
 
 from mmml.distill.acetone_pool import (
+    DIMER_ATOMS,
     POOL_PRESETS,
     PRESET_SMOKE,
     AcetonePoolConfig,
@@ -72,6 +73,28 @@ def build_parser() -> argparse.ArgumentParser:
         default=(),
         help="Additional ASE extxyz frames (10-atom monomers or 20-atom dimers)",
     )
+    p.add_argument(
+        "--from-box-extxyz",
+        type=Path,
+        nargs="+",
+        default=None,
+        help=(
+            "Periodic MD frames (extxyz with cell, e.g. metatomic-pbc-md "
+            "--traj-every). Replaces the acetone pool with monomers and COM-close "
+            "dimers cut out by minimum image. Needs --atoms-per-monomer."
+        ),
+    )
+    p.add_argument("--atoms-per-monomer", type=int, default=None)
+    p.add_argument(
+        "--reference-monomer-xyz",
+        type=Path,
+        default=None,
+        help="Gas-phase monomer for E_ref in interaction mode (box pool only)",
+    )
+    p.add_argument("--frame-stride", type=int, default=1, help="Use every Nth box frame")
+    p.add_argument("--dimer-com-cutoff", type=float, default=6.0, help="Å, box pool dimers")
+    p.add_argument("--max-monomers-per-frame", type=int, default=8)
+    p.add_argument("--max-dimers-per-frame", type=int, default=24)
     p.add_argument("--valid-fraction", type=float, default=0.15)
     p.add_argument(
         "--teacher-backend",
@@ -135,12 +158,47 @@ conversion:
     path.write_text(text)
 
 
+def _box_pool(args: argparse.Namespace):
+    from ase.io import read as ase_read
+
+    from mmml.distill.box_clusters import BoxClusterConfig, box_cluster_pool
+
+    if args.atoms_per_monomer is None:
+        raise SystemExit("--from-box-extxyz needs --atoms-per-monomer")
+    stride = max(int(args.frame_stride), 1)
+    frames = []
+    for path in args.from_box_extxyz:
+        frames.extend(ase_read(str(path), index=f"::{stride}"))
+    ref = None
+    if args.reference_monomer_xyz is not None:
+        ref = ase_read(str(args.reference_monomer_xyz))
+    elif str(args.energy_mode) == ENERGY_MODE_INTERACTION:
+        raise SystemExit(
+            "interaction labels need --reference-monomer-xyz (gas-phase monomer "
+            "for E_ref), or pass --energy-mode total"
+        )
+    cfg = BoxClusterConfig(
+        atoms_per_monomer=int(args.atoms_per_monomer),
+        dimer_com_cutoff_A=float(args.dimer_com_cutoff),
+        max_monomers_per_frame=int(args.max_monomers_per_frame),
+        max_dimers_per_frame=int(args.max_dimers_per_frame),
+        seed=int(args.seed),
+    )
+    return box_cluster_pool(frames, cfg, reference_monomer=ref), len(frames)
+
+
 def run(args: argparse.Namespace) -> dict:
-    extra = tuple(Path(p) for p in (args.extra_extxyz or ()))
-    cfg: AcetonePoolConfig = pool_config_for_preset(args.preset, seed=int(args.seed))
-    if extra:
-        cfg = replace(cfg, extra_extxyz=extra)
-    geos = build_acetone_pool(cfg)
+    n_box_frames = None
+    if args.from_box_extxyz:
+        geos, n_box_frames = _box_pool(args)
+        pad_atoms = 2 * int(args.atoms_per_monomer)
+    else:
+        extra = tuple(Path(p) for p in (args.extra_extxyz or ()))
+        cfg: AcetonePoolConfig = pool_config_for_preset(args.preset, seed=int(args.seed))
+        if extra:
+            cfg = replace(cfg, extra_extxyz=extra)
+        geos = build_acetone_pool(cfg)
+        pad_atoms = DIMER_ATOMS
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -160,6 +218,7 @@ def run(args: argparse.Namespace) -> dict:
         paths = write_distill_npz(
             zeros,
             out_dir,
+            pad_atoms=pad_atoms,
             valid_fraction=float(args.valid_fraction),
             seed=int(args.seed),
             metadata={"geometries_only": True, "preset": args.preset, "seed": int(args.seed)},
@@ -194,9 +253,13 @@ def run(args: argparse.Namespace) -> dict:
         "seed": int(args.seed),
         "n_geometries": len(geos),
     }
+    if n_box_frames is not None:
+        metadata["box_extxyz"] = [str(Path(p).resolve()) for p in args.from_box_extxyz]
+        metadata["n_box_frames"] = int(n_box_frames)
     paths = write_distill_npz(
         labeled,
         out_dir,
+        pad_atoms=pad_atoms,
         valid_fraction=float(args.valid_fraction),
         seed=int(args.seed),
         metadata=metadata,

@@ -17,6 +17,13 @@ usage: mmml pet-physnet-distill [-h] [--checkpoint CHECKPOINT] --out-dir OUT_DIR
                                 [--energy-mode {interaction,total}]
                                 [--geometries-only]
                                 [--extra-extxyz [EXTRA_EXTXYZ ...]]
+                                [--from-box-extxyz FROM_BOX_EXTXYZ [FROM_BOX_EXTXYZ ...]]
+                                [--atoms-per-monomer ATOMS_PER_MONOMER]
+                                [--reference-monomer-xyz REFERENCE_MONOMER_XYZ]
+                                [--frame-stride FRAME_STRIDE]
+                                [--dimer-com-cutoff DIMER_COM_CUTOFF]
+                                [--max-monomers-per-frame MAX_MONOMERS_PER_FRAME]
+                                [--max-dimers-per-frame MAX_DIMERS_PER_FRAME]
                                 [--valid-fraction VALID_FRACTION]
                                 [--teacher-backend {torchscript,ase}]
                                 [--max-atoms-per-batch MAX_ATOMS_PER_BATCH]
@@ -35,6 +42,8 @@ Scientific model:
   --energy-mode {interaction,total}
                         interaction: monomer E-E_ref and unswitched dimer E_int
                         (default, hybrid MD)
+  --dimer-com-cutoff DIMER_COM_CUTOFF
+                        Å, box pool dimers
 
 Execution:
   --preset {smoke,md}
@@ -54,6 +63,11 @@ Output & artifacts:
   --extra-extxyz [EXTRA_EXTXYZ ...]
                         Additional ASE extxyz frames (10-atom monomers or
                         20-atom dimers)
+  --from-box-extxyz FROM_BOX_EXTXYZ [FROM_BOX_EXTXYZ ...]
+                        Periodic MD frames (extxyz with cell, e.g. metatomic-
+                        pbc-md --traj-every). Replaces the acetone pool with
+                        monomers and COM-close dimers cut out by minimum image.
+                        Needs --atoms-per-monomer.
 
 Diagnostics & safety:
   -h, --help            show this help message and exit
@@ -61,6 +75,14 @@ Diagnostics & safety:
 Other options:
   --geometries-only     Write unlabeled R/Z/N NPZ (no teacher). For pool
                         inspection.
+  --atoms-per-monomer ATOMS_PER_MONOMER
+  --reference-monomer-xyz REFERENCE_MONOMER_XYZ
+                        Gas-phase monomer for E_ref in interaction mode (box
+                        pool only)
+  --frame-stride FRAME_STRIDE
+                        Use every Nth box frame
+  --max-monomers-per-frame MAX_MONOMERS_PER_FRAME
+  --max-dimers-per-frame MAX_DIMERS_PER_FRAME
   --valid-fraction VALID_FRACTION
   --student-yaml, --no-student-yaml
                         Write physnet-train.yaml next to the NPZ (warm-start

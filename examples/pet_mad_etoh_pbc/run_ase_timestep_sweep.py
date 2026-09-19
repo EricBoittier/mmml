@@ -14,6 +14,7 @@ Env::
     SWEEP_ENSEMBLES  default nve,nvt
     SWEEP_PS       simulated time per run (default 0.5)
     SWEEP_BOX_A    box side (default 32)
+    SWEEP_TRAJ_EVERY  write <run>/traj.extxyz (E, F, cell) every N steps (0 = off)
     MMML_METATOMIC_DEVICE  cuda / cpu
 """
 
@@ -37,6 +38,7 @@ from ase.optimize import FIRE
 
 from mmml.interfaces.calculators.metatomic import load_metatomic_calculator
 from mmml.md.metatomic_pbc import (
+    append_training_frame,
     build_tiled_cubic_liquid,
     default_etoh_monomer_xyz,
     energy_snapshot,
@@ -55,7 +57,9 @@ def _env_list(name: str, default: str) -> list[str]:
     return [x.strip() for x in os.environ.get(name, default).split(",") if x.strip()]
 
 
-def _run_one(atoms0, calc, *, ensemble: str, dt_fs: float, n_steps: int, out: Path) -> dict:
+def _run_one(
+    atoms0, calc, *, ensemble: str, dt_fs: float, n_steps: int, out: Path, traj_every: int = 0
+) -> dict:
     atoms = atoms0.copy()
     atoms.calc = calc
     rng = np.random.default_rng(SEED)
@@ -81,6 +85,16 @@ def _run_one(atoms0, calc, *, ensemble: str, dt_fs: float, n_steps: int, out: Pa
             rows.append(energy_snapshot(atoms, step=step, dt_fs=dt_fs))
 
     dyn.attach(_log, interval=1)
+    out.mkdir(parents=True, exist_ok=True)
+    traj = out / "traj.extxyz"
+    traj.unlink(missing_ok=True)
+    if traj_every > 0:
+        dyn.attach(
+            lambda: append_training_frame(
+                traj, atoms, step=int(dyn.get_number_of_steps()), dt_fs=dt_fs
+            ),
+            interval=traj_every,
+        )
     t0 = time.perf_counter()
     dyn.run(n_steps)
     wall = time.perf_counter() - t0
@@ -182,6 +196,7 @@ def main() -> int:
     ensembles = _env_list("SWEEP_ENSEMBLES", "nve,nvt")
     total_ps = float(os.environ.get("SWEEP_PS", "0.5"))
     box = float(os.environ.get("SWEEP_BOX_A", "32"))
+    traj_every = int(os.environ.get("SWEEP_TRAJ_EVERY", "0"))
 
     n_mol = n_molecules_for_residue_box("ETOH", box_side_A=box)
     atoms = build_tiled_cubic_liquid(
@@ -200,7 +215,7 @@ def main() -> int:
         for dt in dts:
             n_steps = int(round(total_ps * 1.0e3 / dt))
             rec = _run_one(atoms, calc, ensemble=ens, dt_fs=dt, n_steps=n_steps,
-                           out=out / f"{ens}_dt{dt:g}fs")
+                           out=out / f"{ens}_dt{dt:g}fs", traj_every=traj_every)
             records.append(rec)
             drift = rec.get("drift_meV_per_atom_ps")
             print(

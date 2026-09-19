@@ -128,6 +128,16 @@ def build_parser() -> argparse.ArgumentParser:
         help="Record PE/KE/Etot every N MD steps (always includes step 0).",
     )
     parser.add_argument(
+        "--traj-every",
+        type=int,
+        default=0,
+        help=(
+            "Write a labelled periodic frame (E, F, cell) to <output-dir>/traj.extxyz "
+            "every N MD steps (0 = off). Training data for metatrain / "
+            "pet-physnet-distill --from-box-extxyz."
+        ),
+    )
+    parser.add_argument(
         "--output-dir",
         type=Path,
         default=DEFAULT_OUTPUT_DIR,
@@ -168,6 +178,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import SOLVENT_BULK_PROPS
     from mmml.md.metatomic_pbc import (
+        append_training_frame,
         build_tiled_cubic_liquid,
         default_etoh_monomer_xyz,
         energy_snapshot,
@@ -348,6 +359,24 @@ def main(argv: list[str] | None = None) -> int:
         f"MD start: Etot={rows[0]['Etot_eV']:.6f} eV  "
         f"T={rows[0]['T_K']:.1f} K  |F|_max={rows[0]['Fmax_eVA']:.4f} eV/Å"
     )
+
+    traj_every = max(int(args.traj_every), 0)
+    traj_path = out / "traj.extxyz"
+    if traj_every:
+        traj_path.unlink(missing_ok=True)
+        report["traj_extxyz"] = str(traj_path)
+        report["traj_every"] = traj_every
+
+    def _write_traj() -> None:
+        append_training_frame(
+            traj_path,
+            atoms,
+            step=int(dyn.get_number_of_steps()),
+            dt_fs=float(args.dt_fs),
+        )
+
+    if traj_every:
+        dyn.attach(_write_traj, interval=traj_every)
 
     def _log() -> None:
         step = int(dyn.get_number_of_steps())

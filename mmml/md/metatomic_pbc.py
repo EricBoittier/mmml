@@ -143,6 +143,33 @@ def energy_snapshot(atoms: Atoms, *, step: int, dt_fs: float) -> dict[str, float
     }
 
 
+def append_training_frame(path: Path, atoms: Atoms, *, step: int, dt_fs: float) -> None:
+    """Append one labelled periodic frame to an extxyz file (eV, eV/Å).
+
+    Energy and forces are the calculator's cached results for the current
+    positions, so logging after an MD step costs no extra model call. The
+    cell and pbc go with the frame; metatrain reads this file directly, and
+    ``mmml pet-physnet-distill --from-box-extxyz`` cuts clusters from it.
+    """
+    from ase.calculators.singlepoint import SinglePointCalculator
+    from ase.io import write as ase_write
+
+    frame = Atoms(
+        numbers=atoms.get_atomic_numbers(),
+        positions=atoms.get_positions(),
+        cell=atoms.get_cell(),
+        pbc=atoms.get_pbc(),
+    )
+    frame.calc = SinglePointCalculator(
+        frame,
+        energy=float(atoms.get_potential_energy()),
+        forces=np.asarray(atoms.get_forces(), dtype=float),
+    )
+    frame.info["step"] = int(step)
+    frame.info["time_fs"] = float(step) * float(dt_fs)
+    ase_write(str(path), frame, format="extxyz", append=True)
+
+
 def write_energy_csv(path: Path, rows: list[dict[str, float]]) -> None:
     with path.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=list(ENERGY_CSV_FIELDS))

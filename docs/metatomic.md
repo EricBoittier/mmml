@@ -291,3 +291,33 @@ mmml pet-physnet-distill --checkpoint pet-omol-m-v1.0.0.pt \
 ```
 
 Lower `--max-atoms-per-batch` if an `l`/`xl` model runs out of GPU memory.
+
+### Training data from periodic liquid MD
+
+`metatomic-pbc-md --traj-every N` (and `SWEEP_TRAJ_EVERY` in
+`examples/pet_mad_etoh_pbc/run_ase_timestep_sweep.py`) appends a labelled
+periodic frame to `<output-dir>/traj.extxyz` every N steps. Each frame holds
+positions, cell, pbc, energy (eV) and forces (eV/Å). The labels are the
+calculator's cached results, so writing a frame costs no extra model call.
+metatrain can train or fine-tune PET on this file directly.
+
+PhysNet training here is gas-phase: there is no cell in the training loop.
+`pet-physnet-distill --from-box-extxyz` therefore cuts whole monomers and
+COM-close dimers out of the frames by minimum image and labels them with the
+batched teacher. The teacher can be larger than the model that ran the MD.
+
+```bash
+mmml metatomic-pbc-md --checkpoint pet-mad-xs-v1.5.0.pt --ensemble nvt \
+  --dt-fs 0.5 --n-steps 2000 --minimize-steps 100 --traj-every 20 \
+  --output-dir runs/etoh338_nvt
+
+mmml pet-physnet-distill --checkpoint pet-mad-m-v1.6.0.pt \
+  --from-box-extxyz runs/etoh338_nvt/traj.extxyz --atoms-per-monomer 9 \
+  --reference-monomer-xyz examples/pet_mad_etoh_pbc/etoh.xyz \
+  --out-dir runs/etoh_clusters
+```
+
+With 101 frames (8 monomers + 24 dimers per frame, 6 Å COM cutoff) this gives
+3233 samples. `pet-mad-m` labels them in about 11 s on one RTX 5090.
+`BatchedMetatomicTeacher.evaluate` also takes `(numbers, positions, cell)` to
+relabel whole periodic frames with another PET.
