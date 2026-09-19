@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from pathlib import Path
 
 import numpy as np
@@ -219,3 +220,99 @@ def test_pool_preset_md_is_larger_than_smoke() -> None:
 def test_clash_helper() -> None:
     pos = np.array([[0.0, 0.0, 0.0], [0.1, 0.0, 0.0]])
     assert min_pair_distance(pos) == pytest.approx(0.1)
+
+
+class _BatchedPairwise:
+    """Batched-teacher stand-in: records request sizes, same physics as the ASE dummy."""
+
+    def __init__(self) -> None:
+        self.calls: list[int] = []
+        self._calc = PairwiseDistanceCalculator()
+
+    def evaluate(self, structures):
+        from mmml.distill.teacher_label import AseTeacher
+
+        self.calls.append(len(structures))
+        return AseTeacher(self._calc).evaluate(structures)
+
+
+@pytest.mark.parametrize("mode", [ENERGY_MODE_INTERACTION, ENERGY_MODE_TOTAL])
+def test_batched_teacher_matches_ase_labels(mode: str) -> None:
+    geos = build_acetone_pool(_tiny_pool())
+    ref = label_geometries(PairwiseDistanceCalculator(), geos, energy_mode=mode)
+    teacher = _BatchedPairwise()
+    got = label_geometries(teacher, geos, energy_mode=mode)
+    n_dimers = sum(g.kind == "dimer" for g in geos)
+    assert teacher.calls == [len(geos) + 2 * n_dimers]
+    for a, b in zip(ref, got):
+        assert a.energy_eV == pytest.approx(b.energy_eV)
+        assert np.allclose(a.forces_ev_per_angstrom, b.forces_ev_per_angstrom)
+
+
+def test_pack_batches_respects_budgets() -> None:
+    from mmml.distill.batched_teacher import pack_batches
+
+    sizes = [10, 10, 20, 20, 20, 50]
+    batches = pack_batches(sizes, max_atoms=40, max_systems=3)
+    assert sorted(i for b in batches for i in b) == list(range(len(sizes)))
+    for b in batches:
+        assert len(b) <= 3
+        assert len(b) == 1 or sum(sizes[i] for i in b) <= 40
+    assert [5] in batches  # oversize structure gets its own batch
+    with pytest.raises(ValueError):
+        pack_batches(sizes, max_atoms=0)
+
+
+def test_mlmm_labels_match_mlpot_decomposition() -> None:
+    """mlmm: dimer target is E_AB - 2 E_ref with full forces, so the MLpot
+    difference P(AB) - P(A) - P(B) of perfect fits reproduces E_int."""
+    from mmml.distill.teacher_label import ENERGY_MODE_MLMM
+
+    geos = build_acetone_pool(_tiny_pool())
+    calc = PairwiseDistanceCalculator()
+    got = label_geometries(calc, geos, energy_mode=ENERGY_MODE_MLMM)
+    ref_geo = next(g for g in geos if g.source == "pdb_eq")
+    e_ref = label_geometries(calc, [ref_geo], energy_mode=ENERGY_MODE_TOTAL)[0].energy_eV
+    for geo, s in zip(geos, got):
+        if geo.kind != "dimer":
+            continue
+        assert s.energy_eV == pytest.approx(s.energy_total_eV - 2.0 * e_ref)
+        n_a = geo.atoms_per_monomer[0]
+        mono = label_geometries(
+            calc,
+            [ref_geo, replace(ref_geo, positions=geo.positions[:n_a], source="a"),
+             replace(ref_geo, positions=geo.positions[n_a:], source="b")],
+            energy_mode=ENERGY_MODE_MLMM,
+        )
+        assert s.energy_eV - mono[1].energy_eV - mono[2].energy_eV == pytest.approx(s.energy_int_eV)
+        full = label_geometries(calc, [geo], energy_mode=ENERGY_MODE_TOTAL)[0]
+        assert np.allclose(s.forces_ev_per_angstrom, full.forces_ev_per_angstrom)
+
+
+def test_stratified_pick_fills_every_bin() -> None:
+    from mmml.distill.box_clusters import _stratified_pick
+
+    rng = np.random.default_rng(0)
+    r = np.concatenate([np.full(100, 4.8), [3.0, 3.2], np.full(5, 6.5)])
+    edges = np.array([0.0, 3.5, 4.5, 6.0, 7.5])
+    picked = _stratified_pick(r, edges, 12, rng)
+    assert len(picked) == len(set(picked)) == 12
+    got = r[picked]
+    assert np.sum(got < 3.5) == 2  # the whole sparse bin
+    assert np.sum(got > 6.0) == 3  # full quota
+
+
+def test_include_dimer_fragments_emits_matched_triples() -> None:
+    from mmml.distill.teacher_label import ENERGY_MODE_MLMM
+
+    geos = build_acetone_pool(_tiny_pool())
+    calc = PairwiseDistanceCalculator()
+    got = label_geometries(calc, geos, energy_mode=ENERGY_MODE_MLMM, include_dimer_fragments=True)
+    n_dimers = sum(g.kind == "dimer" for g in geos)
+    assert len(got) == len(geos) + 2 * n_dimers
+    for k, s in enumerate(got):
+        if s.geometry.kind != "dimer":
+            continue
+        a, b = got[k + 1], got[k + 2]
+        assert a.geometry.source == b.geometry.source == f"{s.geometry.source}:frag"
+        assert s.energy_eV - a.energy_eV - b.energy_eV == pytest.approx(s.energy_int_eV)
