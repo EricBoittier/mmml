@@ -6,9 +6,8 @@
 #   sbatch --time=06:00:00 --qos=rtx4090-6hours \
 #     --export=ALL,MODE=full,EPOCHS=100,BATCH_SIZE=8 \
 #     scripts/spice_alpha/train_efield_polar.sbatch
-# Full DES after max_frames=0: BATCH_SIZE=64 is fine.
-# Bigger model (polar jacrev is memory-heavy — drop B, keep max_degree=2):
-#   --export=ALL,MODE=big,SPLITS=...,CKPT=...
+# Full DES (pad=22, polar jacrev): B=64 and B=16 both died in XLA autotune.
+#   --export=ALL,MODE=big,BATCH_SIZE=4,SPLITS=...,CKPT=...
 #
 # Do not source scripts/scicore_env.sh for this job: it sets JAX_ENABLE_X64=1
 # and EFieldPhysNet.init fails (e3x Embed float32 vs MessagePass float64).
@@ -41,6 +40,8 @@ fi
 export PYTHONPATH="$ROOT${PYTHONPATH:+:$PYTHONPATH}"
 export JAX_ENABLE_X64=0
 export XLA_PYTHON_CLIENT_PREALLOCATE=false
+export XLA_PYTHON_CLIENT_MEM_FRACTION="${XLA_PYTHON_CLIENT_MEM_FRACTION:-0.85}"
+export XLA_FLAGS="${XLA_FLAGS:---xla_gpu_autotune_level=0}"
 
 SPLITS="${SPLITS:-$HOME/data/spicealpha/mmml_efield/splits_des_mono}"
 CKPT="${CKPT:-$ROOT/ckpts/spice_ef_polar}"
@@ -51,7 +52,7 @@ if [[ "$MODE" == "big" ]]; then
   # DES monomers are small isolated clusters; 10 Å is already all-pairs for
   # most of them. max_degree=3 roughly doubles irreps × jacrev memory.
   EPOCHS="${EPOCHS:-100}"
-  export BATCH_SIZE="${BATCH_SIZE:-16}"
+  export BATCH_SIZE="${BATCH_SIZE:-4}"
   export FEATURES="${FEATURES:-64}"
   export MAX_DEGREE="${MAX_DEGREE:-2}"
   export NUM_ITERATIONS="${NUM_ITERATIONS:-3}"
@@ -61,7 +62,7 @@ if [[ "$MODE" == "big" ]]; then
   export GRADIENT_CHECKPOINT="${GRADIENT_CHECKPOINT:-1}"
 elif [[ "$MODE" == "full" ]]; then
   EPOCHS="${EPOCHS:-100}"
-  export BATCH_SIZE="${BATCH_SIZE:-64}"
+  export BATCH_SIZE="${BATCH_SIZE:-8}"
   export FEATURES="${FEATURES:-32}"
   export MAX_DEGREE="${MAX_DEGREE:-2}"
   export NUM_ITERATIONS="${NUM_ITERATIONS:-2}"

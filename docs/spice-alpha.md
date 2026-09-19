@@ -158,10 +158,9 @@ SKIP_DIMERS=1 scripts/spice_alpha/prepare_efield_dataset.sh \
 python scripts/spice_alpha/check_efield_npz.py \
   ~/data/spicealpha/mmml_efield_full/splits_des_mono/energies_forces_dipoles_train.npz \
   ~/data/spicealpha/mmml_efield_full/splits_des_mono/energies_forces_dipoles_valid.npz
-# n_valid must be >= 16. MODE=big: F=64, 3 iterations, 32 basis, B=16.
-# Keep cutoff 10 Å and max_degree 2 (polar jacrev).
+# pad=22 polar JVP: B=16/64 failed XLA autotune. MODE=big default B=4.
 sbatch --partition=rtx4090 --qos=rtx4090-6hours --time=06:00:00 \
-  --export=ALL,MODE=big,EPOCHS=100,SPLITS=$HOME/data/spicealpha/mmml_efield_full/splits_des_mono,CKPT=$HOME/mmml/ckpts/spice_ef_polar_big \
+  --export=ALL,MODE=big,EPOCHS=100,BATCH_SIZE=4,SPLITS=$HOME/data/spicealpha/mmml_efield_full/splits_des_mono,CKPT=$HOME/mmml/ckpts/spice_ef_polar_big \
   scripts/spice_alpha/train_efield_polar.sbatch
 ```
 

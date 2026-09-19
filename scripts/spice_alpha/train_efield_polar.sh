@@ -21,6 +21,10 @@ fi
 # load_ef_npz is float32; keep the process on float32 for efield-train.
 export JAX_ENABLE_X64=0
 export XLA_PYTHON_CLIENT_PREALLOCATE="${XLA_PYTHON_CLIENT_PREALLOCATE:-false}"
+export XLA_PYTHON_CLIENT_MEM_FRACTION="${XLA_PYTHON_CLIENT_MEM_FRACTION:-0.85}"
+# Polar jacrev autotune OOMs (login12: "All configs failed during profiling"
+# on MessagePass transpose). Level 0 skips that profiler.
+export XLA_FLAGS="${XLA_FLAGS:---xla_gpu_autotune_level=0}"
 
 BATCH_SIZE="${BATCH_SIZE:-64}"
 FEATURES="${FEATURES:-32}"

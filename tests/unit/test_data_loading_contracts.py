@@ -91,6 +91,9 @@ def test_efield_train_wrapper_disables_x64():
     assert 'MODE" == "big"' in sbatch
     assert 'FEATURES="${FEATURES:-64}"' in sbatch
     assert 'NUM_ITERATIONS="${NUM_ITERATIONS:-3}"' in sbatch
+    assert 'BATCH_SIZE="${BATCH_SIZE:-4}"' in sbatch
+    assert "xla_gpu_autotune_level=0" in text
+    assert "xla_gpu_autotune_level=0" in sbatch
 
 
 def test_efield_train_wrapper_keeps_splits_dir(tmp_path):

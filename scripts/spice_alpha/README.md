@@ -32,11 +32,9 @@ sbatch scripts/spice_alpha/train_efield_polar.sbatch
 sbatch --time=06:00:00 --qos=rtx4090-6hours \
   --export=ALL,MODE=full,EPOCHS=100,BATCH_SIZE=8 \
   scripts/spice_alpha/train_efield_polar.sbatch
-# all monomers, after check prints n_valid >> 16:
-# MODE=big: F=64, 3 message passes, 32 basis, B=16, polar_w=100, checkpoint
-# Cutoff stays 10 Å (DES monomers are already all-pairs). Do not jump max_degree.
+# all monomers. B=16 F=64 and B=64 F=32 both died in polar-JVP XLA autotune.
 sbatch --partition=rtx4090 --qos=rtx4090-6hours --time=06:00:00 \
-  --export=ALL,MODE=big,EPOCHS=100,SPLITS=$HOME/data/spicealpha/mmml_efield_full/splits_des_mono,CKPT=$HOME/mmml/ckpts/spice_ef_polar_big \
+  --export=ALL,MODE=big,EPOCHS=100,BATCH_SIZE=4,SPLITS=$HOME/data/spicealpha/mmml_efield_full/splits_des_mono,CKPT=$HOME/mmml/ckpts/spice_ef_polar_big \
   scripts/spice_alpha/train_efield_polar.sbatch
 ```
 
