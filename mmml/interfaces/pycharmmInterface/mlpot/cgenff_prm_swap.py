@@ -118,6 +118,10 @@ def apply_full_cgenff_params(*, verbose: bool = False, force: bool = False) -> N
     ``_finalize_pbc_mlpot_exclusions_after_param_read`` /
     :func:`~mmml.interfaces.pycharmmInterface.mlpot.topology_recovery.prepare_rescue_lists_safe`).
 
+    Hybrid registration's ML atom type copies
+    (:mod:`~mmml.interfaces.pycharmmInterface.mlpot.ml_type_copies`) are
+    undone first, so ML bonds and angles get their CGenFF parameters back.
+
     Dihedral/improper/CMAP terms that MLpot registration deleted from the PSF
     on ML atoms (:func:`~mmml.interfaces.pycharmmInterface.mlpot.block_terms.delete_ml_torsion_terms`)
     are **not** restored: bonded-MM recovery then runs on ML atoms without
@@ -131,6 +135,13 @@ def apply_full_cgenff_params(*, verbose: bool = False, force: bool = False) -> N
     """
     global _active_mode
     _warn_if_ml_torsions_deleted()
+    from mmml.interfaces.pycharmmInterface.mlpot.ml_type_copies import (
+        restore_ml_atom_types,
+    )
+
+    # Hybrid registration moved ML atoms to zero-bonded type copies; move them
+    # back so their bonds/angles use the full parameters again.
+    restore_ml_atom_types()
     if not force and _active_mode == "full":
         if verbose:
             print("CGENFF params: bonded restore skipped (already full)", flush=True)

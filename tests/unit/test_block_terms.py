@@ -6,7 +6,6 @@ import importlib.util
 from pathlib import Path
 from unittest import mock
 
-import pytest
 
 _block_terms_path = (
     Path(__file__).resolve().parents[2]
@@ -110,21 +109,28 @@ def test_zero_mlpot_psf_mm_terms_zeros_params_and_charges():
     assert "DIHE" in block_terms.ALL_ML_SKIPE_BONDED
 
 
-def test_zero_mlpot_psf_mm_terms_hybrid_warns_and_keeps_mm_bonded():
+def test_zero_mlpot_psf_mm_terms_hybrid_uses_ml_type_copies():
     sel = mock.Mock()
     sel.get_atom_indexes.return_value = [0, 1]
     sel.store.return_value = "mlsel"
     with mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.cgenff_prm_swap.apply_zeroed_cgenff_params"
-    ), mock.patch(
+    ) as zero_prm_fn, mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.cgenff_prm_swap.assert_psf_bonds_present",
         return_value=400,
-    ), mock.patch.object(block_terms, "_import_pycharmm") as imp:
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.ml_type_copies.apply_ml_type_copies",
+        return_value={"types": 2, "bonds": 1, "angles": 0},
+    ) as copies_fn, mock.patch.object(block_terms, "_import_pycharmm") as imp, mock.patch.object(
+        block_terms, "_psf_torsion_counts", return_value=None
+    ):
         imp.return_value.coor.get_natom.return_value = 5
         imp.return_value.psf.get_charges.return_value = [0.1] * 5
-        with pytest.warns(UserWarning, match="mlpot-use-block"):
-            block_terms.zero_mlpot_psf_mm_terms(sel)
+        block_terms.zero_mlpot_psf_mm_terms(sel)
+        # Type-keyed zeroed APPEND and SKIPE would hit the MM atoms too (#225).
+        zero_prm_fn.assert_not_called()
         imp.return_value.lingo.charmm_script.assert_not_called()
+    copies_fn.assert_called_once_with([0, 1], "mlsel", pycharmm=imp.return_value)
 
 
 def test_zero_mlpot_psf_mm_terms_periodic_external_also_bonded_only():
