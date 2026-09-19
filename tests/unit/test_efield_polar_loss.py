@@ -19,6 +19,7 @@ from mmml.models.efield.training import (
     load_ef_npz,
     polarizability_loss_and_mae,
     prepare_batches,
+    require_drop_last_batches,
 )
 from mmml.utils.rotations import rotate_batched_rank2_tensors
 
@@ -40,6 +41,12 @@ def test_efield_parser_polar_weight_defaults_off():
     args = build_train_parser().parse_args(["--polar_weight", "1.5", "--no-polar-at-zero-field"])
     assert args.polar_weight == pytest.approx(1.5)
     assert args.polar_at_zero_field is False
+
+
+def test_require_drop_last_batches_rejects_valid_smaller_than_batch():
+    require_drop_last_batches(n_train=230, n_valid=13, batch_size=8)
+    with pytest.raises(ValueError, match="BATCH_SIZE<=13"):
+        require_drop_last_batches(n_train=230, n_valid=13, batch_size=64)
 
 
 def _dummy_apply(params, atomic_numbers, positions, Ef, **_kwargs):

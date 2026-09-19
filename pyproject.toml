@@ -110,9 +110,13 @@ nvalchemiops-pme = [
 
 # Metatomic (TorchScript AtomisticModel) ASE calculator + CHARMM MLpot adapter.
 # Optional: CI does not install this extra. Device via MMML_METATOMIC_DEVICE.
+# upet: PET-MAD / PET-OMAD etc. download + metatomic export (larger PET teachers).
+# metatrain: train/fine-tune PET models and export them as metatomic .pt.
 metatomic = [
     "metatomic-ase>=0.1.1",
     "metatomic-torch>=0.1.12",
+    "upet>=0.3.0",
+    "metatrain>=2026.4",
 ]
 
 # jax-pme long-range Coulomb backend (--lr-solver jax_pme). The native

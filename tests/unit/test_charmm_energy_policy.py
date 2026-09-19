@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import argparse
+import sys
+import types
 from pathlib import Path
+from unittest import mock
 
 import pytest
 
@@ -174,6 +177,11 @@ def test_apply_before_pbc_writes_epsilon_zero_overlay(tmp_path: Path, monkeypatc
     assert "NONBONDED" in text
     assert "-0.1200" not in text
     assert any("scalar vdw" in s.lower() for s in scripts)
+    # eval_charmm_script does no case folding: lowercase commands are
+    # "Unrecognized" and silently skipped, so every script must be uppercase.
+    assert all(s == s.upper() for s in scripts), scripts
+    # The ε=0 APPEND overlay does not replace the live VDW table; SKIPE does.
+    assert "SKIPE VDW IMNB" in scripts
 
 
 def test_policy_violation_detects_imnb():
@@ -337,3 +345,78 @@ def test_enforce_tolerates_image_imnb_after_pre_remediation(monkeypatch):
         reload_on_violation=False,
     )
     assert applied == ["vdw"]
+
+
+def test_all_ml_registration_combined_skipe_bonded_and_vdw_keeps_user(
+    tmp_path: Path, monkeypatch
+):
+    """All-ML CHARMM registration: both policies SKIPE, USER stays on."""
+    from mmml.interfaces.pycharmmInterface.mlpot import block_terms
+    from mmml.interfaces.pycharmmInterface.mlpot import charmm_energy_policy as cep
+
+    scripts: list[str] = []
+    sel = mock.Mock()
+    sel.get_atom_indexes.return_value = [0, 1, 2]
+
+    fake_pycharmm = types.ModuleType("pycharmm")
+    fake_lingo = types.ModuleType("pycharmm.lingo")
+    fake_lingo.charmm_script = lambda s: scripts.append(s)
+    fake_pycharmm.lingo = fake_lingo
+    fake_pycharmm.coor = mock.Mock()
+    fake_pycharmm.coor.get_natom.return_value = 3
+    fake_pycharmm.psf = mock.Mock()
+    fake_pycharmm.psf.get_charges.return_value = [0.1, 0.2, 0.3]
+    monkeypatch.setitem(sys.modules, "pycharmm", fake_pycharmm)
+    monkeypatch.setitem(sys.modules, "pycharmm.lingo", fake_lingo)
+
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.cgenff_prm_swap.apply_zeroed_cgenff_params"
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.cgenff_prm_swap.assert_psf_bonds_present",
+        return_value=400,
+    ), mock.patch.object(block_terms, "_import_pycharmm", return_value=fake_pycharmm):
+        block_terms.zero_mlpot_psf_mm_terms(sel)
+
+    src = tmp_path / "par.prm"
+    src.write_text(
+        "NONBONDED nbxmod 5\nCL     0.0       -0.1200     2.4700\nEND\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.mlpot.cgenff_prm_swap.cgenff_prm_path",
+        lambda: src,
+    )
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.nbonds_config.read_cgenff_prm",
+        lambda path, append=False: None,
+    )
+
+    class _Silent:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+    monkeypatch.setattr(cep, "charmm_silent_command", lambda: _Silent(), raising=False)
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.charmm_levels.charmm_silent_command",
+        lambda: _Silent(),
+    )
+    applied = cep.apply_charmm_energy_term_policies_before_pbc_finalize(
+        argparse.Namespace(
+            mm_nonbond_mode="jax_mic",
+            periodic_charmm_vdw=False,
+            charmm_zero_energy_terms=None,
+            quiet=True,
+            output_dir=tmp_path,
+        ),
+        ml_selection=sel,
+        verbose=False,
+    )
+
+    joined = "\n".join(scripts)
+    assert "SKIPE " + " ".join(block_terms.ALL_ML_SKIPE_BONDED) in scripts
+    assert "SKIPE VDW IMNB" in scripts
+    assert applied == ["vdw"]
+    assert "USER" not in joined

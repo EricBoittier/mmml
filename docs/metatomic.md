@@ -228,10 +228,18 @@ PhysNet architecture on those labels.
 
 Pool: bundled ACO PDB + DMC extxyz, Cartesian noise, C=O stretches, random
 relative orientations, and COM scans covering the four PES regions (repulsive /
-well / shoulder / long-range) plus a far-field replica. Default labels are the
-hybrid pieces: monomer `E - E_eq` and unswitched dimer `E(AB)-E(A)-E(B)`
-(forces match). The ML/MM switch is **not** baked into `E`; MLpot applies it
-at MD time.
+well / shoulder / long-range) plus a far-field replica.
+
+Default labels (`--energy-mode mlmm`) are each sample's own teacher energy
+minus one `E_ref` per molecule, with the full teacher forces:
+monomer `E_A - E_ref`, dimer `E_AB - 2 E_ref`. PhysNet MLpot runs the
+same network on monomers and dimers and forms
+`E_int = P(AB) - P(A) - P(B)` itself (`calculate_dimer_contributions`), so the
+dimer target must be the dimer energy. `--energy-mode interaction` (dimer
+`E = E_int`) is off by the two monomer deformation energies under MLpot and
+is not extensive (a separated dimer would fit to 0, not `P(A) + P(B)`). `E_int`
+is stored for every dimer in the NPZ either way. The ML/MM switch is **not**
+baked into `E`; MLpot applies it at MD time.
 
 ```bash
 # 1. Label (CHARMM-free). --preset smoke is tiny; md is the MD-oriented mix.
@@ -263,3 +271,87 @@ monomer, RMSD ≈ 0 after SD pass 2.
 
 Do not pass the PET `.pt` as `--teacher-checkpoint` on `physnet-train` — that
 flag loads a Flax tree. The NPZ *is* the teacher.
+
+### Batched TorchScript teacher and larger PETs
+
+Labelling defaults to `--teacher-backend torchscript`
+(`mmml/distill/batched_teacher.py`). Monomers, dimers and both dimer
+fragments go into one request. Structures are sorted by size, packed under
+`--max-atoms-per-batch` / `--max-systems-per-batch`, and each pack is one
+`AtomisticModel.forward` over a `list[System]`. Forces are `-dE/dR` from one
+backward pass. `--teacher-backend ase` keeps the per-structure
+`MetatomicCalculator` path.
+
+On an RTX 5090 with PET-MAD xs, the `md` acetone pool (548 geometries, 1320
+structures with fragments) labels in about 0.9 s once warm. The ASE path runs at
+about 16 ms per structure. The two paths agree to float32 noise
+(|ΔE| < 1e-5 eV, |ΔF| < 1e-4 eV/Å).
+
+The `metatomic` extra installs `upet` (downloads and exports the UPET family)
+and `metatrain` (fine-tuning). To export another teacher:
+
+```bash
+python -c "from upet import list_upet; list_upet()"
+python -c "from upet import save_upet; \
+  save_upet(model='pet-omol', size='m', version='1.0.0', output='pet-omol-m-v1.0.0.pt')"
+mmml pet-physnet-distill --checkpoint pet-omol-m-v1.0.0.pt \
+  --out-dir ./acetone_omol_m --preset md --max-atoms-per-batch 2048
+```
+
+Lower `--max-atoms-per-batch` if an `l`/`xl` model runs out of GPU memory.
+
+### Training data from periodic liquid MD
+
+`mmml pet-box-dataset` builds the periodic dataset from many independent
+starts:
+
+- Each seed packs its own box: a random subset of simple-cubic sites, random
+  COM jitter and random rotations. Target temperatures are cycled over seeds
+  with `--temperatures`.
+- FIRE-minimizes the box and keeps every `--fire-every`th intermediate. These
+  strained and compressed geometries are ones thermal MD rarely visits.
+- Runs Langevin NVT (default 0.5 fs) and keeps every `--md-every`th frame.
+- Drops frames with max |F| > `--max-force` (default 15 eV/Å).
+
+Frames go to `<out>/seed_<k>/traj.extxyz` with the cell, pbc, E (eV), F (eV/Å)
+and `info` tags `seed`, `phase` (`fire`/`md`) and `T_target_K`. metatrain reads
+these files directly. Split seeds across GPUs:
+
+```bash
+CUDA_VISIBLE_DEVICES=0 mmml pet-box-dataset --checkpoint pet-mad-xs-v1.5.0.pt \
+  --seeds 0-15 --temperatures 300,350,400 --out-dir runs/etoh_multiseed &
+CUDA_VISIBLE_DEVICES=1 mmml pet-box-dataset --checkpoint pet-mad-xs-v1.5.0.pt \
+  --seeds 16-31 --temperatures 300,350,400 --out-dir runs/etoh_multiseed &
+```
+
+For the PhysNet ML/MM model, `pet-physnet-distill --from-box-extxyz` cuts
+clusters out of those frames. It takes whole monomers and dimers by minimum
+image and labels them with the batched teacher, which can be larger than the
+model that drove the MD. The sampling follows the MLpot Hamiltonian:
+
+- `r_com` is the unweighted centroid distance, the same quantity
+  `ml_switch_scale` uses.
+- Dimers are kept up to 7.5 Å. With `mm_switch_on` 6.0 and `ml_switch_width`
+  1.5, the ML dimer term is full below 4.5 Å, tapers to 0 at 6.0 Å, and
+  sparse ML still evaluates pairs up to 7.5 Å. MM takes over past 4.5 Å and
+  ML contributes nothing past 6.0 Å.
+- Dimers are drawn evenly from the `--dimer-r-bins` distance bins, so contact
+  and taper pairs are not swamped by the first-shell peak.
+- `source` keeps `box_dimer:fire` / `box_dimer:md` so the two can be weighted
+  or split later.
+- Labels default to `mlmm` (see above).
+
+```bash
+mmml pet-physnet-distill --checkpoint pet-mad-m-v1.6.0.pt \
+  --from-box-extxyz runs/etoh_multiseed/seed_*/traj.extxyz --atoms-per-monomer 9 \
+  --reference-monomer-xyz examples/pet_mad_etoh_pbc/etoh.xyz \
+  --out-dir runs/etoh_clusters
+```
+
+Limits: MLpot is pairwise, so dimer labels cannot carry the many-body part
+of PET's liquid energy. Physically, that part lives in MM polarization, or is
+simply missed. `physnet-train --hybrid-mm` (switch-aware loss with MM in the
+target) needs `mol_id` and CGenFF type/charge arrays, which this NPZ does not
+yet carry.
+`BatchedMetatomicTeacher.evaluate` also takes `(numbers, positions, cell)` to
+relabel whole periodic frames with another PET.

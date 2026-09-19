@@ -66,6 +66,7 @@ COMMAND_GROUPS: tuple[tuple[str, tuple[CommandInfo, ...]], ...] = (
         "ML training & MD",
         (
             CommandInfo("physnet-train", "Train PhysNetJAX EF from NPZ"),
+            CommandInfo("pet-box-dataset", "Many-seed PET box frames (FIRE + NVT extxyz)"),
             CommandInfo("pet-physnet-distill", "PET-MAD teacher → PhysNet NPZ (acetone)"),
             CommandInfo("physnet-evaluate", "Evaluate PhysNet checkpoint"),
             CommandInfo("physnet-md", "PhysNet MD sampling"),
