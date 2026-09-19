@@ -403,3 +403,195 @@ def test_auto_falls_back_to_cpu_without_cupy_or_jax_gpu(monkeypatch):
     monkeypatch.setattr(nl_gpu, "_jax_target_device", lambda positions=None: jax.devices("cpu")[0])
     monkeypatch.setattr(nl_gpu, "cupy_runtime_ok", lambda **kw: pytest.fail("must not probe CuPy"))
     assert not nl_gpu.gpu_nl_path_available()
+
+
+def test_float32_roundtrip_crosses_pair_and_com_thresholds():
+    """The x64-off trap: host float64 values that flip membership after float32."""
+    assert np.float64(12.4699999) < 12.47
+    assert float(np.float32(12.4699999)) >= 12.47
+    assert np.float64(4.0499999) < 4.05
+    assert float(np.float32(4.0499999)) >= 4.05
+
+
+def test_is_device_positions_rejects_numpy_host():
+    from mmml.interfaces.pycharmmInterface.mm_energy_forces import _is_device_positions
+
+    host = np.zeros((3, 3), dtype=np.float64)
+    assert hasattr(host, "__dlpack_device__")
+    assert not _is_device_positions(host)
+
+
+def _threshold_probe_frame():
+    """3 monomers: atom pair just below 12.47 Å; dimer COM just below 4.05 Å."""
+    R = np.zeros((9, 3), dtype=np.float64)
+    R[0] = [0.0, 0.0, 0.0]
+    R[1] = [0.2, 0.0, 0.0]
+    R[2] = [0.4, 0.0, 0.0]
+    R[3] = [12.4699999, 0.0, 0.0]
+    R[4] = [12.6699999, 0.0, 0.0]
+    R[5] = [12.8699999, 0.0, 0.0]
+    R[6] = [0.1, 4.0499999, 0.0]
+    R[7] = [0.2, 4.0499999, 0.0]
+    R[8] = [0.3, 4.0499999, 0.0]
+    mid = np.repeat(np.arange(3), 3)
+    offs = np.arange(0, 10, 3)
+    return R, mid, offs
+
+
+def _fake_charmm_mm_fn(R, *, mm_r_min=4.05, mm_switch_on=10.5, mm_switch_width=2.0, skin=0.0):
+    """Minimal mocked-CHARMM MM pair-list builder (host numpy in, no live CHARMM)."""
+    from unittest.mock import MagicMock, patch
+
+    from mmml.interfaces.pycharmmInterface.mm_energy_forces import build_mm_energy_forces_fn
+
+    n = len(R)
+    n_mono = n // 3
+    charges = np.zeros(n)
+    fake_psf = MagicMock()
+    fake_psf.get_charges.return_value = charges
+    fake_psf.get_iac.return_value = np.zeros(n, dtype=np.int32)
+    fake_param = MagicMock()
+    fake_param.get_atc.return_value = ["CG321"]
+    rtf = MagicMock()
+    rtf.readlines.return_value = ["ATOM C1 CG321 -0.1\n"]
+    prm = MagicMock()
+    prm.readlines.return_value = ["CG321 0.0 -0.05 1.6 0.0 -0.01 1.9\n"]
+    mod = "mmml.interfaces.pycharmmInterface.mm_energy_forces"
+    with patch("pycharmm.psf", fake_psf), patch("pycharmm.param", fake_param), patch(
+        f"{mod}.open", side_effect=[rtf, prm]
+    ), patch(f"{mod}._get_actual_psf_charges", return_value=charges), patch(
+        f"{mod}.CGENFF_PRM", "/dev/null"
+    ), patch(f"{mod}.CGENFF_RTF", "/dev/null"):
+        return build_mm_energy_forces_fn(
+            R,
+            total_atoms=n,
+            n_monomers=n_mono,
+            monomer_offsets=np.arange(0, n + 1, 3, dtype=np.int32),
+            atoms_per_monomer_list=[3] * n_mono,
+            lambda_monomer=np.ones(n_mono),
+            ml_switch_width=1.0,
+            mm_switch_on=mm_switch_on,
+            mm_switch_width=mm_switch_width,
+            mm_r_min=mm_r_min,
+            jax_md_skin_distance=skin,
+            mm_extent_margin_A=0.0,
+            pbc_cell=np.diag([26.0] * 3),
+            use_jax_md_neighbor_list=False,
+            mm_nl_backend="vesin",
+            lr_solver="mic",
+            defer_xla_gpu_warmup=True,
+        )
+
+
+def test_update_mm_pairs_host_numpy_is_not_a_device_sync(monkeypatch):
+    """Host NumPy (MLpot callback) must not be classified as a JAX device array."""
+    pytest.importorskip("vesin")
+    monkeypatch.setenv("MMML_MM_NL_DEVICE", "cpu")
+    R, _, _ = _threshold_probe_frame()
+    _, update = _fake_charmm_mm_fn(R)
+    update(R, force_rebuild=True)
+    stats = update.get_stats()
+    assert stats["host_syncs"] == 0
+    assert stats["cpu_rebuilds"] >= 1
+
+
+def _assert_threshold_pair_membership(pi, pj, *, expect_cutoff_pair: bool):
+    pairs = set(zip((int(a) for a in pi), (int(b) for b in pj)))
+    if expect_cutoff_pair:
+        assert (0, 3) in pairs
+    else:
+        assert (0, 3) not in pairs
+    # COM of monomers 0 and 2 is 4.0499999 < mm_r_min: no 0–2 atom pairs.
+    for a in range(3):
+        for b in range(6, 9):
+            assert (a, b) not in pairs
+
+
+def _check_gpu_host_float64_near_thresholds():
+    """Host float64 in, x64 off: GPU pair set must match CPU at both filters."""
+    import jax
+    import jax.numpy as jnp
+
+    from mmml.interfaces.pycharmmInterface.nl_backend import build_mm_pairs_with_backend
+    from mmml.interfaces.pycharmmInterface.nl_reference import vesin_mic_pair_arrays
+
+    jax.config.update("jax_enable_x64", False)
+    lost = float(np.asarray(jnp.asarray(np.array([12.4699999], dtype=np.float64)))[0])
+    if lost == 12.4699999:
+        raise RuntimeError("JAX x64 still enabled; jnp.asarray kept host float64")
+    assert lost >= 12.47
+
+    nl_gpu = _gpu_pairlist_or_skip()
+    R, mid, offs = _threshold_probe_frame()
+    cell = np.eye(3) * 26.0
+    cutoff, mm_r_min = 12.47, 4.05
+    pi, pj = vesin_mic_pair_arrays(R, cell, cutoff, mid, monomer_offsets=offs, mm_r_min=mm_r_min)
+    _assert_threshold_pair_membership(pi, pj, expect_cutoff_pair=True)
+    ci, cj, cmask, n_cpu, cap, used = build_mm_pairs_with_backend(
+        "vesin", positions=R, box=cell, cutoff=cutoff, monomer_offsets=offs,
+        mm_r_min=mm_r_min, total_atoms=len(R),
+    )
+    assert used == "vesin" and n_cpu > 0
+    idx, mask, label = nl_gpu.rebuild_vesin_pairs_gpu(
+        R, cell, cutoff=cutoff, monomer_offsets=offs, mm_r_min=mm_r_min,
+        max_pairs=cap, total_atoms=len(R),
+    )
+    assert label == "vesin_gpu"
+    idx, mask = np.asarray(idx), np.asarray(mask)
+    np.testing.assert_array_equal(mask, cmask)
+    np.testing.assert_array_equal(idx[:, 0], ci)
+    np.testing.assert_array_equal(idx[:, 1], cj)
+    _assert_threshold_pair_membership(ci[cmask], cj[cmask], expect_cutoff_pair=True)
+
+    import os
+
+    gpu = jax.devices("gpu")[0]
+    listed = {}
+    for device in ("cpu", "auto"):
+        os.environ["MMML_MM_NL_DEVICE"] = device
+        with jax.default_device(gpu):
+            _, update = _fake_charmm_mm_fn(R, mm_r_min=mm_r_min)
+            pidx, pmask = update(R, force_rebuild=True)  # host NumPy, as MLpot
+            keep = np.asarray(pmask) > 0
+            listed[device] = (
+                np.asarray(pidx)[keep, 0],
+                np.asarray(pidx)[keep, 1],
+                update.get_stats(),
+            )
+    np.testing.assert_array_equal(listed["cpu"][0], listed["auto"][0])
+    np.testing.assert_array_equal(listed["cpu"][1], listed["auto"][1])
+    assert listed["auto"][2]["gpu_rebuilds"] >= 1
+    assert listed["cpu"][2]["host_syncs"] == 0
+    assert listed["auto"][2]["host_syncs"] == 0
+    _assert_threshold_pair_membership(listed["cpu"][0], listed["cpu"][1], expect_cutoff_pair=True)
+
+
+def test_gpu_host_float64_near_thresholds_with_x64_disabled():
+    """Subprocess so JAX_ENABLE_X64=0 wins even if this pytest worker already enabled x64."""
+    import os
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    repo = str(Path(__file__).resolve().parents[2])
+    env = os.environ.copy()
+    env["JAX_ENABLE_X64"] = "0"
+    env["PYTHONPATH"] = repo + os.pathsep + env.get("PYTHONPATH", "")
+    code = (
+        "from tests.unit.test_mm_pairs_vectorized import _check_gpu_host_float64_near_thresholds\n"
+        "_check_gpu_host_float64_near_thresholds()\n"
+    )
+    proc = subprocess.run(
+        [sys.executable, "-c", code],
+        cwd=repo,
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    blob = proc.stdout + proc.stderr
+    if proc.returncode != 0 and (
+        "Skipped" in blob or "no JAX GPU" in blob or "GPU pair-list path unavailable" in blob
+        or "vesin not installed" in blob or "cupy" in blob.lower() and "skip" in blob.lower()
+    ):
+        pytest.skip(blob.strip() or "GPU pair-list path unavailable")
+    assert proc.returncode == 0, blob

@@ -1327,6 +1327,11 @@ def switched_mm_eterm_split(
     )
 
 
+def _is_device_positions(x) -> bool:
+    """JAX/CuPy device buffers only. NumPy ≥1.23 exposes ``__dlpack_device__``."""
+    return x is not None and not isinstance(x, np.ndarray) and hasattr(x, "__dlpack_device__")
+
+
 def build_mm_energy_forces_fn(
     R: np.ndarray,
     *,
@@ -2426,7 +2431,7 @@ def build_mm_energy_forces_fn(
             # H2D copy. Pairs stay on device (no D2H/H2D of the padded list).
             if gpu_nl_path_available(positions=positions_jax):
                 pbc_for_build = _pbc_cell_for_nl_build(box_in)
-                if positions_jax is not None and hasattr(positions_jax, "__dlpack_device__"):
+                if _is_device_positions(positions_jax):
                     pos_for_gpu = _jax_cartesian_for_nl_build(positions_jax, box_in)
                 else:
                     pos_for_gpu = _cartesian_for_nl_build(positions_in, box_in)
@@ -2557,7 +2562,7 @@ def build_mm_energy_forces_fn(
             ``force_rebuild=True`` skips Verlet skin / interval cache reuse (used by
             NVE force–energy preflight rescue).
             """
-            positions_jax = positions if hasattr(positions, "__dlpack_device__") else None
+            positions_jax = positions if _is_device_positions(positions) else None
             _nbr_debug = debug
             _pair_stats["calls"] += 1
 

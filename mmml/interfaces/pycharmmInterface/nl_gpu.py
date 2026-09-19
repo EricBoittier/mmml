@@ -401,16 +401,33 @@ def _jax_array_module():
     return jnp
 
 
+def is_device_array(x) -> bool:
+    """True for JAX/CuPy buffers, not host NumPy.
+
+    NumPy ≥1.23 implements ``__dlpack_device__``, so that attribute is not
+    evidence of a GPU array. Treating host coordinates as JAX arrays and
+    running them through ``jnp.asarray`` with x64 disabled silently rounds
+    float64 → float32 (12.4699999 → 12.470000267) and can flip pair
+    membership at a strict cutoff.
+    """
+    return x is not None and not isinstance(x, np.ndarray) and hasattr(x, "__dlpack_device__")
+
+
 def positions_to_cupy(positions) -> "cp.ndarray":
-    """Export positions to CuPy without host round-trip when already on GPU."""
+    """Export positions to CuPy without host round-trip when already on GPU.
+
+    Host NumPy stays float64 on the H2D copy. Device arrays use DLPack.
+    """
     if not have_cupy():
         raise RuntimeError("CuPy is not installed")
     ensure_cupy_cuda_path(quiet=True)
+    if isinstance(positions, np.ndarray):
+        return cp.asarray(positions, dtype=cp.float64)
     if isinstance(positions, cp.ndarray):
         return positions
-    if hasattr(positions, "__dlpack_device__") and not isinstance(positions, np.ndarray):
+    if is_device_array(positions):
         return cp.from_dlpack(positions)
-    return cp.asarray(positions)
+    return cp.asarray(positions, dtype=cp.float64)
 
 
 def cupy_to_jax(arr):
