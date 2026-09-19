@@ -1685,6 +1685,8 @@ def build_mm_energy_forces_fn(
             pair_mask: Array,
             cell_for_mic: Optional[Array] = None,
             charges: Optional[Array] = None,
+            lj_rmins: Optional[Array] = None,
+            lj_epsilons: Optional[Array] = None,
         ) -> Tuple[Array, Array]:
             pair_i = pair_idx[:, 0]
             pair_j = pair_idx[:, 1]
@@ -1695,10 +1697,12 @@ def build_mm_energy_forces_fn(
             q_use = q_per_system if charges is None else charges
             q_a = jnp.take(q_use, pair_i)
             q_b = jnp.take(q_use, pair_j)
-            rm_a = jnp.take(rmins_per_system, pair_i)
-            rm_b = jnp.take(rmins_per_system, pair_j)
-            ep_a = jnp.take(epsilons_per_system, pair_i)
-            ep_b = jnp.take(epsilons_per_system, pair_j)
+            rm_use = rmins_per_system if lj_rmins is None else lj_rmins
+            ep_use = epsilons_per_system if lj_epsilons is None else lj_epsilons
+            rm_a = jnp.take(rm_use, pair_i)
+            rm_b = jnp.take(rm_use, pair_j)
+            ep_a = jnp.take(ep_use, pair_i)
+            ep_b = jnp.take(ep_use, pair_j)
             pair_qq_dyn = q_a * q_b * pair_lambda_mm_dyn
             pair_rm_dyn = rm_a + rm_b
             pair_ep_dyn = (ep_a * ep_b) ** 0.5 * pair_lambda_mm_dyn
@@ -1730,6 +1734,8 @@ def build_mm_energy_forces_fn(
             pair_mask: Array,
             cell_for_mic: Array,
             charges: Optional[Array] = None,
+            lj_rmins: Optional[Array] = None,
+            lj_epsilons: Optional[Array] = None,
         ) -> Array:
             pair_i = pair_idx[:, 0]
             pair_j = pair_idx[:, 1]
@@ -1742,6 +1748,8 @@ def build_mm_energy_forces_fn(
                 pair_mask,
                 cell_for_mic=cell_for_mic,
                 charges=charges,
+                lj_rmins=lj_rmins,
+                lj_epsilons=lj_epsilons,
             )
             return apply_switching_function(
                 positions,
@@ -2395,6 +2403,14 @@ def build_mm_energy_forces_fn(
             return dict(_pair_stats)
 
         update_mm_pairs.get_stats = _get_pair_update_stats
+        # Parameter-differentiable switched MM energy for fitting (DiffTRe-style
+        # reweighting): per-atom CHARMM Rmin/2 and epsilon (<= 0) override the
+        # PSF/CGenFF values; ``None`` keeps them. Units kcal/mol.
+        update_mm_pairs.energy_with_lj = jax.jit(_mm_dynamic_energy_scalar)
+        update_mm_pairs.lj_rmins = rmins_per_system
+        update_mm_pairs.lj_epsilons = epsilons_per_system
+        update_mm_pairs.at_codes = np.asarray(at_codes)
+        update_mm_pairs.atc_names = [str(name) for name in atc]
 
         mm_fn = calculate_mm_energy_and_forces_dynamic
         if _use_jax_pme_coulomb:
