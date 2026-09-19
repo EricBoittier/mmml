@@ -31,7 +31,7 @@ usage: mmml efield-train [-h] [--data DATA] [--train-npz TRAIN_NPZ]
                          [--reduce_on_plateau_rtol REDUCE_ON_PLATEAU_RTOL]
                          [--reduce_on_plateau_accumulation_size REDUCE_ON_PLATEAU_ACCUMULATION_SIZE]
                          [--reduce_on_plateau_min_scale REDUCE_ON_PLATEAU_MIN_SCALE]
-                         [--restart RESTART]                          [--energy_weight ENERGY_WEIGHT]
+                         [--restart RESTART] [--energy_weight ENERGY_WEIGHT]
                          [--forces_weight FORCES_WEIGHT]
                          [--dipole_weight DIPOLE_WEIGHT]
                          [--charge_weight CHARGE_WEIGHT]
@@ -62,9 +62,6 @@ Scientific model:
   --charge_weight CHARGE_WEIGHT
                         Weight for charge neutrality loss (sum of charges per
                         molecule squared)
-  --polar_weight POLAR_WEIGHT
-                        Weight for polarizability loss (Bohr³ vs dμ/dEf at
-                        Ef=0). 0 disables.
   --polar-at-zero-field, --no-polar-at-zero-field
                         Evaluate dμ/dEf at Ef=0 (default; SPICE-α / isolated
                         DFT)
@@ -122,6 +119,9 @@ Other options:
   --restart RESTART
   --dipole_weight DIPOLE_WEIGHT
                         Weight for dipole loss in total loss
+  --polar_weight, --polar-weight POLAR_WEIGHT
+                        Weight for polarizability loss (Bohr³ vs dμ/dEf at
+                        Ef=0). 0 disables.
   --zbl                 Add ZBL nuclear repulsion for short-range stability
   --rot-augment         Apply random SO(3) rotation augmentation to batches (all
                         splits)

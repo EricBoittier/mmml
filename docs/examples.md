@@ -38,6 +38,7 @@ mmml npz2traj data.npz -o trajectory.traj
 mmml pyscf-evaluate -i traj.npz -o out.npz --EF --esp
 mmml compare-charmm-ml --checkpoint ~/ckpts/eg_joint --valid-efd splits/energies_forces_dipoles_test.npz --valid-esp splits/grids_esp_test.npz --pdb pdb/initial.pdb --n-samples 50 --out-dir charmm_ml_comparison
 mmml physnet-train --config train.yaml
+mmml efield-train --train-npz splits/energies_forces_dipoles_train.npz --valid-npz splits/energies_forces_dipoles_valid.npz --polar_weight 1 --polar-at-zero-field
 mmml pet-physnet-distill --checkpoint pet-mad.pt --out-dir ./acetone_pet_distill --preset smoke
 mmml pet-interaction-pes --checkpoint "$PET_MAD_CKPT"
 mmml mode-check --composition TIP3:1 --checkpoint "$MMML_CKPT" --output-dir ./mode_tip3_1
