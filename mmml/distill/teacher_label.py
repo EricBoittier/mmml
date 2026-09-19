@@ -1,12 +1,22 @@
 """Label geometries with an ASE teacher (PET-MAD or a dummy calculator).
 
-Default ``energy_mode=interaction`` writes the MMML hybrid pieces:
+``E_ref`` is the teacher energy of the first ``pdb_eq`` monomer.
 
-* monomers: ``E = E_teacher - E_ref`` (``E_ref`` is the first ``pdb_eq`` monomer)
-* dimers: unswitched ``E = E(AB) - E(A) - E(B)`` and matching forces
+* ``mlmm`` (default): every sample is its own teacher energy minus one
+  ``E_ref`` per molecule, with full teacher forces. Monomer ``E_A - E_ref``;
+  dimer ``E_AB - 2 E_ref``. This is what the PhysNet MLpot needs: it runs the
+  same network on monomers and dimers and forms
+  ``E_int = P(AB) - P(A) - P(B)`` itself (``mmml_calculator``
+  ``calculate_dimer_contributions``), so the dimer target must be the dimer
+  energy, not ``E_int``.
+* ``interaction``: dimer ``E = E(AB) - E(A) - E(B)`` with interaction forces.
+  Not consistent with MLpot for dimers (off by the monomer deformation
+  energies); kept for interaction-only fits and analysis.
+* ``total``: raw teacher energies.
 
-Do **not** bake ``ml_switch_scale`` into the labels; MLpot applies the handoff
-at MD time. Units: energy eV, forces eV/Å (ASE / metatomic).
+``E_int`` is stored for every dimer in all modes. Do **not** bake
+``ml_switch_scale`` into the labels; MLpot applies the handoff at MD time.
+Units: energy eV, forces eV/Å (ASE / metatomic).
 """
 
 from __future__ import annotations
@@ -21,9 +31,10 @@ from ase.calculators.calculator import Calculator
 from mmml.distill.acetone_pool import Geometry
 from mmml.interfaces.calculators.ase_fragment_hybrid import evaluate_whole_system
 
+ENERGY_MODE_MLMM = "mlmm"
 ENERGY_MODE_INTERACTION = "interaction"
 ENERGY_MODE_TOTAL = "total"
-ENERGY_MODES = (ENERGY_MODE_INTERACTION, ENERGY_MODE_TOTAL)
+ENERGY_MODES = (ENERGY_MODE_MLMM, ENERGY_MODE_INTERACTION, ENERGY_MODE_TOTAL)
 
 
 @dataclass
@@ -76,7 +87,7 @@ def label_geometries(
     teacher: Calculator | TeacherEvaluator,
     geometries: list[Geometry],
     *,
-    energy_mode: str = ENERGY_MODE_INTERACTION,
+    energy_mode: str = ENERGY_MODE_MLMM,
 ) -> list[LabeledSample]:
     """Evaluate the teacher on each geometry. ``energy_mode`` selects the stored E/F.
 
@@ -106,7 +117,7 @@ def label_geometries(
         raise RuntimeError(f"teacher returned {len(results)} results for {len(structures)}")
 
     e_ref = 0.0
-    if mode == ENERGY_MODE_INTERACTION:
+    if mode != ENERGY_MODE_TOTAL:
         for geo, slot in zip(geometries, slots):
             if geo.kind == "monomer" and geo.source == "pdb_eq":
                 e_ref = results[slot][0]
@@ -116,7 +127,7 @@ def label_geometries(
     for geo, slot in zip(geometries, slots):
         e_tot, f_tot = results[slot]
         if geo.kind == "monomer":
-            energy = e_tot if mode == ENERGY_MODE_TOTAL else (e_tot - e_ref)
+            energy = e_tot if mode == ENERGY_MODE_TOTAL else (e_tot - e_ref)  # mlmm == interaction
             labeled.append(
                 LabeledSample(
                     geometry=geo,
@@ -133,6 +144,8 @@ def label_geometries(
         f_int = np.concatenate([f_tot[:n_a] - f_a, f_tot[n_a:] - f_b], axis=0)
         if mode == ENERGY_MODE_TOTAL:
             energy, forces = float(e_tot), f_tot
+        elif mode == ENERGY_MODE_MLMM:
+            energy, forces = float(e_tot - 2.0 * e_ref), f_tot
         else:
             energy, forces = e_int, f_int
         labeled.append(

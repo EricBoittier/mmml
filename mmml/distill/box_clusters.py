@@ -7,6 +7,14 @@ dimer is shifted to its nearest image. Positions Å.
 
 Frames are ASE ``Atoms`` with a cell, ``atoms_per_monomer`` atoms per molecule
 in order (liquid-box / ``metatomic-pbc-md`` layout).
+
+ML/MM coverage: ``r_com`` is the unweighted centroid distance, the same
+quantity ``ml_switch_scale`` uses. At the MLpot defaults (mm_switch_on 6.0,
+ml_switch_width 1.5) the ML dimer term is full below 4.5 Å, tapers to 0 at
+6.0 Å, and sparse ML evaluates dimers up to 7.5 Å. Dimers are drawn evenly
+from ``dimer_r_bins_A`` so contact and taper pairs are not swamped by the
+first-shell peak. The frame's ``info["phase"]`` (``fire``/``md``) is kept in
+``Geometry.source``.
 """
 
 from __future__ import annotations
@@ -26,7 +34,9 @@ SOURCE_BOX_DIMER = "box_dimer"
 @dataclass(frozen=True)
 class BoxClusterConfig:
     atoms_per_monomer: int
-    dimer_com_cutoff_A: float = 6.0
+    dimer_com_cutoff_A: float = 7.5
+    # Stratified draw: equal quota per bin (bins past the cutoff are ignored).
+    dimer_r_bins_A: tuple[float, ...] = (0.0, 3.5, 4.5, 5.25, 6.0, 7.5)
     max_monomers_per_frame: int = 8
     max_dimers_per_frame: int = 24
     seed: int = 0
@@ -53,13 +63,31 @@ def whole_molecules(atoms: Atoms, atoms_per_monomer: int) -> np.ndarray:
     return anchor + delta
 
 
+def _stratified_pick(
+    r: np.ndarray, edges: np.ndarray, n_max: int, rng: np.random.Generator
+) -> list[int]:
+    """Up to ``n_max`` indices, equal quota per ``edges`` bin; unused quota spills over."""
+    bins = np.digitize(r, edges) - 1
+    n_bins = len(edges) - 1
+    pools = [list(rng.permutation(np.nonzero(bins == b)[0])) for b in range(n_bins)]
+    picked: list[int] = []
+    quota = max(n_max // max(n_bins, 1), 1)
+    for pool in pools:
+        picked.extend(int(i) for i in pool[:quota])
+        del pool[:quota]
+    rest = [int(i) for pool in pools for i in pool]
+    rng.shuffle(rest)
+    picked.extend(rest[: max(n_max - len(picked), 0)])
+    return picked[:n_max]
+
+
 def box_cluster_pool(
     frames: list[Atoms],
     cfg: BoxClusterConfig,
     *,
     reference_monomer: Atoms | None = None,
 ) -> list[Geometry]:
-    """Monomers + dimers (COM within ``dimer_com_cutoff_A``) from each frame.
+    """Monomers + dimers (centroid distance < ``dimer_com_cutoff_A``) from each frame.
 
     ``reference_monomer`` (e.g. the gas-phase equilibrium xyz) is emitted first
     as ``pdb_eq`` so interaction-mode labels have an ``E_ref``.
@@ -82,11 +110,17 @@ def box_cluster_pool(
                 atoms_per_monomer=(apm,),
             )
         )
+    edges = np.asarray(
+        [e for e in cfg.dimer_r_bins_A if e < float(cfg.dimer_com_cutoff_A)]
+        + [float(cfg.dimer_com_cutoff_A)],
+        dtype=np.float64,
+    )
     for frame in frames:
+        phase = str(frame.info.get("phase", "")).strip()
+        tag = f":{phase}" if phase else ""
         mols = whole_molecules(frame, apm)
         z_mol = np.asarray(frame.get_atomic_numbers(), dtype=int)[:apm]
-        masses = np.asarray(frame.get_masses(), dtype=np.float64)[:apm]
-        com = (mols * masses[None, :, None]).sum(1) / masses.sum()
+        com = mols.mean(axis=1)  # unweighted centroid, as in ml_switch_scale
         cell = np.asarray(frame.get_cell(), dtype=np.float64)
         periodic = bool(np.any(frame.get_pbc())) and abs(np.linalg.det(cell)) > 1e-9
         n_mol = mols.shape[0]
@@ -97,7 +131,7 @@ def box_cluster_pool(
                     numbers=z_mol.copy(),
                     positions=mols[i] - com[i],
                     kind="monomer",
-                    source=SOURCE_BOX_MONOMER,
+                    source=SOURCE_BOX_MONOMER + tag,
                     r_com_A=None,
                     atoms_per_monomer=(apm,),
                 )
@@ -114,7 +148,9 @@ def box_cluster_pool(
                 pairs.append((i, j, d[k], float(r[k])))
         if not pairs:
             continue
-        for idx in rng.permutation(len(pairs))[: int(cfg.max_dimers_per_frame)]:
+        for idx in _stratified_pick(
+            np.array([p[3] for p in pairs]), edges, int(cfg.max_dimers_per_frame), rng
+        ):
             i, j, d_ij, r_ij = pairs[int(idx)]
             pos_a = mols[i] - com[i]
             pos_b = mols[j] - com[j] + d_ij
@@ -123,7 +159,7 @@ def box_cluster_pool(
                     numbers=np.concatenate([z_mol, z_mol]),
                     positions=np.concatenate([pos_a, pos_b], axis=0),
                     kind="dimer",
-                    source=SOURCE_BOX_DIMER,
+                    source=SOURCE_BOX_DIMER + tag,
                     r_com_A=r_ij,
                     atoms_per_monomer=(apm, apm),
                 )

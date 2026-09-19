@@ -33,7 +33,12 @@ from mmml.distill.acetone_pool import (
     pool_config_for_preset,
 )
 from mmml.distill.npz_export import write_distill_npz
-from mmml.distill.teacher_label import ENERGY_MODE_INTERACTION, ENERGY_MODES, label_geometries
+from mmml.distill.teacher_label import (
+    ENERGY_MODE_MLMM,
+    ENERGY_MODE_TOTAL,
+    ENERGY_MODES,
+    label_geometries,
+)
 
 _REPO = Path(__file__).resolve().parents[3]
 
@@ -58,8 +63,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "--energy-mode",
         choices=ENERGY_MODES,
-        default=ENERGY_MODE_INTERACTION,
-        help="interaction: monomer E-E_ref and unswitched dimer E_int (default, hybrid MD)",
+        default=ENERGY_MODE_MLMM,
+        help=(
+            "mlmm (default): monomer E-E_ref, dimer E_AB-2E_ref, full forces; matches "
+            "PhysNet MLpot, which forms E_int=P(AB)-P(A)-P(B) itself. interaction: "
+            "dimer E=E_int (not MLpot-consistent). total: raw teacher energies."
+        ),
     )
     p.add_argument(
         "--geometries-only",
@@ -92,7 +101,18 @@ def build_parser() -> argparse.ArgumentParser:
         help="Gas-phase monomer for E_ref in interaction mode (box pool only)",
     )
     p.add_argument("--frame-stride", type=int, default=1, help="Use every Nth box frame")
-    p.add_argument("--dimer-com-cutoff", type=float, default=6.0, help="Å, box pool dimers")
+    p.add_argument(
+        "--dimer-com-cutoff",
+        type=float,
+        default=7.5,
+        help="Å centroid distance for box dimers (MLpot sparse ML range: on + ml width)",
+    )
+    p.add_argument(
+        "--dimer-r-bins",
+        type=str,
+        default="0,3.5,4.5,5.25,6.0,7.5",
+        help="Å bin edges for an even dimer draw per frame",
+    )
     p.add_argument("--max-monomers-per-frame", type=int, default=8)
     p.add_argument("--max-dimers-per-frame", type=int, default=24)
     p.add_argument("--valid-fraction", type=float, default=0.15)
@@ -172,14 +192,15 @@ def _box_pool(args: argparse.Namespace):
     ref = None
     if args.reference_monomer_xyz is not None:
         ref = ase_read(str(args.reference_monomer_xyz))
-    elif str(args.energy_mode) == ENERGY_MODE_INTERACTION:
+    elif str(args.energy_mode) != ENERGY_MODE_TOTAL:
         raise SystemExit(
-            "interaction labels need --reference-monomer-xyz (gas-phase monomer "
+            "mlmm/interaction labels need --reference-monomer-xyz (gas-phase monomer "
             "for E_ref), or pass --energy-mode total"
         )
     cfg = BoxClusterConfig(
         atoms_per_monomer=int(args.atoms_per_monomer),
         dimer_com_cutoff_A=float(args.dimer_com_cutoff),
+        dimer_r_bins_A=tuple(float(x) for x in str(args.dimer_r_bins).split(",") if x.strip()),
         max_monomers_per_frame=int(args.max_monomers_per_frame),
         max_dimers_per_frame=int(args.max_dimers_per_frame),
         seed=int(args.seed),

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from pathlib import Path
 
 import numpy as np
@@ -260,3 +261,42 @@ def test_pack_batches_respects_budgets() -> None:
     assert [5] in batches  # oversize structure gets its own batch
     with pytest.raises(ValueError):
         pack_batches(sizes, max_atoms=0)
+
+
+def test_mlmm_labels_match_mlpot_decomposition() -> None:
+    """mlmm: dimer target is E_AB - 2 E_ref with full forces, so the MLpot
+    difference P(AB) - P(A) - P(B) of perfect fits reproduces E_int."""
+    from mmml.distill.teacher_label import ENERGY_MODE_MLMM
+
+    geos = build_acetone_pool(_tiny_pool())
+    calc = PairwiseDistanceCalculator()
+    got = label_geometries(calc, geos, energy_mode=ENERGY_MODE_MLMM)
+    ref_geo = next(g for g in geos if g.source == "pdb_eq")
+    e_ref = label_geometries(calc, [ref_geo], energy_mode=ENERGY_MODE_TOTAL)[0].energy_eV
+    for geo, s in zip(geos, got):
+        if geo.kind != "dimer":
+            continue
+        assert s.energy_eV == pytest.approx(s.energy_total_eV - 2.0 * e_ref)
+        n_a = geo.atoms_per_monomer[0]
+        mono = label_geometries(
+            calc,
+            [ref_geo, replace(ref_geo, positions=geo.positions[:n_a], source="a"),
+             replace(ref_geo, positions=geo.positions[n_a:], source="b")],
+            energy_mode=ENERGY_MODE_MLMM,
+        )
+        assert s.energy_eV - mono[1].energy_eV - mono[2].energy_eV == pytest.approx(s.energy_int_eV)
+        full = label_geometries(calc, [geo], energy_mode=ENERGY_MODE_TOTAL)[0]
+        assert np.allclose(s.forces_ev_per_angstrom, full.forces_ev_per_angstrom)
+
+
+def test_stratified_pick_fills_every_bin() -> None:
+    from mmml.distill.box_clusters import _stratified_pick
+
+    rng = np.random.default_rng(0)
+    r = np.concatenate([np.full(100, 4.8), [3.0, 3.2], np.full(5, 6.5)])
+    edges = np.array([0.0, 3.5, 4.5, 6.0, 7.5])
+    picked = _stratified_pick(r, edges, 12, rng)
+    assert len(picked) == len(set(picked)) == 12
+    got = r[picked]
+    assert np.sum(got < 3.5) == 2  # the whole sparse bin
+    assert np.sum(got > 6.0) == 3  # full quota

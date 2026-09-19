@@ -14,7 +14,7 @@ mmml pet-physnet-distill --help
 ```text
 usage: mmml pet-physnet-distill [-h] [--checkpoint CHECKPOINT] --out-dir OUT_DIR
                                 [--preset {smoke,md}] [--seed SEED]
-                                [--energy-mode {interaction,total}]
+                                [--energy-mode {mlmm,interaction,total}]
                                 [--geometries-only]
                                 [--extra-extxyz [EXTRA_EXTXYZ ...]]
                                 [--from-box-extxyz FROM_BOX_EXTXYZ [FROM_BOX_EXTXYZ ...]]
@@ -22,6 +22,7 @@ usage: mmml pet-physnet-distill [-h] [--checkpoint CHECKPOINT] --out-dir OUT_DIR
                                 [--reference-monomer-xyz REFERENCE_MONOMER_XYZ]
                                 [--frame-stride FRAME_STRIDE]
                                 [--dimer-com-cutoff DIMER_COM_CUTOFF]
+                                [--dimer-r-bins DIMER_R_BINS]
                                 [--max-monomers-per-frame MAX_MONOMERS_PER_FRAME]
                                 [--max-dimers-per-frame MAX_DIMERS_PER_FRAME]
                                 [--valid-fraction VALID_FRACTION]
@@ -39,11 +40,14 @@ Input & configuration:
                         --geometries-only.
 
 Scientific model:
-  --energy-mode {interaction,total}
-                        interaction: monomer E-E_ref and unswitched dimer E_int
-                        (default, hybrid MD)
+  --energy-mode {mlmm,interaction,total}
+                        mlmm (default): monomer E-E_ref, dimer E_AB-2E_ref, full
+                        forces; matches PhysNet MLpot, which forms
+                        E_int=P(AB)-P(A)-P(B) itself. interaction: dimer E=E_int
+                        (not MLpot-consistent). total: raw teacher energies.
   --dimer-com-cutoff DIMER_COM_CUTOFF
-                        Å, box pool dimers
+                        Å centroid distance for box dimers (MLpot sparse ML
+                        range: on + ml width)
 
 Execution:
   --preset {smoke,md}
@@ -81,6 +85,8 @@ Other options:
                         pool only)
   --frame-stride FRAME_STRIDE
                         Use every Nth box frame
+  --dimer-r-bins DIMER_R_BINS
+                        Å bin edges for an even dimer draw per frame
   --max-monomers-per-frame MAX_MONOMERS_PER_FRAME
   --max-dimers-per-frame MAX_DIMERS_PER_FRAME
   --valid-fraction VALID_FRACTION

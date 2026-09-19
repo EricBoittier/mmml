@@ -143,7 +143,9 @@ def energy_snapshot(atoms: Atoms, *, step: int, dt_fs: float) -> dict[str, float
     }
 
 
-def append_training_frame(path: Path, atoms: Atoms, *, step: int, dt_fs: float) -> None:
+def append_training_frame(
+    path: Path, atoms: Atoms, *, step: int, dt_fs: float, info: dict | None = None
+) -> None:
     """Append one labelled periodic frame to an extxyz file (eV, eV/Å).
 
     Energy and forces are the calculator's cached results for the current
@@ -165,6 +167,7 @@ def append_training_frame(path: Path, atoms: Atoms, *, step: int, dt_fs: float) 
         energy=float(atoms.get_potential_energy()),
         forces=np.asarray(atoms.get_forces(), dtype=float),
     )
+    frame.info.update(info or {})
     frame.info["step"] = int(step)
     frame.info["time_fs"] = float(step) * float(dt_fs)
     ase_write(str(path), frame, format="extxyz", append=True)
