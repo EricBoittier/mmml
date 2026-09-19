@@ -1190,11 +1190,21 @@ def set_up_nhc_sim_routine(
     _nl_skin = getattr(args, "jax_md_skin_distance", None)
     _nl_interval = getattr(args, "jax_md_update_interval", None)
     _nl_capacity = resolve_mm_pair_list_capacity(update_fn=update_fn, pair_idx=pair_idx)
+    _nl_radius = None
+    if update_fn is not None and hasattr(update_fn, "get_stats"):
+        try:
+            _nl_stats = dict(update_fn.get_stats())
+            _nl_radius = _nl_stats.get("radius")
+            if _nl_n_valid is None and _nl_stats.get("pair_n_valid") is not None:
+                _nl_n_valid = int(_nl_stats["pair_n_valid"])
+        except Exception:
+            _nl_radius = None
     if pair_mask is not None:
         try:
             _nl_n_valid = int(np.sum(np.asarray(pair_mask)))
         except Exception:
-            _nl_n_valid = None
+            pass
+    _nl_extra = {"mm_radius_breakdown": _nl_radius} if _nl_radius else None
     if use_pbc and (pair_idx is not None or _nl_capacity is not None):
         emit_md_system_calculator_report(
             cutoff_params=CUTOFF_PARAMS,
@@ -1206,6 +1216,7 @@ def set_up_nhc_sim_routine(
             n_valid_pairs=_nl_n_valid,
             skin_distance_A=float(_nl_skin) if _nl_skin is not None else None,
             update_interval_steps=int(_nl_interval) if _nl_interval is not None else None,
+            neighbor_extra=_nl_extra,
             include_hybrid_setup=False,
             include_calculator_summary=False,
             include_neighbor_list_summary=True,
@@ -1231,6 +1242,7 @@ def set_up_nhc_sim_routine(
             nl_n_valid_pairs=_nl_n_valid,
             nl_skin_distance_A=float(_nl_skin) if _nl_skin is not None else None,
             nl_update_interval_steps=int(_nl_interval) if _nl_interval is not None else None,
+            extra={"mm_pair_list_radius": _nl_radius} if _nl_radius else None,
         )
         c.print(Panel(str(_calc_json_path), title="[bold green]Calculator Summary JSON[/bold green]", border_style="green"))
     except Exception as _e:

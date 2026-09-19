@@ -597,10 +597,41 @@ def print_neighbor_list_summary(
         )
         bars.append(("Sparse ML dimers", sparse_cap, dimers_total, "bright_yellow"))
 
+    radius = None
+    if extra:
+        raw = extra.get("mm_radius_breakdown")
+        if isinstance(raw, dict) and raw.get("list_radius_A") is not None:
+            radius = raw
+    if radius is not None:
+        table.add_row("─" * 22, "─" * 22)
+        table.add_row("List radius (Å)", f"{float(radius['list_radius_A']):.4f}")
+        table.add_row(
+            "  interaction + skin",
+            f"{float(radius['interaction_radius_A']):.4f} + {float(radius['skin_A']):.4f}",
+        )
+        table.add_row("  COM switch end (Å)", f"{float(radius['com_switch_end_A']):.4f}")
+        table.add_row(
+            "  2 × assumed extent (Å)",
+            f"{float(radius['twice_assumed_extent_A']):.4f}",
+        )
+        half = radius.get("box_half_min_A")
+        if half is not None:
+            table.add_row("  L/2 (Å)", f"{float(half):.4f}")
+            head = radius.get("headroom_A")
+            if head is not None:
+                table.add_row("  headroom L/2−list (Å)", f"{float(head):+.4f}")
+            max_skin = radius.get("max_legal_skin_A")
+            if max_skin is not None:
+                table.add_row("  max legal skin (Å)", f"<{float(max_skin):.4f}")
+            table.add_row(
+                "  skin vs L/2",
+                "OK" if radius.get("skin_legal") else "ILLEGAL (list ≥ L/2)",
+            )
+
     if extra:
         table.add_row("─" * 22, "─" * 22)
         for k, v in extra.items():
-            if k in ("max_active_dimers", "dimers_total"):
+            if k in ("max_active_dimers", "dimers_total", "mm_radius_breakdown"):
                 continue  # already shown above when both present
             table.add_row(str(k), str(v))
 

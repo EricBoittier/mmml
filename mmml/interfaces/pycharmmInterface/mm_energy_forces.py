@@ -54,11 +54,111 @@ def resolve_mm_pair_list_cutoff_A(
     the list at the atom cutoff and NVE is not conserved (ETOH:181, 26 A:
     10.6 % of weighted pairs missing, +810 kcal/mol in 0.25 ps).
     """
+    return float(
+        mm_pair_list_radius_breakdown(
+            mm_switch_on=mm_switch_on,
+            mm_switch_width=mm_switch_width,
+            skin_distance=skin_distance,
+            assumed_extent_A=molecule_extent_A,
+        )["list_radius_A"]
+    )
+
+
+def mm_pair_list_radius_breakdown(
+    *,
+    mm_switch_on: float = 0.0,
+    mm_switch_width: float = 0.0,
+    skin_distance: float = 0.0,
+    measured_extent_A: float = 0.0,
+    extent_margin_A: float = 0.0,
+    assumed_extent_A: float | None = None,
+    cell: Any = None,
+    shared_cutoff: float | None = None,
+) -> dict[str, Any]:
+    """Split the MM list radius into the terms that must stay below L/2.
+
+    ``list_radius = interaction_radius + skin``. The MIC list is legal only
+    while ``list_radius < L/2``. A quoted "12.75 Å + skin" on a 26 Å box
+    (L/2 = 13 Å) therefore allows skin strictly below 0.25 Å, not 0.4 Å.
+    """
+    skin = float(max(0.0, skin_distance))
+    if shared_cutoff is not None:
+        interaction = float(shared_cutoff)
+        assumed = 0.0
+        measured = 0.0
+        margin = 0.0
+        com_end = interaction
+        twice = 0.0
+        mode = "shared_cutoff"
+    else:
+        measured = float(max(0.0, measured_extent_A))
+        margin = float(max(0.0, extent_margin_A))
+        assumed = (
+            float(max(0.0, assumed_extent_A))
+            if assumed_extent_A is not None
+            else measured + margin
+        )
+        com_end = float(mm_switch_on) + float(mm_switch_width)
+        twice = 2.0 * assumed
+        interaction = com_end + twice
+        mode = "com_switch"
+    list_r = interaction + skin
+    half = None
+    if cell is not None:
+        half = 0.5 * float(np.min(np.diag(_cell_matrix_np(np.asarray(cell)))))
+    # Largest skin that keeps list_radius < L/2. Equal to L/2 is rejected.
+    max_skin = None if half is None else float(half) - interaction
+    legal = True if half is None else list_r < float(half)
+    return {
+        "mode": mode,
+        "mm_switch_on_A": float(mm_switch_on),
+        "mm_switch_width_A": float(mm_switch_width),
+        "com_switch_end_A": float(com_end),
+        "measured_extent_A": float(measured),
+        "extent_margin_A": float(margin),
+        "assumed_extent_A": float(assumed),
+        "twice_assumed_extent_A": float(twice),
+        "interaction_radius_A": float(interaction),
+        "skin_A": skin,
+        "list_radius_A": float(list_r),
+        "box_half_min_A": None if half is None else float(half),
+        "headroom_A": None if half is None else float(half) - float(list_r),
+        "max_legal_skin_A": max_skin,
+        "skin_legal": bool(legal),
+    }
+
+
+def format_mm_pair_list_radius_report(info: dict[str, Any]) -> str:
+    """Human-readable radius arithmetic for logs and benchmarks."""
+    half = info.get("box_half_min_A")
+    head = info.get("headroom_A")
+    max_skin = info.get("max_legal_skin_A")
+    legal = bool(info.get("skin_legal", True))
+    half_s = "n/a" if half is None else f"{float(half):.4f} A"
+    head_s = "n/a" if head is None else f"{float(head):+.4f} A"
+    if max_skin is None:
+        max_s = "n/a"
+    elif float(max_skin) <= 0.0:
+        max_s = f"{float(max_skin):.4f} A (interaction already reaches L/2)"
+    else:
+        max_s = f"<{float(max_skin):.4f} A (list must stay < L/2)"
+    verdict = "OK" if legal else "ILLEGAL: list radius reaches L/2"
     return (
-        float(mm_switch_on)
-        + float(mm_switch_width)
-        + 2.0 * float(max(0.0, molecule_extent_A))
-        + float(max(0.0, skin_distance))
+        f"MM pair-list radius ({info.get('mode', 'com_switch')}):\n"
+        f"  COM switch end          {float(info['com_switch_end_A']):.4f} A"
+        f"  (mm_switch_on + mm_switch_width)\n"
+        f"  2 x assumed extent      {float(info['twice_assumed_extent_A']):.4f} A"
+        f"  (2 x (measured {float(info['measured_extent_A']):.4f}"
+        f" + margin {float(info['extent_margin_A']):.4f}))\n"
+        f"  interaction radius      {float(info['interaction_radius_A']):.4f} A"
+        f"  (pairs the COM switch can weight)\n"
+        f"  skin                    {float(info['skin_A']):.4f} A\n"
+        f"  list radius             {float(info['list_radius_A']):.4f} A"
+        f"  (interaction + skin)\n"
+        f"  L/2                     {half_s}\n"
+        f"  headroom                {head_s}  (L/2 - list)\n"
+        f"  max legal skin          {max_s}\n"
+        f"  {verdict}"
     )
 
 
@@ -106,11 +206,13 @@ def check_mm_pair_list_radius(radius_A: float, cell: np.ndarray, *, detail: str 
     """
     half_min = 0.5 * float(np.min(np.diag(_cell_matrix_np(cell))))
     if float(radius_A) >= half_min:
+        extra = f"\n{detail}" if detail else ""
         raise ValueError(
-            f"MM pair list radius {float(radius_A):.2f} A{detail} reaches half the box "
-            f"({half_min:.2f} A): atom pairs of switched-on dimers would be missing from the "
-            "list and NVE would not conserve energy. Use a larger box or a smaller "
-            "--mm-switch-on/--mm-switch-width."
+            f"MM pair list radius {float(radius_A):.4f} A reaches half the box "
+            f"({half_min:.4f} A): atom pairs of switched-on dimers would be missing from the "
+            "list and NVE would not conserve energy. Use a larger box, a smaller "
+            "--mm-switch-on/--mm-switch-width, or a skin that keeps list < L/2."
+            f"{extra}"
         )
 
 
@@ -339,12 +441,30 @@ def format_mm_pair_update_stats_summary(stats: dict) -> str:
     capacity_grows = int(stats.get("capacity_grows", 0))
     capacity_changes = int(stats.get("pair_capacity_changes", 0))
     pct = 100.0 * reused / max(1, calls)
+    cap = int(stats.get("pair_capacity") or 0)
+    n_valid = stats.get("pair_n_valid")
+    occ = ""
+    if cap > 0 and n_valid is not None:
+        occ = f", occupancy={int(n_valid)}/{cap} ({100.0 * int(n_valid) / cap:.1f}%)"
+    radius = stats.get("radius") or {}
+    radius_bit = ""
+    if radius:
+        list_r = radius.get("list_radius_A")
+        half = radius.get("box_half_min_A")
+        skin = radius.get("skin_A")
+        inter = radius.get("interaction_radius_A")
+        if list_r is not None:
+            half_s = "n/a" if half is None else f"{float(half):.3f}"
+            radius_bit = (
+                f", list={float(list_r):.3f} A "
+                f"(interaction {float(inter):.3f} + skin {float(skin):.3f}, L/2={half_s})"
+            )
     return (
         f"[jaxmd_nbr] pair-list cache: {reused}/{calls} reused ({pct:.1f}%), "
         f"{updates} rebuilds (cpu={cpu_rebuilds}, gpu={gpu_rebuilds}), "
         f"host_syncs={host_syncs}, device_skin_checks={device_skin_checks}, "
         f"capacity_grows={capacity_grows}, capacity_changes={capacity_changes}, "
-        f"reallocs={reallocs}, fallbacks={fallbacks}"
+        f"reallocs={reallocs}, fallbacks={fallbacks}{occ}{radius_bit}"
     )
 
 
@@ -1271,23 +1391,32 @@ def build_mm_energy_forces_fn(
     pair_lambda_mm = None
 
     _mm_assumed_extent = 0.0
+    _mm_measured_extent = 0.0
     if hybrid_hamiltonian == "shared_cutoff":
-        _mm_list_cutoff = float(shared_cutoff) + float(jax_md_skin_distance)
-        _mm_radius_detail = f" (shared cutoff {float(shared_cutoff):.2f} A + skin)"
+        _mm_radius_info = mm_pair_list_radius_breakdown(
+            skin_distance=jax_md_skin_distance,
+            cell=pbc_cell,
+            shared_cutoff=float(shared_cutoff),
+        )
     else:
         if pbc_cell is not None:
             # Flexible molecules: the list assumes extent + margin; the rebuild
             # path raises if a molecule later grows past it.
-            _mm_assumed_extent = max_monomer_extent_A(R, monomer_offsets, pbc_cell) + float(
-                max(0.0, mm_extent_margin_A)
-            )
-        _mm_list_cutoff = resolve_mm_pair_list_cutoff_A(
-            mm_switch_on, mm_switch_width, jax_md_skin_distance, molecule_extent_A=_mm_assumed_extent
+            _mm_measured_extent = max_monomer_extent_A(R, monomer_offsets, pbc_cell)
+            _mm_assumed_extent = _mm_measured_extent + float(max(0.0, mm_extent_margin_A))
+        _mm_radius_info = mm_pair_list_radius_breakdown(
+            mm_switch_on=mm_switch_on,
+            mm_switch_width=mm_switch_width,
+            skin_distance=jax_md_skin_distance,
+            measured_extent_A=_mm_measured_extent,
+            extent_margin_A=mm_extent_margin_A,
+            assumed_extent_A=_mm_assumed_extent,
+            cell=pbc_cell,
         )
-        _mm_radius_detail = (
-            f" (COM switch end {float(mm_switch_on) + float(mm_switch_width):.2f} A"
-            f" + 2 x (molecule extent + margin) {2.0 * _mm_assumed_extent:.2f} A + skin)"
-        )
+    _mm_list_cutoff = float(_mm_radius_info["list_radius_A"])
+    _mm_radius_detail = format_mm_pair_list_radius_report(_mm_radius_info)
+    if debug:
+        print(_mm_radius_detail, flush=True)
     # Ewald returns before any pair list is used (full-box Coulomb, all-pairs LJ).
     if pbc_cell is not None and pick_lr_solver(lr_solver) != "ewald":
         check_mm_pair_list_radius(_mm_list_cutoff, pbc_cell, detail=_mm_radius_detail)
@@ -1903,6 +2032,8 @@ def build_mm_energy_forces_fn(
             "pair_capacity_initial": int(_n_static_pairs),
             "pair_capacity_changes": 0,
             "pair_capacity_history": [int(_n_static_pairs)],
+            "pair_n_valid": int(_n_valid) if "_n_valid" in locals() else None,
+            "radius": dict(_mm_radius_info),
             "update_interval": int(max(1, jax_md_update_interval)),
             "skin_distance": float(max(0.0, jax_md_skin_distance)),
             "cache_reuse_reason": "init",
@@ -1945,6 +2076,9 @@ def build_mm_energy_forces_fn(
             return unswitched_pair_vdw_elec(
                 positions, pair_idx, pair_mask, cell_for_mic, charges, **_pair_kw
             )
+
+        def _record_pair_occupancy(n_valid: int) -> None:
+            _pair_stats["pair_n_valid"] = int(n_valid)
 
         def calculate_mm_pair_energies_dynamic(
             positions: Array,
@@ -2657,8 +2791,9 @@ def build_mm_energy_forces_fn(
             _last_box[0] = None if box is None else np.asarray(box, dtype=np.float64).copy()
             _pair_stats["updates"] += 1
 
+            n_valid = int(np.sum(np.asarray(jax.device_get(mask))))
+            _record_pair_occupancy(n_valid)
             if _nbr_debug:
-                n_valid = int(np.sum(np.asarray(jax.device_get(mask))))
                 capacity = pair_idx.shape[0] if hasattr(pair_idx, "shape") else len(pair_i)
                 print(
                     f"[nbr] pairs: n_valid={n_valid}, capacity={capacity}, "
