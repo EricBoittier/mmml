@@ -82,13 +82,13 @@ def force_energy_relative_error(
     force_component: float,
     eps: float,
 ) -> float:
-    """``|F_fd - F| / max(|F|, |F_fd|, 1e-12)`` from a central difference.
+    """``|g_fd - g| / max(|g|, |g_fd|, 1e-12)`` from a central difference of E.
 
-    ``energy_0`` is unused in the stencil (it documents the expansion point) but
-    kept so callers pass the triple they actually evaluated.
+    ``force_component`` is ``dE/dx`` (``jax.grad``), matching the asv MM benches,
+    not the physical force ``-∇E``. ``energy_0`` documents the expansion point.
     """
     del energy_0
-    fd = -(float(energy_plus) - float(energy_minus)) / (2.0 * float(eps))
+    fd = (float(energy_plus) - float(energy_minus)) / (2.0 * float(eps))
     denom = max(abs(float(force_component)), abs(fd), 1e-12)
     return abs(fd - float(force_component)) / denom
 

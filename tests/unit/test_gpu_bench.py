@@ -64,13 +64,13 @@ def test_finite_array_report_rejects_nan():
 
 
 def test_force_energy_relative_error_quadratic():
-    # E = 0.5 x^2 at x=2 → F = -2. Central difference with eps=1e-4.
+    # E = 0.5 x^2 at x=2 → dE/dx = 2. Central difference with eps=1e-4.
     x = 2.0
     eps = 1e-4
     e0 = 0.5 * x * x
     e_plus = 0.5 * (x + eps) ** 2
     e_minus = 0.5 * (x - eps) ** 2
-    err = force_energy_relative_error(e0, e_plus, e_minus, force_component=-x, eps=eps)
+    err = force_energy_relative_error(e0, e_plus, e_minus, force_component=x, eps=eps)
     assert err < 1e-6
 
 
