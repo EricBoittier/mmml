@@ -331,9 +331,10 @@ Full help (all categories). Short index: -h One category: -hN or -halias (see
                         overlap-min-distance). Structures must be ML-safe before
                         USER is enabled.
   --charmm-image-mlpot-min-distance ANG
-                        CHARMM <MKIMAT2> / MIC registration floor (Å) before
-                        MLpot USER (default: 1.0; atom-pair prep gates remain
-                        stricter).
+                        Floor (Å) on the CHARMM <MKIMAT2> Min-Distance column
+                        before MLpot USER (default: 0 = off). That column is a
+                        group bounding-box gap, not an atom distance; the MIC
+                        prep gate checks atom overlaps.
   --pre-mlpot-h-heavy-min-distance ANG
                         Pre-MLpot H–heavy element-pair MIC floor (Å); default
                         2.3.
@@ -1237,6 +1238,10 @@ Full help (all categories). Short index: -h One category: -hN or -halias (see
                         pycharmm: abort if max atomic |F| exceeds this (eV/Å)
                         before dynamics; default 2.0. Raise only for controlled
                         smokes.
+  --pbc-ensemble {npt,nvt}
+                        pycharmm: periodic equi/prod ensemble (default: npt).
+                        nvt keeps the cell fixed (CPT Hoover, pmass=0) at the
+                        built density.
   --hybrid-hamiltonian {handoff,shared_cutoff}
                         Hybrid Hamiltonian: existing COM handoff or additive
                         force-shifted shared cutoff.
