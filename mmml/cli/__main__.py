@@ -331,6 +331,10 @@ def main():
         from .misc import pet_physnet_distill
         return pet_physnet_distill.main(args.args)
 
+    elif command == "tune-mm-nonbonded":
+        from .misc import tune_mm_nonbonded
+        return tune_mm_nonbonded.main(args.args)
+
     elif command == "pet-interaction-pes":
         from .misc import pet_interaction_pes
         return pet_interaction_pes.main(args.args)
