@@ -709,6 +709,30 @@ def metatomic_zero_fragment_output(
     }
 
 
+def _resolve_ml_chunk_layout(ml_sparse_dimers, _max_active_dimers, n_dimers_total, ml_batch_size, n_monomers, _jax_mm_spoof_mode, _kernnn_mode, _metatomic_mode, ml_gpu_count):
+    _ml_chunk_layout = None
+    if (
+        ml_sparse_dimers
+        and _max_active_dimers < n_dimers_total
+        and ml_batch_size
+        and n_monomers + _max_active_dimers > int(ml_batch_size)
+        and not (_jax_mm_spoof_mode or _kernnn_mode or _metatomic_mode)
+    ):
+        from mmml.interfaces.pycharmmInterface.mlpot.ml_chunk_budget import MlChunkLayout
+        from mmml.interfaces.pycharmmInterface.mlpot_gpu import effective_ml_gpu_count
+
+        _layout_n_chunks = -(-(n_monomers + _max_active_dimers) // int(ml_batch_size))
+        if effective_ml_gpu_count(ml_gpu_count, n_chunks=_layout_n_chunks) <= 1:
+            _ml_chunk_layout = MlChunkLayout(
+                n_monomers=int(n_monomers),
+                max_active_dimers=int(_max_active_dimers),
+                chunk_size=int(ml_batch_size),
+                n_chunks=int(_layout_n_chunks),
+            )
+
+    return _ml_chunk_layout
+
+
 def setup_calculator(
     ATOMS_PER_MONOMER: Union[int, List[int], Sequence[int]],
     N_MONOMERS: int = 2,
@@ -1693,28 +1717,10 @@ def setup_calculator(
     _skip_padding_chunks = (
         os.environ.get("MMML_MLPOT_SKIP_PADDING_CHUNKS") or "1"
     ).strip().lower() not in ("0", "false", "no", "off")
-    # Chunk geometry of the sparse-dimer PhysNet batch, for callers that pick a
-    # static chunk budget on the host (``spherical_cutoff_calculator(...,
-    # ml_eval_chunks=k)``, see mlpot.ml_chunk_budget). None: not applicable.
-    _ml_chunk_layout = None
-    if (
-        ml_sparse_dimers
-        and _max_active_dimers < n_dimers_total
-        and ml_batch_size
-        and n_monomers + _max_active_dimers > int(ml_batch_size)
-        and not (_jax_mm_spoof_mode or _kernnn_mode or _metatomic_mode)
-    ):
-        from mmml.interfaces.pycharmmInterface.mlpot.ml_chunk_budget import MlChunkLayout
-        from mmml.interfaces.pycharmmInterface.mlpot_gpu import effective_ml_gpu_count
-
-        _layout_n_chunks = -(-(n_monomers + _max_active_dimers) // int(ml_batch_size))
-        if effective_ml_gpu_count(ml_gpu_count, n_chunks=_layout_n_chunks) <= 1:
-            _ml_chunk_layout = MlChunkLayout(
-                n_monomers=int(n_monomers),
-                max_active_dimers=int(_max_active_dimers),
-                chunk_size=int(ml_batch_size),
-                n_chunks=int(_layout_n_chunks),
-            )
+    _ml_chunk_layout = _resolve_ml_chunk_layout(
+        ml_sparse_dimers, _max_active_dimers, n_dimers_total, ml_batch_size,
+        n_monomers, _jax_mm_spoof_mode, _kernnn_mode, _metatomic_mode, ml_gpu_count,
+    )
 
     _jax_md_skin_distance = float(jax_md_skin_distance)
 
