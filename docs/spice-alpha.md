@@ -88,6 +88,37 @@ XYZ benches: IR-R-7193 has `dipole_eAA` and `polarizability_eAA2_per_V`,
 `pbc="F F F"`. R-3B69 also has `energy_eV` and per-atom **forces** (do not
 flip). Useful for dipole/spectra checks, not a hybrid PES.
 
+## Efield + polarizability
+
+The efield model already predicts `α = dμ/dEf`
+(`mmml.models.efield.model_functions.dipole_derivative_field_batched`).
+SPICE-α is **zero-field** DFT, so train at `Ef = 0` and add a polar
+regularizer. Convert polar to Bohr³ first.
+
+On the machine that already unzipped `SPICE-alpha.zip`:
+
+```bash
+# inner HDF5 (DES only)
+tar -xzf SPICE-alpha/SPICE-alpha.tar.gz --transform='s|^\./||' -C SPICE-alpha \
+  DES370K_Monomers.hdf5 DES370K_Dimers.hdf5
+
+# smoke (256 frames) or drop --max-frames for the full monomer set
+python -m mmml.data.spice_alpha SPICE-alpha/DES370K_Monomers.hdf5 \
+  -o spice_des_mono.npz --efield --polar-units bohr3 --neutral-only \
+  --split-dir splits_des_mono --max-frames 256
+
+mmml efield-train \
+  --train-npz splits_des_mono/energies_forces_dipoles_train.npz \
+  --valid-npz splits_des_mono/energies_forces_dipoles_valid.npz \
+  --output-dir ./ckpts/spice_ef_polar \
+  --energy_weight 1 --forces_weight 100 --dipole_weight 0.1 \
+  --polar_weight 1 --polar-at-zero-field \
+  --num_epochs 100 --batch_size 64 --features 32 --max_degree 2
+```
+
+Wrappers: `scripts/spice_alpha/prepare_efield_dataset.sh` and
+`train_efield_polar.sh`. Iodine is Z=53; the efield model max Z is 55.
+
 ## Train
 
 Iodine is Z=53. Example yaml uses `max_atomic_number: 35` (Br). Total

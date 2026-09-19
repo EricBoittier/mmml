@@ -362,6 +362,61 @@ def test_max_atomic_number_empty_n_is_zero():
     assert max_atomic_number(data) == 0
 
 
+def test_efield_flag_writes_zero_field_and_bohr3_polar(tmp_path):
+    from mmml.data.units import E_ANGSTROM2_PER_VOLT_TO_BOHR3
+
+    src = _write_spice_h5(tmp_path / "spice.hdf5", extra_group=False)
+    out = tmp_path / "ef.npz"
+    data = convert_spice_alpha_hdf5(
+        [src], out, write_efield=True, polar_units="bohr3"
+    )
+    assert data["Ef"].shape == (2, 3)
+    assert np.allclose(data["Ef"], 0.0)
+    assert data["polar"][0, 0, 0] == pytest.approx(1.2 * E_ANGSTROM2_PER_VOLT_TO_BOHR3)
+    loaded = np.load(out)
+    assert "Ef" in loaded.files
+    assert "polar" in loaded.files
+
+
+def test_split_npz_keeps_polar_and_efield(tmp_path):
+    from mmml.data.spice_alpha import split_npz
+
+    src = _write_spice_h5(tmp_path / "spice.hdf5")
+    data = convert_spice_alpha_hdf5(
+        [src], tmp_path / "all.npz", write_efield=True, polar_units="bohr3"
+    )
+    written = split_npz(data, tmp_path / "splits", train_frac=0.5, valid_frac=0.25, test_frac=0.25)
+    train = np.load(written["train"])
+    assert "Ef" in train.files
+    assert "polar" in train.files
+    assert train["R"].shape[0] >= 1
+
+
+def test_cli_efield_and_split(tmp_path):
+    src = _write_spice_h5(tmp_path / "spice.hdf5")
+    out = tmp_path / "all.npz"
+    splits = tmp_path / "splits"
+    assert main(
+        [
+            str(src),
+            "-o",
+            str(out),
+            "--efield",
+            "--polar-units",
+            "bohr3",
+            "--split-dir",
+            str(splits),
+            "--train-frac",
+            "0.5",
+            "--valid-frac",
+            "0.25",
+            "--test-frac",
+            "0.25",
+        ]
+    ) == 0
+    assert (splits / "energies_forces_dipoles_train.npz").is_file()
+
+
 def test_package_export_round_trip(tmp_path):
     from mmml.data import convert_spice_alpha_hdf5 as exported
 

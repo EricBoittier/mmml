@@ -40,6 +40,7 @@ rewrite `E`/`F`/`D`.
 
 Optional: `D` `(n, 3)` e·Å (omit or set `dipole_weight: 0` if missing).
 `polar` is stored by some exporters and **not** trained by PhysNet.
+The efield trainer can fit it as `dμ/dEf` at `Ef = 0` (`--polar_weight`).
 
 Pad rule: right-pad with `Z=0`, zero `R`/`F`. `physnet-train` auto-detects
 `num_atoms` from `R.shape[1]`.

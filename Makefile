@@ -223,7 +223,8 @@ test-data-loading:
 		tests/unit/test_training_npz_contract.py \
 		tests/unit/test_npz_schema.py \
 		tests/unit/test_read_h5_helpers.py \
-		tests/unit/test_fix_and_split_units.py
+		tests/unit/test_fix_and_split_units.py \
+		tests/unit/test_efield_polar_loss.py
 
 test-all:
 	uv run pytest tests

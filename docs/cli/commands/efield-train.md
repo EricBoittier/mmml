@@ -31,10 +31,12 @@ usage: mmml efield-train [-h] [--data DATA] [--train-npz TRAIN_NPZ]
                          [--reduce_on_plateau_rtol REDUCE_ON_PLATEAU_RTOL]
                          [--reduce_on_plateau_accumulation_size REDUCE_ON_PLATEAU_ACCUMULATION_SIZE]
                          [--reduce_on_plateau_min_scale REDUCE_ON_PLATEAU_MIN_SCALE]
-                         [--restart RESTART] [--energy_weight ENERGY_WEIGHT]
+                         [--restart RESTART]                          [--energy_weight ENERGY_WEIGHT]
                          [--forces_weight FORCES_WEIGHT]
                          [--dipole_weight DIPOLE_WEIGHT]
                          [--charge_weight CHARGE_WEIGHT]
+                         [--polar_weight POLAR_WEIGHT]
+                         [--polar-at-zero-field | --no-polar-at-zero-field]
                          [--dipole_field_coupling] [--field_scale FIELD_SCALE]
                          [--electrostatics_damping_sigma ELECTROSTATICS_DAMPING_SIGMA]
                          [--zbl]
@@ -60,6 +62,12 @@ Scientific model:
   --charge_weight CHARGE_WEIGHT
                         Weight for charge neutrality loss (sum of charges per
                         molecule squared)
+  --polar_weight POLAR_WEIGHT
+                        Weight for polarizability loss (Bohr³ vs dμ/dEf at
+                        Ef=0). 0 disables.
+  --polar-at-zero-field, --no-polar-at-zero-field
+                        Evaluate dμ/dEf at Ef=0 (default; SPICE-α / isolated
+                        DFT)
   --dipole_field_coupling
                         Add explicit E_total = E_nn + mu·Ef coupling
   --field_scale FIELD_SCALE
