@@ -581,32 +581,16 @@ def _check_gpu_host_float64_near_thresholds():
     _assert_threshold_pair_membership(listed["cpu"][0], listed["cpu"][1], expect_cutoff_pair=True)
 
 
-def test_gpu_host_float64_near_thresholds_with_x64_disabled():
-    """Subprocess so JAX_ENABLE_X64=0 wins even if this pytest worker already enabled x64."""
-    import os
-    import subprocess
-    import sys
-    from pathlib import Path
+def test_gpu_host_float64_near_thresholds_with_x64_disabled(monkeypatch):
+    """In-process, not a subprocess: on Exclusive_Process GPUs this pytest worker
+    already holds the device, so a child gets CUDA_ERROR_DEVICE_UNAVAILABLE and the
+    test skipped as "no JAX GPU device" on exactly the nodes it targets.
+    The check turns x64 off itself and asserts the float32 rounding took effect."""
+    import jax
 
-    repo = str(Path(__file__).resolve().parents[2])
-    env = os.environ.copy()
-    env["JAX_ENABLE_X64"] = "0"
-    env["PYTHONPATH"] = repo + os.pathsep + env.get("PYTHONPATH", "")
-    code = (
-        "from tests.unit.test_mm_pairs_vectorized import _check_gpu_host_float64_near_thresholds\n"
-        "_check_gpu_host_float64_near_thresholds()\n"
-    )
-    proc = subprocess.run(
-        [sys.executable, "-c", code],
-        cwd=repo,
-        env=env,
-        capture_output=True,
-        text=True,
-    )
-    blob = proc.stdout + proc.stderr
-    if proc.returncode != 0 and (
-        "Skipped" in blob or "no JAX GPU" in blob or "GPU pair-list path unavailable" in blob
-        or "vesin not installed" in blob or "cupy" in blob.lower() and "skip" in blob.lower()
-    ):
-        pytest.skip(blob.strip() or "GPU pair-list path unavailable")
-    assert proc.returncode == 0, blob
+    monkeypatch.setenv("MMML_MM_NL_DEVICE", "auto")  # direct GPU rebuild needs auto|gpu; restored at teardown
+    prev = jax.config.jax_enable_x64
+    try:
+        _check_gpu_host_float64_near_thresholds()
+    finally:
+        jax.config.update("jax_enable_x64", prev)
