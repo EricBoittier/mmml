@@ -515,6 +515,29 @@ def read_restart_coordinates(path: Path) -> np.ndarray | None:
     return pos
 
 
+def read_restart_positions(path: Path) -> np.ndarray | None:
+    """Return ``(N, 3)`` *positions* from a CHARMM restart, dynamics or not.
+
+    A leap-frog *dynamics* restart (``!XOLD, YOLD, ZOLD`` section present)
+    stores the positions in ``XOLD`` and the per-step displacement in
+    ``!X, Y, Z`` (``READYN`` converts with ``X = X - XOLD``; see #219), so
+    :func:`read_restart_coordinates` returns ~1e-3 A displacements for it.
+    Loading those as coordinates collapses every atom onto the origin; that is
+    what broke the offline NVT->NPT CPT cold start from an NVE restart
+    (overlap 0.0001 A at step 0, then "molecule extent 21 A").
+    Coordinate-only restarts (no ``XOLD``) fall back to ``!X, Y, Z``.
+    """
+    p = Path(path)
+    natom = read_restart_natom(p)
+    if natom is None or natom <= 0:
+        return None
+    flat = _restart_section_values(p, "!XOLD, YOLD, ZOLD")
+    if len(flat) < 3 * natom:
+        return read_restart_coordinates(p)
+    pos = np.asarray(flat[: 3 * natom], dtype=float).reshape(natom, 3)
+    return pos if np.all(np.isfinite(pos)) else None
+
+
 def _parse_crd_xyz(parts: Sequence[str]) -> tuple[float, float, float] | None:
     # PyCHARMM write.coor_card EXT: index resid resname atomname x y z ...
     if len(parts) >= 7:
