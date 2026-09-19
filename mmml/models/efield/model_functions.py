@@ -221,6 +221,47 @@ def dipole_derivative_field_batched(
     return jax.jacrev(dipole_fn)(Ef)  # (B, 3, 3)
 
 
+def predicted_polarizability_bohr3(
+    model_apply,
+    params,
+    atomic_numbers,
+    positions,
+    dst_idx_flat,
+    src_idx_flat,
+    batch_segments,
+    batch_size,
+    *,
+    field_scale: float = 0.001,
+    ef_shared=None,
+):
+    """Physical polarizability in Bohr³ from ``dμ/dEf`` at a shared field.
+
+    The efield model stores dipoles in e·Å (positions are Å) and takes
+    ``Ef_input`` such that ``Ef_phys [au] = Ef_input * field_scale``. Then
+
+        α_au [Bohr³] = (dμ_eÅ / dEf_input) / field_scale * (Å → a0)
+
+    ``ef_shared`` defaults to the zero field (SPICE-α / isolated-molecule DFT).
+    """
+    from mmml.data.units import ANGSTROM_TO_BOHR
+
+    if ef_shared is None:
+        ef_shared = jnp.zeros((3,), dtype=positions.dtype)
+    alpha_raw = dipole_derivative_field_batched(
+        model_apply,
+        params,
+        atomic_numbers,
+        positions,
+        ef_shared,
+        dst_idx_flat,
+        src_idx_flat,
+        batch_segments,
+        batch_size,
+    )
+    scale = jnp.asarray(field_scale, dtype=alpha_raw.dtype)
+    return alpha_raw / scale * jnp.asarray(ANGSTROM_TO_BOHR, dtype=alpha_raw.dtype)
+
+
 def dipole_derivative_positions(
     model_apply, params, atomic_numbers, positions, Ef,
     dst_idx_flat, src_idx_flat, batch_segments, batch_size,

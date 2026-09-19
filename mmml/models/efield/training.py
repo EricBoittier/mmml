@@ -20,7 +20,6 @@ from optax import tree_utils as otu
 from flax import linen as nn
 
 import e3x
-from mmml.utils.rotations import rotate_batched_vectors, sample_random_rotations
 
 # ZBL repulsion (optional short-range nuclear repulsion)
 from mmml.models.physnetjax.physnetjax.models.zbl import ZBLRepulsion
@@ -29,8 +28,10 @@ from ase.visualize import view as view  # optional; kept because you had it
 
 from mmml.data.units import ANGSTROM_TO_BOHR, EV_TO_KCAL_MOL, HARTREE_TO_EV
 from mmml.models.efield.args import build_train_parser as build_parser
+from mmml.models.efield.model_functions import predicted_polarizability_bohr3
 from mmml.utils.cli_args import exit_if_unknown_long_options
 from mmml.utils.model_checkpoint import to_jsonable
+from mmml.utils.rotations import rotate_batched_rank2_tensors, rotate_batched_vectors, sample_random_rotations
 
 
 def print_params_structure(params, label="params", max_depth=3, verbose=False):
@@ -482,7 +483,9 @@ def load_ef_npz(path: str | Path) -> dict:
     Load one NPZ from fix-and-split / pyscf-evaluate style splits into the dict format
     expected by train_model / prepare_batches.
 
-    Required keys: R, Z, E, F, Ef. Dipoles: D or Dxyz (same units as NPZ; often e·Å after fix-and-split), optional.
+    Required keys: R, Z, E, F. ``Ef`` defaults to zeros (zero-field DFT / SPICE-α).
+    Dipoles: D or Dxyz (e·Å after fix-and-split), optional.
+    Polarizability: ``polar`` (n, 3, 3) in Bohr³ for the polar loss.
 
     Energy convention (E-field runs): default ``pyscf-evaluate`` adds the nuclear-field energy term
     after SCF (gpu4pyscf-style). Use ``--no-efield-include-nuclear-energy`` for legacy ``mf.kernel``-only
@@ -502,7 +505,10 @@ def load_ef_npz(path: str | Path) -> dict:
     Z = _need("Z")
     E = np.asarray(_need("E"), dtype=np.float64).ravel()
     F = _need("F")
-    Ef = _need("Ef")
+    if "Ef" in raw:
+        Ef = np.asarray(raw["Ef"])
+    else:
+        Ef = np.zeros((np.asarray(R).shape[0], 3), dtype=np.float32)
 
     R = np.asarray(R, dtype=np.float32)
     if R.ndim == 4 and R.shape[1] == 1:
@@ -552,6 +558,13 @@ def load_ef_npz(path: str | Path) -> dict:
     }
     if dip is not None:
         out["D"] = jnp.asarray(dip, dtype=jnp.float32)
+    if "polar" in raw:
+        polar = np.asarray(raw["polar"], dtype=np.float32)
+        if polar.ndim == 4:
+            polar = polar.squeeze()
+        if polar.shape != (R.shape[0], 3, 3):
+            raise ValueError(f"{path}: polar shape {polar.shape}, expected ({R.shape[0]}, 3, 3)")
+        out["polar"] = jnp.asarray(polar, dtype=jnp.float32)
     return out
 
 
@@ -591,25 +604,40 @@ def prepare_datasets(key, num_train, num_valid, dataset):
         else:
             dipoles = dipoles_raw
     
+    if "Ef" in dataset:
+        efield = jnp.asarray(dataset["Ef"], dtype=jnp.float32)
+    else:
+        efield = jnp.zeros((positions_raw.shape[0], 3), dtype=jnp.float32)
+
     train_data = dict(
         atomic_numbers=jnp.asarray(dataset["Z"], dtype=jnp.int32)[train_choice],      # (num_train, N)
         positions=positions_raw[train_choice],                                         # (num_train, N, 3)
-        electric_field=jnp.asarray(dataset["Ef"], dtype=jnp.float32)[train_choice],   # (num_train, 3)
+        electric_field=efield[train_choice],                                           # (num_train, 3)
         energies=jnp.asarray(dataset["E"], dtype=jnp.float32)[train_choice],          # (num_train,) or (num_train,1)
         forces=forces_raw[train_choice],                                               # (num_train, N, 3)
     )
     if dipoles is not None:
         train_data["D"] = dipoles[train_choice]  # (num_train, 3)
-    
+    if "polar" in dataset:
+        polar = jnp.asarray(dataset["polar"], dtype=jnp.float32)
+        if polar.ndim == 4:
+            polar = polar.squeeze()
+        train_data["polar"] = polar[train_choice]
+
     valid_data = dict(
         atomic_numbers=jnp.asarray(dataset["Z"], dtype=jnp.int32)[valid_choice],
         positions=positions_raw[valid_choice],                                         # (num_valid, N, 3)
-        electric_field=jnp.asarray(dataset["Ef"], dtype=jnp.float32)[valid_choice],
+        electric_field=efield[valid_choice],
         energies=jnp.asarray(dataset["E"], dtype=jnp.float32)[valid_choice],
         forces=forces_raw[valid_choice],                                               # (num_valid, N, 3)
     )
     if dipoles is not None:
         valid_data["D"] = dipoles[valid_choice]  # (num_valid, 3)
+    if "polar" in dataset:
+        polar = jnp.asarray(dataset["polar"], dtype=jnp.float32)
+        if polar.ndim == 4:
+            polar = polar.squeeze()
+        valid_data["polar"] = polar[valid_choice]
     return train_data, valid_data
 
 
@@ -703,6 +731,7 @@ def prepare_batches(
             )
 
     has_dipoles = "D" in data and data["D"] is not None
+    has_polar = "polar" in data and data["polar"] is not None
     batches = []
     offset = 0
     while offset + batch_size <= n_used:
@@ -711,6 +740,7 @@ def prepare_batches(
         forces = data["forces"][idx]
         efield = data["electric_field"][idx]
         dipoles = data["D"][idx] if has_dipoles else None
+        polar = data["polar"][idx] if has_polar else None
         if rot_augment:
             rot_key = jax.random.fold_in(key, int(idx[0]))
             rotations = sample_random_rotations(
@@ -721,6 +751,8 @@ def prepare_batches(
             efield = rotate_batched_vectors(efield, rotations)
             if dipoles is not None:
                 dipoles = rotate_batched_vectors(dipoles, rotations)
+            if polar is not None:
+                polar = rotate_batched_rank2_tensors(polar, rotations)
         if precomputed_ok:
             d_flat, s_flat, b_seg = dst_idx_flat, src_idx_flat, batch_segments
         else:
@@ -737,6 +769,8 @@ def prepare_batches(
         }
         if has_dipoles:
             batch_dict["dipoles"] = dipoles
+        if has_polar:
+            batch_dict["polar"] = polar
         batches.append(batch_dict)
         offset += batch_size
 
@@ -747,6 +781,7 @@ def prepare_batches(
         forces = data["forces"][idx]
         efield = data["electric_field"][idx]
         dipoles = data["D"][idx] if has_dipoles else None
+        polar = data["polar"][idx] if has_polar else None
         if rot_augment:
             rot_key = jax.random.fold_in(key, int(idx[0]))
             rotations = sample_random_rotations(
@@ -757,6 +792,8 @@ def prepare_batches(
             efield = rotate_batched_vectors(efield, rotations)
             if dipoles is not None:
                 dipoles = rotate_batched_vectors(dipoles, rotations)
+            if polar is not None:
+                polar = rotate_batched_rank2_tensors(polar, rotations)
         d_flat, s_flat, b_seg = _flat_pairwise_indices(bs_rem, num_atoms)
         batch_dict = {
             "atomic_numbers": data["atomic_numbers"][idx].reshape(bs_rem * num_atoms),
@@ -770,6 +807,8 @@ def prepare_batches(
         }
         if has_dipoles:
             batch_dict["dipoles"] = dipoles
+        if has_polar:
+            batch_dict["polar"] = polar
         batches.append(batch_dict)
 
     return batches
@@ -778,8 +817,45 @@ def prepare_batches(
 # -------------------------
 # Train / Eval steps
 # -------------------------
-@functools.partial(jax.jit, static_argnames=("model_apply", "optimizer_update", "batch_size", "ema_decay", "energy_weight", "forces_weight", "dipole_weight", "charge_weight", "gradient_checkpoint"))
-def train_step(model_apply, optimizer_update, batch, batch_size, opt_state, params, ema_params, transform_state, ema_decay=0.999, energy_weight=1.0, forces_weight=100.0, dipole_weight=10.0, charge_weight=1.0, gradient_checkpoint=False):
+def polarizability_loss_and_mae(
+    model_apply,
+    params,
+    batch,
+    batch_size,
+    field_scale=0.001,
+    *,
+    at_zero_field=True,
+):
+    """MSE / MAE of α [Bohr³] vs ``dμ/dEf`` (see ``model_functions``)."""
+    n_flat = batch["positions"].shape[0]
+    n_atoms = n_flat // int(batch_size)
+    ef_shared = None
+    if not at_zero_field:
+        ef_shared = jnp.mean(batch["electric_field"], axis=0)
+    pred = predicted_polarizability_bohr3(
+        model_apply,
+        params,
+        batch["atomic_numbers"].reshape(batch_size, n_atoms),
+        batch["positions"].reshape(batch_size, n_atoms, 3),
+        batch["dst_idx_flat"],
+        batch["src_idx_flat"],
+        batch["batch_segments"],
+        batch_size,
+        field_scale=field_scale,
+        ef_shared=ef_shared,
+    )
+    target = jnp.asarray(batch["polar"])
+    finite = jnp.isfinite(pred) & jnp.isfinite(target)
+    ok = finite.all(axis=(-2, -1))
+    diff = pred - target
+    denom = jnp.maximum(ok.sum() * 9.0, 1.0)
+    mse = jnp.sum(jnp.where(ok[:, None, None], 0.5 * diff * diff, 0.0)) / denom
+    mae = jnp.sum(jnp.where(ok[:, None, None], jnp.abs(diff), 0.0)) / denom
+    return mse, mae
+
+
+@functools.partial(jax.jit, static_argnames=("model_apply", "optimizer_update", "batch_size", "ema_decay", "energy_weight", "forces_weight", "dipole_weight", "charge_weight", "polar_weight", "field_scale", "polar_at_zero_field", "gradient_checkpoint"))
+def train_step(model_apply, optimizer_update, batch, batch_size, opt_state, params, ema_params, transform_state, ema_decay=0.999, energy_weight=1.0, forces_weight=100.0, dipole_weight=10.0, charge_weight=1.0, polar_weight=0.0, field_scale=0.001, polar_at_zero_field=True, gradient_checkpoint=False):
     def loss_fn(params):
         # Forward pass with mutable intermediates to capture atomic charges
         def energy_fn(pos):
@@ -826,10 +902,21 @@ def train_step(model_apply, optimizer_update, batch, batch_size, opt_state, para
         total_loss = energy_weight * energy_loss + forces_weight * force_loss + charge_weight * charge_sum_sq
         if "dipoles" in batch:
             total_loss = total_loss + dipole_weight * dipole_loss
-        
-        return total_loss, (energy, forces, dipole, charge_sum_sq, energy_loss, force_loss, dipole_loss)
+        polar_loss = 0.0
+        if polar_weight != 0.0 and "polar" in batch:
+            polar_loss, _polar_mae = polarizability_loss_and_mae(
+                model_apply,
+                params,
+                batch,
+                batch_size,
+                field_scale=field_scale,
+                at_zero_field=polar_at_zero_field,
+            )
+            total_loss = total_loss + polar_weight * polar_loss
 
-    (loss, (energy, forces, dipole, charge_sum_sq, energy_loss, force_loss, dipole_loss)), grad = jax.value_and_grad(loss_fn, has_aux=True)(params)
+        return total_loss, (energy, forces, dipole, charge_sum_sq, energy_loss, force_loss, dipole_loss, polar_loss)
+
+    (loss, (energy, forces, dipole, charge_sum_sq, energy_loss, force_loss, dipole_loss, polar_loss)), grad = jax.value_and_grad(loss_fn, has_aux=True)(params)
     
     # Check for NaN/Inf in loss
     loss_finite = jnp.isfinite(loss)
@@ -881,7 +968,17 @@ def train_step(model_apply, optimizer_update, batch, batch_size, opt_state, para
     energy_mae = mean_absolute_error(energy, batch["energies"])
     forces_mae = mean_absolute_error_forces(forces, batch["forces"])
     dipole_mae = mean_absolute_error(dipole, batch["dipoles"]) if "dipoles" in batch else 0.0
-    
+    polar_mae = 0.0
+    if polar_weight != 0.0 and "polar" in batch:
+        _, polar_mae = polarizability_loss_and_mae(
+            model_apply,
+            params,
+            batch,
+            batch_size,
+            field_scale=field_scale,
+            at_zero_field=polar_at_zero_field,
+        )
+
     # R² computation skipped for training batches (only computed for validation)
     energy_r2 = 0.0
     forces_r2 = 0.0
@@ -902,11 +999,13 @@ def train_step(model_apply, optimizer_update, batch, batch_size, opt_state, para
         energy_loss,
         force_loss,
         dipole_loss,
+        polar_loss,
+        polar_mae,
     )
 
 
-@functools.partial(jax.jit, static_argnames=("model_apply", "batch_size", "energy_weight", "forces_weight", "dipole_weight", "charge_weight"))
-def eval_step(model_apply, batch, batch_size, params, energy_weight=1.0, forces_weight=100.0, dipole_weight=10.0, charge_weight=1.0):
+@functools.partial(jax.jit, static_argnames=("model_apply", "batch_size", "energy_weight", "forces_weight", "dipole_weight", "charge_weight", "polar_weight", "field_scale", "polar_at_zero_field"))
+def eval_step(model_apply, batch, batch_size, params, energy_weight=1.0, forces_weight=100.0, dipole_weight=10.0, charge_weight=1.0, polar_weight=0.0, field_scale=0.001, polar_at_zero_field=True):
     # Compute energy, dipole, and capture atomic charges via mutable intermediates
     (energy, dipole), state = model_apply(
         params,
@@ -947,9 +1046,21 @@ def eval_step(model_apply, batch, batch_size, params, energy_weight=1.0, forces_
     energy_loss = mean_squared_loss(energy.reshape(-1), batch["energies"].reshape(-1))
     force_loss = mean_squared_loss(forces, batch["forces"])
     dipole_loss = mean_squared_loss(dipole, batch["dipoles"]) if "dipoles" in batch else 0.0
+    polar_loss = 0.0
+    polar_mae = 0.0
     total_loss = energy_weight * energy_loss + forces_weight * force_loss + charge_weight * charge_sum_sq
     if "dipoles" in batch:
         total_loss = total_loss + dipole_weight * dipole_loss
+    if polar_weight != 0.0 and "polar" in batch:
+        polar_loss, polar_mae = polarizability_loss_and_mae(
+            model_apply,
+            params,
+            batch,
+            batch_size,
+            field_scale=field_scale,
+            at_zero_field=polar_at_zero_field,
+        )
+        total_loss = total_loss + polar_weight * polar_loss
     
     # Ensure loss is finite
     total_loss = jnp.where(jnp.isfinite(total_loss), total_loss, 1e6)
@@ -984,14 +1095,14 @@ def eval_step(model_apply, batch, batch_size, params, energy_weight=1.0, forces_
         ss_tot_dipole = jnp.sum((batch["dipoles"] - jnp.mean(batch["dipoles"]))**2)
         dipole_r2 = jnp.where(ss_tot_dipole > eps, 1.0 - (ss_res_dipole / (ss_tot_dipole + eps)), 0.0)
     
-    return total_loss, energy_loss, force_loss, dipole_loss, charge_sum_sq, energy_mae, forces_mae, dipole_mae, energy_r2, forces_r2, dipole_r2
+    return total_loss, energy_loss, force_loss, dipole_loss, charge_sum_sq, energy_mae, forces_mae, dipole_mae, energy_r2, forces_r2, dipole_r2, polar_loss, polar_mae
 
 
 def train_model(key, model, train_data, valid_data, num_epochs, learning_rate, batch_size, 
                 clip_norm=10.0, ema_decay=0.999, early_stopping_patience=None, early_stopping_min_delta=0.0,
                 reduce_on_plateau_patience=5, reduce_on_plateau_cooldown=5, reduce_on_plateau_factor=0.9,
                 reduce_on_plateau_rtol=1e-4, reduce_on_plateau_accumulation_size=5, reduce_on_plateau_min_scale=0.01,
-                energy_weight=1.0, forces_weight=100.0, dipole_weight=10.0, charge_weight=1.0, initial_params=None,
+                energy_weight=1.0, forces_weight=100.0, dipole_weight=10.0, charge_weight=1.0, polar_weight=0.0, field_scale=0.001, polar_at_zero_field=True, initial_params=None,
                 gradient_checkpoint=False, verbose=False,
                 checkpoint_dir: str | Path | None = None, run_uuid: str | None = None,
                 save_every_n_epochs: int = 0, save_best: bool = True,
@@ -1246,6 +1357,8 @@ def train_model(key, model, train_data, valid_data, num_epochs, learning_rate, b
         train_energy_loss = 0.0
         train_force_loss = 0.0
         train_dipole_loss = 0.0
+        train_polar_loss = 0.0
+        train_polar_mae = 0.0
         for i, batch in enumerate(train_batches):
             (
                 params,
@@ -1262,6 +1375,8 @@ def train_model(key, model, train_data, valid_data, num_epochs, learning_rate, b
                 energy_loss_batch,
                 force_loss_batch,
                 dipole_loss_batch,
+                polar_loss_batch,
+                polar_mae_batch,
             ) = train_step(
                 model_apply=model.apply,
                 optimizer_update=optimizer.update,
@@ -1276,6 +1391,9 @@ def train_model(key, model, train_data, valid_data, num_epochs, learning_rate, b
                 forces_weight=forces_weight,
                 dipole_weight=dipole_weight,
                 charge_weight=charge_weight,
+                polar_weight=polar_weight,
+                field_scale=field_scale,
+                polar_at_zero_field=polar_at_zero_field,
                 gradient_checkpoint=gradient_checkpoint,
             )
             # Don't block - let JAX execute asynchronously for maximum throughput
@@ -1288,6 +1406,8 @@ def train_model(key, model, train_data, valid_data, num_epochs, learning_rate, b
             train_energy_loss += (energy_loss_batch - train_energy_loss) / (i + 1)
             train_force_loss += (force_loss_batch - train_force_loss) / (i + 1)
             train_dipole_loss += (dipole_loss_batch - train_dipole_loss) / (i + 1)
+            train_polar_loss += (polar_loss_batch - train_polar_loss) / (i + 1)
+            train_polar_mae += (polar_mae_batch - train_polar_mae) / (i + 1)
 
         valid_loss = 0.0
         valid_energy_loss = 0.0
@@ -1300,9 +1420,11 @@ def train_model(key, model, train_data, valid_data, num_epochs, learning_rate, b
         valid_energy_r2 = 0.0
         valid_forces_r2 = 0.0
         valid_dipole_r2 = 0.0
+        valid_polar_loss = 0.0
+        valid_polar_mae = 0.0
         # Use EMA parameters for validation (as in physnetjax)
         for i, batch in enumerate(valid_batches):
-            loss, energy_loss, force_loss, dipole_loss_batch, charge_loss_batch, energy_mae, forces_mae, dipole_mae, energy_r2, forces_r2, dipole_r2 = eval_step(
+            loss, energy_loss, force_loss, dipole_loss_batch, charge_loss_batch, energy_mae, forces_mae, dipole_mae, energy_r2, forces_r2, dipole_r2, polar_loss_batch, polar_mae_batch = eval_step(
                 model_apply=model.apply,
                 batch=batch,
                 batch_size=batch_size,
@@ -1311,6 +1433,9 @@ def train_model(key, model, train_data, valid_data, num_epochs, learning_rate, b
                 forces_weight=forces_weight,
                 dipole_weight=dipole_weight,
                 charge_weight=charge_weight,
+                polar_weight=polar_weight,
+                field_scale=field_scale,
+                polar_at_zero_field=polar_at_zero_field,
             )
             # Don't block - let JAX execute asynchronously
             valid_loss += (loss - valid_loss) / (i + 1)
@@ -1324,6 +1449,8 @@ def train_model(key, model, train_data, valid_data, num_epochs, learning_rate, b
             valid_energy_r2 += (energy_r2 - valid_energy_r2) / (i + 1)
             valid_forces_r2 += (forces_r2 - valid_forces_r2) / (i + 1)
             valid_dipole_r2 += (dipole_r2 - valid_dipole_r2) / (i + 1)
+            valid_polar_loss += (polar_loss_batch - valid_polar_loss) / (i + 1)
+            valid_polar_mae += (polar_mae_batch - valid_polar_mae) / (i + 1)
 
         # Update reduce on plateau transform state
         _, transform_state = transform.update(
@@ -1363,6 +1490,9 @@ def train_model(key, model, train_data, valid_data, num_epochs, learning_rate, b
             print(f"    dipole mae [tgt units]  {float(train_dipole_mae): 8.6f} {float(valid_dipole_mae): 8.6f}")
             print(f"    dipole R²               {'N/A':>8s} {float(valid_dipole_r2): 8.6f}")
             print(f"    dipole MSE [tgt²]       {float(train_dipole_loss): 8.6f} {float(valid_dipole_loss): 8.6f}")
+        if polar_weight != 0.0:
+            print(f"    polar mae [Bohr³]       {float(train_polar_mae): 8.6f} {float(valid_polar_mae): 8.6f}")
+            print(f"    polar MSE [Bohr⁶]       {float(train_polar_loss): 8.6f} {float(valid_polar_loss): 8.6f}")
         print(f"    charge loss [e²]        {float(train_charge_loss): 8.6f} {float(valid_charge_loss): 8.6f}")
         print(f"    charge RMSE [e]         {float(jnp.sqrt(train_charge_loss)): 8.6f} {float(jnp.sqrt(valid_charge_loss)): 8.6f}")
         print(f"    LR scale: {float(lr_scale): 8.6f}, effective LR: {float(learning_rate * lr_scale): 8.6f}")
@@ -1490,6 +1620,14 @@ def main(args=None):
     print(f"  train electric_field: {train_data['electric_field'].shape}")
     print(f"  train energies:       {train_data['energies'].shape}")
     print(f"  train forces:        {train_data['forces'].shape}")
+    if "polar" in train_data:
+        print(f"  train polar:         {train_data['polar'].shape}")
+    elif args.polar_weight != 0.0:
+        print(
+            "Warning: --polar_weight is set but NPZ has no 'polar' array; "
+            "polar loss will be skipped.",
+            file=sys.stderr,
+        )
 
     message_passing_model = EFieldPhysNet(
         features=args.features,
@@ -1544,6 +1682,9 @@ def main(args=None):
         forces_weight=args.forces_weight,
         dipole_weight=args.dipole_weight,
         charge_weight=args.charge_weight,
+        polar_weight=args.polar_weight,
+        field_scale=args.field_scale,
+        polar_at_zero_field=args.polar_at_zero_field,
         initial_params=initial_params,
         gradient_checkpoint=args.gradient_checkpoint,
         verbose=args.verbose,
@@ -1591,6 +1732,8 @@ def main(args=None):
             'forces_weight': args.forces_weight,
             'dipole_weight': args.dipole_weight,
             'charge_weight': args.charge_weight,
+            'polar_weight': args.polar_weight,
+            'polar_at_zero_field': args.polar_at_zero_field,
             'save_every': args.save_every,
             'rot_augment': args.rot_augment,
             'rot_perturbation': args.rot_perturbation,

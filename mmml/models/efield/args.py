@@ -119,6 +119,21 @@ def build_train_parser() -> argparse.ArgumentParser:
         help="Weight for charge neutrality loss (sum of charges per molecule squared)",
     )
     parser.add_argument(
+        "--polar_weight",
+        "--polar-weight",
+        type=float,
+        default=0.0,
+        dest="polar_weight",
+        help="Weight for polarizability loss (Bohr³ vs dμ/dEf at Ef=0). 0 disables.",
+    )
+    parser.add_argument(
+        "--polar-at-zero-field",
+        dest="polar_at_zero_field",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Evaluate dμ/dEf at Ef=0 (default; SPICE-α / isolated DFT)",
+    )
+    parser.add_argument(
         "--dipole_field_coupling",
         action="store_true",
         help="Add explicit E_total = E_nn + mu·Ef coupling",
