@@ -503,15 +503,13 @@ def rebind_mlpot_calculator_from_pycmodel(
     if callable(unset):
         unset()
     from mmml.interfaces.pycharmmInterface.mlpot.callback_failstop import (
-        failstop_calculate_charmm,
+        install_fail_closed_energy_func,
     )
 
-    mlpot.calculator = calc
-    # CFUNCTYPE turns a Python exception into a 0.0 USER term; wrap first.
-    mlpot.energy_func = mlpot.func_type(failstop_calculate_charmm(calc.calculate_charmm))
-    # Keep calculator + CFUNCTYPE alive (Fortran only holds a raw function pointer).
-    mlpot._energy_func_keepalive = (calc, mlpot.energy_func)
-    pycharmm.lib.charmm.mlpot_set_func(mlpot.energy_func)
+    # Fail closed: an exception in the callback ends the process (exit 86)
+    # instead of ctypes handing CHARMM an undefined USER energy. Also keeps the
+    # calculator + CFUNCTYPE alive (Fortran only holds a raw function pointer).
+    install_fail_closed_energy_func(mlpot, calc, pycharmm_mod=pycharmm)
     mlidx = (ctypes.c_int * mlpot.ml_Natoms)()
     mlidx[:] = mlpot.ml_indices + 1
     mlidz = (ctypes.c_int * mlpot.ml_Natoms)()
@@ -646,7 +644,17 @@ def assert_mlpot_user_active(
 
     In all-ML workflows CHARMM bonded/nonbonded terms are intentionally zeroed by
     BLOCK, so a missing USER term leaves dynamics integrating a free gas.
+
+    Disarms ``set_mlpot_dynamics_armed`` while probing: the recovery ladder
+    below needs the zero USER return from ``_CallbackPairListUnavailable``.
+    Once USER is verified it arms, so a lost pair list ends the run (exit 86).
+    The deferred-probe path is unverified and stays disarmed.
     """
+    from mmml.interfaces.pycharmmInterface.mlpot.callback_failstop import (
+        set_mlpot_dynamics_armed,
+    )
+
+    set_mlpot_dynamics_armed(False)
     if mlpot_defer_charmm_hybrid_ener(ctx):
         sync_mlpot_fortran_registration(ctx, verbose=False)
         if not quiet:
@@ -725,6 +733,7 @@ def assert_mlpot_user_active(
             f"USER active before {context}: {format_energy_kcal_ev(float(user))}",
             tag_style="bold green",
         )
+    set_mlpot_dynamics_armed(True)
     return float(user)
 
 
@@ -2732,6 +2741,13 @@ def register_mlpot(
             skip_iblo_inb_update=skip_iblo_inb_update,
             **kwargs,
         )
+        # PyCHARMM registered calculator.calculate_charmm unguarded; swap in the
+        # fail-closed wrapper before the first energy call.
+        from mmml.interfaces.pycharmmInterface.mlpot.callback_failstop import (
+            install_fail_closed_energy_func,
+        )
+
+        install_fail_closed_energy_func(mlpot)
         if not use_pbc:
             # MLpot.__init__ already set iblo/inb and ran update_bnbnd (upinb).
             # Re-running prepare_charmm_vacuum + update_bnbnd here segfaults in upinb
