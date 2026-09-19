@@ -135,6 +135,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.staged_restart_policy import (  # n
     _heat_in_place_restart,
     _heat_restart_path,
     _is_dynamics_stage_restart_path,
+    _is_geometry_baseline_snapshot,
     _prior_restart_for_stage,
     _restart_coord_read_candidates,
     _should_seed_heat_prior_restart,
@@ -2766,6 +2767,12 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                             use_memory = True
                             restart = False
                             rread = None
+                        elif seg_i == 0 and _is_geometry_baseline_snapshot(rread, paths):
+                            # baseline.res is a coordinate snapshot of the live
+                            # state (e.g. --from-crd), not a READYN restart.
+                            use_memory = True
+                            restart = False
+                            rread = None
                     if not seg_prep_quiet:
                         from mmml.utils.rich_report import emit_tagged
 
@@ -3435,6 +3442,12 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                     prev_restart=prev_restart,
                     prev_restart_is_current_state=prev_restart_is_current_state,
                 ):
+                    use_memory = True
+                    restart = False
+                    rread = None
+                elif stage == "heat" and _is_geometry_baseline_snapshot(rread, paths):
+                    # baseline.res is a coordinate snapshot of the live state
+                    # (e.g. --from-crd), not a READYN restart: start fresh.
                     use_memory = True
                     restart = False
                     rread = None

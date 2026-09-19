@@ -199,6 +199,30 @@ def _prior_restart_for_stage(
     return None
 
 
+def _is_geometry_baseline_snapshot(
+    rread: Path | str | None,
+    paths: dict[str, Path],
+) -> bool:
+    """True when ``rread`` is the geometry baseline (``baseline.res``), not a dyna restart.
+
+    ``baseline.res`` is an MMML coordinate snapshot of the live CHARMM state,
+    rewritten just before dynamics.  It is not a CHARMM dynamics restart
+    (``READYN`` aborts with a Fortran read error), so a heat stage whose only
+    prior artifact is the baseline must ``start`` from in-memory coordinates
+    -- the same outcome NVE gets, where :func:`_prior_restart_for_stage` never
+    offers the baseline and :func:`_is_dynamics_stage_restart_path` rejects it.
+    """
+    if rread is None or _is_dynamics_stage_restart_path(rread):
+        return False
+    baseline = paths.get("geometry_baseline_res")
+    if baseline is None:
+        return False
+    try:
+        return Path(rread).resolve() == Path(baseline).resolve()
+    except OSError:
+        return Path(rread) == Path(baseline)
+
+
 def _heat_in_place_restart(io: CharmmTrajectoryFiles) -> bool:
     """True when heat reads and writes the same ``.res`` (resume interrupted heat)."""
     if io.restart_read is None or io.restart_write is None:
