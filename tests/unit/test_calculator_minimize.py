@@ -778,3 +778,23 @@ def test_safe_grms_stop_allowed_requires_low_grms_and_low_fmax():
         )
         is False
     )
+
+
+def test_calculator_mini_skips_models_without_spherical_fn(monkeypatch):
+    from types import SimpleNamespace
+
+    from mmml.interfaces.pycharmmInterface.mlpot import calculator_minimize as cm
+    from mmml.interfaces.pycharmmInterface.mlpot import cli_common
+
+    monkeypatch.setattr(cli_common, "charmm_grms_after_ener_force", lambda: 3.5)
+    ctx = SimpleNamespace(pyCModel=object(), ml_Z=[6, 1])
+    assert cm.calculator_mini_supported(ctx) is False
+    fire = cm.minimize_hybrid_calculator_fire_before_sd(ctx, verbose=False)
+    assert fire.ran is False
+    assert fire.grms == 3.5
+    bfgs = cm.minimize_hybrid_calculator_before_sd(
+        ctx, cm.HybridCalculatorMinimizeConfig(verbose=False)
+    )
+    assert bfgs.ran is False
+    repair = cm.repair_stressed_monomers_with_calculator(ctx, atoms_per_list=[2])
+    assert repair.ran is False

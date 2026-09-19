@@ -3670,7 +3670,9 @@ def _apply_npt_cpt_kwargs(
     )
 
     if pmass is None or tmass is None:
-        pmass, tmass = compute_cpt_piston_masses()
+        default_pmass, default_tmass = compute_cpt_piston_masses()
+        pmass = default_pmass if pmass is None else pmass
+        tmass = default_tmass if tmass is None else tmass
     kw.update(
         {
             "leap": True,
