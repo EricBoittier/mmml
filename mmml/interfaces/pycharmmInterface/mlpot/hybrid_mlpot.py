@@ -20,7 +20,10 @@ from mmml.interfaces.pycharmmInterface.cutoffs import (
 )
 from mmml.interfaces.pycharmmInterface.ml_dtypes import as_ml_array, resolve_ml_compute_dtype
 from mmml.interfaces.pycharmmInterface.mmml_calculator import ev2kcalmol, setup_calculator
-from mmml.interfaces.pycharmmInterface.mlpot.mlpot_batch_policy import resolve_ml_batch_size
+from mmml.interfaces.pycharmmInterface.mlpot.mlpot_batch_policy import (
+    resolve_ml_batch_size,
+    resolve_mlpot_mm_skin_A,
+)
 from mmml.interfaces.pycharmmInterface.mlpot.setup import physnet_ml_atomic_numbers
 from mmml.interfaces.pycharmmInterface.mlpot.mlpot_gpu_policy import resolve_ml_gpu_count
 from mmml.interfaces.pycharmmInterface.jax_device_policy import (
@@ -500,6 +503,15 @@ class DecomposedMlpotCalculator:
                 )
             return _DUMMY_MM_PAIR_IDX, _DUMMY_MM_PAIR_MASK, False
         self._note_mm_pair_capacity(mm_pair_idx)
+        get_stats = getattr(update_fn, "get_stats", None)
+        if get_stats is not None:
+            from mmml.interfaces.pycharmmInterface.mlpot.ml_profile import (
+                get_mlpot_profile_stats,
+                mlpot_profiling_enabled,
+            )
+
+            if mlpot_profiling_enabled():
+                get_mlpot_profile_stats().record_mm_pair_stats(get_stats())
         return jnp.asarray(mm_pair_idx), jnp.asarray(mm_pair_mask), True
 
     def _resolve_mm_pairs_from_callback(
@@ -1678,6 +1690,7 @@ def _build_jax_decomposed_mlpot_model(
         ml_max_active_dimers=ml_max_active_dimers,
         cell=cell,
         max_pairs=max_pairs,
+        jax_md_skin_distance=resolve_mlpot_mm_skin_A(args),
         ml_compute_dtype=ml_compute_dtype,
         defer_xla_gpu_warmup=_cpu_load and defer_jax_until_mlpot_registered,
         ml_switch_width=cutoff_params.ml_switch_width,
