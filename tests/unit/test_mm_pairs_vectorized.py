@@ -194,3 +194,60 @@ def test_vesin_excludes_pair_exactly_at_cutoff_on_L_equals_2c_boundary():
         d = float(np.linalg.norm(_mic(R[b] - R[a])))
         assert a < b
         assert d < cutoff
+
+
+def _etoh_like_liquid_frame(n_mol=181, apm=9, L=26.0, seed=19):
+    """Deterministic ETOH:181 / 26 Å stand-in (9-atom monomers on a cubic lattice)."""
+    rng = np.random.default_rng(seed)
+    n_side = int(np.ceil(n_mol ** (1.0 / 3.0)))
+    spacing = L / n_side
+    coms = np.array(
+        [
+            [(i + 0.5) * spacing, (j + 0.5) * spacing, (k + 0.5) * spacing]
+            for i in range(n_side)
+            for j in range(n_side)
+            for k in range(n_side)
+        ],
+        dtype=np.float64,
+    )[:n_mol]
+    local = rng.normal(scale=0.35, size=(n_mol, apm, 3))
+    R = (coms[:, None, :] + local).reshape(-1, 3)
+    mid = np.repeat(np.arange(n_mol), apm)
+    offs = np.arange(0, n_mol * apm + 1, apm)
+    return R, mid, offs
+
+
+def _brute_intermonomer_pairs(R, mid, L, cutoff):
+    d = R[:, None, :] - R[None, :, :]
+    d -= L * np.round(d / L)
+    dist = np.linalg.norm(d, axis=2)
+    ii, jj = np.triu_indices(len(R), k=1)
+    keep = (mid[ii] != mid[jj]) & (dist[ii, jj] < cutoff)
+    return set(zip(ii[keep].tolist(), jj[keep].tolist()))
+
+
+@pytest.mark.parametrize("cutoff", [7.5, 13.0])
+def test_vesin_etoh181_26A_rebuild_matches_bruteforce(cutoff):
+    """Rebuilt pair set on an ETOH:181 26 Å frame, including the L=2c boundary."""
+    pytest.importorskip("vesin")
+    from mmml.interfaces.pycharmmInterface.nl_reference import (
+        unique_mic_orthorhombic,
+        vesin_mic_pair_arrays,
+    )
+
+    L_box = 26.0
+    R, mid, offs = _etoh_like_liquid_frame()
+    # 7.5 Å: unique-MIC (26 > 15). 13 Å: L == 2c, two images possible.
+    assert unique_mic_orthorhombic(np.eye(3) * L_box, cutoff) == (L_box > 2.0 * cutoff)
+    # Plant one inter-monomer pair exactly at the cutoff along x.
+    R = R.copy()
+    R[0] = [0.0, 0.5, 0.5]
+    R[9] = [cutoff, 0.5, 0.5]
+    ref = _brute_intermonomer_pairs(R, mid, L_box, cutoff)
+    assert (0, 9) not in ref
+    pi, pj = vesin_mic_pair_arrays(R, np.eye(3) * L_box, cutoff, mid, monomer_offsets=offs)
+    got = set(zip(pi.tolist(), pj.tolist()))
+    assert (0, 9) not in got
+    assert np.all(pi < pj)
+    assert np.all(np.diff(pi * (len(R) + 1) + pj) > 0)
+    assert got == ref
