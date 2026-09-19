@@ -16,7 +16,11 @@ from benchmarks.gpu_bench_lib import (
     all_blocking_checks_passed,
     build_asv_publish_argv,
     build_asv_run_argv,
+    check_batch_pair_indices,
+    check_calculator_fixture,
     check_jax_gpu_device,
+    check_neighbors,
+    correctness_check_catalog,
     extract_timing_rows,
     finite_array_report,
     force_energy_relative_error,
@@ -26,7 +30,9 @@ from benchmarks.gpu_bench_lib import (
     render_gpu_report_html,
     render_gpu_report_json,
     resolve_asv_command,
+    run_correctness_checks,
     run_gpu_benchmark,
+    select_correctness_checks,
 )
 
 
@@ -93,6 +99,75 @@ def test_all_blocking_checks_passed_fails_on_fail():
         CheckResult("physnet", "fail", "nan energy"),
     ]
     assert not all_blocking_checks_passed(checks)
+
+
+def test_select_correctness_checks_full_catalog_by_default():
+    names = select_correctness_checks()
+    assert names[0] == "jax_gpu"
+    catalog = [spec.name for spec in correctness_check_catalog()]
+    assert names[1:] == catalog
+    assert {"physnet", "mm_nonbonded", "neighbors", "shake", "rattle", "data", "calculator"} <= set(names)
+
+
+def test_select_correctness_checks_targets_physnet_module():
+    assert select_correctness_checks(bench="bench_ml_physnet") == ["jax_gpu", "physnet"]
+    assert select_correctness_checks(bench="PhysNetSystemSize") == ["jax_gpu", "physnet"]
+
+
+def test_select_correctness_checks_targets_md_driver_kernels():
+    names = select_correctness_checks(bench="bench_md_driver")
+    assert names[0] == "jax_gpu"
+    assert "physnet" not in names
+    assert "data" not in names
+    assert set(names[1:]) == {"mm_nonbonded", "neighbors", "shake", "rattle"}
+
+
+def test_select_correctness_checks_unmatched_regex_keeps_all():
+    assert select_correctness_checks(bench="no_such_bench") == select_correctness_checks()
+
+
+def test_select_correctness_checks_only_allow_list():
+    assert select_correctness_checks(only=["neighbors", "data"]) == [
+        "jax_gpu",
+        "neighbors",
+        "data",
+    ]
+    assert select_correctness_checks(only=["jax_gpu", "shake"]) == ["jax_gpu", "shake"]
+    with pytest.raises(ValueError, match="unknown"):
+        select_correctness_checks(only=["not-a-check"])
+
+
+def test_run_correctness_checks_honors_only_allow_list():
+    checks = run_correctness_checks(require_gpu=False, only=["data"])
+    assert [c.name for c in checks] == ["jax_gpu", "data"]
+    assert checks[0].status == "skip"
+    assert checks[1].status in {"pass", "skip"}
+
+
+def test_check_neighbors_dispatch_matches_numpy():
+    result = check_neighbors()
+    assert result.name == "neighbors"
+    assert result.status in {"pass", "skip"}
+    if result.status == "pass":
+        assert result.values["n_pairs"] > 0
+
+
+def test_check_batch_pair_indices_layout():
+    result = check_batch_pair_indices()
+    assert result.passed
+    assert result.name == "data"
+
+
+def test_check_calculator_fixture_skips_or_passes(tmp_path, monkeypatch):
+    result = check_calculator_fixture()
+    assert result.name == "calculator"
+    assert result.status in {"pass", "skip"}
+
+
+def test_gpu_bench_list_checks_exits_zero():
+    from benchmarks.gpu_bench import main
+
+    assert main(["--list-checks"]) == 0
 
 
 def test_build_asv_run_argv_requires_commit_hash():
@@ -308,10 +383,6 @@ def test_run_gpu_benchmark_times_after_checks_pass(monkeypatch, tmp_path: Path):
         lambda **_k: {"commit": "abc123", "dirty": False, "hostname": "t"},
     )
     monkeypatch.setattr(
-        "benchmarks.gpu_bench_lib.run_correctness_checks",
-        lambda **_k: [CheckResult("jax_gpu", "pass", "gpu")],
-    )
-    monkeypatch.setattr(
         "benchmarks.gpu_bench_lib.run_asv",
         lambda **_k: called.append("asv"),
     )
@@ -324,9 +395,20 @@ def test_run_gpu_benchmark_times_after_checks_pass(monkeypatch, tmp_path: Path):
         lambda **_k: [TimingRow("bench.time_energy", {}, 0.02)],
     )
     out = tmp_path / "html"
+    seen: dict = {}
+
+    def _capture_checks(**kwargs):
+        seen.update(kwargs)
+        return [CheckResult("jax_gpu", "pass", "gpu")]
+
+    monkeypatch.setattr(
+        "benchmarks.gpu_bench_lib.run_correctness_checks",
+        _capture_checks,
+    )
     rc = run_gpu_benchmark(
         Namespace(
             bench="bench_ml_physnet",
+            checks=["physnet"],
             append_samples=False,
             checks_only=False,
             skip_checks=False,
@@ -339,6 +421,8 @@ def test_run_gpu_benchmark_times_after_checks_pass(monkeypatch, tmp_path: Path):
     )
     assert rc == 0
     assert called == ["asv", "publish"]
+    assert seen.get("bench") == "bench_ml_physnet"
+    assert seen.get("only") == ["physnet"]
     html = (out / "gpu-report.html").read_text(encoding="utf-8")
     assert "time_energy" in html
 

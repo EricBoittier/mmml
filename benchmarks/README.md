@@ -41,21 +41,23 @@ On a cluster (or an interactive GPU node):
 ```bash
 # interactive: correctness probes, then asv, then HTML
 uv run python benchmarks/gpu_bench.py
-uv run python benchmarks/gpu_bench.py --bench bench_ml_physnet
-uv run python benchmarks/gpu_bench.py --checks-only   # probes only
+uv run python benchmarks/gpu_bench.py --bench bench_ml_physnet   # PhysNet probe + that asv module
+uv run python benchmarks/gpu_bench.py --check neighbors --checks-only
+uv run python benchmarks/gpu_bench.py --list-checks
+uv run python benchmarks/gpu_bench.py --checks-only   # all probes, no timings
 
 sbatch benchmarks/slurm_bench_gpu.sh
 sbatch --export=ALL,BENCH_PATTERN=bench_ml_physnet benchmarks/slurm_bench_gpu.sh
 ```
 
 `benchmarks/gpu_bench.py` is the GPU entry point. It refuses a CPU JAX
-backend, runs a cheap correctness gate on the same kernels asv times
-(PhysNet energy/forces, switched MM + one-component force–energy
-consistency, SHAKE residuals), and **only then** starts `asv run`. A
-failed probe writes the HTML report and exits without burning the
-allocation on timings. Open `benchmarks/html/gpu-report.html` in a
-browser for the snapshot; `uv run asv preview` still serves the full
-asv graphs.
+backend, runs cheap correctness probes on the kernels the **selected**
+asv benches time, and only then starts `asv run`. `--bench bench_ml_physnet`
+gates PhysNet only; `--bench bench_md_driver` gates MM + neighbors +
+SHAKE/RATTLE (the kernels behind ns/day). `--check NAME` is an explicit
+allow-list. A failed probe writes the HTML report and exits without
+burning the allocation on timings. Open `benchmarks/html/gpu-report.html`
+in a browser; `uv run asv preview` still serves the full asv graphs.
 
 The Slurm job wraps that script (and still pins `JAX_PLATFORMS=cuda`
 before Python starts).

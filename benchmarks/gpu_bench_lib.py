@@ -420,28 +420,153 @@ def git_is_dirty(repo_root: Path) -> bool:
     return bool(out)
 
 
+@dataclass(frozen=True, slots=True)
+class CheckSpec:
+    """One probe and the asv ``--bench`` fragments that should trigger it."""
+
+    name: str
+    fn: Callable[[], CheckResult]
+    tags: frozenset[str]
+
+
+def correctness_check_catalog() -> tuple[CheckSpec, ...]:
+    """Kernel probes. ``jax_gpu`` is always first and not listed here."""
+    return (
+        CheckSpec(
+            "physnet",
+            check_physnet_energy_forces,
+            frozenset({"bench_ml_physnet", "physnet", "spooky", "zbl"}),
+        ),
+        CheckSpec(
+            "mm_nonbonded",
+            check_mm_nonbonded,
+            frozenset(
+                {
+                    "bench_mm_energy",
+                    "mm_nonbonded",
+                    "mmnonbonded",
+                    "ewald",
+                    "bench_md_driver",
+                    "mdsystemsize",
+                }
+            ),
+        ),
+        CheckSpec(
+            "neighbors",
+            check_neighbors,
+            frozenset(
+                {
+                    "bench_neighbors",
+                    "pairlist",
+                    "vesin",
+                    "verlet",
+                    "bench_md_driver",
+                    "mdsystemsize",
+                }
+            ),
+        ),
+        CheckSpec(
+            "shake",
+            check_shake_projection,
+            frozenset(
+                {
+                    "bench_constraints",
+                    "shake",
+                    "constrainednve",
+                    "bench_md_driver",
+                    "mdsystemsize",
+                }
+            ),
+        ),
+        CheckSpec(
+            "rattle",
+            check_rattle_projection,
+            frozenset(
+                {
+                    "bench_constraints",
+                    "rattle",
+                    "constrainednve",
+                    "bench_md_driver",
+                    "mdsystemsize",
+                }
+            ),
+        ),
+        CheckSpec(
+            "data",
+            check_batch_pair_indices,
+            frozenset({"bench_data", "batch", "pair_indices", "prepare_batches"}),
+        ),
+        CheckSpec(
+            "calculator",
+            check_calculator_fixture,
+            frozenset({"bench_calculator", "setup_calculator", "spherical"}),
+        ),
+    )
+
+
+def select_correctness_checks(
+    *,
+    bench: str | None = None,
+    only: Sequence[str] | None = None,
+) -> list[str]:
+    """Names to run. ``jax_gpu`` is always included unless ``only`` lists checks.
+
+    ``--bench bench_ml_physnet`` runs the PhysNet probe only (plus the device
+    gate). An unmatched regex keeps the full set so a typo does not skip the
+    gate. ``only`` (``--check``) is an explicit allow-list.
+    """
+    catalog = correctness_check_catalog()
+    known = ["jax_gpu", *[spec.name for spec in catalog]]
+    if only:
+        unknown = [name for name in only if name not in known]
+        if unknown:
+            raise ValueError(
+                f"unknown check(s) {unknown}; known: {', '.join(known)}"
+            )
+        selected = list(dict.fromkeys(only))
+        if "jax_gpu" not in selected:
+            selected = ["jax_gpu", *selected]
+        return selected
+    if not bench or not str(bench).strip():
+        return known
+    needle = str(bench).strip().lower()
+    matched = [
+        spec.name
+        for spec in catalog
+        if _spec_matches_bench(spec, needle)
+    ]
+    if not matched:
+        return known
+    return ["jax_gpu", *matched]
+
+
 def run_correctness_checks(
     *,
     require_gpu: bool = True,
+    bench: str | None = None,
+    only: Sequence[str] | None = None,
     extra: Sequence[Callable[[], CheckResult]] | None = None,
 ) -> list[CheckResult]:
-    """Device gate, then the same kernels the asv suite times (tiny inputs)."""
+    """Device gate, then the kernels the selected asv benches actually time."""
+    wanted = select_correctness_checks(bench=bench, only=only)
+    catalog = {spec.name: spec for spec in correctness_check_catalog()}
     checks: list[CheckResult] = []
-    if require_gpu:
-        checks.append(check_jax_gpu_device())
-        if not checks[-1].passed:
-            return checks
-    else:
-        checks.append(
-            CheckResult("jax_gpu", "skip", "CPU allowed (--allow-cpu)")
-        )
-
-    for name, fn in (
-        ("physnet", check_physnet_energy_forces),
-        ("mm_nonbonded", check_mm_nonbonded),
-        ("shake", check_shake_projection),
-    ):
-        checks.append(_run_named_check(name, fn))
+    if "jax_gpu" in wanted:
+        if require_gpu:
+            checks.append(check_jax_gpu_device())
+            if not checks[-1].passed:
+                return checks
+        else:
+            checks.append(
+                CheckResult("jax_gpu", "skip", "CPU allowed (--allow-cpu)")
+            )
+    for name in wanted:
+        if name == "jax_gpu":
+            continue
+        spec = catalog.get(name)
+        if spec is None:
+            continue
+        checks.append(_run_named_check(spec.name, spec.fn))
     if extra:
         for fn in extra:
             checks.append(_run_named_check(getattr(fn, "__name__", "extra"), fn))
@@ -592,6 +717,164 @@ def check_shake_projection() -> CheckResult:
     )
 
 
+def check_rattle_projection() -> CheckResult:
+    """RATTLE must remove the velocity component along each constrained bond."""
+    _import_asv_helpers()
+    from _common import block, require_jax, water_box  # type: ignore
+
+    require_jax()
+    import jax.numpy as jnp
+    import numpy as np
+
+    from mmml.md.constraints import rattle_velocities, tip3_rigid_constraints
+
+    spec = tip3_rigid_constraints(4)
+    box = water_box(4, seed=4)
+    rng = np.random.default_rng(4)
+    positions = jnp.asarray(box["R"])
+    velocities = jnp.asarray(rng.normal(scale=0.15, size=box["R"].shape))
+    pairs = np.asarray(spec.pairs, dtype=np.int64)
+
+    def _bond_rv(vel) -> float:
+        v = np_asarray(vel)
+        r = np_asarray(positions)
+        rv = []
+        for i, j in pairs:
+            d = r[i] - r[j]
+            dv = v[i] - v[j]
+            rv.append(float(np.abs(np.dot(d, dv))))
+        return float(max(rv)) if rv else 0.0
+
+    before = _bond_rv(velocities)
+    rattled = block(
+        rattle_velocities(velocities, positions, spec, iterations=20, box=None)
+    )
+    after = _bond_rv(rattled)
+    values = {"rv_max_before": before, "rv_max_after": after}
+    if after >= before and before > 0.0:
+        return CheckResult(
+            "rattle",
+            "fail",
+            f"bond-parallel velocity did not shrink ({before:.3g} → {after:.3g})",
+            values=values,
+        )
+    if after > 1e-5:
+        return CheckResult(
+            "rattle",
+            "fail",
+            f"bond-parallel velocity still large after RATTLE ({after:.3g})",
+            values=values,
+        )
+    return CheckResult(
+        "rattle",
+        "pass",
+        f"bond |r·Δv| max {before:.3g} → {after:.3g}",
+        values=values,
+    )
+
+
+def check_neighbors() -> CheckResult:
+    """Tiny unique-MIC pair list: sorted ``i < j`` and matches the NumPy fallback."""
+    _import_asv_helpers()
+    from _common import water_box  # type: ignore
+
+    from mmml.interfaces.pycharmmInterface.mm_system_energy import (
+        _build_pair_indices,
+        _build_pair_indices_vectorized,
+    )
+    import numpy as np
+
+    box = water_box(8, seed=5)
+    cutoff = 3.0
+    cell = box["box"]
+    sides = np.linalg.norm(np.asarray(cell), axis=1)
+    if float(np.min(sides)) < 2.0 * cutoff:
+        return CheckResult(
+            "neighbors",
+            "skip",
+            f"water_box(8) L={float(np.min(sides)):.2f} Å is not unique-MIC at {cutoff} Å",
+        )
+    pi, pj = _build_pair_indices(box["R"], cell, frozenset(), cutoff)
+    qi, qj = _build_pair_indices_vectorized(box["R"], cell, frozenset(), cutoff)
+    pi, pj, qi, qj = (np.asarray(a, dtype=np.int64) for a in (pi, pj, qi, qj))
+    if pi.size == 0:
+        return CheckResult("neighbors", "fail", "pair list is empty at 3 Å")
+    if not bool(np.all(pi < pj)):
+        return CheckResult("neighbors", "fail", "pair list is not i < j")
+    got = set(zip(pi.tolist(), pj.tolist()))
+    ref = set(zip(qi.tolist(), qj.tolist()))
+    if got != ref:
+        return CheckResult(
+            "neighbors",
+            "fail",
+            f"dispatch/NumPy pair sets differ ({len(got)} vs {len(ref)})",
+            values={"n_dispatch": int(pi.size), "n_numpy": int(qi.size)},
+        )
+    return CheckResult(
+        "neighbors",
+        "pass",
+        f"{int(pi.size)} unique-MIC pairs; dispatch matches NumPy",
+        values={"n_pairs": int(pi.size)},
+    )
+
+
+def check_batch_pair_indices() -> CheckResult:
+    """``_pair_indices`` layout used by ``prepare_batches_fast`` / ``pair_cache``."""
+    from mmml.models.physnetjax.physnetjax.data.batches import _pair_indices
+
+    n_atoms, batch_size = 6, 2
+    segs, offsets, dst_2d, src_2d, dst_flat, src_flat = _pair_indices(n_atoms, batch_size)
+    n_pairs = n_atoms * (n_atoms - 1)
+    values = {
+        "dst_2d": list(getattr(dst_2d, "shape", ())),
+        "src_flat": list(getattr(src_flat, "shape", ())),
+    }
+    if tuple(dst_2d.shape) != (batch_size, n_pairs):
+        return CheckResult(
+            "data",
+            "fail",
+            f"dst_2d shape {tuple(dst_2d.shape)} != {(batch_size, n_pairs)}",
+            values=values,
+        )
+    if int(dst_flat.size) != batch_size * n_pairs:
+        return CheckResult("data", "fail", "flat pair index size mismatch", values=values)
+    if int(offsets.shape[0]) != batch_size or int(segs.shape[0]) != batch_size * n_atoms:
+        return CheckResult("data", "fail", "segment/offset layout mismatch", values=values)
+    return CheckResult(
+        "data",
+        "pass",
+        f"_pair_indices({n_atoms}, {batch_size}) layout ok",
+        values=values,
+    )
+
+
+def check_calculator_fixture() -> CheckResult:
+    """Checkpoint + ACO geometry the calculator benches load (no full compile)."""
+    _import_asv_helpers()
+    from _common import aco_cluster, default_checkpoint  # type: ignore
+
+    ckpt = default_checkpoint()
+    if not Path(ckpt).is_file():
+        return CheckResult(
+            "calculator",
+            "skip",
+            f"checkpoint missing: {ckpt}",
+        )
+    geom = aco_cluster(2)
+    r_info = finite_array_report("R", geom["R"])
+    if not r_info["finite"]:
+        return CheckResult("calculator", "fail", "ACO cluster coordinates are not finite")
+    n_atoms = int(geom["R"].shape[0])
+    if n_atoms < 4:
+        return CheckResult("calculator", "fail", f"ACO cluster too small ({n_atoms} atoms)")
+    return CheckResult(
+        "calculator",
+        "pass",
+        f"ckpt={Path(ckpt).name}; ACO:2 has {n_atoms} atoms",
+        values={"checkpoint": str(ckpt), "n_atoms": n_atoms},
+    )
+
+
 def run_asv(
     *,
     repo_root: Path,
@@ -680,7 +963,11 @@ def run_gpu_benchmark(args: Any) -> int:
         checks = [CheckResult("correctness", "skip", "skipped (--skip-checks)")]
     else:
         print("==> correctness checks (before timing)", flush=True)
-        checks = run_correctness_checks(require_gpu=not allow_cpu)
+        checks = run_correctness_checks(
+            require_gpu=not allow_cpu,
+            bench=getattr(args, "bench", None),
+            only=getattr(args, "checks", None),
+        )
         for check in checks:
             print(f"    [{check.status.upper():4}] {check.name}: {check.detail}", flush=True)
 
@@ -793,6 +1080,12 @@ def _import_asv_helpers() -> None:
     path = str(ASV_BENCH_DIR)
     if path not in sys.path:
         sys.path.insert(0, path)
+
+
+def _spec_matches_bench(spec: CheckSpec, needle: str) -> bool:
+    if spec.name.lower() in needle or needle in spec.name.lower():
+        return True
+    return any(tag in needle or needle in tag for tag in spec.tags)
 
 
 def _run_named_check(name: str, fn: Callable[[], CheckResult]) -> CheckResult:

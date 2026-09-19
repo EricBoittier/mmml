@@ -54,6 +54,12 @@ ARGS=()
 if [[ -n "${BENCH_PATTERN:-}" ]]; then
   ARGS+=(--bench "${BENCH_PATTERN}")
 fi
+if [[ -n "${CHECK_NAMES:-}" ]]; then
+  IFS=',' read -ra _CHECKS <<< "${CHECK_NAMES}"
+  for _c in "${_CHECKS[@]}"; do
+    ARGS+=(--check "${_c}")
+  done
+fi
 if [[ "${BENCH_APPEND_SAMPLES:-0}" == "1" ]]; then
   ARGS+=(--append-samples)
 fi
