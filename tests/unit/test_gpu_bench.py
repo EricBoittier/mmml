@@ -64,13 +64,13 @@ def test_finite_array_report_rejects_nan():
 
 
 def test_force_energy_relative_error_quadratic():
-    # E = 0.5 x^2 at x=2 → dE/dx = 2. Central difference with eps=1e-4.
+    # E = 0.5 x^2 at x=2 → F = -2. Central difference with eps=1e-4.
     x = 2.0
     eps = 1e-4
     e0 = 0.5 * x * x
     e_plus = 0.5 * (x + eps) ** 2
     e_minus = 0.5 * (x - eps) ** 2
-    err = force_energy_relative_error(e0, e_plus, e_minus, force_component=x, eps=eps)
+    err = force_energy_relative_error(e0, e_plus, e_minus, force_component=-x, eps=eps)
     assert err < 1e-6
 
 
@@ -204,7 +204,7 @@ def test_format_bench_value_units():
 
 def test_render_html_includes_correctness_timings_and_publish_note():
     checks = [
-        CheckResult("jax_gpu", "pass", "ok", values={"platform": "gpu"}),
+        CheckResult("jax_gpu", "pass", "gpu:0", values={"platform": "gpu"}),
         CheckResult("physnet", "fail", "energy was nan"),
     ]
     timings = [
@@ -233,7 +233,8 @@ def test_render_html_includes_correctness_timings_and_publish_note():
     assert "ns/day" in html
     assert "index.html" in html
     assert "asv publish" in html
-    assert "from CI" in html
+    assert "not uploaded from CI" in html
+    # user-controlled strings must be escaped
     sneaky = render_gpu_report_html(
         meta={"hostname": "<script>alert(1)</script>"},
         checks=[CheckResult("x", "pass", "<img>")],
