@@ -191,6 +191,7 @@ nav:
           - physnet-train: cli/commands/physnet-train.md
           - pet-box-dataset: cli/commands/pet-box-dataset.md
           - pet-physnet-distill: cli/commands/pet-physnet-distill.md
+          - tune-mm-nonbonded: cli/commands/tune-mm-nonbonded.md
           - physnet-evaluate: cli/commands/physnet-evaluate.md
           - physnet-md: cli/commands/physnet-md.md
           - neb: cli/commands/neb.md

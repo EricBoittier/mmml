@@ -1332,6 +1332,16 @@ def _is_device_positions(x) -> bool:
     return x is not None and not isinstance(x, np.ndarray) and hasattr(x, "__dlpack_device__")
 
 
+def apply_mm_charge_scale(charges: np.ndarray, charge_scale: float | None) -> np.ndarray:
+    """Return ``charges * charge_scale`` (a copy); ``None``/1 returns the input."""
+    if charge_scale is None or float(charge_scale) == 1.0:
+        return charges
+    s = float(charge_scale)
+    if not np.isfinite(s) or s <= 0.0:
+        raise ValueError(f"mm charge_scale must be a positive finite number, got {charge_scale!r}")
+    return np.asarray(charges, dtype=np.float64) * s
+
+
 def build_mm_energy_forces_fn(
     R: np.ndarray,
     *,
@@ -1350,6 +1360,7 @@ def build_mm_energy_forces_fn(
     shared_cutoff: float | None = None,
     ep_scale: Optional[np.ndarray] = None,
     sig_scale: Optional[np.ndarray] = None,
+    charge_scale: float = 1.0,
     at_codes_override: Optional[np.ndarray] = None,
     atomic_numbers: Optional[np.ndarray] = None,
     pbc_cell: Optional[np.ndarray] = None,
@@ -1714,6 +1725,11 @@ def build_mm_energy_forces_fn(
             )
         charges = charges_full[:total_atoms]
         at_codes = at_codes_full[:total_atoms]
+    # Uniform MM charge scale (``mm_charge_scale`` in hybrid_mm.json, fitted by
+    # ``mmml tune-mm-nonbonded``): every intermolecular Coulomb pair scales by
+    # charge_scale**2. Applied once here so switched MIC, Ewald and the
+    # per-system (Mode A) paths all see the same charges.
+    charges = apply_mm_charge_scale(charges, charge_scale)
     if at_codes_override is not None:
         at_codes_override_arr = np.array(at_codes_override)
         if at_codes_override_arr.shape[0] != at_codes.shape[0]:

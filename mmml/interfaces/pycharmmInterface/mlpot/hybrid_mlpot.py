@@ -1477,6 +1477,49 @@ def build_decomposed_mlpot_model(
     )
 
 
+def _load_hybrid_mm_scales(scales_file, checkpoint, verbose):
+    """Load optional LJ and charge scales with explicit-file errors preserved."""
+    ep_scale = sig_scale = None
+    mm_charge_scale = 1.0
+    from mmml.models.mm_lj_scales import resolve_md_lj_scales
+
+    try:
+        ep_scale, sig_scale = resolve_md_lj_scales(
+            scales_file=scales_file,
+            checkpoint=checkpoint,
+        )
+    except Exception as exc:
+        if scales_file is not None:
+            raise
+        if verbose:
+            print(f"WARNING: could not load MM LJ scales: {exc}", flush=True)
+    if verbose and ep_scale is not None:
+        print(
+            f"Loaded MM LJ scales ({len(ep_scale)} ATC types) "
+            f"from hybrid_mm.json / --mm-lj-scales-file",
+            flush=True,
+        )
+    from mmml.models.mm_lj_scales import resolve_md_charge_scale
+
+    try:
+        mm_charge_scale = resolve_md_charge_scale(
+            scales_file=scales_file,
+            checkpoint=checkpoint,
+        )
+    except Exception as exc:
+        if scales_file is not None:
+            raise
+        if verbose:
+            print(f"WARNING: could not load MM charge scale: {exc}", flush=True)
+    if verbose and mm_charge_scale != 1.0:
+        print(
+            f"Loaded MM charge scale {mm_charge_scale:.4f} "
+            f"(Coulomb x{mm_charge_scale ** 2:.4f}) from hybrid_mm.json / --mm-lj-scales-file",
+            flush=True,
+        )
+    return ep_scale, sig_scale, mm_charge_scale
+
+
 def _build_jax_decomposed_mlpot_model(
     checkpoint: Path | str,
     atomic_numbers: np.ndarray,
@@ -1648,6 +1691,16 @@ def _build_jax_decomposed_mlpot_model(
             )
 
             deploy_scaled_lj_into_charmm(periodic_external_scales, verbose=verbose)
+            from mmml.models.mm_lj_scales import load_md_charge_scale
+
+            if load_md_charge_scale(periodic_external_scales) != 1.0:
+                print(
+                    f"mmml WARNING: {periodic_external_scales} sets mm_charge_scale, but "
+                    "periodic_external takes ELEC from CHARMM with PSF charges -- the "
+                    "charge scale is NOT applied (use mm_nonbond_mode=jax_mic).",
+                    file=sys.stderr,
+                    flush=True,
+                )
     do_ml_dimer = True if args is None else bool(getattr(args, "do_ml_dimer", True))
     if args is not None and bool(getattr(args, "skip_ml_dimers", False)):
         do_ml_dimer = False
@@ -1758,26 +1811,12 @@ def _build_jax_decomposed_mlpot_model(
     _cpu_load = defer_jax_until_after_sd or mlpot_jax_device_name() == "cpu"
     ep_scale = None
     sig_scale = None
+    mm_charge_scale = 1.0
     scales_file = getattr(args, "mm_lj_scales_file", None) if args is not None else None
     if args is not None and do_mm:
-        from mmml.models.mm_lj_scales import resolve_md_lj_scales
-
-        try:
-            ep_scale, sig_scale = resolve_md_lj_scales(
-                scales_file=scales_file,
-                checkpoint=None if _spoof else ckpt,
-            )
-        except Exception as exc:
-            if scales_file is not None:
-                raise
-            if verbose:
-                print(f"WARNING: could not load MM LJ scales: {exc}", flush=True)
-        if verbose and ep_scale is not None:
-            print(
-                f"Loaded MM LJ scales ({len(ep_scale)} ATC types) "
-                f"from hybrid_mm.json / --mm-lj-scales-file",
-                flush=True,
-            )
+        ep_scale, sig_scale, mm_charge_scale = _load_hybrid_mm_scales(
+            scales_file, None if _spoof else ckpt, verbose
+        )
     elif args is not None and periodic_external_scales is None:
         # doMM off without a successful CHARMM deployment: ep_scale/sig_scale
         # feed the JAX switched-MM pair loop only. Applying nothing while the
@@ -1844,6 +1883,7 @@ def _build_jax_decomposed_mlpot_model(
         verbose=verbose,
         ep_scale=ep_scale,
         sig_scale=sig_scale,
+        mm_charge_scale=mm_charge_scale,
         MAX_ATOMS_PER_SYSTEM=max_atoms,
         ml_batch_size=batch_size,
         ml_gpu_count=gpu_count,
