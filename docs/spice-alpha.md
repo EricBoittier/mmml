@@ -41,7 +41,7 @@ unzip SPICE-alpha.zip \
   'R-3B69/R-3B69.xyz'
 unzip SPICE-alpha.zip 'SPICE-alpha/SPICE-alpha.tar.gz'
 tar -xzf SPICE-alpha/SPICE-alpha.tar.gz --transform='s|^\./||' \
-  DES370K_Dimers.hdf5 DES370K_Monomers.hdf5
+  ./DES370K_Dimers.hdf5 ./DES370K_Monomers.hdf5
 ```
 
 Keep ~25 GB free if you also unpack PubChem. The tarball’s first member is
@@ -79,7 +79,17 @@ convert_spice_alpha_hdf5(["DES370K_Monomers.hdf5"], "spice_des_mono.npz")
 Default `fix-and-split` assumes Hartree / Hartree/Bohr / Debye and will
 **destroy** this dataset. The converter refuses a Bohr/Hartree `units_map`
 unless you pass `--allow-atomic-units` (then use default `fix-and-split`
-plus `--flip-forces` instead).
+plus `--flip-forces` instead). Units metadata is resolved as:
+
+- non-empty file-level `units_map` wins, unless the first molecule group
+  also has a known map of a different kind (canonical vs atomic) — that
+  contradiction is an error
+- empty file-level `units_map` (published DES370K) falls through to the
+  **first molecule group** only (no full-file scan)
+- missing or empty at both levels: convert assumes the SPICE-α README
+  units (Å / eV / eV/Å) and writes `_mmml_units` from that
+- a non-empty string that is not a JSON object is malformed and is an
+  error, not a silent eV/Å fallback
 
 Synthetic contract tests (no Zenodo download): `pytest -m data_loading`
 or `make test-data-loading`. CI: `.github/workflows/data-loading.yml`.
@@ -100,7 +110,7 @@ On the machine that already unzipped `SPICE-alpha.zip`:
 ```bash
 # inner HDF5 (DES only)
 tar -xzf SPICE-alpha/SPICE-alpha.tar.gz --transform='s|^\./||' -C SPICE-alpha \
-  DES370K_Monomers.hdf5 DES370K_Dimers.hdf5
+  ./DES370K_Monomers.hdf5 ./DES370K_Dimers.hdf5
 
 # smoke (256 frames) or drop --max-frames for the full monomer set
 python -m mmml.data.spice_alpha SPICE-alpha/DES370K_Monomers.hdf5 \
@@ -143,8 +153,22 @@ mkdir -p artifacts/spice_ef_polar
 sbatch scripts/spice_alpha/train_efield_polar.sbatch
 
 # 3. After smoke writes params-*.json and logs "polar mae"
+# 256-frame extract has valid n=13; B=64 drop_last → 0 valid batches
 sbatch --partition=rtx4090 --qos=rtx4090-6hours --time=06:00:00 \
-  --export=ALL,MODE=full,EPOCHS=100 \
+  --export=ALL,MODE=full,EPOCHS=100,BATCH_SIZE=8 \
+  scripts/spice_alpha/train_efield_polar.sbatch
+
+# 4. Full DES370K monomers (new tree). SKIP_DIMERS=1. MODE=full uses
+# POLAR_WEIGHT=100 so polar can compete with total |E| ~1e5 eV.
+SKIP_DIMERS=1 scripts/spice_alpha/prepare_efield_dataset.sh \
+  ~/data/spicealpha ~/data/spicealpha/mmml_efield_full 0
+# or: sbatch scripts/spice_alpha/prepare_efield_dataset.sbatch
+python scripts/spice_alpha/check_efield_npz.py \
+  ~/data/spicealpha/mmml_efield_full/splits_des_mono/energies_forces_dipoles_train.npz \
+  ~/data/spicealpha/mmml_efield_full/splits_des_mono/energies_forces_dipoles_valid.npz
+# pad=22 polar JVP: B=16/64 failed XLA autotune. MODE=big default B=4.
+sbatch --partition=rtx4090 --qos=rtx4090-6hours --time=06:00:00 \
+  --export=ALL,MODE=big,EPOCHS=100,BATCH_SIZE=4,SPLITS=$HOME/data/spicealpha/mmml_efield_full/splits_des_mono,CKPT=$HOME/mmml/ckpts/spice_ef_polar_big \
   scripts/spice_alpha/train_efield_polar.sbatch
 ```
 
