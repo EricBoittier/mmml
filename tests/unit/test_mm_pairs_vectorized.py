@@ -29,6 +29,10 @@ def _mic(d):
     return d - L * np.round(d / L)
 
 
+def _charmm_lj(r, rmin, eps):
+    return eps * ((rmin / r) ** 12 - 2 * (rmin / r) ** 6)
+
+
 def test_filter_mask_matches_bruteforce():
     _, R, mid, offs, i, j = _system()
     com = R.reshape(-1, APM, 3).mean(1)
@@ -49,10 +53,6 @@ def test_eterm_split_matches_per_pair_reference(complementary):
               mm_switch_width=5.0, ml_switch_width=1.5, complementary_handoff=complementary)
     got = decompose_mlpot_mm_nb_eterms_kcalmol(R, pidx, mask, np.eye(3) * L, **kw)
 
-    def step(r, x0, x1, g):
-        s = min(max((r - x0) / (x1 - x0), 0.0), 1.0) ** g
-        return s * s * (3 - 2 * s)
-
     from mmml.interfaces.pycharmmInterface.cutoffs import GAMMA_OFF, GAMMA_ON
 
     ref = dict(vdw_primary=0.0, vdw_image=0.0, elec_primary=0.0, elec_image=0.0)
@@ -63,12 +63,11 @@ def test_eterm_split_matches_per_pair_reference(complementary):
         prim = bool(np.all(np.round(d / L) == 0))
         r = float(np.linalg.norm(_mic(d)))
         if complementary:
-            s = step(r, 4.5, 6.0, GAMMA_ON) * (1 - step(r, 6.0, 11.0, GAMMA_OFF))
+            s = _step(r, 4.5, 6.0, GAMMA_ON) * (1 - _step(r, 6.0, 11.0, GAMMA_OFF))
         else:
-            s = step(r, 6.0, 11.0, GAMMA_ON) * (1 - step(r, 11.0, 16.0, GAMMA_OFF))
-        sig = (rm[a] + rm[b]) / 2 ** (1 / 6)
+            s = _step(r, 6.0, 11.0, GAMMA_ON) * (1 - _step(r, 11.0, 16.0, GAMMA_OFF))
         e = np.sqrt(ep[a] * ep[b])
-        ref["vdw_primary" if prim else "vdw_image"] += e * ((sig / r) ** 12 - 2 * (sig / r) ** 6) * s
+        ref["vdw_primary" if prim else "vdw_image"] += _charmm_lj(r, rm[a] + rm[b], e) * s
         ref["elec_primary" if prim else "elec_image"] += 332.063711 * q[a] * q[b] / r * s
     for k, v in ref.items():
         assert got[k] == pytest.approx(v, rel=1e-10, abs=1e-10)
@@ -77,7 +76,7 @@ def test_eterm_split_matches_per_pair_reference(complementary):
 
 def _step(r, x0, x1, g):
     s = min(max((r - x0) / (x1 - x0), 0.0), 1.0) ** g
-    return s * s * (3 - 2 * s)
+    return s**3 * (10 - 15 * s + 6 * s * s)  # quintic smootherstep, as the JAX switch
 
 
 @pytest.mark.parametrize("complementary", [True, False])
@@ -129,9 +128,8 @@ def test_eterm_split_com_weighted_matches_per_pair_reference(complementary):
             s = _step(rs, 4.5, 6.0, GAMMA_ON) * (1 - _step(rs, 6.0, 11.0, GAMMA_OFF))
         else:
             s = _step(rs, 6.0, 11.0, GAMMA_ON) * (1 - _step(rs, 11.0, 16.0, GAMMA_OFF))
-        sig = (rm[a] + rm[b]) / 2 ** (1 / 6)
         e = np.sqrt(ep[a] * ep[b])
-        ref["vdw_primary" if prim else "vdw_image"] += e * ((sig / r) ** 12 - 2 * (sig / r) ** 6) * s
+        ref["vdw_primary" if prim else "vdw_image"] += _charmm_lj(r, rm[a] + rm[b], e) * s
         ref["elec_primary" if prim else "elec_image"] += 332.063711 * q[a] * q[b] / r * s
     assert n_com_switched > 0
     assert ref["elec_primary"] != 0.0 and ref["elec_image"] != 0.0
@@ -251,3 +249,48 @@ def test_vesin_etoh181_26A_rebuild_matches_bruteforce(cutoff):
     assert np.all(pi < pj)
     assert np.all(np.diff(pi * (len(R) + 1) + pj) > 0)
     assert got == ref
+
+
+def test_eterm_split_vdw_minimum_at_charmm_rmin():
+    """Issue #218: one CGenFF pair (CG331/OG311) has its VDW minimum -sqrt(eps_i eps_j) at Rmin_i/2 + Rmin_j/2."""
+    rmh, eps = np.array([2.05, 1.765]), np.array([-0.078, -0.192])
+    r = np.linspace(3.0, 5.0, 2001)
+    kw = dict(charges_e=np.zeros(2), rmins_A=rmh, epsilons_kcal=eps, monomer_id=np.array([0, 1]),
+              mm_switch_on=6.0, mm_switch_width=5.0, pair_dimer_idx=np.array([0]), com_distances_A=np.array([6.0]))
+    vdw = np.array([
+        decompose_mlpot_mm_nb_eterms_kcalmol(np.array([[0, 0, 0], [x, 0, 0]]), np.array([[0, 1]]), np.array([True]), None,
+                                             **kw)["vdw_primary"] for x in r
+    ])
+    assert r[np.argmin(vdw)] == pytest.approx(rmh.sum(), abs=1e-3)
+    assert vdw.min() == pytest.approx(-np.sqrt(eps[0] * eps[1]), rel=1e-6)
+    assert vdw == pytest.approx(_charmm_lj(r, rmh.sum(), np.sqrt(eps[0] * eps[1])), rel=1e-12)
+
+
+def test_hybrid_jax_split_matches_mm_energy_and_numpy():
+    """The routed split is the hybrid's own switched MM, bucketed; numpy fallback agrees on the same inputs."""
+    pytest.importorskip("vesin")
+    import jax.numpy as jnp
+
+    from tests.unit.test_mm_pair_list_completeness import APM as n_per, L as box, Q, _box, _build
+
+    R = _box(5.3, seed=4)
+    R[:, 0] += box - 2.65 - R[:n_per, 0].mean()  # edge dimer (molecules 0, 1) straddles the x face
+    R %= box
+    mm_fn, update = _build(R)
+    pidx, pmask = update(R, force_rebuild=True)
+    e_mm, _ = mm_fn(jnp.asarray(R), pidx, pmask)
+    got = np.asarray(update.mm_eterm_split(jnp.asarray(R), pidx, pmask, None))
+    assert got.sum() == pytest.approx(float(e_mm), rel=1e-9)
+    assert got[1] < 0.0 and got[3] != 0.0  # the in-window edge dimer straddles the face -> image buckets
+
+    n = len(R)
+    mid = np.repeat(np.arange(n // n_per), n_per)
+    com = np.stack([R[mid == m].mean(0) for m in range(n // n_per)])
+    pi, pj = np.asarray(pidx).T
+    dcom = com[mid[pj]] - com[mid[pi]]
+    kw = dict(charges_e=np.tile(Q, n // n_per), rmins_A=np.full(n, 1.6), epsilons_kcal=np.full(n, -0.05),
+              monomer_id=mid, mm_switch_on=5.0, mm_switch_width=1.5, ml_switch_width=1.0,
+              pair_dimer_idx=np.arange(len(pi)), com_distances_A=np.linalg.norm(dcom - box * np.round(dcom / box), axis=1))
+    ref = decompose_mlpot_mm_nb_eterms_kcalmol(R, np.asarray(pidx), np.asarray(pmask) > 0, np.eye(3) * box, **kw)
+    keys = ["vdw_primary", "vdw_image", "elec_primary", "elec_image"]
+    assert got == pytest.approx([ref[k] for k in keys], rel=1e-6, abs=1e-9)

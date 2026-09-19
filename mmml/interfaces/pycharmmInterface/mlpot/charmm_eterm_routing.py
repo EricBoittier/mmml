@@ -82,6 +82,41 @@ def _zero_nb_components() -> dict[str, float]:
     }
 
 
+def _hybrid_mm_eterm_split(
+    calculator: Any, positions_A: Any, mm_pair_idx: Any, mm_pair_mask: Any, box: Any | None
+) -> dict[str, float] | None:
+    """Split from the hybrid's own JAX MM (its q/ε/Rmin, λ, COM switch), or None.
+
+    CHARMM's live charges/ε are zeroed for ML atoms in all-ML runs, so a split
+    built from them always reports VDW = ELEC = 0 and leaves the MM in USER.
+    Costs about one MM forward (no grad) per callback; set
+    ``MMML_MLPOT_ETERM_SPLIT_SOURCE=charmm`` for the old CHARMM-param split.
+    """
+    if (os.environ.get("MMML_MLPOT_ETERM_SPLIT_SOURCE") or "hybrid").strip().lower() == "charmm":
+        return None
+    update_fn = getattr(calculator, "_cached_update_fn", None)
+    get_update_fn = getattr(calculator, "_get_update_fn", None)
+    if update_fn is None and get_update_fn is not None:
+        update_fn = get_update_fn(positions_A, calculator.cutoff_params, box=box)
+        calculator._cached_update_fn = update_fn
+    split_fn = getattr(update_fn, "mm_eterm_split", None)
+    if split_fn is None:
+        return None
+    import jax
+    import jax.numpy as jnp
+    import numpy as np
+
+    v = np.asarray(
+        jax.device_get(split_fn(jnp.asarray(positions_A), mm_pair_idx, mm_pair_mask, box)),
+        dtype=np.float64,
+    )
+    v = np.where(np.isfinite(v), v, 0.0)
+    keys = ("vdw_primary", "vdw_image", "elec_primary", "elec_image")
+    out = {k: float(x) for k, x in zip(keys, v)}
+    out["mm_total"] = float(v.sum())
+    return out
+
+
 def decompose_and_route_mlpot_mm_from_callback(
     calculator: Any,
     positions_A: Any,
@@ -110,6 +145,17 @@ def decompose_and_route_mlpot_mm_from_callback(
     cp = getattr(calculator, "cutoff_params", None)
     if cp is None:
         return float(energy_kcal)
+
+    try:
+        split = _hybrid_mm_eterm_split(calculator, positions_A, mm_pair_idx, mm_pair_mask, box)
+    except Exception as exc:
+        import sys
+
+        print(f"WARN: hybrid MM eterm split failed ({exc}); using CHARMM params", file=sys.stderr)
+        split = None
+    if split is not None:
+        calculator._last_mm_nb_components_kcalmol = split
+        return route_mlpot_callback_energy_kcalmol(float(energy_kcal), split)
 
     from mmml.interfaces.pycharmmInterface.mm_system_energy import (
         _live_charmm_nonbonded_arrays,

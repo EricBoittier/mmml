@@ -1848,13 +1848,14 @@ def build_mm_energy_forces_fn(
                     "this can trigger JAX recompilation"
                 )
 
-        def calculate_mm_pair_energies_dynamic(
+        def _dynamic_pair_vdw_elec(
             positions: Array,
             pair_idx: Array,
             pair_mask: Array,
             cell_for_mic: Optional[Array] = None,
             charges: Optional[Array] = None,
-        ) -> Tuple[Array, Array]:
+        ) -> Tuple[Array, Array, Array]:
+            """Unswitched per-pair (vdw, elec, r); elec is zero under jax-pme Coulomb."""
             pair_i = pair_idx[:, 0]
             pair_j = pair_idx[:, 1]
             lam_a = jnp.take(_lambda_monomer_jnp, _monomer_id_jnp[pair_i])
@@ -1889,8 +1890,20 @@ def build_mm_energy_forces_fn(
             pair_mask_ij = (pair_i < pair_j)
             vdw = _pair_vdw_energies(distances, pair_rm_dyn, pair_ep_dyn, pair_mask_ij)
             if _use_jax_pme_coulomb:
-                return vdw, distances
+                return vdw, jnp.zeros_like(vdw), distances
             elec = coulomb(distances, pair_qq_dyn) * pair_mask_ij
+            return vdw, elec, distances
+
+        def calculate_mm_pair_energies_dynamic(
+            positions: Array,
+            pair_idx: Array,
+            pair_mask: Array,
+            cell_for_mic: Optional[Array] = None,
+            charges: Optional[Array] = None,
+        ) -> Tuple[Array, Array]:
+            vdw, elec, distances = _dynamic_pair_vdw_elec(
+                positions, pair_idx, pair_mask, cell_for_mic=cell_for_mic, charges=charges
+            )
             return vdw + elec, distances
 
         def _mm_dynamic_energy_scalar(
@@ -1945,6 +1958,40 @@ def build_mm_energy_forces_fn(
             forces = jnp.where(jnp.isfinite(forces), forces, 0.0)
             switched_energy = jnp.where(jnp.isfinite(switched_energy), switched_energy, 0.0)
             return switched_energy, forces
+
+        @jax.jit
+        def mm_eterm_split_dynamic(
+            positions: Array,
+            pair_idx: Array,
+            pair_mask: Array,
+            box_override: Optional[Array] = None,
+        ) -> Array:
+            """Switched MM energy split for CHARMM ENER reporting (issue #218).
+
+            Same pair terms, λ, COM switching and MIC as the force path; returns
+            ``[vdw_primary, vdw_image, elec_primary, elec_image]`` (kcal/mol), where
+            image pairs are those whose minimum image needs a lattice shift.
+            """
+            from mmml.interfaces.pycharmmInterface.pbc_utils_jax import frac_coords
+
+            _cell_raw = box_override if box_override is not None else _pbc_cell_jnp
+            cell = _box_to_cell_3x3(_cell_raw)
+            vdw, elec, distances = _dynamic_pair_vdw_elec(
+                positions, pair_idx, pair_mask, cell_for_mic=cell
+            )
+            pair_i, pair_j = pair_idx[:, 0], pair_idx[:, 1]
+            shift = jnp.round(frac_coords(positions[pair_j] - positions[pair_i], cell))
+            primary = jnp.all(shift == 0, axis=1).astype(vdw.dtype)
+            pdi = _dimer_lookup_arr[_monomer_id_jnp[pair_i], _monomer_id_jnp[pair_j]]
+
+            def _sw(e: Array) -> Array:
+                return apply_switching_function(
+                    positions, e, distances=distances, pair_dimer_idx_arg=pdi, box_override=cell
+                )
+
+            return jnp.stack(
+                [_sw(vdw * primary), _sw(vdw * (1 - primary)), _sw(elec * primary), _sw(elec * (1 - primary))]
+            )
 
         def _fallback_backend_request() -> str:
             resolved = resolve_mm_nl_backend(mm_nl_backend)
@@ -2597,6 +2644,9 @@ def build_mm_energy_forces_fn(
             return dict(_pair_stats)
 
         update_mm_pairs.get_stats = _get_pair_update_stats
+        # jax-pme moves Coulomb/dispersion off the pair list, so the pair split would
+        # not be the MM the hybrid evaluates; routing keeps its numpy fallback there.
+        update_mm_pairs.mm_eterm_split = None if _use_jax_pme_coulomb else mm_eterm_split_dynamic
 
         mm_fn = calculate_mm_energy_and_forces_dynamic
         if _use_jax_pme_coulomb:
@@ -2671,6 +2721,9 @@ def decompose_mlpot_mm_nb_eterms_kcalmol(
     """Split switched MM nonbond energy into CHARMM-style primary/image buckets (kcal/mol).
 
     Primary pairs have zero MIC lattice shift; image pairs use a non-zero translation.
+    ``rmins_A`` is the per-atom CHARMM ``Rmin/2``; ``epsilons_kcal`` the per-atom ε.
+    MLpot routing prefers the hybrid's own JAX split (``update_fn.mm_eterm_split``)
+    and uses this only as a fallback (jax-pme, or no JAX MM factory).
     """
     from mmml.interfaces.pycharmmInterface.cutoffs import GAMMA_OFF, GAMMA_ON
 
@@ -2679,7 +2732,7 @@ def decompose_mlpot_mm_nb_eterms_kcalmol(
         if abs(denom) < 1e-12:
             return (r >= x0).astype(np.float64)
         s = np.clip((r - x0) / denom, 0.0, 1.0) ** gamma
-        return s * s * (3.0 - 2.0 * s)
+        return s * s * s * (10.0 + s * (-15.0 + 6.0 * s))  # quintic, as calculator_utils._sharpstep
 
     pos = np.asarray(positions_A, dtype=np.float64)
     n_atoms = int(pos.shape[0])
@@ -2747,10 +2800,11 @@ def decompose_mlpot_mm_nb_eterms_kcalmol(
         )
         mm_scale = mm_on * (1.0 - mm_off)
 
-    rm = rmins[i] + rmins[j]
+    # CHARMM LJ: eps_ij [(Rmin_ij/r)^12 - 2 (Rmin_ij/r)^6], Rmin_ij = Rmin_i/2 + Rmin_j/2,
+    # i.e. minimum -eps_ij at r = Rmin_ij (same form as the JAX force path).
+    rm6 = ((rmins[i] + rmins[j]) / r) ** 6
     ep = np.sqrt(eps[i] * eps[j])
-    sig = rm / (2.0 ** (1.0 / 6.0))
-    vdw = ep * ((sig / r) ** 12 - 2.0 * (sig / r) ** 6) * mm_scale
+    vdw = ep * (rm6 * rm6 - 2.0 * rm6) * mm_scale
     elec = 332.063711 * charges[i] * charges[j] / r * mm_scale
     vdw_pri = float(vdw[is_primary].sum())
     vdw_im = float(vdw[~is_primary].sum())
