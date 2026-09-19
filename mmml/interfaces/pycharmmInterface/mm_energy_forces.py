@@ -30,15 +30,86 @@ from mmml.interfaces.pycharmmInterface.pbc_utils_jax import (
 # reuse is allowed only while max per-atom displacement ≤ skin/2.
 DEFAULT_JAX_MD_CAPACITY_MULTIPLIER = 1.75
 DEFAULT_JAX_MD_SKIN_DISTANCE_A = 0.25
+# Flexibility margin (A) added to the measured max atom-to-centroid distance when
+# sizing the COM-switched MM pair list (radius grows by 2x this). Rebuilds raise if
+# a molecule's extent exceeds the assumed value.
+DEFAULT_MM_EXTENT_MARGIN_A = 0.25
 
 
 def resolve_mm_pair_list_cutoff_A(
     mm_switch_on: float,
     mm_switch_width: float,
     skin_distance: float = 0.0,
+    molecule_extent_A: float = 0.0,
 ) -> float:
-    """Outer pair-list radius: switched-MM cutoff plus Verlet skin buffer."""
-    return float(mm_switch_on) + float(mm_switch_width) + float(max(0.0, skin_distance))
+    """Outer atom-pair list radius for the COM-switched MM term.
+
+    The MM weight follows the monomer COM distance and is non-zero up to
+    ``mm_switch_on + mm_switch_width``, so every atom pair of such a dimer must
+    be listed: add twice the largest atom-to-centroid distance
+    (``molecule_extent_A``, which callers pass with the flexibility margin
+    already added). Without it, pairs of a switched-on dimer drop in and out of
+    the list at the atom cutoff and NVE is not conserved (ETOH:181, 26 A:
+    10.6 % of weighted pairs missing, +810 kcal/mol in 0.25 ps).
+    """
+    return (
+        float(mm_switch_on)
+        + float(mm_switch_width)
+        + 2.0 * float(max(0.0, molecule_extent_A))
+        + float(max(0.0, skin_distance))
+    )
+
+
+def _cell_matrix_np(cell: np.ndarray) -> np.ndarray:
+    c = np.asarray(cell, dtype=np.float64)
+    if c.ndim == 0:
+        return np.diag([float(c)] * 3)
+    if c.ndim == 1:
+        return np.diag(c)
+    return c
+
+
+def max_monomer_extent_A(
+    positions: np.ndarray,
+    monomer_offsets: np.ndarray,
+    cell: np.ndarray | None = None,
+) -> float:
+    """Largest atom-to-centroid distance over monomers (molecules made whole by MIC).
+
+    Vectorized (one pass over atoms), cheap enough to run on every pair-list rebuild.
+    """
+    offs = np.asarray(monomer_offsets, dtype=np.int64)
+    sizes = np.diff(offs)
+    if sizes.size == 0 or int(offs[-1]) <= int(offs[0]):
+        return 0.0
+    R = np.asarray(positions, dtype=np.float64)[offs[0] : offs[-1]]
+    mol = np.repeat(np.arange(sizes.size), sizes)
+    d = R - R[offs[:-1] - offs[0]][mol]
+    if cell is not None:
+        cell_m = _cell_matrix_np(cell)
+        frac = d @ np.linalg.inv(cell_m)
+        d = (frac - np.round(frac)) @ cell_m
+    n = np.maximum(sizes, 1).astype(np.float64)
+    cen = np.stack(
+        [np.bincount(mol, weights=d[:, k], minlength=sizes.size) / n for k in range(3)], axis=1
+    )
+    return float(np.max(np.linalg.norm(d - cen[mol], axis=1)))
+
+
+def check_mm_pair_list_radius(radius_A: float, cell: np.ndarray, *, detail: str = "") -> None:
+    """Raise if the MM atom-pair list radius reaches half the shortest box edge.
+
+    Past L/2 the MIC pair list cannot hold every atom pair of every dimer the
+    COM switch weights (nor avoid duplicate images), so energy is not conserved.
+    """
+    half_min = 0.5 * float(np.min(np.diag(_cell_matrix_np(cell))))
+    if float(radius_A) >= half_min:
+        raise ValueError(
+            f"MM pair list radius {float(radius_A):.2f} A{detail} reaches half the box "
+            f"({half_min:.2f} A): atom pairs of switched-on dimers would be missing from the "
+            "list and NVE would not conserve energy. Use a larger box or a smaller "
+            "--mm-switch-on/--mm-switch-width."
+        )
 
 
 def verlet_reuse_displacement_limit_A(skin_distance: float) -> float:
@@ -918,6 +989,7 @@ def build_mm_energy_forces_fn(
     ewald_include_self: bool = True,
     ewald_include_intra: bool = True,
     include_lj: bool = False,
+    mm_extent_margin_A: float = DEFAULT_MM_EXTENT_MARGIN_A,
 ) -> Any:
     """Build MM energy/forces function with switching.
 
@@ -930,6 +1002,9 @@ def build_mm_energy_forces_fn(
     ``mm_include_lj: true``. Default False preserves Coulomb-only ewald MD.
 
     Args:
+        mm_extent_margin_A: Added to the initial max atom-to-centroid distance to
+            size the PBC pair list (``resolve_mm_pair_list_cutoff_A``). Pair-list
+            rebuilds raise ``ValueError`` if a molecule grows past extent + margin.
         mm_r_min: Optional inner cutoff (Å). Pairs with dimer COM distance < mm_r_min
             are excluded from the MM neighbor list. Use mm_switch_on to exclude close
             monomers (MM only in switching region). Note: with complementary_handoff,
@@ -1073,14 +1148,32 @@ def build_mm_energy_forces_fn(
     _pair_mask_cell = [None]
     pair_lambda_mm = None
 
+    _mm_assumed_extent = 0.0
+    if hybrid_hamiltonian == "shared_cutoff":
+        _mm_list_cutoff = float(shared_cutoff) + float(jax_md_skin_distance)
+        _mm_radius_detail = f" (shared cutoff {float(shared_cutoff):.2f} A + skin)"
+    else:
+        if pbc_cell is not None:
+            # Flexible molecules: the list assumes extent + margin; the rebuild
+            # path raises if a molecule later grows past it.
+            _mm_assumed_extent = max_monomer_extent_A(R, monomer_offsets, pbc_cell) + float(
+                max(0.0, mm_extent_margin_A)
+            )
+        _mm_list_cutoff = resolve_mm_pair_list_cutoff_A(
+            mm_switch_on, mm_switch_width, jax_md_skin_distance, molecule_extent_A=_mm_assumed_extent
+        )
+        _mm_radius_detail = (
+            f" (COM switch end {float(mm_switch_on) + float(mm_switch_width):.2f} A"
+            f" + 2 x (molecule extent + margin) {2.0 * _mm_assumed_extent:.2f} A + skin)"
+        )
+    # Ewald returns before any pair list is used (full-box Coulomb, all-pairs LJ).
+    if pbc_cell is not None and pick_lr_solver(lr_solver) != "ewald":
+        check_mm_pair_list_radius(_mm_list_cutoff, pbc_cell, detail=_mm_radius_detail)
+
     def _create_jax_md_bundle(capacity_multiplier: float):
         return create_jax_md_neighbor_list(
             np.asarray(pbc_cell),
-            r_cutoff=(
-                float(shared_cutoff) + float(jax_md_skin_distance)
-                if hybrid_hamiltonian == "shared_cutoff"
-                else resolve_mm_pair_list_cutoff_A(mm_switch_on, mm_switch_width, jax_md_skin_distance)
-            ),
+            r_cutoff=_mm_list_cutoff,
             monomer_offsets=np.asarray(monomer_offsets),
             dr_threshold=0.5,
             capacity_multiplier=capacity_multiplier,
@@ -1102,12 +1195,6 @@ def build_mm_energy_forces_fn(
                 _cell_list_pairs is not None or have_vesin()
             )
             _use_dynamic_nbrs = _use_jax_md_nbrs or _use_rebuild_nbrs
-
-    _mm_list_cutoff = (
-        float(shared_cutoff) + float(jax_md_skin_distance)
-        if hybrid_hamiltonian == "shared_cutoff"
-        else resolve_mm_pair_list_cutoff_A(mm_switch_on, mm_switch_width, jax_md_skin_distance)
-    )
 
     if _use_rebuild_nbrs:
         _mm_switch_width_dist = _mm_list_cutoff
@@ -1942,6 +2029,26 @@ def build_mm_energy_forces_fn(
             box_delta = float(np.max(np.abs(np.asarray(box_in) - np.asarray(_last_box[0]))))
             return box_delta <= 1e-8
 
+        def _check_extent_and_radius(
+            positions_in: np.ndarray, box_in: Optional[np.ndarray]
+        ) -> None:
+            cell_now = _pbc_cell_for_nl_build(box_in)
+            if box_in is not None:
+                check_mm_pair_list_radius(_mm_list_cutoff, cell_now, detail=_mm_radius_detail)
+            if _mm_assumed_extent <= 0.0:
+                return
+            ext = max_monomer_extent_A(
+                _cartesian_for_nl_build(positions_in, box_in), _offsets_np, cell_now
+            )
+            if ext > _mm_assumed_extent:
+                raise ValueError(
+                    f"Molecule extent {ext:.3f} A (max atom-to-centroid distance) exceeds the "
+                    f"{_mm_assumed_extent:.3f} A assumed for the MM pair list radius "
+                    f"({_mm_list_cutoff:.2f} A): atom pairs of switched-on dimers may be "
+                    "missing. Raise mm_extent_margin_A (needs a correspondingly larger box) "
+                    "or check for a distorted molecule."
+                )
+
         def _rebuild_pairs_with_static_backend(
             positions_in: np.ndarray,
             box_in: Optional[np.ndarray],
@@ -1953,6 +2060,8 @@ def build_mm_energy_forces_fn(
                 gpu_nl_path_available,
                 rebuild_vesin_pairs_gpu,
             )
+
+            _check_extent_and_radius(positions_in, box_in)
 
             if (
                 gpu_nl_path_available()
