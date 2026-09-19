@@ -5,7 +5,6 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 import numpy as np
-import pytest
 
 
 def test_build_mm_energy_forces_fn_force_static_cell_list_sets_pair_lambda():
@@ -16,8 +15,12 @@ def test_build_mm_energy_forces_fn_force_static_cell_list_sets_pair_lambda():
     offsets = np.array([0, 4, 8], dtype=np.int32)
     atoms_per = [4, 4]
     lambda_m = np.ones(n_mono, dtype=np.float64)
-    R = np.random.default_rng(0).uniform(0.0, 10.0, size=(n_atoms, 3))
-    box = np.diag([20.0, 20.0, 20.0])
+    # Two compact 4-atom molecules (extent < 1.4 A): the COM-complete pair list
+    # radius (6 + 4 + 2 x (extent + margin) + skin) must stay below L/2.
+    rng = np.random.default_rng(0)
+    R = np.repeat(np.array([[5.0, 5.0, 5.0], [12.0, 5.0, 5.0]]), 4, axis=0)
+    R = R + rng.uniform(-0.8, 0.8, size=(n_atoms, 3))
+    box = np.diag([30.0, 30.0, 30.0])
 
     pair_i = np.array([0, 1, 4, 5], dtype=np.int32)
     pair_j = np.array([4, 5, 0, 1], dtype=np.int32)
