@@ -56,6 +56,9 @@ sbatch --partition=rtx4090 --qos=rtx4090-6hours --time=06:00:00 \
 # RESTART=$HOME/mmml/ckpts/spice_ef_polar_big/params-best-441a9161-9eca-4563-9957-04c9d2ec5a34.json
 
 # Learning curve (same valid, train 1/3/10/30%). Polar-only. Leaves r3 alone.
+# If polar mae is flat at ~2.39e8 across fractions, also set
+# FORCES_WEIGHT=0 DIPOLE_WEIGHT=0 CHARGE_WEIGHT=0 and drop RESTART
+# (441a9161 is a dead attractor under clip_norm).
 scripts/spice_alpha/submit_efield_lc.sh
 # later:
 python scripts/spice_alpha/summarize_efield_lc.py \

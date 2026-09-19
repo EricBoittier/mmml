@@ -19,6 +19,9 @@ SEED="${SEED:-0}"
 MODE="${MODE:-big}"
 EPOCHS="${EPOCHS:-100}"
 ENERGY_WEIGHT="${ENERGY_WEIGHT:-0}"
+FORCES_WEIGHT="${FORCES_WEIGHT:-100}"
+DIPOLE_WEIGHT="${DIPOLE_WEIGHT:-0.1}"
+CHARGE_WEIGHT="${CHARGE_WEIGHT:-1000}"
 POLAR_WEIGHT="${POLAR_WEIGHT:-100}"
 RESTART="${RESTART:-$HOME/mmml/ckpts/spice_ef_polar_big/params-best-441a9161-9eca-4563-9957-04c9d2ec5a34.json}"
 CKPT_ROOT="${CKPT_ROOT:-$ROOT/ckpts}"
@@ -48,6 +51,6 @@ for frac in "${FRAC_ARR[@]}"; do
   echo "sbatch $tag frac=$frac splits=$splits ckpt=$ckpt"
   sbatch --partition=rtx4090 --qos=rtx4090-6hours --time=06:00:00 \
     --job-name="spice-ef-lc-$tag" \
-    --export=ALL,MODE="$MODE",EPOCHS="$EPOCHS",BATCH_SIZE="$BATCH_SIZE",ENERGY_WEIGHT="$ENERGY_WEIGHT",POLAR_WEIGHT="$POLAR_WEIGHT",RESTART="$RESTART",SPLITS="$splits",CKPT="$ckpt" \
+    --export=ALL,MODE="$MODE",EPOCHS="$EPOCHS",BATCH_SIZE="$BATCH_SIZE",ENERGY_WEIGHT="$ENERGY_WEIGHT",FORCES_WEIGHT="$FORCES_WEIGHT",DIPOLE_WEIGHT="$DIPOLE_WEIGHT",CHARGE_WEIGHT="$CHARGE_WEIGHT",POLAR_WEIGHT="$POLAR_WEIGHT",RESTART="$RESTART",SPLITS="$splits",CKPT="$ckpt" \
     "$ROOT/scripts/spice_alpha/train_efield_polar.sbatch"
 done

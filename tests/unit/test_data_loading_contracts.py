@@ -89,6 +89,8 @@ def test_efield_train_wrapper_disables_x64():
     assert "PYTHONUNBUFFERED" in sbatch
     assert "scicore_env.sh" in sbatch
     assert '--polar_weight "$POLAR_WEIGHT"' in text
+    assert '--forces_weight "$FORCES_WEIGHT"' in text
+    assert '--energy_weight "$ENERGY_WEIGHT"' in text
     assert "--num_basis_functions" in text
     assert 'POLAR_WEIGHT="${POLAR_WEIGHT:-100}"' in sbatch
     assert 'MODE" == "big"' in sbatch
