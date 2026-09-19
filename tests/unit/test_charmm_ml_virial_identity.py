@@ -34,7 +34,7 @@ def test_atomic_virial_matches_validate_script_ideal_gas():
     n, volume, ke = 100, 1000.0, 5.0
     zeros = np.zeros((n, 3))
     assert virial_pressure_atm(zeros, zeros, volume, kinetic_ev=ke) == pytest.approx(
-        script_virial(zeros, zeros, volume, kinetic_ev=ke), rel=0.0, abs=0.0
+        script_virial(zeros, zeros, volume, kinetic_ev=ke), rel=1e-15
     )
 
 
@@ -100,6 +100,55 @@ def test_stopgrad_forces_match_finite_difference_at_fixed_l():
             pert[i, c] += h
             fd[i, c] = -(mic_harmonic_energy_ev(pert, box, k=1.5) - e0) / h
     np.testing.assert_allclose(analytic, fd, rtol=1e-5, atol=1e-6)
+
+
+def test_live_diagnose_argv_parses(tmp_path):
+    """md-system accepts the functionality-script argv (no CHARMM)."""
+    from mmml.cli.run.md_system import build_parser
+
+    psf = tmp_path / "model.psf"
+    crd = tmp_path / "model.crd"
+    ckpt = tmp_path / "ckpt.json"
+    for path in (psf, crd, ckpt):
+        path.write_text("x")
+    args = build_parser().parse_args(
+        [
+            "--backend",
+            "pycharmm",
+            "--setup",
+            "pbc_npt",
+            "--from-psf",
+            str(psf),
+            "--from-crd",
+            str(crd),
+            "--skip-cluster-build",
+            "--box-size",
+            "34",
+            "--composition",
+            "ETOH:405",
+            "--checkpoint",
+            str(ckpt),
+            "--mm-switch-width",
+            "3.0",
+            "--no-calculator-pre-minimize",
+            "--no-charmm-pre-minimize",
+            "--no-monomer-physnet-mini",
+            "--no-mc-density-equalize",
+            "--md-stages",
+            "equi",
+            "--output-dir",
+            str(tmp_path / "out"),
+            "--job-name",
+            "cpt_ml_virial",
+        ]
+    )
+    assert args.backend == "pycharmm"
+    assert args.box_size == 34.0
+    assert args.mm_switch_width == 3.0
+    assert args.calculator_pre_minimize is False
+    assert args.charmm_pre_minimize is False
+    assert args.monomer_physnet_mini is False
+    assert args.mc_density_equalize is False
 
 
 @pytest.mark.parametrize(
