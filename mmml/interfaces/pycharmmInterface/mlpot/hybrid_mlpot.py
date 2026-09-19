@@ -607,24 +607,32 @@ class DecomposedMlpotCalculator:
         y,
         z,
     ) -> np.ndarray:
-        """Re-center molecules in the CHARMM primary cell before MIC evaluation."""
+        """Periodic copy of ``pos`` with each molecule's COM in the primary cell.
+
+        Pure integer-lattice shifts per molecule, applied to a copy only. MIC
+        energies/forces are unchanged by such shifts, so the evaluation sees
+        tidy coordinates without touching CHARMM's state. This used to call
+        ``rewrap_charmm_pbc_molecules`` and write the result into ``x/y/z``:
+        its inward ``margin_A`` nudge is a real displacement, and editing the
+        integrator's coordinates mid-step broke NVE (+289 kcal/mol in 0.25 ps
+        on ETOH:181; conserved once removed). ``x``, ``y``, ``z`` are left
+        untouched; post-SD recentering lives in ``dynamics._rewrap_mlpot_pbc_after_sd``.
+        """
+        del x, y, z
         if not self._cell or not self._atoms_per_monomer:
             return pos
-        from mmml.cli.run.md_handoff import rewrap_charmm_pbc_molecules
+        from mmml.interfaces.pycharmmInterface.mlpot.mc_density import monomer_offsets_from_atoms_per
+        from mmml.utils.geometry_checks import wrap_monomers_primary_cell
 
-        side = float(self._cell)
-        wrapped = rewrap_charmm_pbc_molecules(
-            np.asarray(pos[:n], dtype=np.float64),
-            list(self._atoms_per_monomer),
-            side,
+        L = float(self._cell)
+        offsets = monomer_offsets_from_atoms_per(list(self._atoms_per_monomer))
+        # CHARMM frame is [-L/2, L/2]; wrap in [0, L) and shift back.
+        wrapped = (
+            wrap_monomers_primary_cell(
+                np.asarray(pos[:n], dtype=np.float64) + 0.5 * L, offsets, np.diag([L, L, L])
+            )
+            - 0.5 * L
         )
-        delta = np.abs(wrapped - pos[:n])
-        if float(delta.max()) <= 1e-4:
-            return pos
-        for i in range(n):
-            x[i] = float(wrapped[i, 0])
-            y[i] = float(wrapped[i, 1])
-            z[i] = float(wrapped[i, 2])
         out = np.array(pos, dtype=np.float64, copy=True)
         out[:n] = wrapped
         return out
