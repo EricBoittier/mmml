@@ -172,6 +172,8 @@ def decompose_and_route_mlpot_mm_from_callback(
     try:
         split = _hybrid_mm_eterm_split(calculator, positions_A, mm_pair_idx, mm_pair_mask, box)
     except Exception as exc:
+        # Non-fatal by design: the split only labels how the hybrid energy is
+        # reported (USER vs VDW/ELEC); the total and the forces are unchanged.
         import sys
 
         print(f"WARN: hybrid MM eterm split failed ({exc}); using CHARMM params", file=sys.stderr)
@@ -257,6 +259,8 @@ def decompose_and_route_mlpot_mm_from_callback(
             complementary_handoff=bool(cp.complementary_handoff),
         )
     except Exception as exc:
+        # Non-fatal by design: returning the full hybrid energy as USER keeps
+        # the total and the forces; only the VDW/ELEC reporting split is lost.
         import sys
 
         print(

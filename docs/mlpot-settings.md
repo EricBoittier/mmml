@@ -191,3 +191,50 @@ python scripts/validate_mlpot_sparse_dimers.py \
 ```
 
 See [Medium PBC workflow](mlpot-medium-pbc.md) for caps, `ml_batch_size` defaults, and JAX-MD handoff.
+
+## Callback failures stop the run (exit code 86)
+
+CHARMM calls the MLpot energy function through a ctypes `CFUNCTYPE`. If a
+Python exception escapes it, ctypes prints `Exception ignored on calling ctypes
+callback function` and hands CHARMM an undefined USER energy (0.0 or a stale
+denormal). Before this guard CHARMM kept integrating, and the job then wrote its
+restart, stage summary and `next_run` advice as if nothing had happened.
+
+Every registered callback is now wrapped by
+`mlpot.callback_failstop.fail_closed_callback`. On any exception it prints
+`MMML MLPOT CALLBACK FAILURE` with the full traceback (also to the original
+stderr if CHARMM output is silenced at that moment), flushes Python, C and
+Fortran output, and ends the process with **exit code 86** via `os._exit`.
+Nothing runs after that: no restart, DCD, `stage_summary.json`, job manifest,
+`run_manifest.json` or `next_run.*` is written. Under a multi-rank MPI launch the
+communicator is aborted with the same code.
+
+What now fails closed inside the callback:
+
+| Condition | Before | Now |
+|-----------|--------|-----|
+| Molecule extent exceeds the MM pair-list assumption (`ValueError`) | swallowed by ctypes, dynamics continued | exit 86 |
+| Fortran ML/MM pair list empty with MM on (`_CallbackPairListUnavailable`) | `WARN`, USER = 0, zero forces | exit 86 |
+| Non-finite ML energy or forces (metatomic, plain PhysNet `PyCharmm_Calculator`) | returned 0 / passed through | exit 86 |
+| Periodic Coulomb (jax-pme / ScaFaCoS) failure | `WARN`, ML-only USER | exit 86 |
+
+CHARMM's own `STOP` is not used: `lingo.charmm_script("STOP")` re-enters the
+command parser from inside the energy routine and ends in `STOPCH`, whose
+Fortran `STOP` exits with status 0, so a failed run would look like success.
+
+Job wrappers must propagate the exit status. A script that ends with
+`echo "exit $?" >> run.log` exits 0 whatever `mmml` returned; use
+`rc=$?; echo "exit $rc" >> run.log; exit $rc`.
+
+The decomposed PhysNet hybrid still masks a non-finite ML energy or force to 0
+inside the callback (`jnp.where(jnp.isfinite(...))` in `hybrid_mlpot.py`); making
+that fail closed is left to a follow-up because `perf/mlpot-static-chunk-trip`
+rewrites those lines.
+
+Test-only switches (never set them in production):
+
+| Variable | Effect |
+|----------|--------|
+| `MMML_MLPOT_CALLBACK_FAIL_EXIT_CODE` | exit code other than 86 (1–255) |
+| `MMML_MLPOT_ALLOW_MISSING_CALLBACK_PAIRS=1` | old zero-energy return for an empty ML/MM pair list |
+| `MMML_MLPOT_ALLOW_PERIODIC_COULOMB_FAILURE=1` | old ML-only continuation when periodic Coulomb fails |

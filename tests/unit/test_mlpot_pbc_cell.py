@@ -1337,7 +1337,7 @@ def test_charmm_callback_zero_pairs_refuses_implicit_jax_rebuild():
         )
 
 
-def test_charmm_callback_zero_pairs_records_error_inside_ctypes_callback():
+def _zero_pair_callback_calc():
     z = np.zeros(8, dtype=int)
     spherical_fn = MagicMock()
     calc = DecomposedMlpotCalculator(
@@ -1349,38 +1349,49 @@ def test_charmm_callback_zero_pairs_records_error_inside_ctypes_callback():
         get_update_fn=MagicMock(return_value=MagicMock(return_value=_mock_mm_pair_buffers())),
         mm_pair_source="charmm_callback",
     )
+    return calc, spherical_fn
+
+
+def _call_zero_pair_callback(calc):
     n = 8
-    x = np.zeros(n, dtype=np.float64)
-    y = np.zeros(n, dtype=np.float64)
-    zc = np.zeros(n, dtype=np.float64)
-    dx = np.zeros(n, dtype=np.float64)
-    dy = np.zeros(n, dtype=np.float64)
-    dz = np.zeros(n, dtype=np.float64)
+    bufs = [np.zeros(n, dtype=np.float64) for _ in range(6)]
     with patch(
         "mmml.interfaces.pycharmmInterface.jax_device_policy.mlpot_jax_device_context",
         return_value=MagicMock(__enter__=MagicMock(), __exit__=MagicMock()),
     ):
-        user = calc.calculate_charmm(
-            n,
-            0,
-            0,
-            None,
-            x,
-            y,
-            zc,
-            dx,
-            dy,
-            dz,
-            0,
-            0,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
+        return calc.calculate_charmm(
+            n, 0, 0, None, *bufs, 0, 0, None, None, None, None, None, None, None
         )
+
+
+def test_charmm_callback_zero_pairs_fails_closed_inside_callback(monkeypatch):
+    """Missing ML/MM pairs raise out of calculate_charmm (into the exit-86 guard)."""
+    from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import (
+        ALLOW_MISSING_CALLBACK_PAIRS_ENV,
+        _CallbackPairListUnavailable,
+    )
+
+    from mmml.interfaces.pycharmmInterface.mlpot.callback_failstop import (
+        MlpotCallbackAborted,
+    )
+
+    monkeypatch.delenv(ALLOW_MISSING_CALLBACK_PAIRS_ENV, raising=False)
+    calc, spherical_fn = _zero_pair_callback_calc()
+    with pytest.raises(MlpotCallbackAborted, match="returned zero ML/MM pairs") as info:
+        _call_zero_pair_callback(calc)
+    assert isinstance(info.value.__cause__, _CallbackPairListUnavailable)
+    assert "returned zero ML/MM pairs" in calc._last_callback_error
+    spherical_fn.assert_not_called()
+
+
+def test_charmm_callback_zero_pairs_test_opt_out_returns_zero(monkeypatch):
+    from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import (
+        ALLOW_MISSING_CALLBACK_PAIRS_ENV,
+    )
+
+    monkeypatch.setenv(ALLOW_MISSING_CALLBACK_PAIRS_ENV, "1")
+    calc, spherical_fn = _zero_pair_callback_calc()
+    user = _call_zero_pair_callback(calc)
     assert user == pytest.approx(0.0)
     assert "returned zero ML/MM pairs" in calc._last_callback_error
     assert calc._last_callback_user_return_kcal == pytest.approx(0.0)
