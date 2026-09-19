@@ -36,9 +36,46 @@ def resolve_mm_pair_list_cutoff_A(
     mm_switch_on: float,
     mm_switch_width: float,
     skin_distance: float = 0.0,
+    molecule_extent_A: float = 0.0,
 ) -> float:
-    """Outer pair-list radius: switched-MM cutoff plus Verlet skin buffer."""
-    return float(mm_switch_on) + float(mm_switch_width) + float(max(0.0, skin_distance))
+    """Outer atom-pair list radius for the COM-switched MM term.
+
+    The MM weight follows the monomer COM distance and is non-zero up to
+    ``mm_switch_on + mm_switch_width``, so every atom pair of such a dimer must
+    be listed: add twice the largest atom-to-centroid distance
+    (``molecule_extent_A``). Without it, pairs of a switched-on dimer drop in and
+    out of the list at the atom cutoff and NVE is not conserved (ETOH:181,
+    26 A: 10.6 % of weighted pairs missing, +810 kcal/mol in 0.25 ps).
+    """
+    return (
+        float(mm_switch_on)
+        + float(mm_switch_width)
+        + 2.0 * float(max(0.0, molecule_extent_A))
+        + float(max(0.0, skin_distance))
+    )
+
+
+def max_monomer_extent_A(
+    positions: np.ndarray,
+    monomer_offsets: np.ndarray,
+    cell: np.ndarray | None = None,
+) -> float:
+    """Largest atom-to-centroid distance over monomers (molecules made whole by MIC)."""
+    R = np.asarray(positions, dtype=np.float64)
+    offs = np.asarray(monomer_offsets, dtype=np.int64)
+    cell_m = None
+    if cell is not None:
+        cell_m = np.asarray(cell, dtype=np.float64)
+        if cell_m.ndim == 1:
+            cell_m = np.diag(cell_m)
+    ext = 0.0
+    for a, b in zip(offs[:-1], offs[1:]):
+        mol = R[a:b] - R[a]
+        if cell_m is not None:
+            frac = mol @ np.linalg.inv(cell_m)
+            mol = (frac - np.round(frac)) @ cell_m
+        ext = max(ext, float(np.max(np.linalg.norm(mol - mol.mean(axis=0), axis=1))))
+    return ext
 
 
 def verlet_reuse_displacement_limit_A(skin_distance: float) -> float:
@@ -1028,14 +1065,35 @@ def build_mm_energy_forces_fn(
     _pair_mask_cell = [None]
     pair_lambda_mm = None
 
+    if hybrid_hamiltonian == "shared_cutoff":
+        _mm_list_cutoff = float(shared_cutoff) + float(jax_md_skin_distance)
+    else:
+        _mol_extent = (
+            max_monomer_extent_A(R, monomer_offsets, pbc_cell) if pbc_cell is not None else 0.0
+        )
+        _mm_list_cutoff = resolve_mm_pair_list_cutoff_A(
+            mm_switch_on, mm_switch_width, jax_md_skin_distance, molecule_extent_A=_mol_extent
+        )
+    if pbc_cell is not None:
+        _cell_arr = np.asarray(pbc_cell, dtype=np.float64)
+        _half_min = 0.5 * float(np.min(np.diag(_cell_arr) if _cell_arr.ndim == 2 else _cell_arr))
+        if _mm_list_cutoff >= _half_min:
+            import warnings
+
+            warnings.warn(
+                f"MM pair list radius {_mm_list_cutoff:.2f} A (COM switch end "
+                f"{float(mm_switch_on) + float(mm_switch_width):.2f} A + 2 x molecule extent "
+                f"+ skin) exceeds half the box ({_half_min:.2f} A); capping it, so atom pairs "
+                "of switched-on dimers can drop out of the list and NVE will not conserve "
+                "energy. Use a larger box or a smaller --mm-switch-on/--mm-switch-width.",
+                stacklevel=2,
+            )
+            _mm_list_cutoff = 0.999 * _half_min
+
     def _create_jax_md_bundle(capacity_multiplier: float):
         return create_jax_md_neighbor_list(
             np.asarray(pbc_cell),
-            r_cutoff=(
-                float(shared_cutoff) + float(jax_md_skin_distance)
-                if hybrid_hamiltonian == "shared_cutoff"
-                else resolve_mm_pair_list_cutoff_A(mm_switch_on, mm_switch_width, jax_md_skin_distance)
-            ),
+            r_cutoff=_mm_list_cutoff,
             monomer_offsets=np.asarray(monomer_offsets),
             dr_threshold=0.5,
             capacity_multiplier=capacity_multiplier,
@@ -1057,12 +1115,6 @@ def build_mm_energy_forces_fn(
                 _cell_list_pairs is not None or have_vesin()
             )
             _use_dynamic_nbrs = _use_jax_md_nbrs or _use_rebuild_nbrs
-
-    _mm_list_cutoff = (
-        float(shared_cutoff) + float(jax_md_skin_distance)
-        if hybrid_hamiltonian == "shared_cutoff"
-        else resolve_mm_pair_list_cutoff_A(mm_switch_on, mm_switch_width, jax_md_skin_distance)
-    )
 
     if _use_rebuild_nbrs:
         _mm_switch_width_dist = _mm_list_cutoff
