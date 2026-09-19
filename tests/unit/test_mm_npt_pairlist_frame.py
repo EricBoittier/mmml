@@ -20,7 +20,10 @@ import pytest
 os.environ.setdefault("JAX_PLATFORMS", "cpu")
 
 from mmml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
-from mmml.interfaces.pycharmmInterface.mm_energy_forces import mm_pair_update_positions
+from mmml.interfaces.pycharmmInterface.mm_energy_forces import (
+    mm_pair_update_positions,
+    refresh_mm_pairs_from_cartesian,
+)
 
 _L = 12.0
 _PAIR_CUTOFF = 5.0
@@ -145,3 +148,39 @@ def test_npt_and_nvt_give_same_mm_energy_forces() -> None:
     assert e_nvt != 0.0
     np.testing.assert_allclose(e_npt, e_nvt, rtol=1e-6, atol=1e-8)
     np.testing.assert_allclose(f_npt, f_nvt, rtol=1e-5, atol=1e-7)
+
+
+def test_refresh_mm_pairs_from_cartesian_npt_converts() -> None:
+    """FIRE-style Cartesian refresh must hand the updater fractional coords."""
+    seen: dict = {}
+
+    def update_fn(positions, box=None):
+        seen["P"] = np.asarray(positions)
+        seen["box"] = np.asarray(box)
+        return "idx", "mask"
+
+    R = np.array([[3.0, 0.0, 0.0], [0.0, 6.0, 0.0]], dtype=np.float64)
+    box = np.array([_L, _L, _L], dtype=np.float64)
+    out = refresh_mm_pairs_from_cartesian(
+        update_fn, R, box, fractional_coordinates=True
+    )
+    assert out == ("idx", "mask")
+    np.testing.assert_allclose(seen["P"], R / _L)
+    np.testing.assert_allclose(seen["box"], box)
+
+    refresh_mm_pairs_from_cartesian(
+        update_fn, R, box, fractional_coordinates=False
+    )
+    np.testing.assert_allclose(seen["P"], R)
+
+
+def test_jaxmd_fire_sites_use_cartesian_pair_refresh() -> None:
+    """The four Cartesian FIRE / PBC-FIRE pair updates share the tested helper."""
+    from pathlib import Path
+
+    src = (
+        Path(__file__).resolve().parents[2]
+        / "mmml/cli/run/jaxmd_runner.py"
+    ).read_text(encoding="utf-8")
+    assert src.count("refresh_mm_pairs_from_cartesian(") >= 5
+    assert "_cart_nl_positions" not in src
