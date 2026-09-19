@@ -149,6 +149,19 @@ sbatch scripts/spice_alpha/train_efield_polar.sbatch
 sbatch --partition=rtx4090 --qos=rtx4090-6hours --time=06:00:00 \
   --export=ALL,MODE=full,EPOCHS=100,BATCH_SIZE=8 \
   scripts/spice_alpha/train_efield_polar.sbatch
+
+# 4. Full DES370K monomers (new tree). SKIP_DIMERS=1. MODE=full uses
+# POLAR_WEIGHT=100 so polar can compete with total |E| ~1e5 eV.
+SKIP_DIMERS=1 scripts/spice_alpha/prepare_efield_dataset.sh \
+  ~/data/spicealpha ~/data/spicealpha/mmml_efield_full 0
+# or: sbatch scripts/spice_alpha/prepare_efield_dataset.sbatch
+python scripts/spice_alpha/check_efield_npz.py \
+  ~/data/spicealpha/mmml_efield_full/splits_des_mono/energies_forces_dipoles_train.npz \
+  ~/data/spicealpha/mmml_efield_full/splits_des_mono/energies_forces_dipoles_valid.npz
+# n_valid must be >= 64 before BATCH_SIZE=64
+sbatch --partition=rtx4090 --qos=rtx4090-6hours --time=06:00:00 \
+  --export=ALL,MODE=full,EPOCHS=100,BATCH_SIZE=64,POLAR_WEIGHT=100,SPLITS=$HOME/data/spicealpha/mmml_efield_full/splits_des_mono,CKPT=$HOME/mmml/ckpts/spice_ef_polar_full \
+  scripts/spice_alpha/train_efield_polar.sbatch
 ```
 
 Pass: check script exits 0; smoke log has `polar mae` / `polar MSE` (finite);

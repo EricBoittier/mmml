@@ -27,6 +27,8 @@ FEATURES="${FEATURES:-32}"
 MAX_DEGREE="${MAX_DEGREE:-2}"
 NUM_ITERATIONS="${NUM_ITERATIONS:-2}"
 CUTOFF="${CUTOFF:-10.0}"
+ENERGY_WEIGHT="${ENERGY_WEIGHT:-1.0}"
+POLAR_WEIGHT="${POLAR_WEIGHT:-1.0}"
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 if [[ -f "$HERE/check_efield_npz.py" ]]; then
@@ -44,10 +46,10 @@ mmml efield-train \
   --train-npz "$SPLITS/energies_forces_dipoles_train.npz" \
   --valid-npz "$SPLITS/energies_forces_dipoles_valid.npz" \
   --output-dir "$CKPT" \
-  --energy_weight 1.0 \
+  --energy_weight "$ENERGY_WEIGHT" \
   --forces_weight 100.0 \
   --dipole_weight 0.1 \
-  --polar_weight 1.0 \
+  --polar_weight "$POLAR_WEIGHT" \
   --polar-at-zero-field \
   --field_scale 0.001 \
   --num_epochs "$EPOCHS" \

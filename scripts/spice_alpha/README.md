@@ -20,14 +20,21 @@ scripts/spice_alpha/prepare_efield_dataset.sh ~/data/spicealpha ./spice_mmml 256
 python scripts/spice_alpha/check_efield_npz.py \
   ./spice_mmml/splits_des_mono/energies_forces_dipoles_{train,valid}.npz
 
-# 2. Full DES370K monomers (max_frames=0)
-scripts/spice_alpha/prepare_efield_dataset.sh ~/data/spicealpha ./spice_mmml 0
+# 2. Full DES370K monomers (new tree; skip dimers). Prefer a CPU sbatch.
+SKIP_DIMERS=1 scripts/spice_alpha/prepare_efield_dataset.sh \
+  ~/data/spicealpha ~/data/spicealpha/mmml_efield_full 0
+# or: sbatch scripts/spice_alpha/prepare_efield_dataset.sbatch
 
-# 3. GPU smoke, then full
+# 3. GPU smoke, then full. MODE=full defaults POLAR_WEIGHT=100 (1 left
+# valid polar mae frozen on the 256-frame extract).
 sbatch scripts/spice_alpha/train_efield_polar.sbatch
 # 256-frame extract: BATCH_SIZE=8 (valid n=13; B=64 → 0 valid batches)
 sbatch --time=06:00:00 --qos=rtx4090-6hours \
   --export=ALL,MODE=full,EPOCHS=100,BATCH_SIZE=8 \
+  scripts/spice_alpha/train_efield_polar.sbatch
+# all monomers, after check prints n_valid >> 64:
+sbatch --partition=rtx4090 --qos=rtx4090-6hours --time=06:00:00 \
+  --export=ALL,MODE=full,EPOCHS=100,BATCH_SIZE=64,POLAR_WEIGHT=100,SPLITS=$HOME/data/spicealpha/mmml_efield_full/splits_des_mono,CKPT=$HOME/mmml/ckpts/spice_ef_polar_full \
   scripts/spice_alpha/train_efield_polar.sbatch
 ```
 

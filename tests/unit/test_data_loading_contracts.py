@@ -85,6 +85,8 @@ def test_efield_train_wrapper_disables_x64():
     sbatch = (_REPO / "scripts" / "spice_alpha" / "train_efield_polar.sbatch").read_text()
     assert "JAX_ENABLE_X64=0" in sbatch
     assert "scicore_env.sh" in sbatch
+    assert '--polar_weight "$POLAR_WEIGHT"' in text
+    assert 'POLAR_WEIGHT="${POLAR_WEIGHT:-100}"' in sbatch
 
 
 def test_efield_train_wrapper_keeps_splits_dir(tmp_path):

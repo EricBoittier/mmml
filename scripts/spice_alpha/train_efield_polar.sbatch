@@ -49,6 +49,9 @@ if [[ "$MODE" == "full" ]]; then
   export BATCH_SIZE="${BATCH_SIZE:-64}"
   export FEATURES="${FEATURES:-32}"
   export MAX_DEGREE="${MAX_DEGREE:-2}"
+  # 256-frame run at polar_weight=1 left valid polar mae frozen (~40 Bohr³);
+  # total |E| ~1e5 eV dominates. Full-monomer default raises polar loss.
+  export POLAR_WEIGHT="${POLAR_WEIGHT:-100}"
 else
   EPOCHS="${EPOCHS:-2}"
   export BATCH_SIZE="${BATCH_SIZE:-8}"
