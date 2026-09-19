@@ -38,6 +38,16 @@ cl = _load_script_module(_CAMPAIGN_MOD, SCRIPTS / "campaign_lib.py")
 cs = _load_script_module(_CLEANUP_MOD, SCRIPTS / "cleanup_strategy.py")
 
 
+@pytest.fixture(autouse=True)
+def _isolate_mmml_ckpt(monkeypatch) -> None:
+    """``load_config`` copies ``MMML_CKPT`` onto ``cfg["checkpoint"]``.
+
+    GPU-bench and DCM5 tests can leak that env into this module and turn the
+    documented ``${MMML_CKPT}`` placeholder into a resolved path.
+    """
+    monkeypatch.delenv("MMML_CKPT", raising=False)
+
+
 @pytest.fixture(autouse=True, scope="module")
 def _campaign_lib_alias():
     """Publish this workflow's ``campaign_lib`` under the bare name, then remove it.

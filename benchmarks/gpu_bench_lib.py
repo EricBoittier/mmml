@@ -27,6 +27,9 @@ from typing import Any, Callable, Mapping, Sequence
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 ASV_BENCH_DIR = Path(__file__).resolve().parent / "benchmarks"
+DEFAULT_CKPT = REPO_ROOT / "examples" / "ckpts_json" / "DESdimers_params.json"
+HTML_DIR = REPO_ROOT / "benchmarks" / "html"
+RESULTS_DIR = REPO_ROOT / "benchmarks" / "results"
 REPORT_HTML_NAME = "gpu-report.html"
 REPORT_JSON_NAME = "gpu-report.json"
 
@@ -251,9 +254,7 @@ def render_gpu_report_html(
     dirty = "yes" if meta.get("dirty") else "no"
     generated = html.escape(str(meta.get("generated") or _now_iso()))
     x64 = html.escape(str(meta.get("x64") or os.environ.get("MMML_BENCH_X64", "?")))
-    platforms = html.escape(
-        str(meta.get("jax_platforms") or os.environ.get("JAX_PLATFORMS", "auto"))
-    )
+    platforms = html.escape(str(meta.get("jax_platforms") or os.environ.get("JAX_PLATFORMS", "auto")))
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -431,7 +432,9 @@ def run_correctness_checks(
         if not checks[-1].passed:
             return checks
     else:
-        checks.append(CheckResult("jax_gpu", "skip", "CPU allowed (--allow-cpu)"))
+        checks.append(
+            CheckResult("jax_gpu", "skip", "CPU allowed (--allow-cpu)")
+        )
 
     for name, fn in (
         ("physnet", check_physnet_energy_forces),
@@ -490,10 +493,11 @@ def check_mm_nonbonded() -> CheckResult:
     jax = require_jax()
     import jax.numpy as jnp
 
-    from mmml.interfaces.pycharmmInterface.mm_system_energy import CharmmNbondSettings
     from mmml.md.energy import EnergyContext
     from mmml.md.energy.terms import MMNonbondedTerm
+    from mmml.interfaces.pycharmmInterface.mm_system_energy import CharmmNbondSettings
 
+    # 32 waters at liquid density is ~9.9 Å; a 4 Å cutoff stays inside unique MIC.
     cutoff = 4.0
     system, _box = synthetic_system(32)
     settings = CharmmNbondSettings(cutnb=cutoff, ctonnb=3.0, ctofnb=cutoff)
@@ -522,6 +526,7 @@ def check_mm_nonbonded() -> CheckResult:
     r_minus = r.at[0, 0].add(-eps)
     e_plus = float(block(energy(r_plus)))
     e_minus = float(block(energy(r_minus)))
+    # ``forces`` is ``jax.grad(energy)`` (dE/dR), matching the asv MM benches.
     rel = force_energy_relative_error(
         e0, e_plus, e_minus, force_component=float(np_asarray(f0)[0, 0]), eps=eps
     )
@@ -558,7 +563,9 @@ def check_shake_projection() -> CheckResult:
     reference = jnp.asarray(box["R"])
     perturbed = jnp.asarray(box["R"] + rng.normal(scale=0.02, size=box["R"].shape))
     before = np_asarray(block(constraint_residuals(perturbed, spec)))
-    shaken = block(shake_positions(perturbed, reference, spec, iterations=40, box=None))
+    shaken = block(
+        shake_positions(perturbed, reference, spec, iterations=40, box=None)
+    )
     after = np_asarray(block(constraint_residuals(shaken, spec)))
     before_max = float(np.max(np.abs(before)))
     after_max = float(np.max(np.abs(after)))
@@ -722,11 +729,17 @@ def ensure_asv_machine(asv_cmd: Sequence[str], machine: str | None) -> None:
     subprocess.run(cmd, check=True)
 
 
+# ---------------------------------------------------------------------------
+# internals
+# ---------------------------------------------------------------------------
+
+
 def np_asarray(value: Any):
     import numpy as np
 
     if hasattr(value, "__array__") or isinstance(value, (int, float, list, tuple)):
         return np.asarray(value)
+    # JAX scalar / DeviceArray without going through jax at module import.
     try:
         return np.asarray(value)
     except Exception:
@@ -801,6 +814,7 @@ def _coerce_result_entry(
     if isinstance(entry, (int, float)):
         return [float(entry)], [], []
     if isinstance(entry, list):
+        # asv v2 sometimes stores [result_column, ...]
         first = entry[0] if entry else None
         if isinstance(first, list):
             return [_maybe_float(v) for v in first], [], []
@@ -829,6 +843,7 @@ def _params_for_index(
 ) -> dict[str, str]:
     if not param_grid:
         return {}
+    # asv stores one list per parameter axis.
     sizes = [len(axis) for axis in param_grid]
     if not sizes or any(s <= 0 for s in sizes):
         return {}

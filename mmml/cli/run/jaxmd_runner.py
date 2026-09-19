@@ -36,9 +36,41 @@ from mmml.utils.geometry_checks import (
 )
 from mmml.utils.hdf5_reporter import make_jaxmd_reporter
 from mmml.utils.jax_gpu_warmup import block_jax_values, ensure_xla_gpu_warmed
+from mmml.interfaces.pycharmmInterface.mm_energy_forces import refresh_mm_pairs
 
 import ase.io as ase_io
 from typing import Callable, Optional
+
+
+def _diag_box_nl(box) -> np.ndarray:
+    """Normalize a JAX-MD box for the MM neighbor-list ``update_fn``.
+
+    ``update_fn`` already accepts a cubic ``(3,)``, an orthorhombic ``(3,)``,
+    or a full ``(3, 3)`` cell (see ``_pbc_cell_for_nl_build`` /
+    ``_mm_pair_cell_3x3``). Averaging a 3×3 diagonal into one length and
+    broadcasting it back to a cube is wrong for both orthorhombic NPT
+    (``Lx ≠ Ly ≠ Lz``) and triclinic cells (off-diagonal tilt). Keep the
+    matrix when given one.
+    """
+    box_nl = np.asarray(box, dtype=np.float64)
+    if box_nl.shape == (3, 3):
+        return np.array(box_nl, dtype=np.float64, copy=True)
+    if box_nl.shape == (1,) or box_nl.ndim == 0:
+        length = float(box_nl.reshape(-1)[0])
+        return np.array([length, length, length], dtype=np.float64)
+    return np.asarray(box_nl, dtype=np.float64).reshape(-1)[:3]
+
+
+def _box_nl_debug_label(box_nl) -> str:
+    """Short log line for a neighbor-list box (scalar, ``(3,)``, or ``(3, 3)``)."""
+    arr = np.asarray(box_nl, dtype=np.float64)
+    if arr.shape == (3, 3):
+        diag = np.diagonal(arr)
+        return f"diag=({diag[0]:.4f},{diag[1]:.4f},{diag[2]:.4f})"
+    flat = arr.reshape(-1)
+    if flat.size >= 3 and not np.allclose(flat[:3], flat[0]):
+        return f"L=({flat[0]:.4f},{flat[1]:.4f},{flat[2]:.4f})"
+    return f"L={float(flat[0]):.4f}"
 
 
 def directional_force_energy_error(
@@ -1138,15 +1170,11 @@ def set_up_nhc_sim_routine(
     box_nl = np.array([L_cell, L_cell, L_cell], dtype=np.float64) if L_cell else None
     pbc_box_nl = box_nl  # Capture for run_sim PBC minimization (avoids UnboundLocalError from later box_nl assignments)
 
-    from mmml.interfaces.pycharmmInterface.mm_energy_forces import (
-        refresh_mm_pairs_from_cartesian,
-    )
-
     if update_fn is not None and use_pbc:
         if getattr(args, "debug", False):
             print("[nbr] Initial neighbor list update (PBC)")
-        pair_idx, pair_mask = refresh_mm_pairs_from_cartesian(
-            update_fn, R, box_nl, fractional_coordinates=is_npt
+        pair_idx, pair_mask = refresh_mm_pairs(
+            update_fn, R, box_nl, positions_are_cartesian=True
         )
     c = Console()
     # Silent compile + GPU sync before timed run (avoids XLA cuda_timer delay-kernel warnings).
@@ -1190,11 +1218,21 @@ def set_up_nhc_sim_routine(
     _nl_skin = getattr(args, "jax_md_skin_distance", None)
     _nl_interval = getattr(args, "jax_md_update_interval", None)
     _nl_capacity = resolve_mm_pair_list_capacity(update_fn=update_fn, pair_idx=pair_idx)
+    _nl_radius = None
+    if update_fn is not None and hasattr(update_fn, "get_stats"):
+        try:
+            _nl_stats = dict(update_fn.get_stats())
+            _nl_radius = _nl_stats.get("radius")
+            if _nl_n_valid is None and _nl_stats.get("pair_n_valid") is not None:
+                _nl_n_valid = int(_nl_stats["pair_n_valid"])
+        except Exception:
+            _nl_radius = None
     if pair_mask is not None:
         try:
             _nl_n_valid = int(np.sum(np.asarray(pair_mask)))
         except Exception:
-            _nl_n_valid = None
+            pass
+    _nl_extra = {"mm_radius_breakdown": _nl_radius} if _nl_radius else None
     if use_pbc and (pair_idx is not None or _nl_capacity is not None):
         emit_md_system_calculator_report(
             cutoff_params=CUTOFF_PARAMS,
@@ -1206,6 +1244,7 @@ def set_up_nhc_sim_routine(
             n_valid_pairs=_nl_n_valid,
             skin_distance_A=float(_nl_skin) if _nl_skin is not None else None,
             update_interval_steps=int(_nl_interval) if _nl_interval is not None else None,
+            neighbor_extra=_nl_extra,
             include_hybrid_setup=False,
             include_calculator_summary=False,
             include_neighbor_list_summary=True,
@@ -1231,6 +1270,7 @@ def set_up_nhc_sim_routine(
             nl_n_valid_pairs=_nl_n_valid,
             nl_skin_distance_A=float(_nl_skin) if _nl_skin is not None else None,
             nl_update_interval_steps=int(_nl_interval) if _nl_interval is not None else None,
+            extra={"mm_pair_list_radius": _nl_radius} if _nl_radius else None,
         )
         c.print(Panel(str(_calc_json_path), title="[bold green]Calculator Summary JSON[/bold green]", border_style="green"))
     except Exception as _e:
@@ -1773,11 +1813,11 @@ def set_up_nhc_sim_routine(
                 _cell_fire = jnp.asarray(atoms.get_cell()[:], dtype=jnp.float32)
                 initial_pos = _wrap_monomers(initial_pos, _cell_fire)
                 if update_fn is not None:
-                    fire_pair_idx, fire_pair_mask = refresh_mm_pairs_from_cartesian(
+                    fire_pair_idx, fire_pair_mask = refresh_mm_pairs(
                         update_fn,
                         initial_pos,
                         pbc_box_nl,
-                        fractional_coordinates=is_npt,
+                        positions_are_cartesian=True,
                     )
                     _pbc_state["pair_idx"] = fire_pair_idx
                     _pbc_state["pair_mask"] = fire_pair_mask
@@ -1898,11 +1938,11 @@ def set_up_nhc_sim_routine(
 
                     def _fire_nl_refresh(pos):
                         if use_pbc and update_fn is not None:
-                            pair_i, pair_m = refresh_mm_pairs_from_cartesian(
+                            pair_i, pair_m = refresh_mm_pairs(
                                 update_fn,
                                 pos,
                                 pbc_box_nl,
-                                fractional_coordinates=is_npt,
+                                positions_are_cartesian=True,
                             )
                             _pbc_state["pair_idx"] = pair_i
                             _pbc_state["pair_mask"] = pair_m
@@ -2026,11 +2066,11 @@ def set_up_nhc_sim_routine(
             else:
                 pbc_start_pos = _wrap_monomers(jnp.asarray(minimized_pos), _cell_jax)
             if update_fn is not None:
-                pbc_pair_idx, pbc_pair_mask = refresh_mm_pairs_from_cartesian(
+                pbc_pair_idx, pbc_pair_mask = refresh_mm_pairs(
                     update_fn,
                     pbc_start_pos,
                     pbc_box_nl,
-                    fractional_coordinates=is_npt,
+                    positions_are_cartesian=True,
                 )
                 _pbc_state["pair_idx"] = pbc_pair_idx
                 _pbc_state["pair_mask"] = pbc_pair_mask
@@ -2077,11 +2117,11 @@ def set_up_nhc_sim_routine(
 
                 def _pbc_nl_refresh(pos):
                     if update_fn is not None:
-                        pair_i, pair_m = refresh_mm_pairs_from_cartesian(
+                        pair_i, pair_m = refresh_mm_pairs(
                             update_fn,
                             pos,
                             pbc_box_nl,
-                            fractional_coordinates=is_npt,
+                            positions_are_cartesian=True,
                         )
                         _pbc_state["pair_idx"] = pair_i
                         _pbc_state["pair_mask"] = pair_m
@@ -2177,9 +2217,14 @@ def set_up_nhc_sim_routine(
             _cell_jax = jnp.asarray(atoms.get_cell()[:], dtype=jnp.float32)
             md_pos_wrapped = _wrap_monomers(jnp.asarray(md_pos), _cell_jax)
             md_pos_frac = as_jaxmd_dtype(md_pos_wrapped / float(args.cell))  # cubic: frac = R / L
-            # Neighbor list with fractional_coordinates expects frac pos and box [L,L,L]
+            # Integrator state is fractional; updater frame is its own config.
             box_nl = np.array([float(args.cell)] * 3, dtype=np.float64)
-            pair_idx, pair_mask = update_fn(md_pos_frac, box=box_nl)
+            pair_idx, pair_mask = refresh_mm_pairs(
+                update_fn,
+                md_pos_wrapped,
+                box_nl,
+                positions_are_cartesian=True,
+            )
             state = init_fn(
                 key, md_pos_frac, box=box_curr,
                 neighbor=(pair_idx, pair_mask), kT=kT, mass=Si_mass
@@ -3083,15 +3128,14 @@ def set_up_nhc_sim_routine(
                 while steps_done < steps_per_recording:
                     if is_npt and update_fn is not None:
                         box_curr = simulate.npt_box(state)
-                        # Neighbor list with fractional_coordinates expects frac pos and box [L,L,L]
-                        box_nl = np.asarray(box_curr)
-                        if box_nl.shape == (1,) or box_nl.ndim == 0:
-                            L = float(box_nl.reshape(-1)[0])
-                            box_nl = np.array([L, L, L], dtype=np.float64)
+                        box_nl = _diag_box_nl(box_curr)
                         if getattr(args, "debug", False) and (i < 3 or i % 50 == 0) and steps_done == 0:
-                            print(f"[nbr] NPT record {i}: updating neighbor list, box L={float(box_nl[0]):.4f}")
-                        npt_pair_idx, npt_pair_mask = update_fn(
-                            state.position, box=box_nl
+                            print(
+                                f"[nbr] NPT record {i}: updating neighbor list, "
+                                f"box {_box_nl_debug_label(box_nl)}"
+                            )
+                        npt_pair_idx, npt_pair_mask = refresh_mm_pairs(
+                            update_fn, state.position, box_nl, positions_are_cartesian=False
                         )
                         current_neighbors = (npt_pair_idx, npt_pair_mask)
                         state = sim(state, neighbor=current_neighbors, pressure=npt_pressure)
@@ -3104,7 +3148,12 @@ def set_up_nhc_sim_routine(
                         wrapped_for_nl = _wrap_monomers(state.position, _cell_jax)
                         if getattr(args, "debug", False) and (i < 3 or i % 50 == 0) and steps_done == 0:
                             print(f"[nbr] NVT/NVE record {i} (step {steps_done}): updating neighbor list")
-                        nvt_neighbors = update_fn(wrapped_for_nl, box=pbc_box_nl)
+                        nvt_neighbors = refresh_mm_pairs(
+                            update_fn,
+                            wrapped_for_nl,
+                            pbc_box_nl,
+                            positions_are_cartesian=True,
+                        )
                         _pbc_state["pair_idx"] = nvt_neighbors[0]
                         _pbc_state["pair_mask"] = nvt_neighbors[1]
                         current_neighbors = nvt_neighbors
@@ -3131,14 +3180,11 @@ def set_up_nhc_sim_routine(
                             new_frac = new_frac - jnp.floor(new_frac)
                             npt_neighbors = (npt_pair_idx, npt_pair_mask)
                             if update_fn is not None:
-                                box_nl = np.asarray(jax.device_get(box_curr))
-                                if box_nl.shape == (3, 3):
-                                    Ln = float(np.diagonal(box_nl)[:3].mean())
-                                    box_nl = np.array([Ln, Ln, Ln], dtype=np.float64)
-                                elif box_nl.size >= 3:
-                                    box_nl = np.asarray(box_nl, dtype=np.float64).reshape(-1)[:3]
-                                npt_neighbors = update_fn(
-                                    new_frac, box=box_nl
+                                npt_neighbors = refresh_mm_pairs(
+                                    update_fn,
+                                    new_frac,
+                                    _diag_box_nl(jax.device_get(box_curr)),
+                                    positions_are_cartesian=False,
                                 )
                             npt_pair_idx, npt_pair_mask = npt_neighbors
                             current_neighbors = npt_neighbors

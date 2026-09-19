@@ -21,7 +21,10 @@ os.environ.setdefault("JAX_PLATFORMS", "cpu")
 
 from mmml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
 from mmml.interfaces.pycharmmInterface.mm_energy_forces import (
+    mm_pair_fractional_to_cartesian,
+    mm_pair_positions_for_update,
     mm_pair_update_positions,
+    refresh_mm_pairs,
     refresh_mm_pairs_from_cartesian,
 )
 
@@ -174,13 +177,20 @@ def test_refresh_mm_pairs_from_cartesian_npt_converts() -> None:
     np.testing.assert_allclose(seen["P"], R)
 
 
-def test_jaxmd_fire_sites_use_cartesian_pair_refresh() -> None:
-    """The four Cartesian FIRE / PBC-FIRE pair updates share the tested helper."""
+def test_jaxmd_pair_sites_use_updater_frame_helper() -> None:
+    """Init, FIRE, production, and rescue refresh through the updater's frame."""
     from pathlib import Path
 
     src = (
         Path(__file__).resolve().parents[2]
         / "mmml/cli/run/jaxmd_runner.py"
     ).read_text(encoding="utf-8")
-    assert src.count("refresh_mm_pairs_from_cartesian(") >= 5
+    assert src.count("refresh_mm_pairs(") >= 8
+    assert "fractional_coordinates=is_npt" not in src
+    assert "MM pair list is empty with MM enabled" not in src
     assert "_cart_nl_positions" not in src
+    jaxmd_setup = (
+        Path(__file__).resolve().parents[2]
+        / "mmml/cli/run/md_pbc_suite/jaxmd.py"
+    ).read_text(encoding="utf-8")
+    assert "ensemble=getattr(args, \"ensemble\"" in jaxmd_setup

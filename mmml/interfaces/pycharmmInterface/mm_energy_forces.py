@@ -54,11 +54,111 @@ def resolve_mm_pair_list_cutoff_A(
     the list at the atom cutoff and NVE is not conserved (ETOH:181, 26 A:
     10.6 % of weighted pairs missing, +810 kcal/mol in 0.25 ps).
     """
+    return float(
+        mm_pair_list_radius_breakdown(
+            mm_switch_on=mm_switch_on,
+            mm_switch_width=mm_switch_width,
+            skin_distance=skin_distance,
+            assumed_extent_A=molecule_extent_A,
+        )["list_radius_A"]
+    )
+
+
+def mm_pair_list_radius_breakdown(
+    *,
+    mm_switch_on: float = 0.0,
+    mm_switch_width: float = 0.0,
+    skin_distance: float = 0.0,
+    measured_extent_A: float = 0.0,
+    extent_margin_A: float = 0.0,
+    assumed_extent_A: float | None = None,
+    cell: Any = None,
+    shared_cutoff: float | None = None,
+) -> dict[str, Any]:
+    """Split the MM list radius into the terms that must stay below L/2.
+
+    ``list_radius = interaction_radius + skin``. The MIC list is legal only
+    while ``list_radius < L/2``. A quoted "12.75 Å + skin" on a 26 Å box
+    (L/2 = 13 Å) therefore allows skin strictly below 0.25 Å, not 0.4 Å.
+    """
+    skin = float(max(0.0, skin_distance))
+    if shared_cutoff is not None:
+        interaction = float(shared_cutoff)
+        assumed = 0.0
+        measured = 0.0
+        margin = 0.0
+        com_end = interaction
+        twice = 0.0
+        mode = "shared_cutoff"
+    else:
+        measured = float(max(0.0, measured_extent_A))
+        margin = float(max(0.0, extent_margin_A))
+        assumed = (
+            float(max(0.0, assumed_extent_A))
+            if assumed_extent_A is not None
+            else measured + margin
+        )
+        com_end = float(mm_switch_on) + float(mm_switch_width)
+        twice = 2.0 * assumed
+        interaction = com_end + twice
+        mode = "com_switch"
+    list_r = interaction + skin
+    half = None
+    if cell is not None:
+        half = 0.5 * float(np.min(np.diag(_cell_matrix_np(np.asarray(cell)))))
+    # Largest skin that keeps list_radius < L/2. Equal to L/2 is rejected.
+    max_skin = None if half is None else float(half) - interaction
+    legal = True if half is None else list_r < float(half)
+    return {
+        "mode": mode,
+        "mm_switch_on_A": float(mm_switch_on),
+        "mm_switch_width_A": float(mm_switch_width),
+        "com_switch_end_A": float(com_end),
+        "measured_extent_A": float(measured),
+        "extent_margin_A": float(margin),
+        "assumed_extent_A": float(assumed),
+        "twice_assumed_extent_A": float(twice),
+        "interaction_radius_A": float(interaction),
+        "skin_A": skin,
+        "list_radius_A": float(list_r),
+        "box_half_min_A": None if half is None else float(half),
+        "headroom_A": None if half is None else float(half) - float(list_r),
+        "max_legal_skin_A": max_skin,
+        "skin_legal": bool(legal),
+    }
+
+
+def format_mm_pair_list_radius_report(info: dict[str, Any]) -> str:
+    """Human-readable radius arithmetic for logs and benchmarks."""
+    half = info.get("box_half_min_A")
+    head = info.get("headroom_A")
+    max_skin = info.get("max_legal_skin_A")
+    legal = bool(info.get("skin_legal", True))
+    half_s = "n/a" if half is None else f"{float(half):.4f} A"
+    head_s = "n/a" if head is None else f"{float(head):+.4f} A"
+    if max_skin is None:
+        max_s = "n/a"
+    elif float(max_skin) <= 0.0:
+        max_s = f"{float(max_skin):.4f} A (interaction already reaches L/2)"
+    else:
+        max_s = f"<{float(max_skin):.4f} A (list must stay < L/2)"
+    verdict = "OK" if legal else "ILLEGAL: list radius reaches L/2"
     return (
-        float(mm_switch_on)
-        + float(mm_switch_width)
-        + 2.0 * float(max(0.0, molecule_extent_A))
-        + float(max(0.0, skin_distance))
+        f"MM pair-list radius ({info.get('mode', 'com_switch')}):\n"
+        f"  COM switch end          {float(info['com_switch_end_A']):.4f} A"
+        f"  (mm_switch_on + mm_switch_width)\n"
+        f"  2 x assumed extent      {float(info['twice_assumed_extent_A']):.4f} A"
+        f"  (2 x (measured {float(info['measured_extent_A']):.4f}"
+        f" + margin {float(info['extent_margin_A']):.4f}))\n"
+        f"  interaction radius      {float(info['interaction_radius_A']):.4f} A"
+        f"  (pairs the COM switch can weight)\n"
+        f"  skin                    {float(info['skin_A']):.4f} A\n"
+        f"  list radius             {float(info['list_radius_A']):.4f} A"
+        f"  (interaction + skin)\n"
+        f"  L/2                     {half_s}\n"
+        f"  headroom                {head_s}  (L/2 - list)\n"
+        f"  max legal skin          {max_s}\n"
+        f"  {verdict}"
     )
 
 
@@ -106,11 +206,13 @@ def check_mm_pair_list_radius(radius_A: float, cell: np.ndarray, *, detail: str 
     """
     half_min = 0.5 * float(np.min(np.diag(_cell_matrix_np(cell))))
     if float(radius_A) >= half_min:
+        extra = f"\n{detail}" if detail else ""
         raise ValueError(
-            f"MM pair list radius {float(radius_A):.2f} A{detail} reaches half the box "
-            f"({half_min:.2f} A): atom pairs of switched-on dimers would be missing from the "
-            "list and NVE would not conserve energy. Use a larger box or a smaller "
-            "--mm-switch-on/--mm-switch-width."
+            f"MM pair list radius {float(radius_A):.4f} A reaches half the box "
+            f"({half_min:.4f} A): atom pairs of switched-on dimers would be missing from the "
+            "list and NVE would not conserve energy. Use a larger box, a smaller "
+            "--mm-switch-on/--mm-switch-width, or a skin that keeps list < L/2."
+            f"{extra}"
         )
 
 
@@ -325,6 +427,82 @@ def _optimized_jax_md_update_gpu(
     return nbrs, pair_idx, mask
 
 
+def resolve_mm_pair_stats_n_valid(
+    n_valid: int | None = None,
+    pair_mask: Any | None = None,
+) -> int | None:
+    """Initial occupancy for ``_mm_pair_stats_init``.
+
+    Do not probe ``locals()`` for ``_n_valid`` / ``_nl_n_valid``: the rebuild
+    path binds ``_n_valid``, the jax-md allocate path only has a pair mask,
+    and a missing name silently seeds ``pair_n_valid=None``.
+    """
+    if n_valid is not None:
+        return int(n_valid)
+    if pair_mask is None:
+        return None
+    return int(np.sum(np.asarray(pair_mask)))
+
+
+def _mm_pair_stats_init(
+    *,
+    n_static_pairs: int,
+    n_valid: int | None,
+    radius_info: dict[str, Any],
+    update_interval: int,
+    skin_distance: float,
+    capacity_multiplier: float,
+) -> dict[str, Any]:
+    """Initial neighbor-list counters for a dynamic ``update_mm_pairs`` closure."""
+    return {
+        "calls": 0,
+        "updates": 0,
+        "reused": 0,
+        "reallocs": 0,
+        "fallbacks": 0,
+        "cache_checks": 0,
+        "host_syncs": 0,
+        "device_skin_checks": 0,
+        "cpu_rebuilds": 0,
+        "gpu_rebuilds": 0,
+        "capacity_grows": 0,
+        "com_filter_calls": 0,
+        "capacity_multiplier": float(capacity_multiplier),
+        "pair_capacity": int(n_static_pairs),
+        "pair_capacity_initial": int(n_static_pairs),
+        "pair_capacity_changes": 0,
+        "pair_capacity_history": [int(n_static_pairs)],
+        "pair_n_valid": int(n_valid) if n_valid is not None else None,
+        "radius": dict(radius_info),
+        "update_interval": int(max(1, update_interval)),
+        "skin_distance": float(max(0.0, skin_distance)),
+        "cache_reuse_reason": "init",
+        "last_reuse_reason": "init",
+    }
+
+
+def _record_pair_capacity(stats: dict[str, Any], capacity: int, reason: str) -> None:
+    cap = int(capacity)
+    prev = int(stats.get("pair_capacity", cap))
+    if cap == prev:
+        return
+    stats["pair_capacity"] = cap
+    stats["pair_capacity_changes"] = int(stats.get("pair_capacity_changes", 0)) + 1
+    history = list(stats.get("pair_capacity_history", []))
+    history.append(cap)
+    stats["pair_capacity_history"] = history[-16:]
+    stats["last_capacity_change_reason"] = reason
+    if os.environ.get("MMML_MM_NL_STRICT_CAPACITY") == "1":
+        raise RuntimeError(
+            f"MM pair-list capacity changed from {prev} to {cap} ({reason}); "
+            "this can trigger JAX recompilation"
+        )
+
+
+def _record_pair_occupancy(stats: dict[str, Any], n_valid: int) -> None:
+    stats["pair_n_valid"] = int(n_valid)
+
+
 def format_mm_pair_update_stats_summary(stats: dict) -> str:
     """One-line neighbor-list cache summary for jaxmd suite logs."""
     calls = int(stats.get("calls", 0))
@@ -339,12 +517,30 @@ def format_mm_pair_update_stats_summary(stats: dict) -> str:
     capacity_grows = int(stats.get("capacity_grows", 0))
     capacity_changes = int(stats.get("pair_capacity_changes", 0))
     pct = 100.0 * reused / max(1, calls)
+    cap = int(stats.get("pair_capacity") or 0)
+    n_valid = stats.get("pair_n_valid")
+    occ = ""
+    if cap > 0 and n_valid is not None:
+        occ = f", occupancy={int(n_valid)}/{cap} ({100.0 * int(n_valid) / cap:.1f}%)"
+    radius = stats.get("radius") or {}
+    radius_bit = ""
+    if radius:
+        list_r = radius.get("list_radius_A")
+        half = radius.get("box_half_min_A")
+        skin = radius.get("skin_A")
+        inter = radius.get("interaction_radius_A")
+        if list_r is not None:
+            half_s = "n/a" if half is None else f"{float(half):.3f}"
+            radius_bit = (
+                f", list={float(list_r):.3f} A "
+                f"(interaction {float(inter):.3f} + skin {float(skin):.3f}, L/2={half_s})"
+            )
     return (
         f"[jaxmd_nbr] pair-list cache: {reused}/{calls} reused ({pct:.1f}%), "
         f"{updates} rebuilds (cpu={cpu_rebuilds}, gpu={gpu_rebuilds}), "
         f"host_syncs={host_syncs}, device_skin_checks={device_skin_checks}, "
         f"capacity_grows={capacity_grows}, capacity_changes={capacity_changes}, "
-        f"reallocs={reallocs}, fallbacks={fallbacks}"
+        f"reallocs={reallocs}, fallbacks={fallbacks}{occ}{radius_bit}"
     )
 
 
@@ -500,6 +696,72 @@ def refresh_mm_pairs_from_cartesian(
     """
     framed = mm_pair_update_positions(positions_cart, box, fractional_coordinates)
     return update_fn(framed, box=box)
+
+
+def _mm_pair_cell_3x3(box: Any) -> np.ndarray:
+    box_np = np.asarray(box, dtype=np.float64)
+    if box_np.ndim == 0 or box_np.shape == (1,):
+        return np.diag([float(box_np.reshape(-1)[0])] * 3)
+    if box_np.ndim == 1:
+        return np.diag(box_np.reshape(-1)[:3])
+    return np.asarray(box_np, dtype=np.float64)
+
+
+def mm_pair_updater_expects_fractional(update_fn: Any) -> bool:
+    """Read the frame the updater was built for; default Cartesian if unmarked."""
+    return bool(getattr(update_fn, "fractional_coordinates", False))
+
+
+def mm_pair_fractional_to_cartesian(
+    positions_frac: Any,
+    box: Optional[Any],
+) -> Any:
+    """Map fractional positions to Cartesian using the current ``box``."""
+    if box is None:
+        return positions_frac
+    cell_3x3 = _mm_pair_cell_3x3(box)
+    if isinstance(positions_frac, jax.Array):
+        return positions_frac @ jnp.asarray(cell_3x3, dtype=positions_frac.dtype)
+    return np.asarray(positions_frac, dtype=np.float64) @ cell_3x3
+
+
+def mm_pair_positions_for_update(
+    positions: Any,
+    box: Optional[Any],
+    *,
+    positions_are_cartesian: bool,
+    fractional_coordinates: bool,
+) -> Any:
+    """Put ``positions`` into the frame ``update_mm_pairs`` was built for."""
+    if fractional_coordinates == (not positions_are_cartesian):
+        return positions
+    if fractional_coordinates and positions_are_cartesian:
+        return mm_pair_update_positions(positions, box, True)
+    return mm_pair_fractional_to_cartesian(positions, box)
+
+
+def refresh_mm_pairs(
+    update_fn: Any,
+    positions: Any,
+    box: Optional[Any],
+    *,
+    positions_are_cartesian: bool,
+    **update_kwargs: Any,
+) -> Any:
+    """Call ``update_fn`` in the frame it advertises, not the integrator ensemble.
+
+    ``update_mm_pairs.fractional_coordinates`` is the source of truth. The
+    JAX-MD NPT integrator stores fractional ``state.position`` even when
+    ``setup_calculator`` was built Cartesian (no ``ensemble="npt"``). Inferring
+    the frame from ``is_npt`` alone mismatches those two configurations.
+    """
+    framed = mm_pair_positions_for_update(
+        positions,
+        box,
+        positions_are_cartesian=positions_are_cartesian,
+        fractional_coordinates=mm_pair_updater_expects_fractional(update_fn),
+    )
+    return update_fn(framed, box=box, **update_kwargs)
 
 
 def _validate_dynamic_pair_contract(
@@ -1268,26 +1530,36 @@ def build_mm_energy_forces_fn(
     _use_dynamic_nbrs = _use_jax_md_nbrs or _use_rebuild_nbrs
     _pair_idx_cell = [None]
     _pair_mask_cell = [None]
+    _n_valid: int | None = None
     pair_lambda_mm = None
 
     _mm_assumed_extent = 0.0
+    _mm_measured_extent = 0.0
     if hybrid_hamiltonian == "shared_cutoff":
-        _mm_list_cutoff = float(shared_cutoff) + float(jax_md_skin_distance)
-        _mm_radius_detail = f" (shared cutoff {float(shared_cutoff):.2f} A + skin)"
+        _mm_radius_info = mm_pair_list_radius_breakdown(
+            skin_distance=jax_md_skin_distance,
+            cell=pbc_cell,
+            shared_cutoff=float(shared_cutoff),
+        )
     else:
         if pbc_cell is not None:
             # Flexible molecules: the list assumes extent + margin; the rebuild
             # path raises if a molecule later grows past it.
-            _mm_assumed_extent = max_monomer_extent_A(R, monomer_offsets, pbc_cell) + float(
-                max(0.0, mm_extent_margin_A)
-            )
-        _mm_list_cutoff = resolve_mm_pair_list_cutoff_A(
-            mm_switch_on, mm_switch_width, jax_md_skin_distance, molecule_extent_A=_mm_assumed_extent
+            _mm_measured_extent = max_monomer_extent_A(R, monomer_offsets, pbc_cell)
+            _mm_assumed_extent = _mm_measured_extent + float(max(0.0, mm_extent_margin_A))
+        _mm_radius_info = mm_pair_list_radius_breakdown(
+            mm_switch_on=mm_switch_on,
+            mm_switch_width=mm_switch_width,
+            skin_distance=jax_md_skin_distance,
+            measured_extent_A=_mm_measured_extent,
+            extent_margin_A=mm_extent_margin_A,
+            assumed_extent_A=_mm_assumed_extent,
+            cell=pbc_cell,
         )
-        _mm_radius_detail = (
-            f" (COM switch end {float(mm_switch_on) + float(mm_switch_width):.2f} A"
-            f" + 2 x (molecule extent + margin) {2.0 * _mm_assumed_extent:.2f} A + skin)"
-        )
+    _mm_list_cutoff = float(_mm_radius_info["list_radius_A"])
+    _mm_radius_detail = format_mm_pair_list_radius_report(_mm_radius_info)
+    if debug:
+        print(_mm_radius_detail, flush=True)
     # Ewald returns before any pair list is used (full-box Coulomb, all-pairs LJ).
     if pbc_cell is not None and pick_lr_solver(lr_solver) != "ewald":
         check_mm_pair_list_radius(_mm_list_cutoff, pbc_cell, detail=_mm_radius_detail)
@@ -1365,9 +1637,9 @@ def build_mm_energy_forces_fn(
         idx = nbrs_init.idx
         pair_i, pair_j, mask = _filter_fn_cell[0](idx)
         _max_pairs = idx.shape[1]
+        _n_valid = int(np.sum(np.asarray(jax.device_get(mask))))
         if debug:
-            n_valid_init = int(np.sum(np.asarray(jax.device_get(mask))))
-            print(f"[nbr] allocate: capacity={_max_pairs}, n_valid={n_valid_init}, "
+            print(f"[nbr] allocate: capacity={_max_pairs}, n_valid={_n_valid}, "
                   f"frac_coords={fractional_coordinates}, r_cutoff={_mm_list_cutoff:.2f}")
         pair_idx_atom_atom = jnp.stack([pair_i, pair_j], axis=1)
         _cl_mask_jnp = jnp.asarray(mask, dtype=ml_jnp_dtype)
@@ -1885,53 +2157,21 @@ def build_mm_energy_forces_fn(
         # Dynamic path: compute pair quantities from pair_idx, pair_mask
         _pbc_cell_jnp = jnp.asarray(pbc_cell)
         _lambda_monomer_jnp = jnp.asarray(lambda_monomer)
-        _pair_stats = {
-            "calls": 0,
-            "updates": 0,
-            "reused": 0,
-            "reallocs": 0,
-            "fallbacks": 0,
-            "cache_checks": 0,
-            "host_syncs": 0,
-            "device_skin_checks": 0,
-            "cpu_rebuilds": 0,
-            "gpu_rebuilds": 0,
-            "capacity_grows": 0,
-            "com_filter_calls": 0,
-            "capacity_multiplier": float(jax_md_capacity_multiplier),
-            "pair_capacity": int(_n_static_pairs),
-            "pair_capacity_initial": int(_n_static_pairs),
-            "pair_capacity_changes": 0,
-            "pair_capacity_history": [int(_n_static_pairs)],
-            "update_interval": int(max(1, jax_md_update_interval)),
-            "skin_distance": float(max(0.0, jax_md_skin_distance)),
-            "cache_reuse_reason": "init",
-            "last_reuse_reason": "init",
-        }
+        _pair_stats = _mm_pair_stats_init(
+            n_static_pairs=int(_n_static_pairs),
+            n_valid=resolve_mm_pair_stats_n_valid(
+                n_valid=_n_valid, pair_mask=_cl_mask_jnp
+            ),
+            radius_info=_mm_radius_info,
+            update_interval=int(jax_md_update_interval),
+            skin_distance=float(jax_md_skin_distance),
+            capacity_multiplier=float(jax_md_capacity_multiplier),
+        )
         _last_positions = [None]
         _last_cartesian_positions = [None]
         _last_cartesian_positions_jax = [None]
         _last_box = [None]
         _fallback_max_pairs_cell = [int(_n_static_pairs)]
-
-        def _record_pair_capacity(capacity: int, reason: str) -> None:
-            cap = int(capacity)
-            prev = int(_pair_stats.get("pair_capacity", cap))
-            if cap == prev:
-                return
-            _pair_stats["pair_capacity"] = cap
-            _pair_stats["pair_capacity_changes"] = int(
-                _pair_stats.get("pair_capacity_changes", 0)
-            ) + 1
-            history = list(_pair_stats.get("pair_capacity_history", []))
-            history.append(cap)
-            _pair_stats["pair_capacity_history"] = history[-16:]
-            _pair_stats["last_capacity_change_reason"] = reason
-            if os.environ.get("MMML_MM_NL_STRICT_CAPACITY") == "1":
-                raise RuntimeError(
-                    f"MM pair-list capacity changed from {prev} to {cap} ({reason}); "
-                    "this can trigger JAX recompilation"
-                )
 
         _pair_kw = dict(
             lambda_monomer=_lambda_monomer_jnp, monomer_id=_monomer_id_jnp,
@@ -2089,7 +2329,7 @@ def build_mm_energy_forces_fn(
                         pbc_cell=np.asarray(current_pbc_cell) if current_pbc_cell is not None else None,
                     )
             _fallback_max_pairs_cell[0] = int(fallback_max_pairs)
-            _record_pair_capacity(int(fallback_max_pairs), f"fallback_{used}")
+            _record_pair_capacity(_pair_stats, int(fallback_max_pairs), f"fallback_{used}")
             if _nbr_debug:
                 print(f"[nbr] fallback via {used} max_pairs={fallback_max_pairs}")
             _pair_stats["fallbacks"] += 1
@@ -2207,6 +2447,7 @@ def build_mm_energy_forces_fn(
                             _fallback_max_pairs_cell[0] = int(exc.suggested_max_pairs)
                             _pair_stats["capacity_grows"] += 1
                             _record_pair_capacity(
+                                _pair_stats,
                                 int(_fallback_max_pairs_cell[0]),
                                 "gpu_pair_truncation_growth",
                             )
@@ -2267,6 +2508,7 @@ def build_mm_energy_forces_fn(
                     _fallback_max_pairs_cell[0] = int(exc.suggested_max_pairs)
                     _pair_stats["capacity_grows"] += 1
                     _record_pair_capacity(
+                        _pair_stats,
                         int(_fallback_max_pairs_cell[0]),
                         "cpu_pair_truncation_growth",
                     )
@@ -2274,7 +2516,7 @@ def build_mm_energy_forces_fn(
                 if int(capacity) > int(_fallback_max_pairs_cell[0]):
                     _pair_stats["capacity_grows"] += 1
                 _fallback_max_pairs_cell[0] = int(capacity)
-                _record_pair_capacity(int(capacity), f"{used}_returned_capacity")
+                _record_pair_capacity(_pair_stats, int(capacity), f"{used}_returned_capacity")
             if _nbr_debug:
                 print(f"[nbr] rebuild via {used}: n_valid={n_valid} capacity={capacity}")
             pair_idx_out = jnp.stack([jnp.asarray(cl_i), jnp.asarray(cl_j)], axis=1)
@@ -2526,7 +2768,7 @@ def build_mm_energy_forces_fn(
                 _pair_stats["updates"] += 1
                 _pair_stats["cache_reuse_reason"] = "cpu_rebuild"
                 _pair_stats["last_reuse_reason"] = "cpu_rebuild"
-                _record_pair_capacity(int(pair_idx.shape[0]), "cpu_rebuild_shape")
+                _record_pair_capacity(_pair_stats, int(pair_idx.shape[0]), "cpu_rebuild_shape")
                 if _nbr_debug:
                     n_valid = int(np.sum(np.asarray(jax.device_get(pair_mask))))
                     capacity = int(pair_idx.shape[0])
@@ -2657,8 +2899,9 @@ def build_mm_energy_forces_fn(
             _last_box[0] = None if box is None else np.asarray(box, dtype=np.float64).copy()
             _pair_stats["updates"] += 1
 
+            n_valid = int(np.sum(np.asarray(jax.device_get(mask))))
+            _record_pair_occupancy(_pair_stats, n_valid)
             if _nbr_debug:
-                n_valid = int(np.sum(np.asarray(jax.device_get(mask))))
                 capacity = pair_idx.shape[0] if hasattr(pair_idx, "shape") else len(pair_i)
                 print(
                     f"[nbr] pairs: n_valid={n_valid}, capacity={capacity}, "
@@ -2671,6 +2914,7 @@ def build_mm_energy_forces_fn(
             return dict(_pair_stats)
 
         update_mm_pairs.get_stats = _get_pair_update_stats
+        update_mm_pairs.fractional_coordinates = bool(fractional_coordinates)
         # jax-pme moves Coulomb/dispersion off the pair list, so the pair split would
         # not be the MM the hybrid evaluates; routing keeps its numpy fallback there.
         update_mm_pairs.mm_eterm_split = None if _use_jax_pme_coulomb else mm_eterm_split_dynamic
