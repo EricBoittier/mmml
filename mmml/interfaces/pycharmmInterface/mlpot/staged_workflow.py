@@ -2753,23 +2753,17 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                     else:
                         if (
                             seg_i == 0
-                            and _can_seed_stage_from_memory(
+                            and (_can_seed_stage_from_memory(
                                 Path(rread) if rread is not None else None,
                                 prev_restart=prev_restart,
                                 prev_restart_is_current_state=prev_restart_is_current_state,
-                            )
+                            ) or _is_geometry_baseline_snapshot(rread, paths))  # --from-crd snapshot, not READYN
                         ):
                             use_memory = True
                             restart = False
                             rread = None
                         elif seg_i > 0 and prev_restart_is_current_state:
                             # Continue in-process: avoid READYN stale CPT after overlap rescue.
-                            use_memory = True
-                            restart = False
-                            rread = None
-                        elif seg_i == 0 and _is_geometry_baseline_snapshot(rread, paths):
-                            # baseline.res is a coordinate snapshot of the live
-                            # state (e.g. --from-crd), not a READYN restart.
                             use_memory = True
                             restart = False
                             rread = None
@@ -3441,13 +3435,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                     Path(rread) if rread is not None else None,
                     prev_restart=prev_restart,
                     prev_restart_is_current_state=prev_restart_is_current_state,
-                ):
-                    use_memory = True
-                    restart = False
-                    rread = None
-                elif stage == "heat" and _is_geometry_baseline_snapshot(rread, paths):
-                    # baseline.res is a coordinate snapshot of the live state
-                    # (e.g. --from-crd), not a READYN restart: start fresh.
+                ) or (stage == "heat" and _is_geometry_baseline_snapshot(rread, paths)):  # --from-crd snapshot
                     use_memory = True
                     restart = False
                     rread = None
