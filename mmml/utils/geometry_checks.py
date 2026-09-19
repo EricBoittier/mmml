@@ -97,21 +97,22 @@ def wrap_monomers_primary_cell(
     cell_mat = _cell_matrix(cell)
     if cell_mat is None:
         return pos
-    Lx, Ly, Lz = float(cell_mat[0, 0]), float(cell_mat[1, 1]), float(cell_mat[2, 2])
+    L = np.array(
+        [float(cell_mat[0, 0]), float(cell_mat[1, 1]), float(cell_mat[2, 2])],
+        dtype=float,
+    )
     offsets = np.asarray(monomer_offsets, dtype=int)
-    n_mol = int(len(offsets) - 1)
-    for mi in range(n_mol):
-        s, e = int(offsets[mi]), int(offsets[mi + 1])
-        com = pos[s:e].mean(axis=0)
-        shift = np.array(
-            [
-                -np.floor(com[0] / Lx) * Lx if Lx > 0 else 0.0,
-                -np.floor(com[1] / Ly) * Ly if Ly > 0 else 0.0,
-                -np.floor(com[2] / Lz) * Lz if Lz > 0 else 0.0,
-            ],
-            dtype=float,
-        )
-        pos[s:e] += shift
+    if offsets.size < 2:
+        return pos
+    sizes = np.diff(offsets)
+    if sizes.size == 0 or int(offsets[-1]) <= int(offsets[0]):
+        return pos
+    coms = np.add.reduceat(pos[offsets[0] : offsets[-1]], offsets[:-1] - offsets[0], axis=0) / np.maximum(
+        sizes[:, None], 1
+    )
+    safe_L = np.where(L > 0.0, L, 1.0)
+    shift = np.where(L > 0.0, -np.floor(coms / safe_L) * L, 0.0)
+    pos[offsets[0] : offsets[-1]] += np.repeat(shift, sizes, axis=0)
     return pos
 
 

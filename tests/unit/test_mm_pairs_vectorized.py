@@ -142,6 +142,7 @@ def test_eterm_split_com_weighted_matches_per_pair_reference(complementary):
 
 @pytest.mark.parametrize("cutoff", [5.0, 7.0])  # 7 Å > L/2: pairs can appear through two images
 def test_vesin_mic_pair_arrays_sorted_unique_and_complete(cutoff):
+    """5 Å: unique-MIC skip (L=12 >= 10). 7 Å: L < 2*cutoff keeps sort-dedup."""
     pytest.importorskip("vesin")
     from mmml.interfaces.pycharmmInterface.nl_reference import vesin_mic_pair_arrays
 

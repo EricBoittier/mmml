@@ -10,6 +10,7 @@ import jax.numpy as jnp
 
 from mmml.interfaces.pycharmmInterface.pbc_utils_jax import (
     cart_coords,
+    cell_inverse,
     frac_coords,
     group_ids_from_groups,
     mic_displacement,
@@ -36,6 +37,30 @@ def _reference_wrap_groups_loop(R, groups, cell, mass=None):
         cart_shift = cart_coords(lattice_shift[None, :], cell)[0]
         R_out = R_out.at[g].add(cart_shift)
     return R_out
+
+
+@pytest.mark.unit
+def test_frac_coords_matches_linear_solve_cubic_and_sheared() -> None:
+    """inv(cell) multiply must match solve(cell.T, R.T).T (the old trsm path)."""
+    import jax.scipy.linalg
+
+    rng = np.random.default_rng(0)
+    R = jnp.asarray(rng.normal(size=(40, 3)))
+    cubic = jnp.diag(jnp.array([26.0, 26.0, 26.0]))
+    sheared = jnp.array(
+        [[20.0, 0.4, 0.1], [0.2, 18.0, -0.3], [0.0, 0.5, 22.0]],
+        dtype=jnp.float64,
+    )
+    for cell in (cubic, sheared):
+        got = frac_coords(R, cell)
+        ref = jax.scipy.linalg.solve(cell.T, R.T, assume_a="gen").T
+        np.testing.assert_allclose(np.asarray(got), np.asarray(ref), rtol=1e-10, atol=1e-10)
+        np.testing.assert_allclose(
+            np.asarray(R @ cell_inverse(cell)), np.asarray(ref), rtol=1e-10, atol=1e-10
+        )
+    np.testing.assert_allclose(
+        np.asarray(cell_inverse(cubic)), np.diag([1.0 / 26.0] * 3), atol=1e-15
+    )
 
 
 @pytest.mark.unit

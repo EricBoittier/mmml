@@ -141,12 +141,16 @@ def mm_pair_filter_mask(
     offsets = np.asarray(monomer_offsets, dtype=np.int64)
     counts = np.diff(offsets)
     coms = np.add.reduceat(R[: offsets[-1]], offsets[:-1], axis=0) / counts[:, None]
-    dr = coms[mid[pj]] - coms[mid[pi]]
+    # One COM–COM table (n_mol²) then index by pair monomers — not a MIC
+    # per atom pair (n_pairs). ETOH:181 is 181² vs ~6.6e5 pairs.
+    dcom = coms[None, :, :] - coms[:, None, :]
     cell_mat = cell_matrix_3x3(cell) if cell is not None else None
     if cell_mat is not None:
-        frac = dr @ np.linalg.inv(cell_mat).T
-        dr = (frac - np.round(frac)) @ cell_mat
-    return keep & (np.linalg.norm(dr, axis=1) >= float(mm_r_min))
+        frac = dcom @ np.linalg.inv(cell_mat).T
+        dcom = (frac - np.round(frac)) @ cell_mat
+    com_ok = np.linalg.norm(dcom, axis=2) >= float(mm_r_min)
+    np.fill_diagonal(com_ok, False)
+    return keep & com_ok[mid[pi], mid[pj]]
 
 
 def apply_mm_pair_filters(
@@ -399,17 +403,33 @@ def vesin_mic_pair_arrays(
         )
     R = np.asarray(positions, dtype=np.float64)
     cell_mat = cell_matrix_3x3(cell)
-    calculator = VesinNeighborList(cutoff=float(cutoff), full_list=False)
-    i, j, _shifts, dist = calculator.compute(
-        points=R,
-        box=cell_mat,
-        periodic=True,
-        quantities="ijSd",
-    )
-    i = np.asarray(i, dtype=np.int64)
-    j = np.asarray(j, dtype=np.int64)
-    ok = (np.asarray(dist, dtype=np.float64) < float(cutoff)) & (i < j)
-    i, j = i[ok], j[ok]
+    cutoff = float(cutoff)
+    unique_mic = float(np.min(np.diag(cell_mat))) >= 2.0 * cutoff
+    calculator = VesinNeighborList(cutoff=cutoff, full_list=False)
+    # Unique-MIC boxes: Vesin's half list is already one image per pair; skip
+    # shifts/distances and the sort-dedup. L < 2*cutoff can emit two images.
+    if unique_mic:
+        i, j = calculator.compute(
+            points=R,
+            box=cell_mat,
+            periodic=True,
+            quantities="ij",
+        )
+        i = np.asarray(i, dtype=np.int64)
+        j = np.asarray(j, dtype=np.int64)
+        ok = i < j
+        i, j = i[ok], j[ok]
+    else:
+        i, j, _shifts, dist = calculator.compute(
+            points=R,
+            box=cell_mat,
+            periodic=True,
+            quantities="ijSd",
+        )
+        i = np.asarray(i, dtype=np.int64)
+        j = np.asarray(j, dtype=np.int64)
+        ok = (np.asarray(dist, dtype=np.float64) < cutoff) & (i < j)
+        i, j = i[ok], j[ok]
     keep = mm_pair_filter_mask(
         i,
         j,
@@ -420,11 +440,11 @@ def vesin_mic_pair_arrays(
         monomer_offsets=monomer_offsets,
     )
     i, j = i[keep], j[keep]
-    # A half list can report one pair through two images only when L < 2*cutoff;
-    # dedup on the combined key keeps set semantics either way. Sort + mask gives the
-    # same sorted keys as np.unique ~25x faster (numpy 2's hash-based unique took
-    # ~130 ms per rebuild at 6.6e5 pairs).
-    key = np.sort(i * (int(R.shape[0]) + 1) + j)
+    key = i * (int(R.shape[0]) + 1) + j
+    if unique_mic:
+        order = np.argsort(key, kind="stable")
+        return i[order], j[order]
+    key = np.sort(key)
     if key.size:
         key = key[np.concatenate(([True], key[1:] != key[:-1]))]
     return key // (int(R.shape[0]) + 1), key % (int(R.shape[0]) + 1)

@@ -660,7 +660,11 @@ class DecomposedMlpotCalculator:
         idxvp,
     ) -> float:
         n = int(Natom)
-        pos_full = np.array([x[:n], y[:n], z[:n]], dtype=np.float64).T
+        from mmml.interfaces.pycharmmInterface.mlpot.callback_buffers import (
+            stack_charmm_xyz,
+        )
+
+        pos_full = stack_charmm_xyz(x, y, z, n)
         pos_full = self._maybe_rewrap_primary_cell_in_callback(pos_full, n, x, y, z)
         ml_idx = self._resolve_ml_callback_slice(n)
         n_ml = int(ml_idx.size)
@@ -855,10 +859,11 @@ class DecomposedMlpotCalculator:
                     file=sys.stderr,
                     flush=True,
                 )
-        for i in range(n):
-            dx[i] -= forces[i, 0]
-            dy[i] -= forces[i, 1]
-            dz[i] -= forces[i, 2]
+        from mmml.interfaces.pycharmmInterface.mlpot.callback_buffers import (
+            subtract_forces_from_charmm_grad,
+        )
+
+        subtract_forces_from_charmm_grad(dx, dy, dz, forces, n)
         if run_ml and use_mm_pairs:
             hybrid_before_route = float(e_kcal)
             from mmml.interfaces.pycharmmInterface.mlpot.charmm_eterm_routing import (

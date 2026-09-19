@@ -128,3 +128,30 @@ def test_fast_path_matches_full_split_on_zeroed_params():
         mm_switch_width=1.5,
     )
     assert out == routing._zero_nb_components()
+
+
+def test_live_charmm_nb_arrays_cached_on_calculator(monkeypatch):
+    monkeypatch.setenv("MMML_MLPOT_ROUTE_MM_ETERMS", "1")
+    n = 18
+    calc = _calc(2, 9)
+    calc._live_charmm_nb_cache = None
+    zeros = np.zeros(n)
+    live = (zeros, zeros.copy(), np.ones(n) * 1.8)
+    with patch(_LIVE, return_value=live) as mock_live, patch.object(
+        routing, "push_mlpot_nb_components_to_charmm"
+    ):
+        kwargs = dict(
+            calculator=calc,
+            positions_A=np.zeros((n, 3)),
+            mm_pair_idx=_NoHostCopy(),
+            mm_pair_mask=_NoHostCopy(),
+            box=np.diag([26.0] * 3),
+            energy_kcal=-1.0,
+            use_mm_pairs=True,
+        )
+        routing.decompose_and_route_mlpot_mm_from_callback(**kwargs)
+        routing.decompose_and_route_mlpot_mm_from_callback(**kwargs)
+    assert mock_live.call_count == 1
+    cached = calc._live_charmm_nb_cache
+    assert isinstance(cached, tuple) and cached[0] == n
+    np.testing.assert_array_equal(cached[1], zeros)

@@ -20,6 +20,7 @@ from mmml.interfaces.pycharmmInterface.calculator_utils import (
 from mmml.interfaces.pycharmmInterface.cutoffs import GAMMA_OFF, GAMMA_ON
 from mmml.interfaces.pycharmmInterface.ml_dtypes import resolve_ml_compute_dtype
 from mmml.interfaces.pycharmmInterface.pbc_utils_jax import (
+    cell_inverse,
     mic_displacement,
     mic_displacement_smooth,
     mic_displacements_batched,
@@ -267,7 +268,7 @@ def _filter_pairs_by_com_min_jax(
             cell_3x3 = jnp.diag(pbc_cell)
         else:
             cell_3x3 = pbc_cell
-        inv_cell = jnp.linalg.inv(cell_3x3)
+        inv_cell = cell_inverse(cell_3x3)
         frac_dr = dr @ inv_cell.T
         frac_dr = frac_dr - jnp.round(frac_dr)
         dr = frac_dr @ cell_3x3
