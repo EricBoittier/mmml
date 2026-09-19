@@ -54,6 +54,18 @@ def mock_charmm_quiet_output_for_unit_tests(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _reset_mlpot_callback_failstop():
+    """A leftover fatal flag must not abort later unit tests in this worker."""
+    from mmml.interfaces.pycharmmInterface.mlpot.callback_failstop import (
+        reset_mlpot_callback_failstop,
+    )
+
+    reset_mlpot_callback_failstop()
+    yield
+    reset_mlpot_callback_failstop()
+
+
+@pytest.fixture(autouse=True)
 def _clear_stub_charmm_lib_env(monkeypatch):
     """Drop CHARMM_HOME/LIB_DIR when they point at pytest stub libs (file too short)."""
     lib_dir = os.environ.get("CHARMM_LIB_DIR")
