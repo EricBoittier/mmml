@@ -9,12 +9,18 @@ Example::
       mmml pet-physnet-distill \\
       --checkpoint /tmp/mmml-metatomic-models/pet-mad-xs-v1.5.0.pt \\
       --out-dir ./acetone_pet_distill --preset smoke
+
+Labels go through one batched TorchScript forward per ``--max-atoms-per-batch``
+chunk (``--teacher-backend torchscript``); ``ase`` is the per-structure path.
+Other PETs: ``python -c "from upet import save_upet; save_upet(model='pet-omol',
+size='m', version='1.0.0', output='pet-omol-m-v1.0.0.pt')"``.
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import time
 from dataclasses import replace
 from pathlib import Path
 
@@ -67,6 +73,27 @@ def build_parser() -> argparse.ArgumentParser:
         help="Additional ASE extxyz frames (10-atom monomers or 20-atom dimers)",
     )
     p.add_argument("--valid-fraction", type=float, default=0.15)
+    p.add_argument(
+        "--teacher-backend",
+        choices=("torchscript", "ase"),
+        default="torchscript",
+        help=(
+            "torchscript: batched AtomisticModel forward over many structures "
+            "(default); ase: one MetatomicCalculator call per structure"
+        ),
+    )
+    p.add_argument(
+        "--max-atoms-per-batch",
+        type=int,
+        default=4096,
+        help="torchscript backend: atom budget per forward (lower for larger PETs)",
+    )
+    p.add_argument(
+        "--max-systems-per-batch",
+        type=int,
+        default=512,
+        help="torchscript backend: structure budget per forward",
+    )
     p.add_argument(
         "--student-yaml",
         action=argparse.BooleanOptionalAction,
@@ -141,14 +168,27 @@ def run(args: argparse.Namespace) -> dict:
 
     if args.checkpoint is None:
         raise SystemExit("--checkpoint is required unless --geometries-only")
-    from mmml.interfaces.calculators.metatomic import load_metatomic_calculator
+    if args.teacher_backend == "torchscript":
+        from mmml.distill.batched_teacher import BatchedMetatomicTeacher
 
-    calc = load_metatomic_calculator(args.checkpoint)
-    labeled = label_geometries(calc, geos, energy_mode=str(args.energy_mode))
+        evaluator = BatchedMetatomicTeacher(
+            args.checkpoint,
+            max_atoms_per_batch=int(args.max_atoms_per_batch),
+            max_systems_per_batch=int(args.max_systems_per_batch),
+        )
+    else:
+        from mmml.interfaces.calculators.metatomic import load_metatomic_calculator
+
+        evaluator = load_metatomic_calculator(args.checkpoint)
+    t_label = time.perf_counter()
+    labeled = label_geometries(evaluator, geos, energy_mode=str(args.energy_mode))
+    label_s = time.perf_counter() - t_label
     teacher = Path(args.checkpoint).resolve()
     metadata = {
         "teacher": str(teacher),
         "teacher_size_bytes": int(teacher.stat().st_size),
+        "teacher_backend": str(args.teacher_backend),
+        "label_s": float(label_s),
         "energy_mode": str(args.energy_mode),
         "preset": str(args.preset),
         "seed": int(args.seed),

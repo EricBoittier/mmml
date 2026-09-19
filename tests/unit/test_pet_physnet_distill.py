@@ -219,3 +219,44 @@ def test_pool_preset_md_is_larger_than_smoke() -> None:
 def test_clash_helper() -> None:
     pos = np.array([[0.0, 0.0, 0.0], [0.1, 0.0, 0.0]])
     assert min_pair_distance(pos) == pytest.approx(0.1)
+
+
+class _BatchedPairwise:
+    """Batched-teacher stand-in: records request sizes, same physics as the ASE dummy."""
+
+    def __init__(self) -> None:
+        self.calls: list[int] = []
+        self._calc = PairwiseDistanceCalculator()
+
+    def evaluate(self, structures):
+        from mmml.distill.teacher_label import AseTeacher
+
+        self.calls.append(len(structures))
+        return AseTeacher(self._calc).evaluate(structures)
+
+
+@pytest.mark.parametrize("mode", [ENERGY_MODE_INTERACTION, ENERGY_MODE_TOTAL])
+def test_batched_teacher_matches_ase_labels(mode: str) -> None:
+    geos = build_acetone_pool(_tiny_pool())
+    ref = label_geometries(PairwiseDistanceCalculator(), geos, energy_mode=mode)
+    teacher = _BatchedPairwise()
+    got = label_geometries(teacher, geos, energy_mode=mode)
+    n_dimers = sum(g.kind == "dimer" for g in geos)
+    assert teacher.calls == [len(geos) + 2 * n_dimers]
+    for a, b in zip(ref, got):
+        assert a.energy_eV == pytest.approx(b.energy_eV)
+        assert np.allclose(a.forces_ev_per_angstrom, b.forces_ev_per_angstrom)
+
+
+def test_pack_batches_respects_budgets() -> None:
+    from mmml.distill.batched_teacher import pack_batches
+
+    sizes = [10, 10, 20, 20, 20, 50]
+    batches = pack_batches(sizes, max_atoms=40, max_systems=3)
+    assert sorted(i for b in batches for i in b) == list(range(len(sizes)))
+    for b in batches:
+        assert len(b) <= 3
+        assert len(b) == 1 or sum(sizes[i] for i in b) <= 40
+    assert [5] in batches  # oversize structure gets its own batch
+    with pytest.raises(ValueError):
+        pack_batches(sizes, max_atoms=0)

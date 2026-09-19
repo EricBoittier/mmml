@@ -263,3 +263,31 @@ monomer, RMSD ≈ 0 after SD pass 2.
 
 Do not pass the PET `.pt` as `--teacher-checkpoint` on `physnet-train` — that
 flag loads a Flax tree. The NPZ *is* the teacher.
+
+### Batched TorchScript teacher and larger PETs
+
+Labelling defaults to `--teacher-backend torchscript`
+(`mmml/distill/batched_teacher.py`). Monomers, dimers and both dimer
+fragments go into one request. Structures are sorted by size, packed under
+`--max-atoms-per-batch` / `--max-systems-per-batch`, and each pack is one
+`AtomisticModel.forward` over a `list[System]`. Forces are `-dE/dR` from one
+backward pass. `--teacher-backend ase` keeps the per-structure
+`MetatomicCalculator` path.
+
+On an RTX 5090 with PET-MAD xs, the `md` acetone pool (548 geometries, 1320
+structures with fragments) labels in about 0.9 s once warm. The ASE path runs at
+about 16 ms per structure. The two paths agree to float32 noise
+(|ΔE| < 1e-5 eV, |ΔF| < 1e-4 eV/Å).
+
+The `metatomic` extra installs `upet` (downloads and exports the UPET family)
+and `metatrain` (fine-tuning). To export another teacher:
+
+```bash
+python -c "from upet import list_upet; list_upet()"
+python -c "from upet import save_upet; \
+  save_upet(model='pet-omol', size='m', version='1.0.0', output='pet-omol-m-v1.0.0.pt')"
+mmml pet-physnet-distill --checkpoint pet-omol-m-v1.0.0.pt \
+  --out-dir ./acetone_omol_m --preset md --max-atoms-per-batch 2048
+```
+
+Lower `--max-atoms-per-batch` if an `l`/`xl` model runs out of GPU memory.
