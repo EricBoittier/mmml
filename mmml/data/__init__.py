@@ -45,6 +45,7 @@ from .spice_alpha import (
     convert_spice_alpha_hdf5,
     iter_spice_alpha_frames,
     pad_frames,
+    split_npz,
     write_physnet_npz,
 )
 from .units import (
@@ -101,6 +102,7 @@ __all__ = [
     "convert_spice_alpha_hdf5",
     "iter_spice_alpha_frames",
     "pad_frames",
+    "split_npz",
     "write_physnet_npz",
     # Units
     "CALCULATOR_UNITS",

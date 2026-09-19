@@ -20,6 +20,8 @@ from typing import Any, Iterator, Literal, Mapping, Sequence
 
 import numpy as np
 
+from mmml.data.units import polar_e_angstrom2_per_volt_to_bohr3
+
 UnitsKind = Literal["canonical", "atomic", "unknown"]
 
 # From SPICE-alpha/README.md inside the Zenodo zip (not inferred).
@@ -43,7 +45,8 @@ TRAIN_NPZ_UNITS: dict[str, str] = {
 
 DEFAULT_CHARGE_TOL = 0.15
 PHYSNET_TRAIN_KEYS = ("R", "Z", "N", "E", "F")
-PHYSNET_OPTIONAL_KEYS = ("D", "Q", "polar")
+PHYSNET_OPTIONAL_KEYS = ("D", "Q", "polar", "Ef")
+PolarUnits = Literal["spice", "bohr3"]
 
 
 def normalize_unit_token(value: str) -> str:
@@ -195,6 +198,8 @@ def pad_frames(
     frames: Sequence[SpiceAlphaFrame],
     *,
     pad_atoms: int | None = None,
+    write_efield: bool = False,
+    polar_units: PolarUnits = "spice",
 ) -> dict[str, np.ndarray]:
     """Stack frames into a PhysNet-padded NPZ dict (Å / eV / eV/Å / e·Å)."""
     if not frames:
@@ -224,6 +229,12 @@ def pad_frames(
         if fr.polar is not None:
             polar[i] = fr.polar
             has_polar = True
+    units = dict(TRAIN_NPZ_UNITS)
+    if has_polar and polar_units == "bohr3":
+        polar = polar_e_angstrom2_per_volt_to_bohr3(polar)
+        units["polar"] = "bohr3"
+    elif has_polar:
+        units["polar"] = "e_angstrom2_per_volt"
     out: dict[str, np.ndarray] = {
         "R": R,
         "Z": Z,
@@ -232,10 +243,14 @@ def pad_frames(
         "F": F,
         "D": D,
         "Q": Q,
-        "_mmml_units": np.array(json.dumps(TRAIN_NPZ_UNITS)),
+        "_mmml_units": np.array(json.dumps(units)),
     }
     if has_polar:
-        out["polar"] = polar
+        out["polar"] = np.asarray(polar, dtype=np.float64)
+    if write_efield:
+        out["Ef"] = np.zeros((n, 3), dtype=np.float64)
+        units["Ef"] = "zero"
+        out["_mmml_units"] = np.array(json.dumps(units))
     return out
 
 
@@ -303,6 +318,8 @@ def convert_spice_alpha_hdf5(
     neutral_only: bool = False,
     charge_tol: float = DEFAULT_CHARGE_TOL,
     require_canonical_units: bool = True,
+    write_efield: bool = False,
+    polar_units: PolarUnits = "spice",
 ) -> dict[str, np.ndarray]:
     """Load one or more SPICE-α HDF5 files and write a PhysNet NPZ."""
     import h5py
@@ -327,9 +344,53 @@ def convert_spice_alpha_hdf5(
                     break
         if max_frames and len(frames) >= max_frames:
             break
-    data = pad_frames(frames, pad_atoms=pad_atoms)
+    data = pad_frames(
+        frames,
+        pad_atoms=pad_atoms,
+        write_efield=write_efield,
+        polar_units=polar_units,
+    )
     write_physnet_npz(data, out)
     return data
+
+
+def split_npz(
+    data: Mapping[str, Any],
+    out_dir: Path | str,
+    *,
+    train_frac: float = 0.9,
+    valid_frac: float = 0.05,
+    test_frac: float = 0.05,
+    seed: int = 0,
+    prefix: str = "energies_forces_dipoles",
+) -> dict[str, Path]:
+    """Index-split a converted NPZ (keeps ``polar`` / ``Ef``)."""
+    n = int(np.asarray(data["E"]).reshape(-1).shape[0])
+    if abs(train_frac + valid_frac + test_frac - 1.0) > 1e-6:
+        raise ValueError("train/valid/test fractions must sum to 1")
+    rng = np.random.default_rng(seed)
+    perm = rng.permutation(n)
+    n_train = int(round(n * train_frac))
+    n_valid = int(round(n * valid_frac))
+    n_train = min(max(n_train, 0), n)
+    n_valid = min(max(n_valid, 0), n - n_train)
+    cuts = {
+        "train": perm[:n_train],
+        "valid": perm[n_train : n_train + n_valid],
+        "test": perm[n_train + n_valid :],
+    }
+    dest = Path(out_dir)
+    dest.mkdir(parents=True, exist_ok=True)
+    written: dict[str, Path] = {}
+    for name, idx in cuts.items():
+        part = {}
+        for key, val in data.items():
+            arr = np.asarray(val)
+            part[key] = arr[idx] if arr.shape[:1] == (n,) else arr
+        path = dest / f"{prefix}_{name}.npz"
+        write_physnet_npz(part, path)
+        written[name] = path
+    return written
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -343,6 +404,27 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--neutral-only", action="store_true")
     parser.add_argument("--no-flip-gradient", action="store_true")
     parser.add_argument("--allow-atomic-units", action="store_true")
+    parser.add_argument(
+        "--efield",
+        action="store_true",
+        help="Write Ef = 0 (n, 3) for mmml efield-train (zero-field DFT).",
+    )
+    parser.add_argument(
+        "--polar-units",
+        choices=("spice", "bohr3"),
+        default="spice",
+        help="spice = e·Å²/V as released; bohr3 for efield polar loss",
+    )
+    parser.add_argument(
+        "--split-dir",
+        type=Path,
+        default=None,
+        help="Also write train/valid/test NPZs here (keeps polar and Ef)",
+    )
+    parser.add_argument("--train-frac", type=float, default=0.9)
+    parser.add_argument("--valid-frac", type=float, default=0.05)
+    parser.add_argument("--test-frac", type=float, default=0.05)
+    parser.add_argument("--seed", type=int, default=0)
     return parser
 
 
@@ -356,11 +438,30 @@ def main(argv: Sequence[str] | None = None) -> int:
         flip_gradient=not args.no_flip_gradient,
         neutral_only=args.neutral_only,
         require_canonical_units=not args.allow_atomic_units,
+        write_efield=args.efield,
+        polar_units=args.polar_units,
     )
+    extra = []
+    if "Ef" in data:
+        extra.append("Ef=0")
+    if "polar" in data:
+        extra.append(f"polar={args.polar_units}")
     print(
         f"wrote {args.out} n={len(data['E'])} pad={data['R'].shape[1]} "
         f"Zmax={max_atomic_number(data)}"
+        + (f" ({', '.join(extra)})" if extra else "")
     )
+    if args.split_dir is not None:
+        written = split_npz(
+            data,
+            args.split_dir,
+            train_frac=args.train_frac,
+            valid_frac=args.valid_frac,
+            test_frac=args.test_frac,
+            seed=args.seed,
+        )
+        for name, path in written.items():
+            print(f"  {name}: {path}")
     return 0
 
 
