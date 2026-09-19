@@ -43,6 +43,19 @@ def test_subtract_forces_from_charmm_grad_matches_python_loop() -> None:
     np.testing.assert_allclose([dz[i] for i in range(n)], [dz_ref[i] for i in range(n)])
 
 
+def test_subtract_forces_from_python_lists() -> None:
+    """Unit tests and some hosts pass lists; as_array must not silently no-op."""
+    n = 3
+    dx = [10.0, 20.0, 30.0]
+    dy = [1.0, 2.0, 3.0]
+    dz = [-1.0, -2.0, -3.0]
+    forces = np.ones((n, 3), dtype=np.float64)
+    subtract_forces_from_charmm_grad(dx, dy, dz, forces, n)
+    assert dx == [9.0, 19.0, 29.0]
+    assert dy == [0.0, 1.0, 2.0]
+    assert dz == [-2.0, -3.0, -4.0]
+
+
 def test_subtract_forces_does_not_overwrite_existing_grad() -> None:
     """A memmove of ``-F`` would drop CHARMM's already-resident contributions."""
     n = 4

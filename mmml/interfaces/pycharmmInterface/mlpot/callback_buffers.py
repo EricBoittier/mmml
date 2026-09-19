@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import ctypes
+
 import numpy as np
 
 
@@ -30,12 +32,11 @@ def subtract_forces_from_charmm_grad(dx, dy, dz, forces, n: int) -> None:
     f = np.asarray(forces, dtype=np.float64)
     n = int(n)
     for arr, col in ((dx, 0), (dy, 1), (dz, 2)):
-        try:
+        # as_array(list) succeeds but copies (owndata=True); only ctypes views write back.
+        if isinstance(arr, ctypes.Array):
             view = np.ctypeslib.as_array(arr, shape=(n,))
             view[:n] -= f[:n, col]
             continue
-        except (TypeError, ValueError):
-            pass
         try:
             arr[:n] -= f[:n, col]
         except Exception:
