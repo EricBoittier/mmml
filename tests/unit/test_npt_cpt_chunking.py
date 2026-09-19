@@ -189,3 +189,11 @@ def test_materialize_cpt_subchunk_skips_nstep0_velocity_assign(tmp_path):
         )
 
     assign.assert_not_called()
+
+
+def test_cpt_stability_chunking_skips_constant_volume():
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import _cpt_stability_chunk_nstep
+
+    assert _cpt_stability_chunk_nstep({"cpt": True, "pmass": 500}, 100000) is not None
+    assert _cpt_stability_chunk_nstep({"cpt": True, "pmass": 0}, 100000) is None
+    assert _cpt_stability_chunk_nstep({"cpt": False}, 100000) is None
