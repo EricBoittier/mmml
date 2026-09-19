@@ -10,7 +10,7 @@ from __future__ import annotations
 import struct
 from datetime import datetime
 from pathlib import Path
-from typing import Any, BinaryIO, List, Optional, Union
+from typing import Any, BinaryIO, List, Optional, Sequence, Union
 
 import numpy as np
 
@@ -252,8 +252,10 @@ def _dcd_header_byte_size(data: bytes) -> tuple[int, int, int, bool]:
     if cord_block[:4] != b"CORD":
         raise ValueError("invalid DCD header (missing CORD magic)")
     n_frames = struct.unpack(_FMT_I, cord_block[4:8])[0]
-    if len(cord_block) >= 44:
-        has_unitcell = struct.unpack(_FMT_I, cord_block[40:44])[0] != 0
+    # ICNTRL(k) sits at payload offset 4 + 4*(k-1). ICNTRL(10) at [40:44] is
+    # DELTA (nonzero in every CHARMM file); the unit-cell flag is ICNTRL(11).
+    if len(cord_block) >= 48:
+        has_unitcell = struct.unpack(_FMT_I, cord_block[44:48])[0] != 0
     read_record()  # title
     natoms_block = read_record()
     if len(natoms_block) != 4:
@@ -269,54 +271,109 @@ def _dcd_frame_byte_size(n_atoms: int, *, has_unitcell: bool) -> int:
     return xyz
 
 
-def concat_dcd_files(chunks: list[Union[str, Path]], out: Union[str, Path]) -> int:
+def concat_dcd_files(
+    chunks: list[Union[str, Path]],
+    out: Union[str, Path],
+    *,
+    frame_keep: Optional[Sequence[Optional[Sequence[int]]]] = None,
+    nsavc: Optional[int] = None,
+    istart: Optional[int] = None,
+) -> int:
     """Concatenate same-system DCD chunks; return total frame count.
 
-    Chunk files must share atom count and unit-cell flag. The first chunk supplies
-    the header; frame blocks from every chunk are appended in order.
+    Missing, zero-byte and headerless inputs are skipped. The first valid chunk
+    supplies the header; frame blocks from every valid chunk are appended in
+    order. Chunks must share atom count and unit-cell flag (``ValueError``
+    otherwise). A chunk whose header over-counts its payload contributes only its
+    complete frames. ``out`` may be one of ``chunks``.
+
+    ``frame_keep`` (parallel to ``chunks``) lists the 0-based frame indices to keep
+    from each chunk (``None`` keeps all; indices past the chunk's complete frames
+    are ignored). ``nsavc`` / ``istart`` override header ICNTRL(3) / ICNTRL(2);
+    with ``nsavc`` the header NSTEP becomes ``nsavc * frames``.
     """
-    paths = [Path(p) for p in chunks if Path(p).is_file()]
     out_path = Path(out)
-    if not paths:
+    if frame_keep is not None and len(frame_keep) != len(chunks):
+        raise ValueError(f"frame_keep has {len(frame_keep)} entries for {len(chunks)} DCD chunk(s)")
+    valid: list[tuple[Path, bytes, int, int, int, bool, Optional[Sequence[int]]]] = []
+    for i, chunk in enumerate(chunks):
+        path = Path(chunk)
+        if not path.is_file() or path.stat().st_size == 0:
+            continue
+        data = path.read_bytes()
+        try:
+            hdr_end, n_frames, natoms, uc = _dcd_header_byte_size(data)
+        except (ValueError, struct.error):
+            continue
+        keep = frame_keep[i] if frame_keep is not None else None
+        valid.append((path, data, hdr_end, n_frames, natoms, uc, keep))
+    if not valid:
         out_path.unlink(missing_ok=True)
         return 0
 
-    first = paths[0].read_bytes()
-    header_end, _, n_atoms, has_unitcell = _dcd_header_byte_size(first)
+    first_path, first, header_end, _, n_atoms, has_unitcell, _k = valid[0]
     frame_bytes = _dcd_frame_byte_size(n_atoms, has_unitcell=has_unitcell)
     total_frames = 0
     frame_blob = bytearray()
-    for path in paths:
-        data = path.read_bytes()
-        hdr_end, n_frames, natoms, uc = _dcd_header_byte_size(data)
+    kept: list[tuple[bytes, int]] = []
+    for path, data, hdr_end, n_frames, natoms, uc, keep in valid:
         if natoms != n_atoms:
             raise ValueError(
-                f"DCD chunk {path.name} incompatible with {paths[0].name} "
-                f"(natoms {natoms} vs {n_atoms})"
+                f"DCD chunk {path.name} incompatible with {first_path.name} (natoms {natoms} vs {n_atoms})"
+            )
+        if uc != has_unitcell:
+            raise ValueError(
+                f"DCD chunk {path.name} incompatible with {first_path.name} (unit-cell flag {uc} vs {has_unitcell})"
             )
         payload = data[hdr_end:]
-        expected = n_frames * frame_bytes
-        if len(payload) < expected:
-            alt_frame_bytes = _dcd_frame_byte_size(n_atoms, has_unitcell=not has_unitcell)
-            alt_frames = len(payload) // alt_frame_bytes
-            if alt_frames > 0:
-                n_frames = min(n_frames, alt_frames)
-                frame_bytes = alt_frame_bytes
-                has_unitcell = not has_unitcell
-            else:
-                complete_frames = len(payload) // frame_bytes
-                if complete_frames <= 0:
-                    raise ValueError(
-                        f"DCD chunk {path.name} truncated: expected {expected} frame bytes, "
-                        f"got {len(payload)}"
-                    )
-                n_frames = complete_frames
-        frame_blob.extend(payload[: n_frames * frame_bytes])
-        total_frames += n_frames
+        complete_frames = len(payload) // frame_bytes
+        if complete_frames < n_frames:
+            # Header claims more frames than were flushed (killed run).
+            n_frames = complete_frames
+        if n_frames <= 0:
+            continue
+        if keep is None:
+            frame_blob.extend(payload[: n_frames * frame_bytes])
+            n_out = n_frames
+        else:
+            idx = sorted({int(k) for k in keep if 0 <= int(k) < n_frames})
+            for k in idx:
+                frame_blob.extend(payload[k * frame_bytes : (k + 1) * frame_bytes])
+            n_out = len(idx)
+        if n_out <= 0:
+            continue
+        total_frames += n_out
+        kept.append((data, n_out))
 
     out_bytes = bytearray(first[:header_end])
     out_bytes[8:12] = struct.pack(_FMT_I, total_frames)
+    if istart is not None:
+        out_bytes[12:16] = struct.pack(_FMT_I, int(istart))
+    if nsavc is not None:
+        out_bytes[16:20] = struct.pack(_FMT_I, int(nsavc))
+        nstep = int(nsavc) * total_frames
+    else:
+        nstep = _merged_dcd_nstep(kept) if frame_keep is None else None
+    if nstep:
+        out_bytes[20:24] = struct.pack(_FMT_I, nstep)
     out_bytes.extend(frame_blob)
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_bytes(out_bytes)
+    tmp = out_path.with_name(out_path.name + ".concat.tmp")
+    tmp.write_bytes(out_bytes)
+    tmp.replace(out_path)
     return total_frames
+
+
+def _merged_dcd_nstep(kept: list[tuple[bytes, int]]) -> int | None:
+    """ICNTRL(4) NSTEP spanning the merged frames (cosmetic; ``None`` if unknown)."""
+    if not kept:
+        return None
+    try:
+        first_npriv = struct.unpack(_FMT_I, kept[0][0][12:16])[0]
+        last_data, last_frames = kept[-1]
+        last_npriv = struct.unpack(_FMT_I, last_data[12:16])[0]
+        last_nsavc = struct.unpack(_FMT_I, last_data[16:20])[0]
+    except struct.error:
+        return None
+    nstep = int(last_npriv) - int(first_npriv) + int(last_nsavc) * int(last_frames)
+    return nstep if nstep > 0 else None

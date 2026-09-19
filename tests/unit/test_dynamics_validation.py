@@ -1417,3 +1417,40 @@ def test_assert_stage_dynamics_completed_rejects_empty_dcd_after_full_integratio
             restart_path=None,
             integrated_step=100000,
         )
+
+
+def test_expected_overlap_stage_dcd_frame_count_uses_global_cadence():
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        expected_overlap_stage_dcd_frame_count,
+    )
+
+    assert expected_overlap_stage_dcd_frame_count(total_nstep=2000, nsavc=500) == 4
+    assert expected_overlap_stage_dcd_frame_count(total_nstep=100000, nsavc=4000) == 25
+    # Per-chunk expectation hides these saves when nsavc >= chunk length.
+    assert expected_overlap_chunk_dcd_frame_count(total_nstep=2000, nsavc=500, n_chunks=4) == 0
+
+
+def test_assert_stage_warns_when_chunk_frames_below_global_cadence(tmp_path, capsys):
+    dcd = tmp_path / "prod.dcd"
+    atoms = [None, None]
+    for i in range(4):
+        n = 1 if i == 3 else 0
+        save_trajectory_dcd(
+            tmp_path / f"prod.{i:04d}.dcd",
+            np.zeros((n, 2, 3)),
+            atoms,
+            boxes=[np.array([30.0, 30.0, 30.0])],
+            steps_per_frame=499,
+        )
+
+    assert_stage_dynamics_completed(
+        stage="prod",
+        expected_nstep=2000,
+        nsavc=500,
+        dcd_path=dcd,
+        integrated_step=2000,
+    )
+
+    out = capsys.readouterr().out
+    assert "fewer than the 4 global saves" in out
+    assert "PROD complete" in out
