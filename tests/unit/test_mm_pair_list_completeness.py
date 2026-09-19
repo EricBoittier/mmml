@@ -212,3 +212,36 @@ def test_max_monomer_extent_is_image_invariant():
     split = R.copy()
     split[3] += np.array([L, 0.0, -L])  # one atom of molecule 1 in another image
     assert max_monomer_extent_A(split, offsets, cell) == pytest.approx(ref, abs=1e-12)
+
+
+@pytest.mark.parametrize("edge_com", [ON + WIDTH - 0.01, 4.4])
+def test_update_mm_pairs_gpu_rebuild_identical_to_cpu(edge_com, monkeypatch):
+    """The closure's GPU rebuild (auto device) gives the CPU pair list bit-for-bit (and the same MM energy/forces)."""
+    pytest.importorskip("cupy")
+    from mmml.interfaces.pycharmmInterface import nl_gpu
+
+    try:
+        gpu = jax.devices("gpu")[0]
+    except RuntimeError:
+        pytest.skip("no JAX GPU device")
+    if not nl_gpu.gpu_nl_path_available("gpu", positions=jax.device_put(jnp.zeros((1, 3)), gpu)):
+        pytest.skip("GPU pair-list path unavailable")
+    R = _box(edge_com, seed=7)
+    out = {}
+    for device in ("cpu", "auto"):
+        monkeypatch.setenv("MMML_MM_NL_DEVICE", device)
+        with jax.default_device(gpu):
+            mm_fn, update = _build(R)
+            for pos in (R, jax.device_put(jnp.asarray(R), gpu)):  # host (MLpot) and device input
+                pidx, pmask = update(pos, force_rebuild=True)
+                e, f = mm_fn(jnp.asarray(R), pidx, pmask)
+                out.setdefault(device, []).append((np.asarray(pidx), np.asarray(pmask), float(e), np.asarray(f)))
+            stats = update.get_stats()
+        assert stats["gpu_rebuilds" if device == "auto" else "cpu_rebuilds"] >= 2, stats
+    for (ic, mc, ec, fc), (ig, mg, eg, fg) in zip(out["cpu"], out["auto"]):
+        assert mc.dtype == mg.dtype
+        np.testing.assert_array_equal(mc, mg)
+        np.testing.assert_array_equal(ic[mc > 0], ig[mg > 0])
+        # Identical pair list + inputs; XLA GPU scatter-add order may flip the last ulp.
+        assert eg == pytest.approx(ec, rel=1e-13, abs=1e-13)
+        np.testing.assert_allclose(fg, fc, rtol=1e-12, atol=1e-13)
