@@ -71,7 +71,7 @@ def _fake_charmm(n_atoms: int):
     rtf_mock = MagicMock()
     rtf_mock.readlines.return_value = ["ATOM C1 CG321 -0.1\n"]
     prm_mock = MagicMock()
-    prm_mock.readlines.return_value = ["CG321 0.0 -0.05 1.6\n"]
+    prm_mock.readlines.return_value = ["CG321 0.0 -0.05 1.6 0.0 -0.01 1.9\n"]  # >4 fields: parsed
     mod = "mmml.interfaces.pycharmmInterface.mm_energy_forces"
     with patch("pycharmm.psf", fake_psf), patch("pycharmm.param", fake_param), patch(
         f"{mod}.open", side_effect=[rtf_mock, prm_mock]
