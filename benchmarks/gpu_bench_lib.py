@@ -188,7 +188,9 @@ def resolve_asv_command(repo_root: Path) -> list[str]:
     venv_asv = Path(repo_root) / ".venv" / "bin" / "asv"
     if venv_asv.is_file() and os.access(venv_asv, os.X_OK):
         return [str(venv_asv)]
-    return ["uv", "run", "asv"]
+    # asv lives in the "dev" extra (pyproject.toml); plain `uv run asv` uses
+    # the base env and fails with "Failed to spawn: asv".
+    return ["uv", "run", "--extra", "dev", "asv"]
 
 
 def latest_asv_result_files(results_dir: Path) -> list[Path]:

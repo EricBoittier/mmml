@@ -198,7 +198,7 @@ def test_resolve_asv_command_prefers_venv(tmp_path: Path):
 
 
 def test_resolve_asv_command_falls_back_to_uv(tmp_path: Path):
-    assert resolve_asv_command(tmp_path) == ["uv", "run", "asv"]
+    assert resolve_asv_command(tmp_path) == ["uv", "run", "--extra", "dev", "asv"]
 
 
 def test_prepare_bench_env_sets_gpu_defaults(monkeypatch, tmp_path: Path):
