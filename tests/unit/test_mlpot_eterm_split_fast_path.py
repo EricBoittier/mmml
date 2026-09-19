@@ -106,6 +106,8 @@ def test_any_nonzero_live_param_keeps_full_split(which, monkeypatch):
         )
     mock_decompose.assert_called_once()
     assert user == pytest.approx(6.25)
+    comps = calc._last_mm_nb_components_kcalmol
+    assert comps["split_source"] == "charmm" and comps["charmm_vdw_elec_suppressed"] is False
 
 
 def test_fast_path_matches_full_split_on_zeroed_params():
@@ -148,9 +150,14 @@ def test_hybrid_split_only_when_opted_in(source, monkeypatch):
         user = routing.decompose_and_route_mlpot_mm_from_callback(
             calc, np.zeros((18, 3)), np.array([[0, 9]]), np.array([True]), None, 10.0, use_mm_pairs=True
         )
+    comps = calc._last_mm_nb_components_kcalmol
     if source != "hybrid":  # default: zeroed live params (all-ML) -> #226 fast path, all in USER
-        assert user == 10.0 and calc._last_mm_nb_components_kcalmol["mm_total"] == 0.0
+        assert user == 10.0 and comps["mm_total"] == 0.0
+        # CHARMM slots are zero because its live q/eps are zeroed, not because there is no MM.
+        assert comps["split_source"] == "charmm" and comps["charmm_vdw_elec_suppressed"] is True
     else:
         assert user == pytest.approx(10.0 - 0.75)
+        # The opt-in hybrid split reports the JAX MM terms; it is never labelled suppressed.
+        assert comps["split_source"] == "hybrid" and comps["charmm_vdw_elec_suppressed"] is False
         assert push.call_args.kwargs["vdw_primary_kcal"] == -1.0
         assert push.call_args.kwargs["elec_image_kcal"] == 0.25

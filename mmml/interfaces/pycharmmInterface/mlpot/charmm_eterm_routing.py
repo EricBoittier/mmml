@@ -93,6 +93,19 @@ def _zero_nb_components() -> dict[str, float]:
     }
 
 
+def _label_split(components: dict, *, source: str, charmm_suppressed: bool) -> dict:
+    """Tag a split with where it came from, so zeros are not misread as "no MM".
+
+    ``charmm_vdw_elec_suppressed`` is True only when the split was taken from CHARMM's
+    live parameters and those are zeroed (all-ML policy): the CHARMM VDW/ELEC slots
+    are then 0 while the JAX MM energy stays in USER. The opt-in ``hybrid`` split
+    reports the JAX MM terms themselves and is never labelled suppressed.
+    """
+    components["split_source"] = source
+    components["charmm_vdw_elec_suppressed"] = bool(charmm_suppressed)
+    return components
+
+
 def _hybrid_mm_eterm_split(
     calculator: Any, positions_A: Any, mm_pair_idx: Any, mm_pair_mask: Any, box: Any | None
 ) -> dict[str, float] | None:
@@ -164,6 +177,7 @@ def decompose_and_route_mlpot_mm_from_callback(
         print(f"WARN: hybrid MM eterm split failed ({exc}); using CHARMM params", file=sys.stderr)
         split = None
     if split is not None:
+        split = _label_split(split, source="hybrid", charmm_suppressed=False)
         calculator._last_mm_nb_components_kcalmol = split
         return route_mlpot_callback_energy_kcalmol(float(energy_kcal), split)
 
@@ -209,7 +223,7 @@ def decompose_and_route_mlpot_mm_from_callback(
         # live charges/eps (the JAX MM term keeps its own copy), and the full pair
         # pass (~6.6e5 pairs, ETOH:181) plus the device->host pair-list copy cost
         # ~1/3 of every MD step for nothing.
-        components = _zero_nb_components()
+        components = _label_split(_zero_nb_components(), source="charmm", charmm_suppressed=True)
         calculator._last_mm_nb_components_kcalmol = components
         return route_mlpot_callback_energy_kcalmol(float(energy_kcal), components)
 
@@ -252,5 +266,6 @@ def decompose_and_route_mlpot_mm_from_callback(
             flush=True,
         )
         return float(energy_kcal)
+    components = _label_split(components, source="charmm", charmm_suppressed=False)
     calculator._last_mm_nb_components_kcalmol = components
     return route_mlpot_callback_energy_kcalmol(float(energy_kcal), components)
