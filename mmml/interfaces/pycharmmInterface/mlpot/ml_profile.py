@@ -40,6 +40,8 @@ class MlpotProfileStats:
     last_chunk_size: int = 0
     last_effective_batch_size: int = 0
     max_n_gpus: int = 0
+    mm_pair_calls: int = 0
+    mm_pair_rebuilds: int = 0
     _last_callback_end: Optional[float] = field(default=None, repr=False)
 
     def record_ml(self, elapsed_s: float) -> None:
@@ -75,6 +77,11 @@ class MlpotProfileStats:
         self.last_effective_batch_size = int(effective_batch_size)
         self.max_n_gpus = max(self.max_n_gpus, int(n_gpus))
 
+    def record_mm_pair_stats(self, stats: dict[str, Any]) -> None:
+        """Latest cumulative MM pair-list counters (``update_mm_pairs.get_stats()``)."""
+        self.mm_pair_calls = int(stats.get("calls", 0))
+        self.mm_pair_rebuilds = int(stats.get("updates", 0))
+
     def summary_line(self) -> str:
         parts: list[str] = []
         total_cb = self.ml_seconds + self.charmm_gap_seconds
@@ -100,6 +107,11 @@ class MlpotProfileStats:
                 f"(mean={mean_ms:.2f} ms, last n_gpus={self.last_n_gpus}, "
                 f"n_chunks={self.last_n_chunks}, chunk={self.last_chunk_size}, "
                 f"batch={self.last_effective_batch_size})"
+            )
+        if self.mm_pair_calls > 0:
+            parts.append(
+                f"MM pair list: {self.mm_pair_rebuilds} rebuilds / "
+                f"{self.mm_pair_calls} calls"
             )
         if not parts:
             return "MLpot profile: no samples"
@@ -131,6 +143,8 @@ class MlpotProfileStats:
             "last_chunk_size": self.last_chunk_size,
             "last_effective_batch_size": self.last_effective_batch_size,
             "max_n_gpus": self.max_n_gpus,
+            "mm_pair_calls": self.mm_pair_calls,
+            "mm_pair_rebuilds": self.mm_pair_rebuilds,
             "summary": self.summary_line(),
         }
 

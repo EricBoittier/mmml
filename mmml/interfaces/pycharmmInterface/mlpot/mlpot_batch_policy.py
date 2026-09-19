@@ -32,3 +32,24 @@ def resolve_ml_batch_size(
     if n >= 20:
         return 256 if on_gpu else 128
     return 512 if on_gpu else 256
+
+
+# Verlet skin (Å) of the MLpot MM pair list (static Vesin/cell-list rebuild backend).
+DEFAULT_MLPOT_MM_SKIN_A = 0.25
+
+
+def resolve_mlpot_mm_skin_A(args: object | None = None) -> float:
+    """Verlet skin for the MLpot MM pair list.
+
+    ``MMML_MLPOT_MM_SKIN_A`` wins, then an explicit ``--jax-md-skin-distance``,
+    then ``DEFAULT_MLPOT_MM_SKIN_A``. The list radius grows by the skin and the
+    list is reused until some atom has moved (minimum image) more than skin/2.
+    """
+    env = (os.environ.get("MMML_MLPOT_MM_SKIN_A") or "").strip()
+    if env:
+        return max(0.0, float(env))
+    explicit = getattr(args, "_cli_explicit", None) or set()
+    val = getattr(args, "jax_md_skin_distance", None) if args is not None else None
+    if "jax_md_skin_distance" in explicit and val is not None:
+        return max(0.0, float(val))
+    return DEFAULT_MLPOT_MM_SKIN_A

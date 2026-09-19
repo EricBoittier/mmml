@@ -275,6 +275,39 @@ def format_mm_pair_update_stats_summary(stats: dict) -> str:
     )
 
 
+def _cell_3x3_or_none(cell: Any) -> np.ndarray | None:
+    if cell is None:
+        return None
+    c = np.asarray(cell, dtype=np.float64)
+    if c.ndim == 0 or c.shape == (1,):
+        return np.diag([float(c.reshape(-1)[0])] * 3)
+    if c.shape == (3,):
+        return np.diag(c)
+    return c.reshape(3, 3)
+
+
+def max_displacement_since_build_A(
+    R: np.ndarray,
+    last_R: np.ndarray,
+    cell: Any | None = None,
+) -> float:
+    """Largest per-atom move since the last pair-list build (Å).
+
+    With a periodic ``cell`` the move is taken under the minimum image, so a
+    molecule re-wrapped into the primary cell (an exact lattice shift, which
+    leaves every MIC pair distance unchanged) does not count as an L-sized
+    jump. The Verlet bound still holds: the MIC distance is 1-Lipschitz and
+    lattice-periodic in the displacement, so no pair distance changes by more
+    than the sum of the two atoms' MIC moves.
+    """
+    d = np.asarray(R, dtype=np.float64) - np.asarray(last_R, dtype=np.float64)
+    cell_m = _cell_3x3_or_none(cell)
+    if cell_m is not None:
+        frac = d @ np.linalg.inv(cell_m)
+        d = (frac - np.round(frac)) @ cell_m
+    return float(np.max(np.linalg.norm(d, axis=1))) if d.size else 0.0
+
+
 def neighbor_pair_cache_should_reuse(
     *,
     calls: int,
@@ -286,6 +319,7 @@ def neighbor_pair_cache_should_reuse(
     last_box: np.ndarray | None,
     have_cache: bool,
     box_delta_tol: float = 1e-8,
+    cell: Any | None = None,
 ) -> bool:
     """Return True when ``update_mm_pairs`` may reuse cached pair_idx/pair_mask.
 
@@ -294,6 +328,8 @@ def neighbor_pair_cache_should_reuse(
     - ``skin > 0``: reuse only while max per-atom displacement ≤ skin/2 and the
       box is unchanged.  ``interval > 1`` also forces a rebuild every
       ``interval`` calls even if still within the skin.
+    - ``cell``: periodic cell of the MIC pair list; displacements are then
+      measured under the minimum image (see ``max_displacement_since_build_A``).
     """
     if not have_cache:
         return False
@@ -314,7 +350,7 @@ def neighbor_pair_cache_should_reuse(
 
     if last_R is None:
         return False
-    max_disp = float(np.max(np.linalg.norm(R - last_R, axis=1)))
+    max_disp = max_displacement_since_build_A(R, last_R, cell)
     if max_disp > verlet_reuse_displacement_limit_A(skin_f):
         return False
 
@@ -1891,6 +1927,12 @@ def build_mm_energy_forces_fn(
                 cell = _box_to_cell_3x3(jnp.asarray(pbc_cell, dtype=pos.dtype))
             return pos @ cell
 
+        def _reuse_mic_cell(box_in: Optional[np.ndarray]) -> Optional[np.ndarray]:
+            # Cell of the MIC pair list (None: open boundaries -> plain displacement).
+            if box_in is None and pbc_cell is None:
+                return None
+            return _cell_3x3_or_none(_pbc_cell_for_nl_build(box_in))
+
         def _box_delta_within_tolerance(box_in: Optional[np.ndarray]) -> bool:
             if box_in is None or _last_box[0] is None:
                 return box_in is None and _last_box[0] is None
@@ -2186,10 +2228,14 @@ def build_mm_energy_forces_fn(
                 # Max displacement on device; sync only a scalar (not full R).
                 R_cart_jax = _jax_cartesian_for_nl_build(positions_jax, box)
                 last_R = _last_cartesian_positions_jax[0]
+                d_jax = R_cart_jax - last_R
+                _mic_cell = _reuse_mic_cell(box)
+                if _mic_cell is not None:
+                    cell_j = jnp.asarray(_mic_cell, dtype=d_jax.dtype)
+                    frac_j = d_jax @ jnp.linalg.inv(cell_j)
+                    d_jax = (frac_j - jnp.round(frac_j)) @ cell_j
                 max_disp = float(
-                    jax.device_get(
-                        jnp.max(jnp.linalg.norm(R_cart_jax - last_R, axis=1))
-                    )
+                    jax.device_get(jnp.max(jnp.linalg.norm(d_jax, axis=1)))
                 )
                 if max_disp <= verlet_reuse_displacement_limit_A(skin):
                     _pair_stats["reused"] += 1
@@ -2215,6 +2261,7 @@ def build_mm_energy_forces_fn(
                 box=box,
                 last_box=_last_box[0],
                 have_cache=have_cache,
+                cell=_reuse_mic_cell(box),
             ):
                 _pair_stats["reused"] += 1
                 if (
