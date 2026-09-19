@@ -65,6 +65,12 @@ def build_parser() -> argparse.ArgumentParser:
     lab.add_argument("--teacher-max-atoms", type=int, default=4096)
     lab.add_argument("--student-batch", type=int, default=512)
     lab.add_argument("--overwrite", action="store_true")
+    lab.add_argument("--box-from-file", action="store_true",
+                     help="frames were sampled by the teacher: take box E/F from the extxyz "
+                     "(only monomers are evaluated)")
+    lab.add_argument("--group-every", type=int, default=None,
+                     help="frames without a 'seed' key: bootstrap group = block of this many frames")
+    lab.add_argument("--tag", default=None, help="label file name stem (default: from path)")
     lab.add_argument("--no-box-forces", action="store_true",
                      help="teacher box energy only (large boxes do not fit GPU memory with forces)")
     lab.add_argument("--time-budget-s", type=float, default=None,
@@ -141,7 +147,7 @@ def _run_label(args: argparse.Namespace) -> int:
         if args.time_budget_s is not None and time.time() - t_start > args.time_budget_s:
             print("time budget reached; stopping before", path, flush=True)
             break
-        stem = path.parent.name if path.stem == "traj" else path.stem
+        stem = args.tag or (path.parent.name if path.stem == "traj" else path.stem)
         out = args.out_dir / f"labels_{stem}.npz"
         if out.exists() and not args.overwrite:
             print(f"skip {out} (exists)", flush=True)
@@ -150,11 +156,12 @@ def _run_label(args: argparse.Namespace) -> int:
         frames = []
         for fr in iter_box_frames(
             [path], atoms_per_molecule=args.atoms_per_molecule, phase=args.phase or None,
-            stride=args.stride, max_per_file=args.max_per_file,
+            stride=args.stride, max_per_file=args.max_per_file, group_every=args.group_every,
         ):
             frames.append(label_frame(fr, teacher=teacher, student=student,
                                       r_pair_max=args.r_pair_max,
-                                      box_forces=not args.no_box_forces))
+                                      box_forces=not args.no_box_forces,
+                                      box_from_file=args.box_from_file))
             last = frames[-1]
             n = last["mols"].shape[0]
             print(f"{stem} frame {fr.index}: teacher E_int/N {last['teacher_e_int'] / n:+.3f}"

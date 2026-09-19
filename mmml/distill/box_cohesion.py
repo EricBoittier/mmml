@@ -52,6 +52,8 @@ class BoxFrame:
     cell: np.ndarray  # (3, 3)
     mols: np.ndarray  # (M, a, 3) unwrapped around each molecule's first atom
     phase: str = ""
+    energy_eV: float | None = None  # stored box energy (extxyz), if any
+    forces: np.ndarray | None = None  # stored box forces eV/A, if any
 
 
 def iter_box_frames(
@@ -61,8 +63,14 @@ def iter_box_frames(
     phase: str | None = "md",
     stride: int = 1,
     max_per_file: int | None = None,
+    group_every: int | None = None,
 ) -> Iterable[BoxFrame]:
-    """Frames from extxyz trajectories (``seed``/``phase`` info keys optional)."""
+    """Frames from extxyz trajectories (``seed``/``phase`` info keys optional).
+
+    Without a ``seed`` key the group (bootstrap / hold-out unit) is the file
+    index, or with ``group_every`` a time block of that many kept frames:
+    ``1000 * file_index + kept // group_every``.
+    """
     from ase.io import iread
 
     from mmml.distill.box_clusters import whole_molecules
@@ -79,7 +87,19 @@ def iter_box_frames(
                 continue
             if max_per_file is not None and kept >= int(max_per_file):
                 break
-            group = int(atoms.info.get("seed", fi))
+            if "seed" in atoms.info:
+                group = int(atoms.info["seed"])
+            elif group_every:
+                group = 1000 * fi + kept // int(group_every)
+            else:
+                group = fi
+            e_file = f_file = None
+            if atoms.calc is not None:
+                try:
+                    e_file = float(atoms.get_potential_energy())
+                    f_file = np.asarray(atoms.get_forces(), dtype=np.float64)
+                except Exception:  # pragma: no cover - frames without results
+                    e_file = f_file = None
             yield BoxFrame(
                 group=group,
                 index=k,
@@ -88,6 +108,8 @@ def iter_box_frames(
                 cell=np.asarray(atoms.cell[:], dtype=np.float64),
                 mols=whole_molecules(atoms, atoms_per_molecule),
                 phase=ph,
+                energy_eV=e_file,
+                forces=f_file,
             )
             kept += 1
 
@@ -222,6 +244,7 @@ def label_frame(
     student: PhysNetPairEvaluator | None = None,
     r_pair_max: float = 8.0,
     box_forces: bool = True,
+    box_from_file: bool = False,
 ) -> dict[str, Any]:
     """Teacher and/or student interaction labels of one frame (kcal/mol).
 
@@ -243,7 +266,13 @@ def label_frame(
         res = teacher.evaluate([(z_mol, mols[m]) for m in range(M)])
         e_mono = np.array([r[0] for r in res])
         f_mono = np.stack([r[1] for r in res])
-        if box_forces:
+        if box_from_file:
+            # frames sampled *by the teacher itself*: reuse its stored E/F
+            if frame.energy_eV is None or frame.forces is None:
+                raise ValueError("box_from_file needs energy/forces in the trajectory")
+            e_box, f_box = frame.energy_eV, frame.forces
+            out["teacher_f_int"] = (f_box.reshape(M, a, 3) - f_mono) * EV_TO_KCAL
+        elif box_forces:
             e_box, f_box = teacher.evaluate([box])[0]
             out["teacher_f_int"] = (f_box.reshape(M, a, 3) - f_mono) * EV_TO_KCAL
         else:
