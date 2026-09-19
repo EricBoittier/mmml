@@ -367,3 +367,39 @@ def test_npt_energy_fn_responds_to_perturbation():
     dudv_fd = float((U_eps(eps) - U_eps(-eps)) / (2.0 * eps))
     assert abs(dudv_ad - dudv_fd) / max(1.0, abs(dudv_fd)) < 1.0e-4
     assert abs(dudv_ad) > 1.0e-8
+
+
+def test_npt_forces_are_real_space_and_conserve_energy():
+    """jax-md's NpT integrator treats -grad(E)(frac) as a REAL-space force.
+
+    ``space.transform`` has a custom JVP so native jax-md energies return
+    dE/dreal for fractional inputs. Building real = frac @ box.T by plain
+    matmul makes the gradient dE/dfrac = dE/dreal @ box, i.e. every force is
+    scaled by the box length. With both barostat and thermostat effectively
+    decoupled (huge tau) the run is ~NVE, so KE + PE must be conserved.
+    """
+    base = _periodic_system(n_side=2, spacing=4.0)
+    # Keep every atom well inside the cell so fractional wrapping never moves
+    # it (the harmonic tether is not periodic).
+    system = MolecularSystem(
+        R=base.R + 2.0, Z=base.Z, box=base.box, mol_id=base.mol_id
+    )
+    rng = np.random.default_rng(0)
+    origin = system.R + rng.normal(scale=0.15, size=system.R.shape)
+    energy = HybridEnergy(
+        [_HarmonicTerm()], system, EnergyContext(options={"origin": origin})
+    )
+    ensemble = EnsembleSpec(
+        ensemble="npt", dt_fs=0.5, n_steps=400, temperature_K=50.0,
+        pressure_bar=1.0,
+        params={
+            "float64": True, "seed": 3,
+            "barostat_kwargs": {"tau": 1.0e6},
+            "thermostat_kwargs": {"tau": 1.0e6},
+        },
+    )
+    traj = JaxmdDriver(record_every=50).run(system, energy, ensemble)
+    e_tot = np.asarray(traj.metadata["total_energies"])
+    pe = np.asarray(traj.metadata["energies"])
+    assert np.ptp(pe) > 1e-3, "potential must actually vary for the test to bite"
+    assert np.ptp(e_tot) < 0.02 * np.ptp(pe), (e_tot, pe)

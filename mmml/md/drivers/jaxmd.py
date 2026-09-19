@@ -150,7 +150,12 @@ class JaxmdDriver:
             init_position = jnp.asarray(system.R, dtype=dtype) @ jnp.transpose(inv_box0)
 
             def _to_real(frac_R, box_curr):
-                return frac_R @ jnp.transpose(box_curr)
+                # space.transform, not ``frac_R @ box.T``: same value, but its
+                # custom JVP passes the position tangent through unscaled, so
+                # grad(E)(frac) is dE/dreal -- the real-space force jax-md's
+                # NpT integrator expects. A plain matmul makes it
+                # dE/dreal @ box, scaling every force by the box length.
+                return space.transform(box_curr, frac_R)
 
             def energy_fn(frac_R, box=box, perturbation=1.0, **kw):
                 # jax-md NPT force_stress_fn differentiates through
