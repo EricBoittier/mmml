@@ -4,12 +4,15 @@ Standardized NPZ data format schema for MMML.
 Defines the canonical structure for all NPZ files used across DCMNet,
 PhysNetJAX, and other models in the MMML ecosystem.
 
-Units Convention:
+Units Convention (ingest / Molpro-PySCF, used by ``mmml validate``):
     - Coordinates (R): Angstrom
     - Energies (E): Hartree
     - Forces (F): Hartree/Bohr
     - Dipoles (D): Debye
     - ESP: Hartree/e
+
+PhysNet *train* units are Å / eV / eV/Å / e·Å. See
+docs/training-npz-contract.md and docs/UNITS_SUMMARY.md.
 """
 
 import sys

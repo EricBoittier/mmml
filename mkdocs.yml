@@ -131,6 +131,8 @@ nav:
           # CLI_NAV_END: MD & campaigns
   - QM & data:
       - sections/qm-data.md
+      - Training NPZ contract: training-npz-contract.md
+      - SPICE-α (Zenodo 19205036) → PhysNet: spice-alpha.md
       - QC cross-check: qc-cross-check.md
       - Preparing hybrid ML/MM datasets (CGenFF assignment): hybrid-mm-dataset-preparation.md
       - SO3LR / DES dimers — chemical space & LJ coverage: des-so3lr-dimers.md
@@ -180,6 +182,7 @@ nav:
       - Long-range electrostatics (ScaFaCoS): mlpot-long-range-electrostatics.md
   - Training & sampling:
       - sections/training-sampling.md
+      - Training NPZ contract: training-npz-contract.md
       - Bayesian design of compact PES datasets: bayesian-pes-design.md
       - Nudged elastic band (NEB): neb.md
       - Diffusion Monte Carlo (DMC): dmc.md

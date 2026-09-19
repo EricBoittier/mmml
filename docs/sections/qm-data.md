@@ -22,7 +22,13 @@ Converting from other sources:
 ```bash
 mmml xml2npz molpro.xml -o data.npz     # Molpro XML -> NPZ
 mmml npz2traj data.npz -o traj.traj     # NPZ -> ASE trajectory
+# already eV / eV/Å / e·Å (SPICE-α, distill): do not reconvert
+mmml fix-and-split --efd data.npz -o ./splits --preserve-units
 ```
+
+What trainers accept (keys, units, total vs interaction, gradient sign):
+[Training NPZ contract](../training-npz-contract.md). External DFT dump:
+[SPICE-α → PhysNet](../spice-alpha.md).
 
 ## What's here
 
@@ -30,6 +36,10 @@ mmml npz2traj data.npz -o traj.traj     # NPZ -> ASE trajectory
 
 - [QC cross-check](../qc-cross-check.md) — independently verifying a QM pipeline
   before you train on its output.
+- [Training NPZ contract](../training-npz-contract.md) — ingest vs train
+  units, energy meaning, padding, hybrid extras.
+- [SPICE-α (Zenodo 19205036)](../spice-alpha.md) — extract HDF5, flip
+  gradients, split with `--preserve-units`.
 - [Preparing hybrid ML/MM datasets](../hybrid-mm-dataset-preparation.md) —
   assigning CGenFF types and charges to a dimer NPZ.
 - [Dimer scans (DCM / ACO)](../functionality/dimer_scans/README.md) and

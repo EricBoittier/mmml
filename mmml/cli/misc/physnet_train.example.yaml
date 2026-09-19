@@ -1,6 +1,12 @@
 # Example PhysNetJAX training config for: mmml physnet-train --config train.yaml
 # CLI flags override values from this file.
 #
+# NPZ contract (docs/training-npz-contract.md):
+#   R,Z,N,E,F in Å / eV / eV/Å; D optional e·Å. F is force (−∇E), not a gradient.
+#   --conversion scales printed MAE only. Interaction labels must already be E_int.
+#   --hybrid-mm needs prepare-mm-dataset (mol_id + CGenFF tables).
+#   Already-eV files (SPICE-α, pet-physnet-distill): fix-and-split --preserve-units.
+#
 # Hybrid ML/MM + charge modes (fixed / latent / fixed_plus_latent):
 #   examples/hybrid_mm_charges/train_*.yaml
 # Periodic PME Coulomb (LJ off) for hybrid train:

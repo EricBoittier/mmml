@@ -130,6 +130,7 @@ EXAMPLE_BLOCKS: tuple[tuple[str, tuple[str, ...]], ...] = (
         "QM pipeline",
         (
             "mmml fix-and-split --efd data.npz --output-dir ./splits",
+            "mmml fix-and-split --efd spice.npz -o ./splits --preserve-units",
             "mmml npz2traj data.npz -o trajectory.traj",
             "mmml pyscf-evaluate -i traj.npz -o out.npz --EF --esp",
             "mmml compare-charmm-ml --checkpoint ~/ckpts/eg_joint "

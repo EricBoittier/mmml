@@ -33,6 +33,7 @@ mmml analyze-liquid --campaign-dir artifacts/lj_scales/liquid_dcm -o analysis/
 
 ```bash
 mmml fix-and-split --efd data.npz --output-dir ./splits
+mmml fix-and-split --efd spice.npz -o ./splits --preserve-units
 mmml npz2traj data.npz -o trajectory.traj
 mmml pyscf-evaluate -i traj.npz -o out.npz --EF --esp
 mmml compare-charmm-ml --checkpoint ~/ckpts/eg_joint --valid-efd splits/energies_forces_dipoles_test.npz --valid-esp splits/grids_esp_test.npz --pdb pdb/initial.pdb --n-samples 50 --out-dir charmm_ml_comparison
