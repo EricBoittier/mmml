@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Sequence
@@ -53,6 +54,83 @@ POLICY_REGISTRY: dict[str, CharmmEnergyTermPolicy] = {
         tolerance_kcal=1.0e-3,
     ),
 }
+
+
+#: CHARMM nonbond ELEC terms that ``SKIPE`` drops once every live partial charge
+#: is zero (all-ML MLpot: registration zeroes all ML charges). With VDW/IMNB
+#: already skipped by the ``vdw`` policy, ENBFS8 then returns at its first test
+#: instead of looping over the primary + image pair lists every step.
+ZERO_CHARGE_SKIPE_TERMS: tuple[str, ...] = ("ELEC", "IMEL")
+
+#: Opt-out for A/B checks: keep CHARMM's (zero) ELEC/IMEL evaluation.
+KEEP_CHARMM_ELEC_ENV = "MMML_MLPOT_KEEP_CHARMM_ELEC"
+
+# SKIPE is global and accumulates for the CHARMM process; mirror it here so the
+# MLpot eterm router does not push MM buckets into terms CHARMM no longer sums.
+_SKIPPED_CHARMM_TERMS: set[str] = set()
+
+
+def charmm_skipped_terms() -> frozenset[str]:
+    """CHARMM energy terms this process removed with ``SKIPE``."""
+    return frozenset(_SKIPPED_CHARMM_TERMS)
+
+
+def _charmm_skipe(terms: Sequence[str]) -> None:
+    import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+    import pycharmm
+
+    # eval_charmm_script skips CHARMM's uppercase conversion: commands must be uppercase.
+    pycharmm.lingo.charmm_script("SKIPE " + " ".join(terms))
+    _SKIPPED_CHARMM_TERMS.update(str(t).upper() for t in terms)
+
+
+def charmm_elec_redundant(
+    policies: Sequence[CharmmEnergyTermPolicy],
+    charges: Sequence[float] | np.ndarray | None,
+) -> bool:
+    """True when CHARMM ELEC/IMEL can only add zero energy and zero force.
+
+    Requires the ``vdw`` policy (JAX owns the intermolecular MM nonbond, CHARMM
+    VDW/IMNB are skipped) and an all-zero live charge vector. Every CHARMM
+    Coulomb pair term carries ``q_i q_j``, so ELEC and IMEL are then exactly
+    zero and skipping them leaves the Hamiltonian unchanged.
+    """
+    if not any(p.zero_nonbond_prm for p in policies):
+        return False
+    if charges is None:
+        return False
+    q = np.asarray(charges, dtype=np.float64).ravel()
+    return bool(q.size) and bool(np.all(q == 0.0))
+
+
+def skip_redundant_charmm_elec(
+    policies: Sequence[CharmmEnergyTermPolicy],
+    *,
+    verbose: bool = False,
+) -> list[str]:
+    """``SKIPE ELEC IMEL`` when :func:`charmm_elec_redundant` holds; return skipped terms."""
+    if (os.environ.get(KEEP_CHARMM_ELEC_ENV) or "").strip().lower() in ("1", "true", "yes", "on"):
+        return []
+    if not any(p.zero_nonbond_prm for p in policies):
+        return []
+    try:
+        import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+        import pycharmm
+
+        charges = list(pycharmm.psf.get_charges())
+    except (AttributeError, ImportError, OSError):
+        return []
+    if not charmm_elec_redundant(policies, charges):
+        return []
+    terms = list(ZERO_CHARGE_SKIPE_TERMS)
+    _charmm_skipe(terms)
+    if verbose:
+        print(
+            f"CHARMM energy policy: SKIPE {' '.join(terms)} (all {len(charges)} "
+            "CHARMM charges are zero; JAX computes the MM nonbond)",
+            flush=True,
+        )
+    return terms
 
 
 def _parse_term_list(raw: str | None) -> list[str]:
@@ -135,11 +213,7 @@ def _skip_policy_terms(policies: Sequence[CharmmEnergyTermPolicy], *, verbose: b
     terms = list(dict.fromkeys(t for p in policies for t in p.skipe_terms))
     if not terms:
         return
-    import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
-    import pycharmm
-
-    # eval_charmm_script skips CHARMM's uppercase conversion: commands must be uppercase.
-    pycharmm.lingo.charmm_script("SKIPE " + " ".join(terms))
+    _charmm_skipe(terms)
     if verbose:
         print(f"CHARMM energy policy: SKIPE {' '.join(terms)}", flush=True)
 
@@ -459,6 +533,13 @@ def apply_charmm_energy_term_policies_before_pbc_finalize(
     if zero_charges:
         _zero_ml_atom_charges(ml_selection)
         applied.extend(p.name for p in policies if p.zero_ml_charges)
+
+    if zero_nonbond:
+        # After the charge edits above: all-ML registration has zeroed every
+        # charge, so CHARMM ELEC/IMEL are identically zero (JAX owns MM).
+        skip_redundant_charmm_elec(
+            policies, verbose=verbose or not getattr(args, "quiet", False)
+        )
 
     return list(dict.fromkeys(applied))
 

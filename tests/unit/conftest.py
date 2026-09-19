@@ -76,3 +76,12 @@ def _clear_stub_charmm_lib_env(monkeypatch):
             monkeypatch.delenv("CHARMM_HOME", raising=False)
             monkeypatch.delenv("CHARMM_LIB_DIR", raising=False)
     yield
+
+
+@pytest.fixture(autouse=True)
+def _isolate_charmm_skipe_registry(monkeypatch):
+    """Tests that call the energy policy with a fake CHARMM must not leak SKIPE state."""
+    from mmml.interfaces.pycharmmInterface.mlpot import charmm_energy_policy as cep
+
+    monkeypatch.setattr(cep, "_SKIPPED_CHARMM_TERMS", set())
+    yield
