@@ -32,7 +32,7 @@ from mmml.distill.acetone_pool import (
     build_acetone_pool,
     pool_config_for_preset,
 )
-from mmml.distill.npz_export import write_distill_npz
+from mmml.distill.npz_export import SPLIT_MODES, SPLIT_SAMPLE, SPLIT_SEED, write_distill_npz
 from mmml.distill.teacher_label import (
     ENERGY_MODE_MLMM,
     ENERGY_MODE_TOTAL,
@@ -120,7 +120,23 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Also store each dimer's A and B as monomer samples (matched triples for MLpot E_int)",
     )
-    p.add_argument("--valid-fraction", type=float, default=0.15)
+    p.add_argument(
+        "--valid-fraction",
+        type=float,
+        default=0.15,
+        help="Valid share: of samples (--split sample) or of trajectories (--split seed)",
+    )
+    p.add_argument(
+        "--split",
+        choices=SPLIT_MODES,
+        default=None,
+        help=(
+            "seed: whole trajectories (frame info seed, else input file) go to "
+            "train or valid, so AB/A/B triples and repeated monomers never "
+            "straddle the split; default with --from-box-extxyz. sample: "
+            "per-sample permutation; default for the acetone pool"
+        ),
+    )
     p.add_argument(
         "--teacher-backend",
         choices=("torchscript", "ase"),
@@ -192,8 +208,11 @@ def _box_pool(args: argparse.Namespace):
         raise SystemExit("--from-box-extxyz needs --atoms-per-monomer")
     stride = max(int(args.frame_stride), 1)
     frames = []
-    for path in args.from_box_extxyz:
-        frames.extend(ase_read(str(path), index=f"::{stride}"))
+    frame_files: list[int] = []
+    for i_file, path in enumerate(args.from_box_extxyz):
+        chunk = ase_read(str(path), index=f"::{stride}")
+        frames.extend(chunk)
+        frame_files.extend([i_file] * len(chunk))
     ref = None
     if args.reference_monomer_xyz is not None:
         ref = ase_read(str(args.reference_monomer_xyz))
@@ -211,8 +230,13 @@ def _box_pool(args: argparse.Namespace):
         seed=int(args.seed),
     )
     stats: dict = {}
-    geos = box_cluster_pool(frames, cfg, reference_monomer=ref, stats=stats)
+    geos = box_cluster_pool(
+        frames, cfg, reference_monomer=ref, stats=stats, frame_files=frame_files
+    )
     stats["n_box_frames"] = len(frames)
+    seeds = sorted({int(f.info["seed"]) for f in frames if f.info.get("seed") is not None})
+    stats["n_box_seeds"] = len(seeds)
+    stats["n_box_frames_without_seed"] = sum(1 for f in frames if f.info.get("seed") is None)
     return geos, stats
 
 
@@ -228,6 +252,7 @@ def run(args: argparse.Namespace) -> dict:
             cfg = replace(cfg, extra_extxyz=extra)
         geos = build_acetone_pool(cfg)
         pad_atoms = DIMER_ATOMS
+    split = args.split or (SPLIT_SEED if args.from_box_extxyz else SPLIT_SAMPLE)
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -250,6 +275,7 @@ def run(args: argparse.Namespace) -> dict:
             pad_atoms=pad_atoms,
             valid_fraction=float(args.valid_fraction),
             seed=int(args.seed),
+            split=split,
             metadata={"geometries_only": True, "preset": args.preset, "seed": int(args.seed)},
         )
         return {"n_geometries": len(geos), "paths": {k: str(v) for k, v in paths.items()}}
@@ -297,6 +323,7 @@ def run(args: argparse.Namespace) -> dict:
         pad_atoms=pad_atoms,
         valid_fraction=float(args.valid_fraction),
         seed=int(args.seed),
+        split=split,
         metadata=metadata,
     )
     if args.student_yaml:

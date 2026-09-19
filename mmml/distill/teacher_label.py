@@ -22,7 +22,7 @@ Units: energy eV, forces eV/Å (ASE / metatomic).
 from __future__ import annotations
 
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Protocol
 
 import numpy as np
@@ -99,7 +99,8 @@ def label_geometries(
     ``include_dimer_fragments`` also emits each dimer's A and B as monomer
     samples (source ``<dimer source>:frag``) right after the dimer. The
     student then sees matched AB/A/B triples, which is what MLpot differences
-    into ``E_int``. Costs no extra teacher calls.
+    into ``E_int``. Costs no extra teacher calls. Fragments inherit the
+    dimer's provenance (``group_*``), so a grouped split keeps AB/A/B together.
     """
     mode = str(energy_mode).strip().lower()
     if mode not in ENERGY_MODES:
@@ -166,7 +167,8 @@ def label_geometries(
         if include_dimer_fragments:
             z_a, r_a, z_b, r_b = _split_dimer(geo)
             for z_m, r_m, (e_m, f_m) in ((z_a, r_a, (e_a, f_a)), (z_b, r_b, (e_b, f_b))):
-                frag = Geometry(
+                frag = replace(  # keeps the dimer's provenance (group_*)
+                    geo,
                     numbers=z_m,
                     positions=r_m,
                     kind="monomer",

@@ -27,6 +27,7 @@ usage: mmml pet-physnet-distill [-h] [--checkpoint CHECKPOINT] --out-dir OUT_DIR
                                 [--max-dimers-per-frame MAX_DIMERS_PER_FRAME]
                                 [--include-dimer-fragments]
                                 [--valid-fraction VALID_FRACTION]
+                                [--split {sample,seed}]
                                 [--teacher-backend {torchscript,ase}]
                                 [--max-atoms-per-batch MAX_ATOMS_PER_BATCH]
                                 [--max-systems-per-batch MAX_SYSTEMS_PER_BATCH]
@@ -94,6 +95,14 @@ Other options:
                         Also store each dimer's A and B as monomer samples
                         (matched triples for MLpot E_int)
   --valid-fraction VALID_FRACTION
+                        Valid share: of samples (--split sample) or of
+                        trajectories (--split seed)
+  --split {sample,seed}
+                        seed: whole trajectories (frame info seed, else input
+                        file) go to train or valid, so AB/A/B triples and
+                        repeated monomers never straddle the split; default with
+                        --from-box-extxyz. sample: per-sample permutation;
+                        default for the acetone pool
   --student-yaml, --no-student-yaml
                         Write physnet-train.yaml next to the NPZ (warm-start
                         DESdimers)
