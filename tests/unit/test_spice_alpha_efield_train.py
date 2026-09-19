@@ -6,6 +6,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import optax
+import pytest
 
 from mmml.data.spice_alpha import convert_spice_alpha_hdf5, split_npz
 from mmml.models.efield.training import (
@@ -19,6 +20,17 @@ from mmml.models.efield.training import (
 from spice_alpha_fixtures import write_water_spice_h5
 
 BATCH_SIZE = 2
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _float32_for_e3x_efield():
+    """Unit CI sets ``JAX_ENABLE_X64=1``. e3x ``Embed`` stays float32 while
+    ``basis`` / ``MessagePass`` promote to float64, so ``e3x.nn.add`` raises.
+    Pin this module to float32, matching ``load_ef_npz`` and GPU train."""
+    prev = bool(jax.config.jax_enable_x64)
+    jax.config.update("jax_enable_x64", False)
+    yield
+    jax.config.update("jax_enable_x64", prev)
 
 
 def _tiny_model() -> EFieldPhysNet:
