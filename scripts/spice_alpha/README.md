@@ -11,6 +11,20 @@ Labels are converted from the release unit `e·Å²/V` to Bohr³.
 `scripts/scicore_env.sh` defaults x64 on and will crash `EFieldPhysNet.init`.
 Do not source that prolog for this job. No CHARMM.
 
+Checkpoints now write `run_meta.json` + `history.jsonl` every epoch, a rich
+`best-valid-<uuid>.json` (polar/energy/force MAE, not just loss), and Orbax
+weights under `orbax/` (JSON `params-best-*.json` still written; `--save-format
+orbax|json|both`). A missing `params-best.json` while the job is running is
+**not** proof that validation never improved — older trainers only created
+that symlink on exit. Audit from the login node:
+
+```bash
+python scripts/spice_alpha/audit_efield_job.py \
+  --ckpt $HOME/mmml/ckpts/spice_ef_polar_big \
+  --log artifacts/spice_ef_polar/slurm-22826285.out \
+  --job 22826285
+```
+
 ```bash
 # 1. Inner HDF5 + NPZ splits (256 frames = smoke; skips the 1.3 GB dimers)
 # Published DES370K HDF5 may have an empty file-level units_map; convert

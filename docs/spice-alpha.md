@@ -173,11 +173,23 @@ sbatch --partition=rtx4090 --qos=rtx4090-6hours --time=06:00:00 \
 ```
 
 Pass: check script exits 0; smoke log has `polar mae` / `polar MSE` (finite);
-`ckpts/spice_ef_polar/params-*.json` exists. Epoch-1 energy MAE of tens–hundreds
-of eV is expected (zero-init heads, total E, no atom refs). Fail: `e3x.nn.add`
-dtype error (x64 still on); `polar_weight is set but NPZ has no 'polar'`;
-energy stuck after many epochs at hundreds of eV (default `fix-and-split`
-double-converted eV→eV). OOM: `BATCH_SIZE=4 GRADIENT_CHECKPOINT=1`.
+`ckpts/spice_ef_polar/params-*.json` or `orbax/params-*` exists. Epoch-1 energy
+MAE of tens–hundreds of eV is expected (zero-init heads, total E, no atom
+refs). Fail: `e3x.nn.add` dtype error (x64 still on); `polar_weight is set
+but NPZ has no 'polar'`; energy stuck after many epochs at hundreds of eV
+(default `fix-and-split` double-converted eV→eV). OOM: `BATCH_SIZE=4
+GRADIENT_CHECKPOINT=1`.
+
+A missing `params-best.json` **during** the run does not mean valid loss
+never improved. Audit Slurm + the ckpt dir (reads `history.jsonl` /
+`best-valid-*.json` / sacct):
+
+```bash
+python scripts/spice_alpha/audit_efield_job.py \
+  --ckpt $HOME/mmml/ckpts/spice_ef_polar_big \
+  --log artifacts/spice_ef_polar/slurm-22826285.out \
+  --job 22826285
+```
 
 ## Train
 

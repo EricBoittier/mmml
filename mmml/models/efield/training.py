@@ -6,6 +6,7 @@ warnings.simplefilter(action='ignore', category=FutureWarning)
 import functools
 import json
 import sys
+import time
 import uuid
 from pathlib import Path
 
@@ -30,6 +31,21 @@ from mmml.data.units import ANGSTROM_TO_BOHR, EV_TO_KCAL_MOL, HARTREE_TO_EV
 from mmml.models.efield.args import build_train_parser as build_parser
 from mmml.models.efield.model_functions import predicted_polarizability_bohr3
 from mmml.utils.cli_args import exit_if_unknown_long_options
+from mmml.models.efield.checkpointing import (
+    ORBAX_SUBDIR,
+    append_history,
+    epoch_record,
+    load_params_orbax,
+    normalize_save_format,
+    orbax_dir,
+    point_symlink,
+    save_params_orbax,
+    wants_json,
+    wants_orbax,
+    write_best_valid,
+    write_json,
+    write_run_meta,
+)
 from mmml.utils.model_checkpoint import to_jsonable
 from mmml.utils.rotations import rotate_batched_rank2_tensors, rotate_batched_vectors, sample_random_rotations
 
@@ -97,16 +113,22 @@ def sanitize_flax_variables_dict(params):
 
 
 def load_params(params_path, verbose=False):
-    """Load parameters from JSON file.
-    
+    """Load parameters from JSON or an Orbax checkpoint directory.
+
     Handles the Flax sow() tuple-to-array conversion issue:
     Flax stores intermediates from sow() as tuples (array,), but JSON
     round-trip converts these to arrays with an extra dimension.
     This function strips the 'intermediates' key (which is not needed
     for inference or restart) to avoid pytree structure mismatches.
     """
-    with open(params_path, 'r') as f:
-        params_dict = json.load(f)
+    path = Path(params_path)
+    if path.is_dir():
+        params_dict = load_params_orbax(path)
+        if verbose:
+            print(f"  Loaded Orbax checkpoint {path}")
+    else:
+        with open(path, "r") as f:
+            params_dict = json.load(f)
     
     # Convert numpy arrays back from lists
     def convert_to_jax(obj):
@@ -119,6 +141,8 @@ def load_params(params_path, verbose=False):
             elif arr.dtype == np.int64:
                 return jnp.array(arr, dtype=jnp.int32)
             return jnp.array(arr)
+        if hasattr(obj, "shape") and hasattr(obj, "dtype"):
+            return jnp.asarray(obj)
         return obj
     
     params = sanitize_flax_variables_dict(convert_to_jax(params_dict))
@@ -1129,6 +1153,8 @@ def train_model(key, model, train_data, valid_data, num_epochs, learning_rate, b
                 gradient_checkpoint=False, verbose=False,
                 checkpoint_dir: str | Path | None = None, run_uuid: str | None = None,
                 save_every_n_epochs: int = 0, save_best: bool = True,
+                save_format: str = "both",
+                run_meta: dict | None = None,
                 rot_augment: bool = False, rot_perturbation: float = 1.0,
                 log_every_n_steps: int = 100):
     """
@@ -1182,8 +1208,13 @@ def train_model(key, model, train_data, valid_data, num_epochs, learning_rate, b
     save_every_n_epochs : int, optional
         If > 0, save current EMA params every N epochs (``params-epoch-NNNN-<uuid>.json``).
     save_best : bool, optional
-        If True (default), when validation improves save ``params-best-<uuid>.json`` and
-        ``best-valid-<uuid>.json`` (best weighted valid loss and epoch).
+        If True (default), when validation improves save best weights and
+        ``best-valid-<uuid>.json`` (full metrics, not just loss/epoch).
+    save_format : {"json", "orbax", "both"}, optional
+        Weight dump format. Metadata (``history.jsonl``, ``run_meta.json``,
+        ``best-valid-*.json``) is always written. Default ``both``.
+    run_meta : dict, optional
+        Extra keys merged into ``run_meta.json`` at the start of training.
     
     Returns
     -------
@@ -1371,10 +1402,38 @@ def train_model(key, model, train_data, valid_data, num_epochs, learning_rate, b
 
     _ckpt_dir = Path(checkpoint_dir).expanduser().resolve() if checkpoint_dir is not None else None
     _can_ckpt = _ckpt_dir is not None and run_uuid is not None
+    _save_format = normalize_save_format(save_format)
     if (save_every_n_epochs > 0 or save_best) and checkpoint_dir and not run_uuid:
         print("  Warning: checkpoint_dir set but run_uuid is None — skipping on-disk checkpoints.")
+    if _can_ckpt:
+        write_run_meta(
+            _ckpt_dir,
+            {
+                "uuid": run_uuid,
+                "n_train": n_train,
+                "n_valid": n_valid,
+                "batch_size": int(batch_size),
+                "num_epochs": int(num_epochs),
+                "learning_rate": float(learning_rate),
+                "polar_weight": float(polar_weight),
+                "energy_weight": float(energy_weight),
+                "forces_weight": float(forces_weight),
+                "dipole_weight": float(dipole_weight),
+                "charge_weight": float(charge_weight),
+                "field_scale": float(field_scale),
+                "polar_at_zero_field": bool(polar_at_zero_field),
+                "gradient_checkpoint": bool(gradient_checkpoint),
+                "save_every_n_epochs": int(save_every_n_epochs),
+                "save_format": _save_format,
+                "train_pad_atoms": train_n,
+                "valid_pad_atoms": valid_n,
+                **(run_meta or {}),
+            },
+        )
+        _train_log(f"  run_meta.json + history.jsonl under {_ckpt_dir} (save_format={_save_format})")
 
     for epoch in range(1, num_epochs + 1):
+        _epoch_t0 = time.monotonic()
         key, shuffle_key = jax.random.split(key)
         train_batches = prepare_batches(
             shuffle_key,
@@ -1554,37 +1613,60 @@ def train_model(key, model, train_data, valid_data, num_epochs, learning_rate, b
                 print("    ✓ Improved!")
         sys.stdout.flush()
 
-        # On-disk checkpoints (EMA weights + best validation metrics) after metrics log
-        if _can_ckpt and save_every_n_epochs > 0 and epoch % save_every_n_epochs == 0:
-            ck_path = _ckpt_dir / f"params-epoch-{epoch:04d}-{run_uuid}.json"
-            save_params_json(ck_path, ema_params, verbose=False)
-            print(f"    ✓ Periodic checkpoint: {ck_path.name}")
-        if _can_ckpt and save_best and improved:
-            best_path = _ckpt_dir / f"params-best-{run_uuid}.json"
-            save_params_json(best_path, best_ema_params, verbose=False)
-            metrics_path = _ckpt_dir / f"best-valid-{run_uuid}.json"
-            with open(metrics_path, "w") as f:
-                json.dump(
-                    {
-                        "best_valid_loss": float(best_valid_loss),
-                        "best_epoch": int(best_epoch),
-                        "uuid": run_uuid,
-                    },
-                    f,
-                    indent=2,
-                )
-            print(
-                f"    ✓ Best valid checkpoint: {best_path.name} "
-                f"(weighted loss={float(best_valid_loss):.6f}, epoch {best_epoch})"
+        # On-disk history every epoch; weights when periodic / validation improves
+        if _can_ckpt:
+            rec = epoch_record(
+                epoch=epoch,
+                run_uuid=run_uuid,
+                improved=improved,
+                best_epoch=best_epoch,
+                best_valid_loss=float(best_valid_loss),
+                patience_counter=patience_counter,
+                train_loss=float(train_loss),
+                valid_loss=float(valid_loss),
+                train_energy_mae_kcal=train_energy_mae_val,
+                valid_energy_mae_kcal=valid_energy_mae_val,
+                train_forces_mae_kcal=train_forces_mae_val,
+                valid_forces_mae_kcal=valid_forces_mae_val,
+                train_dipole_mae=float(train_dipole_mae),
+                valid_dipole_mae=float(valid_dipole_mae),
+                train_polar_mae=float(train_polar_mae),
+                valid_polar_mae=float(valid_polar_mae),
+                train_polar_mse=float(train_polar_loss),
+                valid_polar_mse=float(valid_polar_loss),
+                lr_scale=float(lr_scale),
+                learning_rate=float(learning_rate),
+                n_train=n_train,
+                n_valid=n_valid,
+                batch_size=int(batch_size),
+                polar_weight=float(polar_weight),
+                epoch_wall_s=time.monotonic() - _epoch_t0,
             )
-            for link_name, target in (
-                ("params-best.json", best_path.name),
-                ("best-valid.json", metrics_path.name),
-            ):
-                link = _ckpt_dir / link_name
-                if link.exists() or link.is_symlink():
-                    link.unlink()
-                link.symlink_to(target)
+            append_history(_ckpt_dir, rec)
+
+            def _save_weights(stem: str, tree, *, best_link: bool = False) -> None:
+                if wants_json(_save_format):
+                    json_path = _ckpt_dir / f"{stem}.json"
+                    save_params_json(json_path, tree, verbose=False)
+                    print(f"    ✓ JSON checkpoint: {json_path.name}")
+                    if best_link:
+                        point_symlink(_ckpt_dir / "params-best.json", json_path.name)
+                if wants_orbax(_save_format):
+                    o_path = save_params_orbax(orbax_dir(_ckpt_dir, stem), tree, metadata=rec)
+                    print(f"    ✓ Orbax checkpoint: {o_path.relative_to(_ckpt_dir)}")
+                    if best_link:
+                        point_symlink(_ckpt_dir / "params-best", Path(ORBAX_SUBDIR) / stem)
+
+            if save_every_n_epochs > 0 and epoch % save_every_n_epochs == 0:
+                _save_weights(f"params-epoch-{epoch:04d}-{run_uuid}", ema_params)
+            if save_best and improved:
+                write_best_valid(_ckpt_dir, run_uuid, rec)
+                _save_weights(f"params-best-{run_uuid}", best_ema_params, best_link=True)
+                print(
+                    f"    ✓ Best valid checkpoint epoch {best_epoch} "
+                    f"(weighted loss={float(best_valid_loss):.6f}, "
+                    f"polar mae={float(valid_polar_mae):.6f} Bohr³)"
+                )
         
         # Early stopping check
         if early_stopping_patience is not None and patience_counter >= early_stopping_patience:
@@ -1631,6 +1713,7 @@ def main(args=None):
     print(f"  reduce_on_plateau_accumulation_size: {args.reduce_on_plateau_accumulation_size}")
     print(f"  reduce_on_plateau_min_scale: {args.reduce_on_plateau_min_scale}")
     print(f"  save_every: {args.save_every}")
+    print(f"  save_format: {args.save_format}")
     print(f"  rot_augment: {args.rot_augment}")
     print(f"  rot_perturbation: {args.rot_perturbation}")
 
@@ -1726,43 +1809,7 @@ def main(args=None):
         print(f"Restarting from: {args.restart}")
     print(f"{'='*60}\n")
 
-    params = train_model(
-        key=train_key,
-        model=message_passing_model,
-        train_data=train_data,
-        valid_data=valid_data,
-        num_epochs=args.num_epochs,
-        learning_rate=args.learning_rate,
-        batch_size=args.batch_size,
-        clip_norm=args.clip_norm,
-        ema_decay=args.ema_decay,
-        early_stopping_patience=args.early_stopping_patience,
-        early_stopping_min_delta=args.early_stopping_min_delta,
-        reduce_on_plateau_patience=args.reduce_on_plateau_patience,
-        reduce_on_plateau_cooldown=args.reduce_on_plateau_cooldown,
-        reduce_on_plateau_factor=args.reduce_on_plateau_factor,
-        reduce_on_plateau_rtol=args.reduce_on_plateau_rtol,
-        reduce_on_plateau_accumulation_size=args.reduce_on_plateau_accumulation_size,
-        reduce_on_plateau_min_scale=args.reduce_on_plateau_min_scale,
-        energy_weight=args.energy_weight,
-        forces_weight=args.forces_weight,
-        dipole_weight=args.dipole_weight,
-        charge_weight=args.charge_weight,
-        polar_weight=args.polar_weight,
-        field_scale=args.field_scale,
-        polar_at_zero_field=args.polar_at_zero_field,
-        initial_params=initial_params,
-        gradient_checkpoint=args.gradient_checkpoint,
-        verbose=args.verbose,
-        checkpoint_dir=out_dir,
-        run_uuid=run_uuid,
-        save_every_n_epochs=args.save_every,
-        save_best=True,
-        rot_augment=args.rot_augment,
-        rot_perturbation=args.rot_perturbation,
-    )
-
-    # Prepare model config
+    # Write config before the first epoch so a live job can be audited.
     model_config = {
         'uuid': run_uuid,
         'model': {
@@ -1801,8 +1848,11 @@ def main(args=None):
             'polar_weight': args.polar_weight,
             'polar_at_zero_field': args.polar_at_zero_field,
             'save_every': args.save_every,
+            'save_format': args.save_format,
             'rot_augment': args.rot_augment,
             'rot_perturbation': args.rot_perturbation,
+            'gradient_checkpoint': args.gradient_checkpoint,
+            'restart': args.restart,
         },
         'data': {
             'dataset': args.data,
@@ -1811,65 +1861,97 @@ def main(args=None):
             'test_npz': args.test_npz,
         }
     }
-
-    # Save config file
     config_filename = str(out_dir / f"config-{run_uuid}.json")
-    with open(config_filename, 'w') as f:
-        json.dump(model_config, f, indent=2)
-    print(f"\n✓ Model config saved to {config_filename}")
+    write_json(Path(config_filename), model_config)
+    point_symlink(out_dir / "config.json", Path(config_filename).name)
+    print(f"✓ Model config saved to {config_filename}")
 
-    # Save parameters with UUID (same stripping as save_params_json / checkpoints)
+    params = train_model(
+        key=train_key,
+        model=message_passing_model,
+        train_data=train_data,
+        valid_data=valid_data,
+        num_epochs=args.num_epochs,
+        learning_rate=args.learning_rate,
+        batch_size=args.batch_size,
+        clip_norm=args.clip_norm,
+        ema_decay=args.ema_decay,
+        early_stopping_patience=args.early_stopping_patience,
+        early_stopping_min_delta=args.early_stopping_min_delta,
+        reduce_on_plateau_patience=args.reduce_on_plateau_patience,
+        reduce_on_plateau_cooldown=args.reduce_on_plateau_cooldown,
+        reduce_on_plateau_factor=args.reduce_on_plateau_factor,
+        reduce_on_plateau_rtol=args.reduce_on_plateau_rtol,
+        reduce_on_plateau_accumulation_size=args.reduce_on_plateau_accumulation_size,
+        reduce_on_plateau_min_scale=args.reduce_on_plateau_min_scale,
+        energy_weight=args.energy_weight,
+        forces_weight=args.forces_weight,
+        dipole_weight=args.dipole_weight,
+        charge_weight=args.charge_weight,
+        polar_weight=args.polar_weight,
+        field_scale=args.field_scale,
+        polar_at_zero_field=args.polar_at_zero_field,
+        initial_params=initial_params,
+        gradient_checkpoint=args.gradient_checkpoint,
+        verbose=args.verbose,
+        checkpoint_dir=out_dir,
+        run_uuid=run_uuid,
+        save_every_n_epochs=args.save_every,
+        save_best=True,
+        save_format=args.save_format,
+        run_meta={
+            "model": model_config["model"],
+            "data": model_config["data"],
+        },
+        rot_augment=args.rot_augment,
+        rot_perturbation=args.rot_perturbation,
+    )
+
+    # Final weights (same stripping as save_params_json / checkpoints)
     params_filename = str(out_dir / f"params-{run_uuid}.json")
-    save_params_json(params_filename, params, verbose=args.verbose)
-    print(f"✓ Parameters saved to {params_filename}")
+    if wants_json(args.save_format):
+        save_params_json(params_filename, params, verbose=args.verbose)
+        print(f"✓ Parameters saved to {params_filename}")
+    if wants_orbax(args.save_format):
+        final_orbax = save_params_orbax(
+            orbax_dir(out_dir, f"params-{run_uuid}"),
+            params,
+            metadata={"uuid": run_uuid, "kind": "final"},
+        )
+        print(f"✓ Orbax parameters saved to {final_orbax}")
+        point_symlink(out_dir / "params", Path(ORBAX_SUBDIR) / f"params-{run_uuid}")
     
-    # Verify round-trip: load back and check structure
-    params_reloaded = load_params(params_filename, verbose=args.verbose)
-    params_to_save = params
-    if isinstance(params, dict) and "intermediates" in params:
-        params_to_save = {k: v for k, v in params.items() if k != "intermediates"}
-    # Quick sanity check: compare leaf values
-    orig_leaves = jax.tree_util.tree_leaves(params_to_save)
-    try:
-        reload_leaves = jax.tree_util.tree_leaves(params_reloaded)
-        if len(orig_leaves) != len(reload_leaves):
-            print(f"⚠ WARNING: param tree leaf count mismatch! saved={len(orig_leaves)} reloaded={len(reload_leaves)}")
-        else:
-            max_diff = max(float(jnp.max(jnp.abs(jnp.asarray(a, dtype=jnp.float32) - jnp.asarray(b, dtype=jnp.float32)))) 
-                         for a, b in zip(orig_leaves, reload_leaves) 
-                         if hasattr(a, 'shape') and hasattr(b, 'shape') and a.shape == b.shape)
-            print(f"✓ Round-trip check: {len(orig_leaves)} leaves, max diff = {max_diff:.2e}")
-    except Exception as e:
-        print(f"⚠ WARNING: round-trip structure mismatch: {e}")
+    # Verify round-trip from whichever format we just wrote
+    reload_path = None
+    if wants_json(args.save_format) and Path(params_filename).is_file():
+        reload_path = params_filename
+    elif wants_orbax(args.save_format):
+        reload_path = orbax_dir(out_dir, f"params-{run_uuid}")
+    if reload_path is not None:
+        params_reloaded = load_params(reload_path, verbose=args.verbose)
+        params_to_save = params
+        if isinstance(params, dict) and "intermediates" in params:
+            params_to_save = {k: v for k, v in params.items() if k != "intermediates"}
+        orig_leaves = jax.tree_util.tree_leaves(params_to_save)
+        try:
+            reload_leaves = jax.tree_util.tree_leaves(params_reloaded)
+            if len(orig_leaves) != len(reload_leaves):
+                print(f"⚠ WARNING: param tree leaf count mismatch! saved={len(orig_leaves)} reloaded={len(reload_leaves)}")
+            else:
+                max_diff = max(float(jnp.max(jnp.abs(jnp.asarray(a, dtype=jnp.float32) - jnp.asarray(b, dtype=jnp.float32))))
+                             for a, b in zip(orig_leaves, reload_leaves)
+                             if hasattr(a, 'shape') and hasattr(b, 'shape') and a.shape == b.shape)
+                print(f"✓ Round-trip check: {len(orig_leaves)} leaves, max diff = {max_diff:.2e}")
+        except Exception as e:
+            print(f"⚠ WARNING: round-trip structure mismatch: {e}")
 
-    # Also save symlinks for convenience (params.json, config.json, best checkpoints)
     try:
-        link_params = out_dir / "params.json"
-        link_cfg = out_dir / "config.json"
-        link_best = out_dir / "params-best.json"
-        link_best_metrics = out_dir / "best-valid.json"
-        if link_params.exists() or link_params.is_symlink():
-            link_params.unlink()
-        if link_cfg.exists() or link_cfg.is_symlink():
-            link_cfg.unlink()
-        if link_best.exists() or link_best.is_symlink():
-            link_best.unlink()
-        if link_best_metrics.exists() or link_best_metrics.is_symlink():
-            link_best_metrics.unlink()
-        link_params.symlink_to(Path(params_filename).name)
-        link_cfg.symlink_to(Path(config_filename).name)
-        best_params_name = f"params-best-{run_uuid}.json"
-        best_metrics_name = f"best-valid-{run_uuid}.json"
-        if (out_dir / best_params_name).is_file():
-            link_best.symlink_to(best_params_name)
-        if (out_dir / best_metrics_name).is_file():
-            link_best_metrics.symlink_to(best_metrics_name)
-        msg = f"✓ Created symlinks in {out_dir}: params.json, config.json"
-        if (out_dir / best_params_name).is_file():
-            msg += ", params-best.json"
-        if (out_dir / best_metrics_name).is_file():
-            msg += ", best-valid.json"
-        print(msg)
+        if wants_json(args.save_format) and Path(params_filename).is_file():
+            point_symlink(out_dir / "params.json", Path(params_filename).name)
+        point_symlink(out_dir / "config.json", Path(config_filename).name)
+        print(f"✓ Symlinks in {out_dir}: config.json"
+              + (", params.json" if wants_json(args.save_format) else "")
+              + (", params-best.json / best-valid.json if validation improved" ))
     except Exception as e:
         print(f"Note: Could not create symlinks: {e}")
 
@@ -1877,7 +1959,8 @@ def main(args=None):
     print("Training complete!")
     print(f"UUID: {run_uuid}")
     print(f"Config: {config_filename}")
-    print(f"Params: {params_filename}")
+    print(f"History: {out_dir / 'history.jsonl'}")
+    print(f"Params: {params_filename if wants_json(args.save_format) else orbax_dir(out_dir, f'params-{run_uuid}')}")
     print(f"{'='*60}")
     
     return params

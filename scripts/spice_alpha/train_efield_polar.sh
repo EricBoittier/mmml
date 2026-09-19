@@ -47,6 +47,12 @@ EXTRA=()
 if [[ "${GRADIENT_CHECKPOINT:-0}" != "0" ]]; then
   EXTRA+=(--gradient-checkpoint)
 fi
+if [[ -n "${SAVE_FORMAT:-}" ]]; then
+  EXTRA+=(--save-format "$SAVE_FORMAT")
+fi
+if [[ -n "${SAVE_EVERY:-}" ]]; then
+  EXTRA+=(--save-every "$SAVE_EVERY")
+fi
 
 mmml efield-train \
   --train-npz "$SPLITS/energies_forces_dipoles_train.npz" \

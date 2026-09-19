@@ -43,7 +43,7 @@ usage: mmml efield-train [-h] [--data DATA] [--train-npz TRAIN_NPZ]
                          [--include-pseudotensors | --no-include-pseudotensors]
                          [--gradient-checkpoint] [--rot-augment]
                          [--rot-perturbation ROT_PERTURBATION] [--verbose]
-                         [--save-every N]
+                         [--save-every N] [--save-format {json,orbax,both}]
 
 Input & configuration:
   --data DATA           Single merged NPZ; random train/valid split via --num-
@@ -83,9 +83,12 @@ Execution:
 
 Output & artifacts:
   --output-dir OUTPUT_DIR
-                        Directory for params-*.json, config-*.json, and symlinks
-  --save-every N        Save EMA checkpoint every N epochs to params-epoch-
-                        NNNN-<uuid>.json (0 = no periodic saves)
+                        Directory for history.jsonl, Orbax/JSON weights,
+                        config-*.json, and symlinks
+  --save-every N        Save EMA weights every N epochs (0 = no periodic saves)
+  --save-format {json,orbax,both}
+                        Weight dump: Orbax dir (orbax/), JSON params-*.json, or
+                        both (default)
 
 Diagnostics & safety:
   -h, --help            show this help message and exit
