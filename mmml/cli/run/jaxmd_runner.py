@@ -36,9 +36,25 @@ from mmml.utils.geometry_checks import (
 )
 from mmml.utils.hdf5_reporter import make_jaxmd_reporter
 from mmml.utils.jax_gpu_warmup import block_jax_values, ensure_xla_gpu_warmed
+from mmml.interfaces.pycharmmInterface.mm_energy_forces import (
+    refresh_mm_pairs,
+    refresh_mm_pairs_from_cartesian,
+)
 
 import ase.io as ase_io
 from typing import Callable, Optional
+
+
+def _diag_box_nl(box) -> np.ndarray:
+    """Normalize a JAX-MD box to the (3,) diagonal ``update_fn`` expects."""
+    box_nl = np.asarray(box)
+    if box_nl.shape == (3, 3):
+        length = float(np.diagonal(box_nl)[:3].mean())
+        return np.array([length, length, length], dtype=np.float64)
+    if box_nl.shape == (1,) or box_nl.ndim == 0:
+        length = float(box_nl.reshape(-1)[0])
+        return np.array([length, length, length], dtype=np.float64)
+    return np.asarray(box_nl, dtype=np.float64).reshape(-1)[:3]
 
 
 def directional_force_energy_error(
@@ -1138,15 +1154,11 @@ def set_up_nhc_sim_routine(
     box_nl = np.array([L_cell, L_cell, L_cell], dtype=np.float64) if L_cell else None
     pbc_box_nl = box_nl  # Capture for run_sim PBC minimization (avoids UnboundLocalError from later box_nl assignments)
 
-    from mmml.interfaces.pycharmmInterface.mm_energy_forces import (
-        refresh_mm_pairs_from_cartesian,
-    )
-
     if update_fn is not None and use_pbc:
         if getattr(args, "debug", False):
             print("[nbr] Initial neighbor list update (PBC)")
-        pair_idx, pair_mask = refresh_mm_pairs_from_cartesian(
-            update_fn, R, box_nl, fractional_coordinates=is_npt
+        pair_idx, pair_mask = refresh_mm_pairs(
+            update_fn, R, box_nl, positions_are_cartesian=True
         )
     c = Console()
     # Silent compile + GPU sync before timed run (avoids XLA cuda_timer delay-kernel warnings).
@@ -3095,15 +3107,11 @@ def set_up_nhc_sim_routine(
                 while steps_done < steps_per_recording:
                     if is_npt and update_fn is not None:
                         box_curr = simulate.npt_box(state)
-                        # Neighbor list with fractional_coordinates expects frac pos and box [L,L,L]
-                        box_nl = np.asarray(box_curr)
-                        if box_nl.shape == (1,) or box_nl.ndim == 0:
-                            L = float(box_nl.reshape(-1)[0])
-                            box_nl = np.array([L, L, L], dtype=np.float64)
+                        box_nl = _diag_box_nl(box_curr)
                         if getattr(args, "debug", False) and (i < 3 or i % 50 == 0) and steps_done == 0:
                             print(f"[nbr] NPT record {i}: updating neighbor list, box L={float(box_nl[0]):.4f}")
-                        npt_pair_idx, npt_pair_mask = update_fn(
-                            state.position, box=box_nl
+                        npt_pair_idx, npt_pair_mask = refresh_mm_pairs(
+                            update_fn, state.position, box_nl, positions_are_cartesian=False
                         )
                         current_neighbors = (npt_pair_idx, npt_pair_mask)
                         state = sim(state, neighbor=current_neighbors, pressure=npt_pressure)
@@ -3143,14 +3151,11 @@ def set_up_nhc_sim_routine(
                             new_frac = new_frac - jnp.floor(new_frac)
                             npt_neighbors = (npt_pair_idx, npt_pair_mask)
                             if update_fn is not None:
-                                box_nl = np.asarray(jax.device_get(box_curr))
-                                if box_nl.shape == (3, 3):
-                                    Ln = float(np.diagonal(box_nl)[:3].mean())
-                                    box_nl = np.array([Ln, Ln, Ln], dtype=np.float64)
-                                elif box_nl.size >= 3:
-                                    box_nl = np.asarray(box_nl, dtype=np.float64).reshape(-1)[:3]
-                                npt_neighbors = update_fn(
-                                    new_frac, box=box_nl
+                                npt_neighbors = refresh_mm_pairs(
+                                    update_fn,
+                                    new_frac,
+                                    _diag_box_nl(jax.device_get(box_curr)),
+                                    positions_are_cartesian=False,
                                 )
                             npt_pair_idx, npt_pair_mask = npt_neighbors
                             current_neighbors = npt_neighbors
