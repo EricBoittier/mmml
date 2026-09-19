@@ -490,8 +490,12 @@ def test_resolve_mkimat2_min_distance_default():
         resolve_mkimat2_min_distance_A,
     )
 
-    assert resolve_mkimat2_min_distance_A(None) == pytest.approx(1.0)
-    assert resolve_mkimat2_min_distance_A(argparse.Namespace()) == pytest.approx(1.0)
+    # MKIMAT2 Min-Distance is a group bounding-box gap (0 whenever a group is
+    # inside CUTIM), not an atom distance, so the floor is off by default.
+    assert resolve_mkimat2_min_distance_A(None) == pytest.approx(0.0)
+    assert resolve_mkimat2_min_distance_A(argparse.Namespace()) == pytest.approx(0.0)
+    explicit = argparse.Namespace(charmm_image_mlpot_min_distance=1.0)
+    assert resolve_mkimat2_min_distance_A(explicit) == pytest.approx(1.0)
 
 
 def test_resolve_mkimat2_min_distance_dense_dcm_uses_same_default():
@@ -503,9 +507,9 @@ def test_resolve_mkimat2_min_distance_dense_dcm_uses_same_default():
         solvents=["DCM"],
         _cluster_atoms_per_list=[5] * 52,
     )
-    assert resolve_mkimat2_min_distance_A(args) == pytest.approx(1.0)
-    assert resolve_mkimat2_min_distance_A(None) == pytest.approx(1.0)
-    assert resolve_mkimat2_min_distance_A(argparse.Namespace()) == pytest.approx(1.0)
+    assert resolve_mkimat2_min_distance_A(args) == pytest.approx(0.0)
+    assert resolve_mkimat2_min_distance_A(None) == pytest.approx(0.0)
+    assert resolve_mkimat2_min_distance_A(argparse.Namespace()) == pytest.approx(0.0)
 
 
 def test_assert_charmm_image_min_distance_aborts_dense_dcm_mkimat_margin(monkeypatch):
@@ -555,7 +559,7 @@ def test_resolve_mic_registration_fallback_uses_prep_floor_not_mkimat():
         _cluster_atoms_per_list=[5] * 52,
         pre_mlpot_overlap_min_distance=2.3,
     )
-    assert resolve_mkimat2_min_distance_A(args) == pytest.approx(1.0)
+    assert resolve_mkimat2_min_distance_A(args) == pytest.approx(0.0)
     assert resolve_mic_registration_fallback_min_A(args) == pytest.approx(2.3)
     assert resolve_mic_registration_fallback_min_A(None) == pytest.approx(0.45)
     sparse = argparse.Namespace(solvents=["DCM"], _cluster_atoms_per_list=[5] * 10)

@@ -3670,7 +3670,9 @@ def _apply_npt_cpt_kwargs(
     )
 
     if pmass is None or tmass is None:
-        pmass, tmass = compute_cpt_piston_masses()
+        default_pmass, default_tmass = compute_cpt_piston_masses()
+        pmass = default_pmass if pmass is None else pmass
+        tmass = default_tmass if tmass is None else tmass
     kw.update(
         {
             "leap": True,
@@ -7155,6 +7157,10 @@ def _cpt_stability_chunk_nstep(kw: dict[str, Any], total_nstep: int) -> int | No
     import os
 
     if not bool(kw.get("cpt")) or total_nstep <= 0:
+        return None
+    if kw.get("pmass") is not None and float(kw["pmass"]) == 0.0:
+        # Constant-volume CPT (--pbc-ensemble nvt): no piston to stabilise, and
+        # micro-chunks inside an overlap chunk drop all but one sub-chunk's DCD.
         return None
     raw = os.environ.get("MMML_CPT_DYNAMICS_CHUNK_NSTEP")
     chunk = (

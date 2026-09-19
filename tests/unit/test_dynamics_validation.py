@@ -1399,3 +1399,21 @@ def test_rewrite_overlap_readyn_restart_harmonizes_nsavv(tmp_path, monkeypatch):
     assert captured["nsavc"] == 49
     assert captured["nsavv"] == 50
     assert read_restart_nsavv(scratch) == 50
+
+
+def test_assert_stage_dynamics_completed_rejects_empty_dcd_after_full_integration(tmp_path):
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        assert_stage_dynamics_completed,
+    )
+
+    dcd = tmp_path / "prod.0.dcd"
+    dcd.write_bytes(b"")
+    with pytest.raises(RuntimeError, match="0 readable frame"):
+        assert_stage_dynamics_completed(
+            stage="prod",
+            expected_nstep=100000,
+            nsavc=4000,
+            dcd_path=dcd,
+            restart_path=None,
+            integrated_step=100000,
+        )
