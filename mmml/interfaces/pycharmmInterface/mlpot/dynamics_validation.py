@@ -1340,7 +1340,19 @@ def assert_stage_dynamics_completed(
             if chunk_paths
             else f" at nsavc={nsavc}"
         )
-        if integrated_step is not None and integrated_step >= min_steps:
+        if (
+            integrated_step is not None
+            and integrated_step >= min_steps
+            and n_frames == 0
+            and expected_frames >= 1
+        ):
+            # Dynamics ran to completion by its own accounting and wrote nothing:
+            # lost output, not a rescue artefact. Fail now rather than run on.
+            problems.append(
+                f"{label} has 0 readable frame(s) after {integrated_step} integrated "
+                f"steps (~{expected_frames} expected{chunk_note}); trajectory output was lost"
+            )
+        elif integrated_step is not None and integrated_step >= min_steps:
             print(
                 f"WARN: {stage.upper()} {label} has {n_frames} readable frame(s), "
                 f"expected >= {min_frames} (~{expected_frames} total{chunk_note}), "

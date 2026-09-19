@@ -117,6 +117,38 @@ def filter_pairs_under_cutoff(
     return out
 
 
+def mm_pair_filter_mask(
+    pair_i: np.ndarray,
+    pair_j: np.ndarray,
+    *,
+    monomer_id: np.ndarray,
+    positions: np.ndarray,
+    cell: np.ndarray | None = None,
+    mm_r_min: float | None = None,
+    monomer_offsets: Sequence[int] | None = None,
+) -> np.ndarray:
+    """Vectorized MM pair filter: inter-monomer, and dimer COM distance >= ``mm_r_min``.
+
+    Same rule as :func:`apply_mm_pair_filters`; returns a bool mask over the pairs.
+    """
+    pi = np.asarray(pair_i, dtype=np.int64)
+    pj = np.asarray(pair_j, dtype=np.int64)
+    mid = np.asarray(monomer_id, dtype=np.int64)
+    keep = mid[pi] != mid[pj]
+    if mm_r_min is None or monomer_offsets is None or not np.any(keep):
+        return keep
+    R = np.asarray(positions, dtype=np.float64)
+    offsets = np.asarray(monomer_offsets, dtype=np.int64)
+    counts = np.diff(offsets)
+    coms = np.add.reduceat(R[: offsets[-1]], offsets[:-1], axis=0) / counts[:, None]
+    dr = coms[mid[pj]] - coms[mid[pi]]
+    cell_mat = cell_matrix_3x3(cell) if cell is not None else None
+    if cell_mat is not None:
+        frac = dr @ np.linalg.inv(cell_mat).T
+        dr = (frac - np.round(frac)) @ cell_mat
+    return keep & (np.linalg.norm(dr, axis=1) >= float(mm_r_min))
+
+
 def apply_mm_pair_filters(
     pairs: Iterable[tuple[int, int]],
     *,
@@ -127,37 +159,19 @@ def apply_mm_pair_filters(
     monomer_offsets: Sequence[int] | None = None,
 ) -> set[tuple[int, int]]:
     """Keep inter-monomer pairs; optionally drop pairs with dimer COM distance < mm_r_min."""
-    R = np.asarray(positions, dtype=np.float64)
-    mid = np.asarray(monomer_id, dtype=np.int32)
-    cell_mat = cell_matrix_3x3(cell) if cell is not None else None
-
-    coms: np.ndarray | None = None
-    if mm_r_min is not None and monomer_offsets is not None:
-        offsets = np.asarray(monomer_offsets, dtype=np.int32)
-        n_monomers = len(offsets) - 1
-        coms = np.zeros((n_monomers, 3), dtype=np.float64)
-        for k in range(n_monomers):
-            start, end = int(offsets[k]), int(offsets[k + 1])
-            coms[k] = R[start:end].mean(axis=0)
-
-    inv_cell = np.linalg.inv(cell_mat) if cell_mat is not None else None
-    mm_r_min_f = float(mm_r_min) if mm_r_min is not None else None
-
-    filtered: set[tuple[int, int]] = set()
-    for ai, aj in pairs:
-        if int(mid[ai]) == int(mid[aj]):
-            continue
-        if mm_r_min_f is not None and coms is not None:
-            mi, mj = int(mid[ai]), int(mid[aj])
-            dr = coms[mj] - coms[mi]
-            if inv_cell is not None and cell_mat is not None:
-                frac_dr = dr @ inv_cell.T
-                frac_dr = frac_dr - np.round(frac_dr)
-                dr = frac_dr @ cell_mat
-            if float(np.linalg.norm(dr)) < mm_r_min_f:
-                continue
-        filtered.add((int(ai), int(aj)))
-    return filtered
+    arr = np.asarray(list(pairs), dtype=np.int64).reshape(-1, 2)
+    if arr.shape[0] == 0:
+        return set()
+    keep = mm_pair_filter_mask(
+        arr[:, 0],
+        arr[:, 1],
+        monomer_id=monomer_id,
+        positions=positions,
+        cell=cell,
+        mm_r_min=mm_r_min,
+        monomer_offsets=monomer_offsets,
+    )
+    return set(map(tuple, arr[keep].tolist()))
 
 
 def canonical_half_pair(ai: int, aj: int) -> tuple[int, int]:
@@ -368,7 +382,7 @@ def brute_force_mic_pairs(
     )
 
 
-def vesin_mic_pairs(
+def vesin_mic_pair_arrays(
     positions: np.ndarray,
     cell: np.ndarray,
     cutoff: float,
@@ -376,8 +390,8 @@ def vesin_mic_pairs(
     *,
     mm_r_min: float | None = None,
     monomer_offsets: Sequence[int] | None = None,
-) -> set[tuple[int, int]]:
-    """Vesin half-list pairs within ``cutoff``, with MM monomer/COM filters applied."""
+) -> tuple[np.ndarray, np.ndarray]:
+    """Vesin half-list ``(i, j)`` arrays (i < j, lexicographically sorted) after MM filters."""
     if not _HAVE_VESIN:
         raise ImportError(
             "vesin is not installed. Install with: pip install vesin "
@@ -392,19 +406,40 @@ def vesin_mic_pairs(
         periodic=True,
         quantities="ijSd",
     )
-    i = np.asarray(i, dtype=np.int32)
-    j = np.asarray(j, dtype=np.int32)
-    dist = np.asarray(dist, dtype=np.float64)
-    strict = dist < float(cutoff)
-    raw = {(int(a), int(b)) for a, b, ok in zip(i, j, strict, strict=False) if ok and a < b}
-    return apply_mm_pair_filters(
-        raw,
+    i = np.asarray(i, dtype=np.int64)
+    j = np.asarray(j, dtype=np.int64)
+    ok = (np.asarray(dist, dtype=np.float64) < float(cutoff)) & (i < j)
+    i, j = i[ok], j[ok]
+    keep = mm_pair_filter_mask(
+        i,
+        j,
         monomer_id=monomer_id,
         positions=R,
         cell=cell_mat,
         mm_r_min=mm_r_min,
         monomer_offsets=monomer_offsets,
     )
+    i, j = i[keep], j[keep]
+    # A half list can report one pair through two images only when L < 2*cutoff;
+    # np.unique on the combined key keeps set semantics either way.
+    key = np.unique(i * (int(R.shape[0]) + 1) + j)
+    return key // (int(R.shape[0]) + 1), key % (int(R.shape[0]) + 1)
+
+
+def vesin_mic_pairs(
+    positions: np.ndarray,
+    cell: np.ndarray,
+    cutoff: float,
+    monomer_id: np.ndarray,
+    *,
+    mm_r_min: float | None = None,
+    monomer_offsets: Sequence[int] | None = None,
+) -> set[tuple[int, int]]:
+    """Vesin half-list pairs within ``cutoff``, with MM monomer/COM filters applied."""
+    i, j = vesin_mic_pair_arrays(
+        positions, cell, cutoff, monomer_id, mm_r_min=mm_r_min, monomer_offsets=monomer_offsets
+    )
+    return set(zip(i.tolist(), j.tolist()))
 
 
 def _array_module(arr):

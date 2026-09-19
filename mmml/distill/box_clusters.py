@@ -15,10 +15,18 @@ ml_switch_width 1.5) the ML dimer term is full below 4.5 Å, tapers to 0 at
 from ``dimer_r_bins_A`` so contact and taper pairs are not swamped by the
 first-shell peak. The frame's ``info["phase"]`` (``fire``/``md``) is kept in
 ``Geometry.source``.
+
+Provenance: every cut cluster carries its frame's ``info["seed"]``
+(``group_seed``; ``mmml pet-box-dataset`` writes one per trajectory), the
+input-file index (``group_file``, the fallback group for frames without a
+seed), the frame's index in ``frames`` (``group_frame``), ``info["step"]`` and
+the phase. ``write_distill_npz(split="seed")`` keeps each trajectory on one
+side of the train/valid split.
 """
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 
 import numpy as np
@@ -113,14 +121,18 @@ def box_cluster_pool(
     *,
     reference_monomer: Atoms | None = None,
     stats: dict | None = None,
+    frame_files: Sequence[int] | None = None,
 ) -> list[Geometry]:
     """Monomers + dimers (centroid distance < ``dimer_com_cutoff_A``) from each frame.
 
     ``reference_monomer`` (e.g. the gas-phase equilibrium xyz) is emitted first
     as ``pdb_eq`` so mlmm/interaction labels have an ``E_ref``; its bond graph
     also drives the intact-molecule filter. ``stats`` (if given) receives
-    ``n_broken_molecules``.
+    ``n_broken_molecules``. ``frame_files`` gives each frame's input-file
+    index (``group_file``); default 0 for every frame.
     """
+    if frame_files is not None and len(frame_files) != len(frames):
+        raise ValueError(f"frame_files has {len(frame_files)} entries for {len(frames)} frames")
     apm = int(cfg.atoms_per_monomer)
     rng = np.random.default_rng(int(cfg.seed))
     geos: list[Geometry] = []
@@ -150,9 +162,18 @@ def box_cluster_pool(
         + [float(cfg.dimer_com_cutoff_A)],
         dtype=np.float64,
     )
-    for frame in frames:
+    for i_frame, frame in enumerate(frames):
         phase = str(frame.info.get("phase", "")).strip()
         tag = f":{phase}" if phase else ""
+        seed = frame.info.get("seed")
+        step = frame.info.get("step")
+        group = dict(
+            group_seed=None if seed is None else int(seed),
+            group_file=0 if frame_files is None else int(frame_files[i_frame]),
+            group_frame=int(i_frame),
+            group_step=None if step is None else int(step),
+            group_phase=phase or None,
+        )
         mols = whole_molecules(frame, apm)
         z_mol = np.asarray(frame.get_atomic_numbers(), dtype=int)[:apm]
         com = mols.mean(axis=1)  # unweighted centroid, as in ml_switch_scale
@@ -174,6 +195,7 @@ def box_cluster_pool(
                     source=SOURCE_BOX_MONOMER + tag,
                     r_com_A=None,
                     atoms_per_monomer=(apm,),
+                    **group,
                 )
             )
 
@@ -206,6 +228,7 @@ def box_cluster_pool(
                     source=SOURCE_BOX_DIMER + tag,
                     r_com_A=r_ij,
                     atoms_per_monomer=(apm, apm),
+                    **group,
                 )
             )
     if stats is not None:

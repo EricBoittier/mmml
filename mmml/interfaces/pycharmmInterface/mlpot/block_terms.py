@@ -29,6 +29,10 @@ def _import_pycharmm():
     return pycharmm
 
 
+# CHARMM bonded energy terms skipped when every atom is ML (see zero_mlpot_psf_mm_terms).
+ALL_ML_SKIPE_BONDED = ("BOND", "ANGL", "UREY", "DIHE", "IMPR", "CDIH")
+
+
 def _truthy(name: str) -> bool:
     return (os.environ.get(name) or "").strip().lower() in ("1", "yes", "true")
 
@@ -98,6 +102,24 @@ def zero_mlpot_psf_mm_terms(
         )
 
     apply_zeroed_cgenff_params(bonded_only=True, verbose=verbose)
+    # READ PARAM APPEND zeroes BOND/ANGL/UREY/IMPR but leaves most CGenFF
+    # dihedrals live (ETOH:181 box: DIHE 170.8 -> 133.8 kcal/mol), so CHARMM
+    # would add a second torsional term on top of the ML. All-ML: skip every
+    # CHARMM bonded term (SKIPE accumulates, so this composes with the energy
+    # policy's SKIPE VDW IMNB). Hybrid: SKIPE would also drop the MM
+    # molecules' bonded terms, so only warn.
+    if tag == "all":
+        pycharmm.lingo.charmm_script("SKIPE " + " ".join(ALL_ML_SKIPE_BONDED))
+        summary += f"; SKIPE {' '.join(ALL_ML_SKIPE_BONDED)}"
+    else:
+        import warnings
+
+        warnings.warn(
+            "MLpot hybrid registration: the zeroed-CGenFF APPEND leaves CGenFF "
+            "dihedrals active on ML atoms (double-counted torsions). Use "
+            "--mlpot-use-block (BLOCK COEFF 0 DIHE) for hybrid ML/MM systems.",
+            stacklevel=2,
+        )
 
     charges = list(pycharmm.psf.get_charges())
     for idx in ml_indices:

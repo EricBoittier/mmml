@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterator, Literal, Mapping, Sequence
@@ -79,33 +80,97 @@ def classify_units_map(units_map: Mapping[str, Any] | None) -> UnitsKind:
     return "unknown"
 
 
+def _unwrap_h5_attr(raw: Any) -> Any:
+    """Unwrap numpy / 0-d HDF5 attribute scalars to a Python value."""
+    if raw is None:
+        return None
+    if isinstance(raw, np.ndarray):
+        if raw.size == 0:
+            return None
+        if raw.shape == () or raw.size == 1:
+            raw = raw.reshape(-1)[0]
+    if isinstance(raw, np.generic):
+        raw = raw.item()
+    return raw
+
+
 def parse_units_attr(raw: Any) -> dict[str, str]:
-    """Decode an HDF5 ``units_map`` attribute (JSON string or mapping)."""
+    """Decode an HDF5 ``units_map`` attribute (JSON object or mapping).
+
+    Empty / missing values (published DES370K empty strings, empty bytes)
+    are missing metadata (``{}``). A non-empty string that is not a JSON
+    object is malformed and raises ``ValueError``.
+    """
+    raw = _unwrap_h5_attr(raw)
     if raw is None:
         return {}
     if isinstance(raw, bytes):
         raw = raw.decode("utf-8", errors="replace")
     if isinstance(raw, str):
-        loaded = json.loads(raw)
+        text = raw.strip().lstrip("\ufeff")
+        if not text:
+            return {}
+        try:
+            loaded = json.loads(text)
+        except json.JSONDecodeError as exc:
+            raise ValueError(
+                f"malformed units_map (not JSON): {text[:80]!r}"
+            ) from exc
         if isinstance(loaded, dict):
             return {str(k): str(v) for k, v in loaded.items()}
-        return {}
+        raise ValueError(
+            f"malformed units_map (JSON must be an object, got {type(loaded).__name__})"
+        )
     if isinstance(raw, Mapping):
         return {str(k): str(v) for k, v in raw.items()}
     return {}
 
 
-def read_units_map(h5: Any) -> dict[str, str]:
-    """File-level ``units_map``, else the first group's."""
-    parsed = parse_units_attr(h5.attrs.get("units_map"))
-    if parsed:
-        return parsed
+def _first_molecule_units_map(h5: Any) -> dict[str, str]:
+    """``units_map`` on the first molecule group only — never a full-file scan."""
     for name in h5.keys():
         group = h5[name]
-        parsed = parse_units_attr(getattr(group, "attrs", {}).get("units_map"))
-        if parsed:
-            return parsed
+        try:
+            if "conformations" not in group:
+                continue
+        except TypeError:
+            continue
+        group_attrs = getattr(group, "attrs", None)
+        if group_attrs is None or "units_map" not in group_attrs:
+            return {}
+        return parse_units_attr(group_attrs.get("units_map"))
     return {}
+
+
+def read_units_map(h5: Any) -> dict[str, str]:
+    """File-level non-empty ``units_map``, else the first molecule group's.
+
+    An empty file-level attribute (published DES370K) does **not** discard
+    explicit group metadata. Only the first molecule group is inspected so
+    a large HDF5 does not pay a full attribute scan. When both levels are
+    present and classify as different known kinds, raise rather than pick
+    one silently.
+    """
+    root: dict[str, str] = {}
+    attrs = getattr(h5, "attrs", None)
+    if attrs is not None and "units_map" in attrs:
+        root = parse_units_attr(attrs.get("units_map"))
+    group = _first_molecule_units_map(h5)
+    if root and group:
+        root_kind = classify_units_map(root)
+        group_kind = classify_units_map(group)
+        if (
+            root_kind != "unknown"
+            and group_kind != "unknown"
+            and root_kind != group_kind
+        ):
+            raise ValueError(
+                "contradictory units_map: file-level is "
+                f"{root_kind} but first molecule group is {group_kind}"
+            )
+    if root:
+        return root
+    return group
 
 
 @dataclass(frozen=True)
@@ -299,6 +364,49 @@ def max_atomic_number(data: Mapping[str, Any]) -> int:
     return found
 
 
+DES370K_HDF5 = ("DES370K_Monomers.hdf5", "DES370K_Dimers.hdf5")
+
+
+def extract_des370k_hdf5(tar_path: Path | str, dest: Path | str) -> list[Path]:
+    """Extract DES370K monomer/dimer HDF5 from the Zenodo tarball.
+
+    Members are stored as ``./DES370K_*.hdf5``. GNU ``tar ... DES370K_*.hdf5``
+    (no ``./``) fails with ``Not found in archive``.
+    """
+    import tarfile
+
+    archive = Path(tar_path)
+    out_dir = Path(dest)
+    if not archive.is_file():
+        raise FileNotFoundError(f"missing tarball: {archive}")
+    out_dir.mkdir(parents=True, exist_ok=True)
+    written: list[Path] = []
+    with tarfile.open(archive, "r:*") as handle:
+        for member in DES370K_HDF5:
+            dest_file = out_dir / member
+            if dest_file.is_file():
+                written.append(dest_file)
+                continue
+            extracted = False
+            for key in (f"./{member}", member):
+                try:
+                    handle.extract(key, path=out_dir, filter="data")
+                except KeyError:
+                    continue
+                extracted = True
+                break
+            if not dest_file.is_file():
+                alt = out_dir / Path(member).name
+                if alt.is_file() and alt != dest_file:
+                    alt.rename(dest_file)
+            if not extracted or not dest_file.is_file():
+                raise FileNotFoundError(
+                    f"{archive}: missing {member} (tried './{member}' and {member!r})"
+                )
+            written.append(dest_file)
+    return written
+
+
 def check_efield_train_npz(path: Path | str) -> list[str]:
     """Return problems that would break ``efield-train --polar_weight``; empty = ok."""
     dest = Path(path)
@@ -368,12 +476,25 @@ def convert_spice_alpha_hdf5(
 
     frames: list[SpiceAlphaFrame] = []
     for path in paths:
+        print(
+            f"convert: opening {path} (max_frames={max_frames or 'all'})",
+            file=sys.stderr,
+            flush=True,
+        )
         with h5py.File(path, "r") as handle:
             kind = classify_units_map(read_units_map(handle))
+            print(f"convert: units={kind}", file=sys.stderr, flush=True)
             if require_canonical_units and kind == "atomic":
                 raise ValueError(
                     f"{path}: units_map looks like original SPICE (Bohr/Hartree). "
                     "Use fix-and-split defaults + --flip-forces, not this converter."
+                )
+            if kind == "unknown":
+                print(
+                    "convert: units_map missing or empty; assuming SPICE-α "
+                    "README units (Å, eV, eV/Å) and writing _mmml_units from that",
+                    file=sys.stderr,
+                    flush=True,
                 )
             for frame in iter_spice_alpha_frames(
                 handle,

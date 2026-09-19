@@ -24,6 +24,9 @@ class CharmmEnergyTermPolicy:
     zero_bonded_prm: bool = False
     zero_nonbond_prm: bool = False
     zero_ml_charges: bool = False
+    # CHARMM SKIPE term names: excluded from every later ENER/DYNA so the
+    # term is exactly zero even when the .prm overlay does not take.
+    skipe_terms: tuple[str, ...] = ()
 
 
 POLICY_REGISTRY: dict[str, CharmmEnergyTermPolicy] = {
@@ -32,6 +35,7 @@ POLICY_REGISTRY: dict[str, CharmmEnergyTermPolicy] = {
         energy_keys=("VDW", "IMNB"),
         tolerance_kcal=1.0e-8,
         zero_nonbond_prm=True,
+        skipe_terms=("VDW", "IMNB"),
     ),
     "elec": CharmmEnergyTermPolicy(
         name="elec",
@@ -120,6 +124,36 @@ def _post_remediation_policy(policy: CharmmEnergyTermPolicy) -> CharmmEnergyTerm
     return policy
 
 
+def _skip_policy_terms(policies: Sequence[CharmmEnergyTermPolicy], *, verbose: bool) -> None:
+    """``SKIPE`` every policy term; MLpot USER and the rest stay included.
+
+    The ε=0 ``READ PARAM APPEND`` overlay leaves the live VDW table untouched
+    (VDW stays at its CGenFF value). The old libcharmm hid that because its
+    latched ``qappend`` wiped the table on the next full read (fixed in
+    6b050e2fb). ``SKIPE`` removes the term from the energy instead.
+    """
+    terms = list(dict.fromkeys(t for p in policies for t in p.skipe_terms))
+    if not terms:
+        return
+    import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
+    import pycharmm
+
+    # eval_charmm_script skips CHARMM's uppercase conversion: commands must be uppercase.
+    pycharmm.lingo.charmm_script("SKIPE " + " ".join(terms))
+    if verbose:
+        print(f"CHARMM energy policy: SKIPE {' '.join(terms)}", flush=True)
+
+
+def _zero_scalar_vdw() -> None:
+    import pycharmm
+
+    from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_silent_command
+
+    with charmm_silent_command():
+        pycharmm.lingo.charmm_script("SCALAR VDW SET 0.0 SELE ALL END")
+        pycharmm.lingo.charmm_script("SCALAR VDW14 SET 0.0 SELE ALL END")
+
+
 def _policy_scratch_dir(args: argparse.Namespace | None) -> Path:
     if args is not None:
         out = getattr(args, "output_dir", None)
@@ -159,11 +193,8 @@ def _reload_prm_overlay(
         _suspend_pbc_for_cgenff_param_read(verbose=verbose)
     read_cgenff_prm(overlay_path, append=True)
     if zero_nonbond:
-        import pycharmm
-        from mmml.interfaces.pycharmmInterface.charmm_levels import charmm_silent_command
-        with charmm_silent_command():
-            pycharmm.lingo.charmm_script("scalar vdw set 0.0 sele all end")
-            pycharmm.lingo.charmm_script("scalar vdw14 set 0.0 sele all end")
+        _zero_scalar_vdw()
+        _skip_policy_terms([POLICY_REGISTRY["vdw"]], verbose=verbose)
         if verbose:
             print("CHARMM energy policy: applied SCALAR VDW/VDW14 SET 0.0 to all atoms (READ PARAM APPEND workaround)", flush=True)
 
@@ -383,10 +414,6 @@ def apply_charmm_energy_term_policies_before_pbc_finalize(
 
     if zero_nonbond:
         import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
-        import pycharmm
-        from mmml.interfaces.pycharmmInterface.charmm_levels import (
-            charmm_silent_command,
-        )
         from mmml.interfaces.pycharmmInterface.charmm_prm_zero import (
             zeroed_nonbond_prm_text,
         )
@@ -416,9 +443,11 @@ def apply_charmm_energy_term_policies_before_pbc_finalize(
         )
         # Crystal is already suspended by register_mlpot before this hook.
         read_cgenff_prm(overlay, append=True)
-        with charmm_silent_command():
-            pycharmm.lingo.charmm_script("scalar vdw set 0.0 sele all end")
-            pycharmm.lingo.charmm_script("scalar vdw14 set 0.0 sele all end")
+        _zero_scalar_vdw()
+        _skip_policy_terms(
+            [p for p in policies if p.zero_nonbond_prm],
+            verbose=verbose or not getattr(args, "quiet", False),
+        )
         applied.extend(p.name for p in policies if p.zero_nonbond_prm)
         if verbose or not getattr(args, "quiet", False):
             print(
