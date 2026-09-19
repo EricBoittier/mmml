@@ -91,6 +91,36 @@ and versioning process.
 
 ### Added
 
+- Metatomic ASE / PyCHARMM MLpot path (`uv sync --extra metatomic`): TorchScript
+  AtomisticModel (`.pt`) as CHARMM USER via `MetatomicMlpotModel`, with the MMML
+  fragment ML/MM scheme (`--metatomic-eval-mode fragments`) or a single whole-system
+  evaluation. Optional JAX MM stays in an MM-only `setup_calculator` spherical_fn
+  (torch is never jitted). The hybrid MLpot factory returns the metatomic adapter
+  before importing `jax_md` (flax 0.12 / jax 0.11 `HiPrimitive` break). JAX MLpot
+  warmup is skipped for metatomic (`warmup_decomposed_mlpot` / auto
+  `warmup-mlpot-jax`). Also wired into `energy_forces` providers, dimer-scan,
+  and ic-scan. Hub smoke (PET-MAD s 1.0.2, PET-MAD xs 1.5.0, PET-MOLS s 1.0.0 from
+  `lab-cosmo/upet`) is documented in `tests/functionality/metatomic/`. Serial
+  PyCHARMM ENER/SD/NVE smoke is `tests/functionality/metatomic/pycharmm_md_smoke.py`.
+  CPU cost vs bundled JAX PhysNet is `tests/functionality/metatomic/compare_jax_cost.py`.
+  PET-MAD teacher → PhysNet student (acetone pool + synthetic augmentations) is
+  `mmml pet-physnet-distill`; dummy-teacher tests in
+  `tests/unit/test_pet_physnet_distill.py`.
+  Periodic PET-MAD MD example: 32 Å liquid ethanol (ETOH:338 at 0.789 g/cm³,
+  300 K, 0.5 fs, `--metatomic-eval-mode whole_system`) in
+  `examples/pet_mad_etoh_pbc/` and
+  [`docs/examples/pet-mad-etoh-pbc.md`](docs/examples/pet-mad-etoh-pbc.md).
+  ASE NVE conservation path: FIRE mini then VelocityVerlet with a PE/KE/Etot
+  log (`run_nve.sh`). First-class CLI: `mmml metatomic-pbc-md` (CHARMM-free
+  cubic liquid box; ethanol 32 Å / 300 K / 0.5 fs is the default recipe).
+  YAML `nve` job is 0.2 ps after mini.
+  Interaction PES: `mmml pet-interaction-pes` writes linear OH···O vs
+  acceptor–acceptor 1D slices (O–O, not COM copies), an angular cut at
+  \(r_e\), one 2D \(E_\mathrm{int}(r,\theta)\) surface (\(\theta\) =
+  donor–H–acceptor), and a trimer leftover \(E_3\) (CHARMM-free single
+  points; plots from JSON via the shared ICML style).
+  See [`docs/metatomic.md`](docs/metatomic.md).
+
 - `scripts/bench_static_vs_neighbor_pairs.py`: static complete pair list vs
   rebuilt neighbour list, on correctness (fixed-configuration parity, build
   cutoff sensitivity, staleness under drift) and speed vs system size. Runs on
@@ -154,6 +184,16 @@ and versioning process.
   by the discovered `setup/charmm` tree.
 
 ### Fixed
+
+- CI unit tests: extract metatomic MM-only helpers from `setup_calculator` and
+  split `build_decomposed_mlpot_model` so the function-size ratchet stays
+  inside grace / the 500-line club does not gain a member. Docs figure script
+  imports `apply_plot_style` in the shared form the plot-style guard checks.
+
+- CI: cap `jax`/`jaxlib` at `<0.11.2`. JAX 0.11.2 deleted
+  `jax.experimental.hijax.HiPrimitive`; flax 0.12 still subclasses it when
+  `jax_md` imports `flax.nnx`, which aborted unit/functionality collection.
+  `tests/unit/test_jax_flax_hijax.py` pins that import.
 
 - **libcharmm did not link on arm64 (macOS), at any MLpot tier.** `api_func.F90`
   held twelve `max_Npr` integer arrays in static storage — 6.1 GB at

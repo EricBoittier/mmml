@@ -41,6 +41,11 @@ def detect_model_kind(checkpoint: Path | str, *, config: dict[str, Any] | None =
     if model_type == "efield" or "efield" in str(path).lower():
         return ProviderKind.EFIELD_PHYSNET
 
+    from mmml.interfaces.calculators.metatomic import is_metatomic_checkpoint
+
+    if is_metatomic_checkpoint(path):
+        return ProviderKind.METATOMIC
+
     if any(k in cfg for k in ("features", "max_degree", "num_iterations", "cutoff")):
         return ProviderKind.PHYSNET
 
@@ -91,6 +96,14 @@ def capabilities_for_kind(kind: ProviderKind) -> ProviderCapabilities:
             supports_decomposed_ml=False,
             notes="Requires external electric field vector Ef; use efield-md or zero-field inference.",
         ),
+        ProviderKind.METATOMIC: ProviderCapabilities(
+            kind=kind,
+            supports_decomposed_ml=True,
+            notes=(
+                "Metatomic ASE AtomisticModel; CHARMM MLpot uses fragment "
+                "monomer/dimer hybrid (not JAX PhysNet batches)."
+            ),
+        ),
         ProviderKind.DCMNET: ProviderCapabilities(
             kind=kind,
             supports_energy=False,
@@ -135,6 +148,8 @@ def assert_hybrid_ml_compatible(checkpoint: Path | str, *, config: dict[str, Any
             "field vector; it cannot drive standard hybrid CHARMM MLpot. "
             "Use efield-md or build_provider() instead."
         )
+    if kind == ProviderKind.METATOMIC:
+        return kind
     if kind == ProviderKind.UNKNOWN:
         raise ValueError(
             f"Could not classify checkpoint {checkpoint} for hybrid MLpot."
@@ -176,6 +191,17 @@ def build_ml_provider(options: dict[str, Any]) -> EnergyForcesProvider:
     if checkpoint is None:
         raise ValueError("ML provider requires 'checkpoint' in options.")
     kind = detect_model_kind(checkpoint)
+    if kind == ProviderKind.METATOMIC:
+        from mmml.interfaces.calculators.metatomic import load_metatomic_calculator
+
+        calc = load_metatomic_calculator(
+            checkpoint,
+            device=options.get("device"),
+        )
+        return AseCalculatorProvider(
+            calc,
+            capabilities=capabilities_for_kind(kind),
+        )
     backend = build_ml_backend(options)
     return _MlBackendWrapper(backend, capabilities=capabilities_for_kind(kind))
 

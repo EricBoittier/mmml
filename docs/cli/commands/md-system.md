@@ -1266,14 +1266,22 @@ Full help (all categories). Short index: -h One category: -hN or -halias (see
                         A (CHARMM TIP3)
   --rigid-water-theta RIGID_WATER_THETA
                         deg (CHARMM TIP3)
-  --ml-potential-mode {physnet,kernnn,jax_mm_clone,jax_mm_spoof,bonded_intra}
-                        Which potential supplies the ML terms. 'bonded_intra'
-                        keeps PhysNet for the dimer interaction but hands the
-                        internal monomer energy to CGenFF bonded (requires
-                        --jax-mm-spoof-psf). Use it when the model was trained
-                        on rigid monomers and carries no restoring force for
-                        intramolecular coordinates. See docs/hybrid-bonded-
-                        intra.md.
+  --ml-potential-mode {physnet,kernnn,jax_mm_clone,jax_mm_spoof,bonded_intra,metatomic}
+                        Which potential supplies the ML terms. 'metatomic' uses
+                        an ASE AtomisticModel (.pt) for CHARMM MLpot fragment
+                        ML/MM. 'bonded_intra' keeps PhysNet for the dimer
+                        interaction but hands the internal monomer energy to
+                        CGenFF bonded (requires --jax-mm-spoof-psf). Use
+                        bonded_intra when the model was trained on rigid
+                        monomers and carries no restoring force for
+                        intramolecular coordinates. See docs/metatomic.md and
+                        docs/hybrid-bonded-intra.md.
+  --metatomic-eval-mode {fragments,whole_system}
+                        How a metatomic model is evaluated in CHARMM MLpot.
+                        Default is 'fragments' (the MMML ML/MM scheme: isolated
+                        monomers plus switched dimer interaction).
+                        'whole_system' is one evaluation on the ML selection
+                        (all-ML USER term).
   --bonded-intra-damp-onset BONDED_INTRA_DAMP_ONSET
                         Enable the bonded_intra damping guard: taper the ML
                         dimer interaction to zero as either monomer's CGenFF

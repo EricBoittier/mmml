@@ -17,6 +17,7 @@ SUPPORTED_CALCULATORS = (
     "multipoles",
     "efield",
     "kernnn",
+    "metatomic",
     "xtb",
     "dftb3-d4",
     "pyscf",

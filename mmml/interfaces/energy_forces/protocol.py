@@ -17,6 +17,7 @@ class ProviderKind(str, Enum):
     SPOOKY_PHYSNET = "spooky_physnet"
     JOINT_PHYSNET_DCMNET = "joint_physnet_dcmnet"
     EFIELD_PHYSNET = "efield_physnet"
+    METATOMIC = "metatomic"
     DCMNET = "dcmnet"
     PYSCF = "pyscf"
     ORCA = "orca"
@@ -38,7 +39,7 @@ class ProviderCapabilities:
     supports_esp: bool = False
     supports_external_field: bool = False
     supports_decomposed_ml: bool = False
-    """True when usable in hybrid CHARMM monomer/dimer MLpot (PhysNet family)."""
+    """True when usable in hybrid CHARMM monomer/dimer MLpot (PhysNet or metatomic)."""
     supports_batch: bool = True
     notes: str = ""
 

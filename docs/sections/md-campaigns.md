@@ -1,8 +1,9 @@
 # MD & campaigns
 
 Running dynamics — pure MM, pure ML, or hybrid ML/MM — across the ASE, JAX-MD,
-and PyCHARMM backends. `md-system` is the single entry point; a *campaign* is
-one YAML describing many runs.
+and PyCHARMM backends. `md-system` is the campaign entry point; a *campaign* is
+one YAML describing many runs. CHARMM-free metatomic ASE MD in a cubic liquid
+box is `mmml metatomic-pbc-md` (default: 32 Å ethanol).
 
 ```bash
 mmml env                                 # resolved checkpoints + CHARMM paths
@@ -44,12 +45,14 @@ fullest worked path: build, solvate, equilibrate, run. For a classroom
   JAX-MD, and PyCHARMM without losing state.
 - [Remote MD runs + live streaming](../remote-md-streaming.md) — watching a
   cluster run from your laptop.
+- [PET-MAD 32 Å liquid ethanol](../examples/pet-mad-etoh-pbc.md) — CHARMM-free
+  `metatomic-pbc-md` plus all-ML USER via `md-system`.
 
 **Worked examples** — teaching φ/ψ + umbrella, solvated embedding, NMA/aaa.ama
 training, and reactive Menshutkin free energies.
 
-**Commands** — `md-system`, `md-embedding`, `umbrella-sample`, `health-check`,
-and the MPI helpers.
+**Commands** — `md-system`, `metatomic-pbc-md` (CHARMM-free metatomic ASE MD),
+`md-embedding`, `umbrella-sample`, `health-check`, and the MPI helpers.
 
 ## Where this leads
 

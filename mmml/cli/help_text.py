@@ -26,6 +26,10 @@ COMMAND_GROUPS: tuple[tuple[str, tuple[CommandInfo, ...]], ...] = (
         "MD & campaigns",
         (
             CommandInfo("md-system", "Mixed-composition MD (ASE/JAX-MD/PyCHARMM MLpot)"),
+            CommandInfo(
+                "metatomic-pbc-md",
+                "CHARMM-free metatomic ASE MD in a cubic liquid box",
+            ),
             CommandInfo("run", "MM/ML simulation (ASE + JAX-MD hybrid)"),
             CommandInfo("run-pycharmm", "Pure CHARMM heating/equilibration"),
             CommandInfo("lambda-mbar", "MBAR post-processing for lambda TI"),
@@ -47,6 +51,10 @@ COMMAND_GROUPS: tuple[tuple[str, tuple[CommandInfo, ...]], ...] = (
             CommandInfo("npz2traj", "NPZ → ASE trajectory (E/F/dipole/charges)"),
             CommandInfo("validate", "Validate NPZ against schema"),
             CommandInfo("dimer-scan", "Rigid 1D dimer energy/force scan"),
+            CommandInfo(
+                "pet-interaction-pes",
+                "PET-MAD interaction slices, surfaces, and trimer leftover",
+            ),
             CommandInfo("ic-scan", "Bond/angle/dihedral scans (1D or N-D) for QM/ML"),
             CommandInfo(
                 "mode-check",
@@ -58,6 +66,7 @@ COMMAND_GROUPS: tuple[tuple[str, tuple[CommandInfo, ...]], ...] = (
         "ML training & MD",
         (
             CommandInfo("physnet-train", "Train PhysNetJAX EF from NPZ"),
+            CommandInfo("pet-physnet-distill", "PET-MAD teacher → PhysNet NPZ (acetone)"),
             CommandInfo("physnet-evaluate", "Evaluate PhysNet checkpoint"),
             CommandInfo("physnet-md", "PhysNet MD sampling"),
             CommandInfo("neb", "NEB reaction-path sampling with PhysNet"),
@@ -110,6 +119,8 @@ EXAMPLE_BLOCKS: tuple[tuple[str, tuple[str, ...]], ...] = (
         (
             "mmml configure",
             "mmml md-system --setup pbc_npt --composition MEOH:5,TIP3:5 --temperature 300",
+            "mmml md-system --config examples/pet_mad_etoh_pbc/yaml/pbc_nvt.yaml --job-id nve_smoke",
+            "mmml metatomic-pbc-md --ensemble nve --minimize-steps 60 --n-steps 400",
             "mmml md-system --config campaign.yaml --run-all",
             "mmml warmup-mlpot-jax --checkpoint \"$MMML_CKPT\" --n-monomers 20",
             "mmml analyze-liquid --campaign-dir artifacts/lj_scales/liquid_dcm -o analysis/",
@@ -126,6 +137,8 @@ EXAMPLE_BLOCKS: tuple[tuple[str, tuple[str, ...]], ...] = (
             "--valid-esp splits/grids_esp_test.npz --pdb pdb/initial.pdb "
             "--n-samples 50 --out-dir charmm_ml_comparison",
             "mmml physnet-train --config train.yaml",
+            "mmml pet-physnet-distill --checkpoint pet-mad.pt --out-dir ./acetone_pet_distill --preset smoke",
+            "mmml pet-interaction-pes --checkpoint \"$PET_MAD_CKPT\"",
             "mmml mode-check --composition TIP3:1 --checkpoint \"$MMML_CKPT\" --output-dir ./mode_tip3_1",
             "mmml mode-check --composition TIP3:2 --checkpoint \"$MMML_CKPT\" --output-dir ./mode_tip3_2 --checks minimize,fd,bond-scan,vibrations,kick",
             "mmml mode-check --pbc-fd --checkpoint \"$MMML_CKPT\" --output artifacts/fd_force_check.json",

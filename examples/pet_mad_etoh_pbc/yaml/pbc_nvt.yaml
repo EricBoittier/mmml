@@ -1,0 +1,83 @@
+# PET-MAD all-ML liquid ethanol: 32 Å cube at experimental ρ (0.789 g/cm³).
+#
+# Count: --box-auto count --composition ETOH:1 --box-size 32
+#        --target-density-g-cm3 0.789  →  ETOH:338 (3042 atoms).
+#
+# Neat liquid uses --metatomic-eval-mode whole_system (one eval per USER
+# call). fragments would score 338 isolated monomers plus dimers.
+#
+#   export PET_MAD_CKPT=/path/to/pet-mad-xs-v1.5.0.pt
+#   mmml md-system --config examples/pet_mad_etoh_pbc/yaml/pbc_nvt.yaml \
+#     --job-id nve_smoke --checkpoint "$PET_MAD_CKPT"
+#   mmml md-system --config examples/pet_mad_etoh_pbc/yaml/pbc_nvt.yaml \
+#     --job-id nve --checkpoint "$PET_MAD_CKPT"
+#   mmml md-system --config examples/pet_mad_etoh_pbc/yaml/pbc_nvt.yaml \
+#     --job-id nvt --checkpoint "$PET_MAD_CKPT"
+#
+# Prefer a certified MM box first (Packmol + CHARMM MM, no MLpot):
+#   mmml liquid-box --composition ETOH:338 --box-size 32 \
+#     --target-density-g-cm3 0.789 -o boxes/etoh338_32A
+# then pass --from-psf / --from-crd for the jobs below.
+#
+# CHARMM-free ASE smoke (no Packmol): mmml metatomic-pbc-md
+#   (examples/pet_mad_etoh_pbc/ase_pbc_md.py is a thin wrapper)
+# Docs: docs/examples/pet-mad-etoh-pbc.md
+
+defaults:
+  composition: "ETOH:338"
+  builder: liquid
+  packmol: true
+  box_size: 32.0
+  target_density_g_cm3: 0.789
+  seed: 42
+  checkpoint: ${PET_MAD_CKPT}
+  ml_potential_mode: metatomic
+  metatomic_eval_mode: whole_system
+  include_mm: false
+  charmm_zero_energy_terms: "vdw,elec,bonded"
+  mlpot_pbc: true
+  temperature: 300.0
+  dt_fs: 0.5
+  density_prep_mode: off
+  mc_density_equalize: false
+
+campaign_output: scratch/pet_mad_etoh_pbc
+
+runs:
+  nve_smoke:
+    description: 32 Å ETOH:338 PET-MAD — mini + 5 NVE steps at 0.5 fs / 300 K
+    backend: pycharmm
+    setup: pbc_nve
+    md_stages: mini,nve
+    mini_nstep: 5
+    ps_nve: 0.0025
+    output_dir: scratch/pet_mad_etoh_pbc/nve_smoke
+    extra_args:
+      - --mlpot-pbc
+      - --no-echeck
+      - --no-include-mm
+
+  nve:
+    description: 32 Å ETOH:338 PET-MAD — mini + 0.2 ps NVE at 0.5 fs (conservation)
+    backend: pycharmm
+    setup: pbc_nve
+    md_stages: mini,nve
+    mini_nstep: 50
+    ps_nve: 0.2
+    output_dir: scratch/pet_mad_etoh_pbc/nve
+    extra_args:
+      - --mlpot-pbc
+      - --no-echeck
+      - --no-include-mm
+
+  nvt:
+    description: 32 Å ETOH:338 PET-MAD — mini → 2 ps heat → 20 ps NVT at 300 K, 0.5 fs
+    backend: pycharmm
+    setup: pbc_nvt
+    md_stages: mini,heat,equi
+    ps_heat: 2.0
+    ps_equi: 20.0
+    output_dir: scratch/pet_mad_etoh_pbc/nvt
+    extra_args:
+      - --mlpot-pbc
+      - --no-include-mm

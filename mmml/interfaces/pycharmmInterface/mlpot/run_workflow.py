@@ -954,9 +954,14 @@ def _register_mlpot_context(
                     verbose=verbose,
                 )
     from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import DecomposedMlpotModel
+    from mmml.interfaces.pycharmmInterface.mlpot.metatomic_mlpot import MetatomicMlpotModel
 
-    if isinstance(pyCModel, DecomposedMlpotModel) and cubic_box_side_A is not None:
-        pyCModel._charmm_box_side_A = float(cubic_box_side_A)
+    if isinstance(pyCModel, (DecomposedMlpotModel, MetatomicMlpotModel)) and cubic_box_side_A is not None:
+        if isinstance(pyCModel, DecomposedMlpotModel):
+            pyCModel._charmm_box_side_A = float(cubic_box_side_A)
+            pyCModel._cell = float(cubic_box_side_A)
+        else:
+            pyCModel.set_cell(float(cubic_box_side_A))
     ctx.ml_Z = np.asarray(z_model, dtype=int)
     ctx.use_pbc = bool(mlpot_use_pbc)
     ctx.atoms_per_monomer = list(apm_model)
@@ -1021,6 +1026,7 @@ def sync_mlpot_pbc_cell_from_charmm(
     box under ``!CRYSTAL PARAMETERS``.
     """
     from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import DecomposedMlpotModel
+    from mmml.interfaces.pycharmmInterface.mlpot.metatomic_mlpot import MetatomicMlpotModel
     from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import resolve_mlpot_mic_box_side_A
 
     if restart_path is not None:
@@ -1040,6 +1046,8 @@ def sync_mlpot_pbc_cell_from_charmm(
     old = getattr(pyCModel, "_cell", False)
     if isinstance(pyCModel, DecomposedMlpotModel):
         pyCModel._cell = side
+    elif isinstance(pyCModel, MetatomicMlpotModel):
+        pyCModel.set_cell(side)
     if verbose:
         if source == "restart":
             print(

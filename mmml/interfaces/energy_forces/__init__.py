@@ -6,7 +6,8 @@ PhysNet+DCMNet, EFieldPhysNet) and supplementary QC backends (PySCF, ORCA,
 xTB, Molpro) share the same :class:`EnergyForcesProvider` protocol.
 
 Hybrid CHARMM monomer/dimer MLpot requires
-:attr:`ProviderCapabilities.supports_decomposed_ml` (PhysNet family only).
+:attr:`ProviderCapabilities.supports_decomposed_ml` (PhysNet family or
+metatomic fragment hybrid).
 Use :func:`assert_hybrid_ml_compatible` before building decomposed MLpot.
 """
 

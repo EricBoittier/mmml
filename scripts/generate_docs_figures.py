@@ -41,7 +41,7 @@ from mmml.utils.ase_structure_plot import (
     save_structure_figure as _save_structure_figure,
     use_matplotlib_agg as _use_agg,
 )
-from mmml.utils.plotting.styles import OKABE_ITO_PALETTE, apply_plot_style, comparison_colors
+from mmml.utils.plotting.styles import apply_plot_style, OKABE_ITO_PALETTE, comparison_colors
 
 if TYPE_CHECKING:
     from ase import Atoms
@@ -560,6 +560,33 @@ def figure_acem_methyl_scan(out: Path) -> None:
     plt.close(fig)
 
 
+PET_MAD_PES_JSON = REPO / "examples" / "pet_mad_etoh_pbc" / "data" / "interaction_pes.json"
+
+
+def figure_pet_mad_interaction(out: Path, kind: str) -> None:
+    """Replay PET-MAD interaction PES figures from the committed campaign JSON."""
+    from mmml.analysis.interaction_pes import load_interaction_pes_json
+    from mmml.analysis.interaction_pes_plot import (
+        plot_dimer_angular,
+        plot_dimer_slices,
+        plot_dimer_surface,
+        plot_trimer_mbe,
+    )
+
+    apply_plot_style("icml")
+    document = load_interaction_pes_json(PET_MAD_PES_JSON)
+    writers = {
+        "slices": plot_dimer_slices,
+        "surface": plot_dimer_surface,
+        "trimer": plot_trimer_mbe,
+        "angular": plot_dimer_angular,
+    }
+    writer = writers.get(kind)
+    if writer is None:
+        raise ValueError(f"unknown PET-MAD figure kind {kind!r}")
+    writer(document, out, write_pdf=False)
+
+
 def generate(*, check: bool = False, only: tuple[str, ...] = ()) -> int:
     _use_agg()
     _style_matplotlib_rc()
@@ -575,6 +602,10 @@ def generate(*, check: bool = False, only: tuple[str, ...] = ()) -> int:
         PLOTS / "structure-builder-sizes.png": "workflow",
         PLOTS / "trialanine-build-pipeline.png": "trialanine_pipeline",
         PLOTS / "acem-methyl-scan.png": "acem_methyl",
+        PLOTS / "pet_mad_dimer_slices.png": "pet_mad_slices",
+        PLOTS / "pet_mad_dimer_angular.png": "pet_mad_angular",
+        PLOTS / "pet_mad_dimer_surface.png": "pet_mad_surface",
+        PLOTS / "pet_mad_trimer_mbe.png": "pet_mad_trimer",
     }
 
     builders = {
@@ -588,6 +619,10 @@ def generate(*, check: bool = False, only: tuple[str, ...] = ()) -> int:
         "mixed_system_zoom": lambda p: figure_mixed_system_zoom(p),
         "mixed_system_overview": lambda p: figure_mixed_system_overview(p),
         "acem_methyl": lambda p: figure_acem_methyl_scan(p),
+        "pet_mad_slices": lambda p: figure_pet_mad_interaction(p, "slices"),
+        "pet_mad_angular": lambda p: figure_pet_mad_interaction(p, "angular"),
+        "pet_mad_surface": lambda p: figure_pet_mad_interaction(p, "surface"),
+        "pet_mad_trimer": lambda p: figure_pet_mad_interaction(p, "trimer"),
     }
     if only:
         wanted = set(only)

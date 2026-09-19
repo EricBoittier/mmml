@@ -7,7 +7,7 @@ import sys
 import time
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, Literal, Optional, Sequence, Union
+from typing import TYPE_CHECKING, Any, Literal, Optional, Sequence, Union
 
 import jax
 import jax.numpy as jnp
@@ -28,6 +28,9 @@ from mmml.interfaces.pycharmmInterface.jax_device_policy import (
     mlpot_jax_device_context,
 )
 from mmml.utils.jax_gpu_warmup import ensure_xla_gpu_warmed
+
+if TYPE_CHECKING:
+    from mmml.interfaces.pycharmmInterface.mlpot.metatomic_mlpot import MetatomicMlpotModel
 
 __all__ = [
     "resolve_ml_batch_size",
@@ -1267,14 +1270,67 @@ def build_decomposed_mlpot_model(
     ml_compute_dtype: str | None = None,
     defer_jax_until_mlpot_registered: bool = False,
     defer_jax_until_after_sd: bool = False,
-) -> DecomposedMlpotModel:
-    from mmml.interfaces.pycharmmInterface.mlpot.jax_mm_spoof import jax_mm_spoof_enabled
-    from mmml.models.kernnn import is_kernnn_checkpoint
+) -> DecomposedMlpotModel | MetatomicMlpotModel:
+    """CHARMM MLpot factory: metatomic ASE adapter or JAX PhysNet/KerNN hybrid."""
+    from mmml.interfaces.pycharmmInterface.mlpot.metatomic_mlpot import (
+        maybe_build_metatomic_mlpot_model,
+    )
 
-    _spoof = jax_mm_spoof_enabled(args)
+    metatomic_model = maybe_build_metatomic_mlpot_model(
+        checkpoint,
+        atomic_numbers,
+        atoms_per_monomer,
+        int(n_monomers),
+        cell=cell,
+        verbose=verbose,
+        args=args,
+    )
+    if metatomic_model is not None:
+        return metatomic_model
+    return _build_jax_decomposed_mlpot_model(
+        checkpoint,
+        atomic_numbers,
+        atoms_per_monomer,
+        n_monomers,
+        ml_batch_size=ml_batch_size,
+        ml_gpu_count=ml_gpu_count,
+        ml_max_active_dimers=ml_max_active_dimers,
+        ml_spatial_mpi=ml_spatial_mpi,
+        cell=cell,
+        verbose=verbose,
+        args=args,
+        ml_compute_dtype=ml_compute_dtype,
+        defer_jax_until_mlpot_registered=defer_jax_until_mlpot_registered,
+        defer_jax_until_after_sd=defer_jax_until_after_sd,
+    )
+
+
+def _build_jax_decomposed_mlpot_model(
+    checkpoint: Path | str,
+    atomic_numbers: np.ndarray,
+    atoms_per_monomer: Sequence[int],
+    n_monomers: int,
+    *,
+    ml_batch_size: Optional[int] = None,
+    ml_gpu_count: Optional[int] = None,
+    ml_max_active_dimers: Optional[int] = None,
+    ml_spatial_mpi: bool | None = None,
+    cell: Union[float, bool] = False,
+    verbose: bool = False,
+    args: Any | None = None,
+    ml_compute_dtype: str | None = None,
+    defer_jax_until_mlpot_registered: bool = False,
+    defer_jax_until_after_sd: bool = False,
+) -> DecomposedMlpotModel:
+    from mmml.models.kernnn import is_kernnn_checkpoint
+    from mmml.interfaces.pycharmmInterface.mlpot.metatomic_mlpot import (
+        _jax_mm_spoof_requested,
+    )
+
     _ckpt_probe = Path(checkpoint).expanduser() if checkpoint is not None else None
     if args is not None and getattr(args, "model_restart_path", None) is not None:
         _ckpt_probe = Path(getattr(args, "model_restart_path")).expanduser()
+    _spoof = _jax_mm_spoof_requested(args)
     _kernnn = bool(_ckpt_probe) and is_kernnn_checkpoint(_ckpt_probe)
     _ml_mode = "jax_mm_clone" if _spoof else ("kernnn" if _kernnn else "physnet")
     if _spoof:
@@ -2086,10 +2142,19 @@ def warmup_decomposed_mlpot(
     a separate ``warmup_hybrid_spherical_cutoff`` pass that would duplicate XLA
     work (slice/mul/scatter/PhysNet/jax-pme compiled twice).
     """
+    from mmml.interfaces.pycharmmInterface.mlpot.metatomic_mlpot import MetatomicMlpotModel
     from mmml.utils.jax_gpu_warmup import (
         ensure_xla_gpu_warmed,
         maybe_sanitize_process_env_for_ptxas,
     )
+
+    if isinstance(model, MetatomicMlpotModel):
+        if verbose:
+            print(
+                "Metatomic MLpot: skipping JAX warmup (torch ASE adapter)",
+                flush=True,
+            )
+        return
 
     maybe_sanitize_process_env_for_ptxas()
     if getattr(model, "_jax_warmup_done", False) and model._spherical_fn is not None:

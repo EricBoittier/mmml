@@ -34,6 +34,7 @@ uv sync
 uv sync --extra cli      # shell tab completion (argcomplete)
 uv sync --extra md-cpu   # Vesin NL + MDAnalysis (CPU MD smokes)
 uv sync --extra dev      # pytest, MkDocs, ruff
+uv sync --extra metatomic  # TorchScript AtomisticModel ASE + CHARMM MLpot
 make install-gpu         # JAX CUDA 13 + CuPy (GPU nodes; SM 7.5+)
 # make install-gpu-cuda12  # older GPUs / CUDA 12
 ```

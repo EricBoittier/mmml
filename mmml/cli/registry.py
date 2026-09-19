@@ -42,6 +42,11 @@ COMMAND_REGISTRY: tuple[CommandSpec, ...] = (
         note="Prefer md-system for new MD; run kept for hybrid calculator demos.",
     ),
     CommandSpec("md-system", "mmml.cli.run.md_system", "Mixed-composition MD (ASE/JAX-MD/PyCHARMM)"),
+    CommandSpec(
+        "metatomic-pbc-md",
+        "mmml.cli.misc.metatomic_pbc_md",
+        "CHARMM-free metatomic ASE MD in a cubic liquid box (NVT/NVE)",
+    ),
     CommandSpec("liquid-box", "mmml.cli.run.liquid_box", "Build/certify periodic liquid boxes (MM only)"),
     CommandSpec(
         "md-embedding",
@@ -96,6 +101,11 @@ COMMAND_REGISTRY: tuple[CommandSpec, ...] = (
         "Reproducible rigid 1D dimer energy/force scan",
     ),
     CommandSpec(
+        "pet-interaction-pes",
+        "mmml.cli.misc.pet_interaction_pes",
+        "PET-MAD interaction slices, surfaces, and trimer many-body leftover",
+    ),
+    CommandSpec(
         "ic-scan",
         "mmml.cli.misc.ic_scan",
         "Bond/angle/dihedral scans (1D or N-D) for QM/ML",
@@ -126,6 +136,11 @@ COMMAND_REGISTRY: tuple[CommandSpec, ...] = (
         "Monomer/cluster FD, X–H stretch, vib, kick (+ PBC FD)",
     ),
     CommandSpec("physnet-train", "mmml.cli.make.make_training", "Train PhysNet message-passing model (E/F)"),
+    CommandSpec(
+        "pet-physnet-distill",
+        "mmml.cli.misc.pet_physnet_distill",
+        "PET-MAD teacher → PhysNet NPZ (acetone dataset + synthetic pool)",
+    ),
     CommandSpec("physnet-md", "mmml.cli.misc.physnet_md", "PhysNet MD sampling"),
     CommandSpec("physnet-evaluate", "mmml.cli.misc.physnet_evaluate", "Evaluate PhysNet checkpoint"),
     CommandSpec("compare-npz", "mmml.cli.misc.compare_npz", "Reference vs model NPZ plots"),

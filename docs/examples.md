@@ -22,6 +22,8 @@ mmml health-check --require-gpu
 ```bash
 mmml configure
 mmml md-system --setup pbc_npt --composition MEOH:5,TIP3:5 --temperature 300
+mmml md-system --config examples/pet_mad_etoh_pbc/yaml/pbc_nvt.yaml --job-id nve_smoke
+mmml metatomic-pbc-md --ensemble nve --minimize-steps 60 --n-steps 400
 mmml md-system --config campaign.yaml --run-all
 mmml warmup-mlpot-jax --checkpoint "$MMML_CKPT" --n-monomers 20
 mmml analyze-liquid --campaign-dir artifacts/lj_scales/liquid_dcm -o analysis/
@@ -35,6 +37,8 @@ mmml npz2traj data.npz -o trajectory.traj
 mmml pyscf-evaluate -i traj.npz -o out.npz --EF --esp
 mmml compare-charmm-ml --checkpoint ~/ckpts/eg_joint --valid-efd splits/energies_forces_dipoles_test.npz --valid-esp splits/grids_esp_test.npz --pdb pdb/initial.pdb --n-samples 50 --out-dir charmm_ml_comparison
 mmml physnet-train --config train.yaml
+mmml pet-physnet-distill --checkpoint pet-mad.pt --out-dir ./acetone_pet_distill --preset smoke
+mmml pet-interaction-pes --checkpoint "$PET_MAD_CKPT"
 mmml mode-check --composition TIP3:1 --checkpoint "$MMML_CKPT" --output-dir ./mode_tip3_1
 mmml mode-check --composition TIP3:2 --checkpoint "$MMML_CKPT" --output-dir ./mode_tip3_2 --checks minimize,fd,bond-scan,vibrations,kick
 mmml mode-check --pbc-fd --checkpoint "$MMML_CKPT" --output artifacts/fd_force_check.json

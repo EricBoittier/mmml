@@ -86,3 +86,25 @@ def test_assert_hybrid_ml_compatible_accepts_physnet() -> None:
 def test_build_provider_unknown_raises() -> None:
     with pytest.raises(ValueError, match="Unknown provider"):
         build_provider(ProviderSpec(name="not_a_backend"))
+
+
+def test_capabilities_metatomic_supports_decomposed_ml() -> None:
+    caps = capabilities_for_kind(ProviderKind.METATOMIC)
+    assert caps.supports_decomposed_ml is True
+    assert caps.supports_energy is True
+    assert "fragment" in caps.notes.lower()
+
+
+def test_detect_model_kind_metatomic_suffix() -> None:
+    kind = detect_model_kind("export.pt", config={})
+    assert kind == ProviderKind.METATOMIC
+
+
+def test_assert_hybrid_ml_compatible_accepts_metatomic() -> None:
+    kind = assert_hybrid_ml_compatible("export.pt", config={})
+    assert kind == ProviderKind.METATOMIC
+
+
+def test_build_provider_metatomic_requires_checkpoint() -> None:
+    with pytest.raises(ValueError, match="checkpoint"):
+        build_provider(ProviderSpec(name="metatomic", options={}))

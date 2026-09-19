@@ -108,6 +108,7 @@ nav:
           - Peptide φ/ψ scan → umbrella PMF (teaching): examples/tria-phi-psi-scan.md
           - MD embedding (solvated peptide): examples/md-embedding-design.md
           - NMA end-to-end (residue → train → MD): examples/nma-workflow.md
+          - PET-MAD PBC liquid ethanol (32 Å, 300 K): examples/pet-mad-etoh-pbc.md
           - aaa.ama peptide ML workflow: examples/aaa-ama-workflow.md
           - NH₃–CH₃Cl PhysNet results: examples/nh3-ch3cl-results.md
           - Menshutkin reactive ML/MM free energies: examples/menshutkin.md
@@ -115,6 +116,7 @@ nav:
       - Commands:
           # CLI_NAV_START: MD & campaigns
           - md-system: cli/commands/md-system.md
+          - metatomic-pbc-md: cli/commands/metatomic-pbc-md.md
           - run: cli/commands/run.md
           - run-pycharmm: cli/commands/run-pycharmm.md
           - md-embedding: cli/commands/md-embedding.md
@@ -150,6 +152,7 @@ nav:
           - verify-esp-alignment: cli/commands/verify-esp-alignment.md
           - normal-mode-sample: cli/commands/normal-mode-sample.md
           - dimer-scan: cli/commands/dimer-scan.md
+          - pet-interaction-pes: cli/commands/pet-interaction-pes.md
           - ic-scan: cli/commands/ic-scan.md
           - mode-check: cli/commands/mode-check.md
           - compare-npz: cli/commands/compare-npz.md
@@ -168,6 +171,7 @@ nav:
       - Hybrid MM charges (fixed / latent / fixed+latent): hybrid-mm-charges.md
       - Trainable hybrid MM LJ scales (per-type σ / ε): hybrid-mm-lj-scales.md
       - Hybrid ML/MM decomposition (terms ↔ PyCHARMM): hybrid-mlmm-decomposition.md
+      - Metatomic (ASE + PyCHARMM MLpot): metatomic.md
       - Bonded intra + rigid-water stabilization: hybrid-bonded-intra.md
       - Interaction-prior constraints & trust map: interaction-prior-constraints.md
       - MLpot settings: mlpot-settings.md
@@ -182,6 +186,7 @@ nav:
       - Commands:
           # CLI_NAV_START: ML training & MD
           - physnet-train: cli/commands/physnet-train.md
+          - pet-physnet-distill: cli/commands/pet-physnet-distill.md
           - physnet-evaluate: cli/commands/physnet-evaluate.md
           - physnet-md: cli/commands/physnet-md.md
           - neb: cli/commands/neb.md
