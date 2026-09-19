@@ -153,11 +153,14 @@ position jitter, median energy+forces:
 | Water dimer (6 atoms) | 2.7 ms / 8.4 ms | 9.9 ms / 27 ms (**3.6×**) | 10 ms / 26 ms (**3.7×**) |
 | Acetone dimer (20 atoms) | 3.8 ms / 9.9 ms | 17 ms / 42 ms (**4.5×**) | 34 ms / 63 ms (**9×**) |
 
-`fragments` is three sequential evals (`E(A)+E(B)+s·(E(AB)−E(A)−E(B))`), which
-is what `--metatomic-eval-mode fragments` pays per CHARMM USER call. Production
-PhysNet MLpot batches those fragments in one jitted apply, so the PhysNet USER
-path is cheaper than the sequential numbers above. A GPU would move PET much
-more than this tiny PhysNet. Re-run:
+The table times three sequential evals (`E(A)+E(B)+s·(E(AB)−E(A)−E(B))`).
+When MLpot loads the checkpoint itself, `--metatomic-eval-mode fragments`
+instead sends every monomer and every dimer inside `--mm-switch-on` (MIC COM
+pairs, vectorised search) through `BatchedMetatomicTeacher` in atom-budget
+packs, and reuses the isolated E(A) for the shifted E(B). DCM:308 in a 32 Å
+box on CPU (16 threads), PET-MAD xs: 1464 dimers at 6 Å take 2.0 s per USER
+call, against 26.8 s for one ASE call per fragment; results agree to 3e-5 eV.
+An injected ASE calculator keeps the per-call path. Re-run:
 
 ```bash
 JAX_PLATFORMS=cpu MMML_METATOMIC_DEVICE=cpu \
@@ -203,7 +206,10 @@ mmml md-system --config examples/pet_mad_etoh_pbc/yaml/pbc_nvt.yaml \
 ```
 
 `--box-auto count --composition ETOH:1 --box-size 32 --target-density-g-cm3 0.789`
-is the same 338-molecule count. Do **not** use `fragments` on this box.
+is the same 338-molecule count. `fragments` on this box is a pairwise model,
+not PET: on DCM:308 the PET dimer sum is net repulsive (+3.2 kcal/mol per
+molecule at 6 Å, +7.6 at 10 Å) where the whole-system cohesive energy is
+−1.2, so use `whole_system` for PET liquids.
 YAML `nve` is 0.2 ps after mini. Details, pass/fail, and YAML:
 [PET-MAD ethanol PBC](examples/pet-mad-etoh-pbc.md).
 

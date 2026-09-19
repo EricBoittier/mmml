@@ -9,6 +9,7 @@ from ase.calculators.calculator import Calculator, all_changes
 from mmml.interfaces.calculators.ase_fragment_hybrid import (
     AseFragmentHybridCalculator,
     evaluate_fragment_hybrid,
+    evaluate_fragment_hybrid_batched,
     evaluate_whole_system,
     numpy_ml_switch_scale,
     wrap_dimer_monomer_b_numpy,
@@ -169,3 +170,63 @@ def test_ase_fragment_hybrid_calculator_fragments_property() -> None:
     atoms = Atoms(numbers=[1, 1], positions=[[0.0, 0.0, 0.0], [3.0, 0.0, 0.0]])
     atoms.calc = calc
     assert atoms.get_potential_energy() == pytest.approx(3.0)
+
+
+def _ase_batch_eval(calculator: Calculator):
+    from ase import Atoms
+
+    def batch_eval(structures):
+        out = []
+        for numbers, positions in structures:
+            atoms = Atoms(numbers=numbers, positions=positions, pbc=False)
+            atoms.calc = calculator
+            out.append((atoms.get_potential_energy(), atoms.get_forces()))
+        return out
+
+    return batch_eval
+
+
+def _random_triatomic_box(n_mon: int, box: float, seed: int = 0):
+    rng = np.random.default_rng(seed)
+    coms = rng.uniform(0.0, box, size=(n_mon, 3))
+    local = np.array([[0.0, 0.0, 0.0], [0.9, 0.2, 0.0], [-0.3, 0.8, 0.1]])
+    pos = (coms[:, None, :] + local[None, :, :]).reshape(-1, 3)
+    return np.ones(3 * n_mon, dtype=int), pos, [3] * n_mon
+
+
+@pytest.mark.parametrize("cell", [None, 9.0])
+def test_batched_fragments_match_per_call_loop(cell) -> None:
+    numbers, pos, per = _random_triatomic_box(12, 9.0)
+    kw = dict(cell=cell, mm_switch_on=4.0, ml_switch_width=1.5)
+    calc = PairwiseDistanceCalculator()
+    ref = evaluate_fragment_hybrid(calc, numbers, pos, per, **kw)
+    got = evaluate_fragment_hybrid_batched(_ase_batch_eval(calc), numbers, pos, per, **kw)
+    assert got.n_dimers_evaluated == ref.n_dimers_evaluated > 0
+    assert got.energy_ev == pytest.approx(ref.energy_ev, rel=1e-12)
+    np.testing.assert_allclose(
+        got.forces_ev_per_angstrom, ref.forces_ev_per_angstrom, atol=1e-10
+    )
+
+
+def test_batched_fragments_one_request_and_pbc_forces_fd() -> None:
+    numbers, pos, per = _random_triatomic_box(8, 7.0, seed=3)
+    calls = []
+    inner = _ase_batch_eval(PairwiseDistanceCalculator())
+
+    def batch_eval(structures):
+        calls.append(len(structures))
+        return inner(structures)
+
+    kw = dict(cell=7.0, mm_switch_on=4.0, ml_switch_width=1.5)
+    res = evaluate_fragment_hybrid_batched(batch_eval, numbers, pos, per, **kw)
+    assert calls == [len(per) + res.n_dimers_evaluated]
+    h = 1.0e-5
+    for atom in (0, 7, 13):
+        for axis in range(3):
+            plus, minus = pos.copy(), pos.copy()
+            plus[atom, axis] += h
+            minus[atom, axis] -= h
+            e_p = evaluate_fragment_hybrid_batched(inner, numbers, plus, per, **kw).energy_ev
+            e_m = evaluate_fragment_hybrid_batched(inner, numbers, minus, per, **kw).energy_ev
+            fd = -(e_p - e_m) / (2.0 * h)
+            assert res.forces_ev_per_angstrom[atom, axis] == pytest.approx(fd, abs=1e-5)

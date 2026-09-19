@@ -26,8 +26,10 @@ from ase.calculators.calculator import Calculator
 from mmml.data.units import EV_TO_KCAL_MOL
 from mmml.interfaces.calculators.ase_fragment_hybrid import (
     METATOMIC_EVAL_MODES,
+    BatchEvaluator,
     FragmentHybridResult,
     evaluate_fragment_hybrid,
+    evaluate_fragment_hybrid_batched,
     evaluate_whole_system,
 )
 from mmml.interfaces.calculators.metatomic import (
@@ -77,8 +79,10 @@ class MetatomicMlpotCalculator:
         cutoff_params: CutoffParameters | None = None,
         cell: float | bool = False,
         ml_atom_indices: Sequence[int] | np.ndarray | None = None,
+        batch_evaluator: BatchEvaluator | None = None,
     ) -> None:
         self._calc = calculator
+        self._batch_evaluator = batch_evaluator
         self.atomic_numbers = np.asarray(
             [int(x) for x in atomic_numbers], dtype=np.int32
         )
@@ -123,6 +127,18 @@ class MetatomicMlpotCalculator:
                 self.atomic_numbers,
                 pos_ml,
                 cell=cell,
+            )
+        if self._batch_evaluator is not None:
+            return evaluate_fragment_hybrid_batched(
+                self._batch_evaluator,
+                self.atomic_numbers,
+                pos_ml,
+                self._atoms_per_monomer,
+                do_ml=self.do_ml,
+                do_ml_dimer=self.do_ml_dimer,
+                cell=cell,
+                mm_switch_on=float(self.cutoff_params.mm_switch_on),
+                ml_switch_width=float(self.cutoff_params.ml_switch_width),
             )
         return evaluate_fragment_hybrid(
             self._calc,
@@ -222,8 +238,10 @@ class MetatomicMlpotModel:
         cutoff_params: CutoffParameters | None = None,
         cell: float | bool = False,
         checkpoint: Path | None = None,
+        batch_evaluator: BatchEvaluator | None = None,
     ) -> None:
         self._calc = calculator
+        self._batch_evaluator = batch_evaluator
         self._atomic_numbers = np.asarray(atomic_numbers, dtype=int)
         self._atoms_per_monomer = [int(n) for n in atoms_per_monomer]
         self._eval_mode = resolve_metatomic_eval_mode(explicit=eval_mode)
@@ -272,6 +290,7 @@ class MetatomicMlpotModel:
             cutoff_params=self._cutoff_params,
             cell=self._cell,
             ml_atom_indices=self._ml_atom_indices,
+            batch_evaluator=self._batch_evaluator,
         )
         self._registered_calculator = calc
         return calc
@@ -357,6 +376,30 @@ def _mm_fn_from_spherical(spherical_fn: Any, cutoff_params: CutoffParameters) ->
     return mm_fn
 
 
+def _maybe_batched_fragment_evaluator(
+    checkpoint: Path, *, verbose: bool
+) -> BatchEvaluator | None:
+    """One TorchScript forward per atom-budget pack of monomers + dimers."""
+    try:
+        from mmml.distill.batched_teacher import BatchedMetatomicTeacher
+
+        teacher = BatchedMetatomicTeacher(checkpoint)
+    except Exception as exc:
+        print(
+            f"Metatomic MLpot: batched fragment evaluator unavailable ({exc!r}); "
+            "falling back to one ASE call per monomer/dimer.",
+            flush=True,
+        )
+        return None
+    if verbose:
+        print(
+            f"Metatomic MLpot: batched fragments on {teacher.device} "
+            f"(max {teacher.max_atoms_per_batch} atoms per forward)",
+            flush=True,
+        )
+    return teacher.evaluate
+
+
 def build_metatomic_mlpot_model(
     checkpoint: Path | str,
     atomic_numbers: np.ndarray,
@@ -382,6 +425,12 @@ def build_metatomic_mlpot_model(
         )
     mode = resolve_metatomic_eval_mode(args, explicit=eval_mode)
     calc = calculator if calculator is not None else load_metatomic_calculator(ckpt)
+    # An injected calculator (tests, custom ASE models) keeps the per-call path.
+    batch_evaluator = (
+        _maybe_batched_fragment_evaluator(ckpt, verbose=verbose)
+        if mode == "fragments" and calculator is None
+        else None
+    )
     cutoff_params = (
         cutoff_parameters_from_args(args) if args is not None else CutoffParameters()
     )
@@ -431,6 +480,7 @@ def build_metatomic_mlpot_model(
         cutoff_params=cutoff_params,
         cell=cell,
         checkpoint=ckpt,
+        batch_evaluator=batch_evaluator,
     )
 
 
