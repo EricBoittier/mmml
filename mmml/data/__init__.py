@@ -50,6 +50,14 @@ from .spice_alpha import (
     split_npz,
     write_physnet_npz,
 )
+from .efield_lc import (
+    DEFAULT_LC_FRACS,
+    frac_tag,
+    n_train_for_frac,
+    prepare_lc_grid,
+    prepare_lc_split,
+    subsample_frame_npz,
+)
 from .units import (
     CALCULATOR_UNITS,
     CANONICAL_ENERGY_UNIT,
@@ -108,6 +116,12 @@ __all__ = [
     "pad_frames",
     "split_npz",
     "write_physnet_npz",
+    "DEFAULT_LC_FRACS",
+    "frac_tag",
+    "n_train_for_frac",
+    "prepare_lc_grid",
+    "prepare_lc_split",
+    "subsample_frame_npz",
     # Units
     "CALCULATOR_UNITS",
     "CANONICAL_ENERGY_UNIT",

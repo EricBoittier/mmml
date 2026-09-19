@@ -189,6 +189,10 @@ python scripts/spice_alpha/audit_efield_job.py \
   --ckpt $HOME/mmml/ckpts/spice_ef_polar_big \
   --log artifacts/spice_ef_polar/slurm-22826285.out \
   --job 22826285
+
+# Polar-only learning curve (same 888 valid, smaller train). Do not
+# reuse spice_ef_polar_big_r3 while 22868157 is R.
+scripts/spice_alpha/submit_efield_lc.sh
 ```
 
 ## Train
