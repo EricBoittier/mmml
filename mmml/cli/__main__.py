@@ -323,6 +323,10 @@ def main():
         sys.argv = ["mmml physnet-train"] + args.args
         return make_training.main()
 
+    elif command == "pet-box-dataset":
+        from .misc import pet_box_dataset
+        return pet_box_dataset.main(args.args)
+
     elif command == "pet-physnet-distill":
         from .misc import pet_physnet_distill
         return pet_physnet_distill.main(args.args)
