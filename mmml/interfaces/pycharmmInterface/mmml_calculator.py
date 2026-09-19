@@ -60,6 +60,7 @@ from mmml.interfaces.pycharmmInterface.mm_energy_forces import (
     DEFAULT_JAX_MD_CAPACITY_MULTIPLIER,
     DEFAULT_JAX_MD_SKIN_DISTANCE_A,
     build_mm_energy_forces_fn,
+    mm_pair_update_positions,
 )
 from mmml.utils.jax_gpu_warmup import (
     apply_xla_cuda_timer_log_filter,
@@ -3369,7 +3370,12 @@ def setup_calculator(
                     update_fn = _cached_update_mm_pairs[0]
                     if update_fn is not None:
                         if box_vec is not None:
-                            mm_pair_idx, mm_pair_mask = update_fn(R, box=box_vec)
+                            # NpT builds the pair list with fractional_coordinates=True;
+                            # ASE positions are Cartesian, so convert first.
+                            R_nl = mm_pair_update_positions(
+                                R, box_vec, _fractional_coordinates
+                            )
+                            mm_pair_idx, mm_pair_mask = update_fn(R_nl, box=box_vec)
                         else:
                             mm_pair_idx, mm_pair_mask = update_fn(R)
                         get_stats = getattr(update_fn, "get_stats", None)

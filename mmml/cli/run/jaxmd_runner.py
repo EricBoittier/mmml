@@ -1137,16 +1137,17 @@ def set_up_nhc_sim_routine(
     box_init = jnp.array([L_cell, L_cell, L_cell], dtype=_JAXMD_DTYPE) if L_cell else None
     box_nl = np.array([L_cell, L_cell, L_cell], dtype=np.float64) if L_cell else None
     pbc_box_nl = box_nl  # Capture for run_sim PBC minimization (avoids UnboundLocalError from later box_nl assignments)
+
+    from mmml.interfaces.pycharmmInterface.mm_energy_forces import (
+        refresh_mm_pairs_from_cartesian,
+    )
+
     if update_fn is not None and use_pbc:
         if getattr(args, "debug", False):
             print("[nbr] Initial neighbor list update (PBC)")
-        if is_npt:
-            # NPT: neighbor list uses fractional_coordinates; pass frac pos and box [L,L,L]
-            R_frac = np.asarray(R) / L_cell
-            pair_idx, pair_mask = update_fn(R_frac, box=box_nl)
-        else:
-            # NVT/NVE: fixed box, pass box for neighbor list consistency
-            pair_idx, pair_mask = update_fn(R, box=box_nl)
+        pair_idx, pair_mask = refresh_mm_pairs_from_cartesian(
+            update_fn, R, box_nl, fractional_coordinates=is_npt
+        )
     c = Console()
     # Silent compile + GPU sync before timed run (avoids XLA cuda_timer delay-kernel warnings).
     ensure_xla_gpu_warmed(force=True)
@@ -1772,8 +1773,11 @@ def set_up_nhc_sim_routine(
                 _cell_fire = jnp.asarray(atoms.get_cell()[:], dtype=jnp.float32)
                 initial_pos = _wrap_monomers(initial_pos, _cell_fire)
                 if update_fn is not None:
-                    fire_pair_idx, fire_pair_mask = update_fn(
-                        np.asarray(initial_pos), box=pbc_box_nl
+                    fire_pair_idx, fire_pair_mask = refresh_mm_pairs_from_cartesian(
+                        update_fn,
+                        initial_pos,
+                        pbc_box_nl,
+                        fractional_coordinates=is_npt,
                     )
                     _pbc_state["pair_idx"] = fire_pair_idx
                     _pbc_state["pair_mask"] = fire_pair_mask
@@ -1894,7 +1898,12 @@ def set_up_nhc_sim_routine(
 
                     def _fire_nl_refresh(pos):
                         if use_pbc and update_fn is not None:
-                            pair_i, pair_m = update_fn(np.asarray(pos), box=pbc_box_nl)
+                            pair_i, pair_m = refresh_mm_pairs_from_cartesian(
+                                update_fn,
+                                pos,
+                                pbc_box_nl,
+                                fractional_coordinates=is_npt,
+                            )
                             _pbc_state["pair_idx"] = pair_i
                             _pbc_state["pair_mask"] = pair_m
 
@@ -2017,8 +2026,11 @@ def set_up_nhc_sim_routine(
             else:
                 pbc_start_pos = _wrap_monomers(jnp.asarray(minimized_pos), _cell_jax)
             if update_fn is not None:
-                pbc_pair_idx, pbc_pair_mask = update_fn(
-                    np.asarray(pbc_start_pos), box=pbc_box_nl
+                pbc_pair_idx, pbc_pair_mask = refresh_mm_pairs_from_cartesian(
+                    update_fn,
+                    pbc_start_pos,
+                    pbc_box_nl,
+                    fractional_coordinates=is_npt,
                 )
                 _pbc_state["pair_idx"] = pbc_pair_idx
                 _pbc_state["pair_mask"] = pbc_pair_mask
@@ -2065,7 +2077,12 @@ def set_up_nhc_sim_routine(
 
                 def _pbc_nl_refresh(pos):
                     if update_fn is not None:
-                        pair_i, pair_m = update_fn(np.asarray(pos), box=pbc_box_nl)
+                        pair_i, pair_m = refresh_mm_pairs_from_cartesian(
+                            update_fn,
+                            pos,
+                            pbc_box_nl,
+                            fractional_coordinates=is_npt,
+                        )
                         _pbc_state["pair_idx"] = pair_i
                         _pbc_state["pair_mask"] = pair_m
 
