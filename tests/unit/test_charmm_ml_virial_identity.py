@@ -109,7 +109,7 @@ def test_stopgrad_forces_match_finite_difference_at_fixed_l():
         (400.0, 410.0, 2.0, "H2"),
         (500.0, 510.0, 490.0, "H3"),
         (1.5, 2.0, 0.8, "H4"),
-        (12.0, 400.0, 380.0, "ambiguous"),
+        (100.0, 400.0, 380.0, "ambiguous"),
     ],
 )
 def test_classify_decision_table(prsi, atomic, strain, want):

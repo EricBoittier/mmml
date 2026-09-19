@@ -39,6 +39,7 @@ pip install -e .
 | `07_md_system_spatial_mpi_mini.py` | optional | Full `md-system --ml-spatial-mpi` mini dry-run / cluster smoke |
 | `10_spatial_mpi_cpu_profile.py` | optional | CPU spatial MPI np sweep (DCM:100) with cProfile + JAX timers |
 | `08_serial_vs_mpirun_md_system.py` | optional | A/B serial `python md-system` vs `mpirun np=1` (`upinb` claim); writes JSON report |
+| `11_cpt_ml_virial.py` | yes | One `ENER FORCE`: `PRSI` vs atomic `Σ F·r` vs strain `-dE/dV` (no CPT) |
 | `run_all.sh` | — | Run 00→03; `RUN_EXTENDED=1` adds 04–05 |
 
 ```bash
@@ -240,6 +241,37 @@ python tests/functionality/mlpot/08_serial_vs_mpirun_md_system.py --run-both \
 
 Config: `mmml/cli/run/md_system.serial_mpi_probe.example.yaml` (ACO:2 hybrid mini). JSON report
 includes hostname, UTC timestamp, env snapshot, and per-run `elapsed_s`.
+
+## CHARMM CPT vs ML virial (no 6 ps NPT)
+
+CI (no CHARMM): `pytest tests/unit/test_charmm_ml_virial_identity.py -q`
+
+Live `ENER FORCE` on the campaign ethanol box (gpu08). Zero velocities, no `dyna`.
+Do **not** use `2241` as the fixture.
+
+```bash
+# L = 34 Å (JAX-MD liquid density)
+python tests/functionality/mlpot/11_cpt_ml_virial.py \
+  --psf ~/gpu_jobs/etoh34_box/model.psf \
+  --crd ~/gpu_jobs/etoh34_box/model.crd \
+  --checkpoint ~/metatomic-runs/training/students/etoh_omol_l_A_best.json \
+  --box-side 34 --mm-switch-width 3.0 --composition ETOH:405
+
+# L = 36.41 Å (2211 last good restart)
+python tests/functionality/mlpot/11_cpt_ml_virial.py \
+  --psf ~/gpu_jobs/etoh34_box/model.psf \
+  --crd ~/gpu_jobs/etoh34_box/model.crd \
+  --continue-from ~/gpu_jobs/charmm_npt6ps_etoh34_2211/equi.res \
+  --checkpoint ~/metatomic-runs/training/students/etoh_omol_l_A_best.json \
+  --box-side 36.41 --mm-switch-width 3.0 --composition ETOH:405
+```
+
+| Result at L = 34 | Meaning | Next |
+|---|---|---|
+| `P_PRSI ≈ 0`, `P_atomic` large | H1 — USER not in `VIRAL` | Prove grads hit `VIRAL` |
+| `P_PRSI ≈ P_atomic` ≠ `P_strain`; `P_strain` ~ 1 atm | **H2** — CPT follows the wrong pressure | CHARMM strain/`dE/dV` PR, not `pmass` |
+| All three agree and ≫ 1 atm | H3 — Hamiltonian wants a larger box | Compare width 3.0 vs 1.5 |
+| `P_strain` and `P_PRSI` ~ 1 atm | H4 — not a virial-convention walk | Different autopsy; still no 6 ps CPT |
 
 ## Library module
 
