@@ -42,9 +42,11 @@ def _smooth_frac_to_mic(frac: Array, k: float = SMOOTH_MIC_K) -> Array:
 def cell_inverse(cell: Array) -> Array:
     """Inverse of a 3×3 cell. Diagonal boxes use ``1/L`` (no LU / trsm).
 
-    MD force-path sites that still invert or solve a cell (19 Sep gpu09
-    profile: ~96 ``trsm_left_kernel<double>`` launches / step — attribution
-    is by call graph, not hardware counters):
+    The ``solve``/``inv`` replacements below are implemented. Whether they
+    account for the gpu09 ``trsm_left_kernel<double>`` hotspot (~96 launches /
+    step) is still unverified — re-count launches after this lands.
+
+    Sites that used a per-call cell solve or inverse:
 
     * ``mpnn_kernels.pair_displacements`` — ``solve(cell.T, dR.T)`` when
       ``use_pbc`` (whole-box PhysNet; fragment ML/MM is usually vacuum).

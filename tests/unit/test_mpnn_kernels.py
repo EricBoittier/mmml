@@ -275,3 +275,32 @@ def test_pair_displacements_uses_current_cell_after_box_change():
     # 20 Å wraps under 16 Å (MIC +4) but not under 40 Å.
     np.testing.assert_allclose(np.asarray(d_small)[0], [4.0, 0.0, 0.0], atol=1e-12)
     np.testing.assert_allclose(np.asarray(d_large)[0], [20.0, 0.0, 0.0], atol=1e-12)
+
+
+def test_pair_displacements_pbc_energy_forces_match_solve():
+    """value_and_grad parity vs the old trsm path (cubic + sheared, away from ±L/2)."""
+    rng = np.random.default_rng(4)
+    positions = jnp.asarray(rng.uniform(2.0, 8.0, size=(6, 3)))
+    dst = jnp.asarray([0, 0, 1, 2], dtype=jnp.int32)
+    src = jnp.asarray([3, 4, 5, 1], dtype=jnp.int32)
+    cubic = jnp.diag(jnp.array([26.0, 26.0, 26.0]))
+    sheared = jnp.array(
+        [[20.0, 0.4, 0.1], [0.2, 18.0, -0.3], [0.0, 0.5, 22.0]],
+        dtype=jnp.float64,
+    )
+
+    def _energy_new(pos, cell):
+        d = pair_displacements(pos, dst, src, cell=cell, use_pbc=True)
+        return 0.5 * jnp.sum(d * d)
+
+    def _energy_solve(pos, cell):
+        dR = pos[src] - pos[dst]
+        dS = jax.scipy.linalg.solve(cell.T, dR.T, assume_a="gen").T
+        d = (dS - jnp.round(dS)) @ cell
+        return 0.5 * jnp.sum(d * d)
+
+    for cell in (cubic, sheared):
+        e_new, g_new = jax.value_and_grad(_energy_new)(positions, cell)
+        e_old, g_old = jax.value_and_grad(_energy_solve)(positions, cell)
+        np.testing.assert_allclose(float(e_new), float(e_old), rtol=1e-10, atol=1e-12)
+        np.testing.assert_allclose(np.asarray(g_new), np.asarray(g_old), rtol=1e-9, atol=1e-10)
