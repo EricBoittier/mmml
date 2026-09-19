@@ -20,6 +20,7 @@ fi
 # MessagePass promotes, and EFieldPhysNet.init raises in e3x.nn.add.
 # load_ef_npz is float32; keep the process on float32 for efield-train.
 export JAX_ENABLE_X64=0
+export PYTHONUNBUFFERED="${PYTHONUNBUFFERED:-1}"
 export XLA_PYTHON_CLIENT_PREALLOCATE="${XLA_PYTHON_CLIENT_PREALLOCATE:-false}"
 export XLA_PYTHON_CLIENT_MEM_FRACTION="${XLA_PYTHON_CLIENT_MEM_FRACTION:-0.85}"
 # Polar jacrev autotune OOMs (login12: "All configs failed during profiling"

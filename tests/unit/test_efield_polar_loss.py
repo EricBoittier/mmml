@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import inspect
+
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -16,10 +18,12 @@ from mmml.data.units import (
 from mmml.models.efield.args import build_train_parser
 from mmml.models.efield.model_functions import predicted_polarizability_bohr3
 from mmml.models.efield.training import (
+    _train_log,
     load_ef_npz,
     polarizability_loss_and_mae,
     prepare_batches,
     require_drop_last_batches,
+    train_model,
 )
 from mmml.utils.rotations import rotate_batched_rank2_tensors
 
@@ -41,6 +45,18 @@ def test_efield_parser_polar_weight_defaults_off():
     args = build_train_parser().parse_args(["--polar_weight", "1.5", "--no-polar-at-zero-field"])
     assert args.polar_weight == pytest.approx(1.5)
     assert args.polar_at_zero_field is False
+
+
+def test_train_log_flushes(capsys):
+    _train_log("heartbeat")
+    assert capsys.readouterr().out == "heartbeat\n"
+
+
+def test_train_model_logs_compile_and_step_heartbeats():
+    src = inspect.getsource(train_model)
+    assert "compiling train_step" in src
+    assert "log_every_n_steps" in src
+    assert "block_until_ready" in src
 
 
 def test_require_drop_last_batches_rejects_valid_smaller_than_batch():

@@ -39,6 +39,7 @@ if [[ -f "$ROOT/scripts/resolve_mmml_env.sh" ]]; then
 fi
 export PYTHONPATH="$ROOT${PYTHONPATH:+:$PYTHONPATH}"
 export JAX_ENABLE_X64=0
+export PYTHONUNBUFFERED=1
 export XLA_PYTHON_CLIENT_PREALLOCATE=false
 export XLA_PYTHON_CLIENT_MEM_FRACTION="${XLA_PYTHON_CLIENT_MEM_FRACTION:-0.85}"
 export XLA_FLAGS="${XLA_FLAGS:---xla_gpu_autotune_level=0}"

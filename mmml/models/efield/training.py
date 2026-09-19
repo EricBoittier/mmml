@@ -1116,6 +1116,11 @@ def eval_step(model_apply, batch, batch_size, params, energy_weight=1.0, forces_
     return total_loss, energy_loss, force_loss, dipole_loss, charge_sum_sq, energy_mae, forces_mae, dipole_mae, energy_r2, forces_r2, dipole_r2, polar_loss, polar_mae
 
 
+def _train_log(msg: str) -> None:
+    """Slurm captures stdout; unflushed prints look like a hang for a whole epoch."""
+    print(msg, flush=True)
+
+
 def train_model(key, model, train_data, valid_data, num_epochs, learning_rate, batch_size, 
                 clip_norm=10.0, ema_decay=0.999, early_stopping_patience=None, early_stopping_min_delta=0.0,
                 reduce_on_plateau_patience=5, reduce_on_plateau_cooldown=5, reduce_on_plateau_factor=0.9,
@@ -1124,7 +1129,8 @@ def train_model(key, model, train_data, valid_data, num_epochs, learning_rate, b
                 gradient_checkpoint=False, verbose=False,
                 checkpoint_dir: str | Path | None = None, run_uuid: str | None = None,
                 save_every_n_epochs: int = 0, save_best: bool = True,
-                rot_augment: bool = False, rot_perturbation: float = 1.0):
+                rot_augment: bool = False, rot_perturbation: float = 1.0,
+                log_every_n_steps: int = 100):
     """
     Train model with EMA, gradient clipping, early stopping, and learning rate reduction on plateau.
     
@@ -1343,6 +1349,15 @@ def train_model(key, model, train_data, valid_data, num_epochs, learning_rate, b
     from mmml.models.physnetjax.physnetjax.data.data import print_shapes
 
     print_shapes(valid_batches[0], name="Validation Batch[0]")
+    n_train = int(np.asarray(train_data["electric_field"]).shape[0])
+    n_valid = int(np.asarray(valid_data["electric_field"]).shape[0])
+    n_valid_batches = len(valid_batches)
+    _train_log(
+        f"ready: n_train={n_train} n_valid={n_valid} B={batch_size} "
+        f"valid_batches={n_valid_batches} epochs={num_epochs} "
+        f"polar_weight={polar_weight} (prints once per epoch + every "
+        f"{max(int(log_every_n_steps), 1)} steps)"
+    )
     # print(
     #     "Loss terms: energy/force MSE use the same units as targets — typically E [eV], F [eV/Å]; "
     #     "dipole MSE is squared NPZ dipole units. Weighted total mixes terms via energy_weight, forces_weight, …"
@@ -1382,6 +1397,13 @@ def train_model(key, model, train_data, valid_data, num_epochs, learning_rate, b
         train_dipole_loss = 0.0
         train_polar_loss = 0.0
         train_polar_mae = 0.0
+        n_tb = len(train_batches)
+        if epoch == 1:
+            _train_log(
+                f"epoch 1: {n_tb} train batches "
+                f"(n_train={n_train}//{batch_size}); compiling train_step "
+                f"(polar JVP, first call is slow)..."
+            )
         for i, batch in enumerate(train_batches):
             (
                 params,
@@ -1431,6 +1453,13 @@ def train_model(key, model, train_data, valid_data, num_epochs, learning_rate, b
             train_dipole_loss += (dipole_loss_batch - train_dipole_loss) / (i + 1)
             train_polar_loss += (polar_loss_batch - train_polar_loss) / (i + 1)
             train_polar_mae += (polar_mae_batch - train_polar_mae) / (i + 1)
+            step = i + 1
+            every = max(int(log_every_n_steps), 1)
+            if step == 1:
+                jax.block_until_ready(loss)
+                _train_log(f"  epoch {epoch} step 1/{n_tb} compiled")
+            elif step % every == 0 or step == n_tb:
+                _train_log(f"  epoch {epoch} step {step}/{n_tb}")
 
         valid_loss = 0.0
         valid_energy_loss = 0.0
@@ -1501,7 +1530,7 @@ def train_model(key, model, train_data, valid_data, num_epochs, learning_rate, b
         # Block once at the end of epoch for logging (allows async execution during training)
         jax.block_until_ready(valid_loss)
         
-        print(f"epoch: {epoch:3d}                    train:   valid:")
+        _train_log(f"epoch: {epoch:3d}                    train:   valid:")
         print(f"    weighted total loss     {float(train_loss): 8.6f} {float(valid_loss): 8.6f}")
         print(f"    energy MSE [eV²]        {float(train_energy_loss): 8.6f} {float(valid_energy_loss): 8.6f}")
         print(f"    force MSE [(eV/Å)²]     {float(train_force_loss): 8.6f} {float(valid_force_loss): 8.6f}")
@@ -1523,6 +1552,7 @@ def train_model(key, model, train_data, valid_data, num_epochs, learning_rate, b
             print(f"    best valid loss: {float(best_valid_loss): 8.6f}, patience: {patience_counter}/{early_stopping_patience}")
             if improved and not (_can_ckpt and save_best):
                 print("    ✓ Improved!")
+        sys.stdout.flush()
 
         # On-disk checkpoints (EMA weights + best validation metrics) after metrics log
         if _can_ckpt and save_every_n_epochs > 0 and epoch % save_every_n_epochs == 0:
@@ -1618,6 +1648,11 @@ def main(args=None):
         valid_data = load_ef_npz(args.valid_npz)
         args.num_train = int(train_data["positions"].shape[0])
         args.num_valid = int(valid_data["positions"].shape[0])
+        print(
+            f"  NPZ sizes n_train={args.num_train} n_valid={args.num_valid} "
+            f"(ignore argparse num_train/num_valid defaults above)",
+            flush=True,
+        )
     elif args.data:
         dataset = np.load(args.data, allow_pickle=True)
         train_data, valid_data = prepare_datasets(
