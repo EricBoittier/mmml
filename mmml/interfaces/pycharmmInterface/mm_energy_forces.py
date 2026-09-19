@@ -427,6 +427,23 @@ def _optimized_jax_md_update_gpu(
     return nbrs, pair_idx, mask
 
 
+def resolve_mm_pair_stats_n_valid(
+    n_valid: int | None = None,
+    pair_mask: Any | None = None,
+) -> int | None:
+    """Initial occupancy for ``_mm_pair_stats_init``.
+
+    Do not probe ``locals()`` for ``_n_valid`` / ``_nl_n_valid``: the rebuild
+    path binds ``_n_valid``, the jax-md allocate path only has a pair mask,
+    and a missing name silently seeds ``pair_n_valid=None``.
+    """
+    if n_valid is not None:
+        return int(n_valid)
+    if pair_mask is None:
+        return None
+    return int(np.sum(np.asarray(pair_mask)))
+
+
 def _mm_pair_stats_init(
     *,
     n_static_pairs: int,
@@ -1513,6 +1530,7 @@ def build_mm_energy_forces_fn(
     _use_dynamic_nbrs = _use_jax_md_nbrs or _use_rebuild_nbrs
     _pair_idx_cell = [None]
     _pair_mask_cell = [None]
+    _n_valid: int | None = None
     pair_lambda_mm = None
 
     _mm_assumed_extent = 0.0
@@ -1619,9 +1637,9 @@ def build_mm_energy_forces_fn(
         idx = nbrs_init.idx
         pair_i, pair_j, mask = _filter_fn_cell[0](idx)
         _max_pairs = idx.shape[1]
+        _n_valid = int(np.sum(np.asarray(jax.device_get(mask))))
         if debug:
-            n_valid_init = int(np.sum(np.asarray(jax.device_get(mask))))
-            print(f"[nbr] allocate: capacity={_max_pairs}, n_valid={n_valid_init}, "
+            print(f"[nbr] allocate: capacity={_max_pairs}, n_valid={_n_valid}, "
                   f"frac_coords={fractional_coordinates}, r_cutoff={_mm_list_cutoff:.2f}")
         pair_idx_atom_atom = jnp.stack([pair_i, pair_j], axis=1)
         _cl_mask_jnp = jnp.asarray(mask, dtype=ml_jnp_dtype)
@@ -2141,7 +2159,9 @@ def build_mm_energy_forces_fn(
         _lambda_monomer_jnp = jnp.asarray(lambda_monomer)
         _pair_stats = _mm_pair_stats_init(
             n_static_pairs=int(_n_static_pairs),
-            n_valid=int(_n_valid) if "_n_valid" in locals() else None,
+            n_valid=resolve_mm_pair_stats_n_valid(
+                n_valid=_n_valid, pair_mask=_cl_mask_jnp
+            ),
             radius_info=_mm_radius_info,
             update_interval=int(jax_md_update_interval),
             skin_distance=float(jax_md_skin_distance),

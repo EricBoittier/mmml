@@ -46,15 +46,34 @@ from typing import Callable, Optional
 
 
 def _diag_box_nl(box) -> np.ndarray:
-    """Normalize a JAX-MD box to the (3,) diagonal ``update_fn`` expects."""
-    box_nl = np.asarray(box)
+    """Normalize a JAX-MD box for the MM neighbor-list ``update_fn``.
+
+    ``update_fn`` already accepts a cubic ``(3,)``, an orthorhombic ``(3,)``,
+    or a full ``(3, 3)`` cell (see ``_pbc_cell_for_nl_build`` /
+    ``_mm_pair_cell_3x3``). Averaging a 3×3 diagonal into one length and
+    broadcasting it back to a cube is wrong for both orthorhombic NPT
+    (``Lx ≠ Ly ≠ Lz``) and triclinic cells (off-diagonal tilt). Keep the
+    matrix when given one.
+    """
+    box_nl = np.asarray(box, dtype=np.float64)
     if box_nl.shape == (3, 3):
-        length = float(np.diagonal(box_nl)[:3].mean())
-        return np.array([length, length, length], dtype=np.float64)
+        return np.array(box_nl, dtype=np.float64, copy=True)
     if box_nl.shape == (1,) or box_nl.ndim == 0:
         length = float(box_nl.reshape(-1)[0])
         return np.array([length, length, length], dtype=np.float64)
     return np.asarray(box_nl, dtype=np.float64).reshape(-1)[:3]
+
+
+def _box_nl_debug_label(box_nl) -> str:
+    """Short log line for a neighbor-list box (scalar, ``(3,)``, or ``(3, 3)``)."""
+    arr = np.asarray(box_nl, dtype=np.float64)
+    if arr.shape == (3, 3):
+        diag = np.diagonal(arr)
+        return f"diag=({diag[0]:.4f},{diag[1]:.4f},{diag[2]:.4f})"
+    flat = arr.reshape(-1)
+    if flat.size >= 3 and not np.allclose(flat[:3], flat[0]):
+        return f"L=({flat[0]:.4f},{flat[1]:.4f},{flat[2]:.4f})"
+    return f"L={float(flat[0]):.4f}"
 
 
 def directional_force_energy_error(
@@ -3109,7 +3128,10 @@ def set_up_nhc_sim_routine(
                         box_curr = simulate.npt_box(state)
                         box_nl = _diag_box_nl(box_curr)
                         if getattr(args, "debug", False) and (i < 3 or i % 50 == 0) and steps_done == 0:
-                            print(f"[nbr] NPT record {i}: updating neighbor list, box L={float(box_nl[0]):.4f}")
+                            print(
+                                f"[nbr] NPT record {i}: updating neighbor list, "
+                                f"box {_box_nl_debug_label(box_nl)}"
+                            )
                         npt_pair_idx, npt_pair_mask = refresh_mm_pairs(
                             update_fn, state.position, box_nl, positions_are_cartesian=False
                         )
