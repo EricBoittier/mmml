@@ -502,8 +502,13 @@ def rebind_mlpot_calculator_from_pycmodel(
     unset = getattr(mlpot, "unset_mlpot", None)
     if callable(unset):
         unset()
+    from mmml.interfaces.pycharmmInterface.mlpot.callback_failstop import (
+        failstop_calculate_charmm,
+    )
+
     mlpot.calculator = calc
-    mlpot.energy_func = mlpot.func_type(calc.calculate_charmm)
+    # CFUNCTYPE turns a Python exception into a 0.0 USER term; wrap first.
+    mlpot.energy_func = mlpot.func_type(failstop_calculate_charmm(calc.calculate_charmm))
     # Keep calculator + CFUNCTYPE alive (Fortran only holds a raw function pointer).
     mlpot._energy_func_keepalive = (calc, mlpot.energy_func)
     pycharmm.lib.charmm.mlpot_set_func(mlpot.energy_func)
