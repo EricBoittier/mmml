@@ -72,6 +72,16 @@ def route_mlpot_callback_energy_kcalmol(
     return float(user_kcal)
 
 
+def _zero_nb_components() -> dict[str, float]:
+    return {
+        "vdw_primary": 0.0,
+        "vdw_image": 0.0,
+        "elec_primary": 0.0,
+        "elec_image": 0.0,
+        "mm_total": 0.0,
+    }
+
+
 def decompose_and_route_mlpot_mm_from_callback(
     calculator: Any,
     positions_A: Any,
@@ -96,10 +106,7 @@ def decompose_and_route_mlpot_mm_from_callback(
     except ImportError:
         return float(energy_kcal)
 
-    pos = np.asarray(positions_A, dtype=np.float64)
-    n = int(pos.shape[0])
-    pair_idx = np.asarray(mm_pair_idx, dtype=np.int32)
-    pair_mask = np.asarray(mm_pair_mask, dtype=bool)
+    n = int(np.shape(positions_A)[0])
     cp = getattr(calculator, "cutoff_params", None)
     if cp is None:
         return float(energy_kcal)
@@ -139,6 +146,20 @@ def decompose_and_route_mlpot_mm_from_callback(
             dtype=np.float64,
         )
         charges = np.asarray(_get_actual_psf_charges(n), dtype=np.float64)[:n]
+
+    if not (np.any(charges) or np.any(eps)):
+        # Every per-pair term carries q_i*q_j or sqrt(eps_i*eps_j), so the split is
+        # exactly zero. This is the all-ML case: the energy policy zeroes CHARMM's
+        # live charges/eps (the JAX MM term keeps its own copy), and the full pair
+        # pass (~6.6e5 pairs, ETOH:181) plus the device->host pair-list copy cost
+        # ~1/3 of every MD step for nothing.
+        components = _zero_nb_components()
+        calculator._last_mm_nb_components_kcalmol = components
+        return route_mlpot_callback_energy_kcalmol(float(energy_kcal), components)
+
+    pos = np.asarray(positions_A, dtype=np.float64)
+    pair_idx = np.asarray(mm_pair_idx, dtype=np.int32)
+    pair_mask = np.asarray(mm_pair_mask, dtype=bool)
 
     offsets = np.zeros(len(calculator._atoms_per_monomer) + 1, dtype=np.int32)
     offsets[1:] = np.cumsum(np.asarray(calculator._atoms_per_monomer, dtype=np.int32))
