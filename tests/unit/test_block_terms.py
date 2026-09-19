@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from unittest import mock
-
 import importlib.util
 from pathlib import Path
 from unittest import mock
+
+import pytest
 
 _block_terms_path = (
     Path(__file__).resolve().parents[2]
@@ -103,6 +103,28 @@ def test_zero_mlpot_psf_mm_terms_zeros_params_and_charges():
     fake_psf.delete_connectivity.assert_not_called()
     fake_psf.set_charge.assert_called_once()
     assert fake_psf.set_charge.call_args.args[0] == [0.0, 0.0, 0.0]
+    # The zeroed APPEND leaves CGenFF dihedrals live; all-ML must SKIPE them.
+    pycharmm.lingo.charmm_script.assert_called_once_with(
+        "SKIPE " + " ".join(block_terms.ALL_ML_SKIPE_BONDED)
+    )
+    assert "DIHE" in block_terms.ALL_ML_SKIPE_BONDED
+
+
+def test_zero_mlpot_psf_mm_terms_hybrid_warns_and_keeps_mm_bonded():
+    sel = mock.Mock()
+    sel.get_atom_indexes.return_value = [0, 1]
+    sel.store.return_value = "mlsel"
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.cgenff_prm_swap.apply_zeroed_cgenff_params"
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.cgenff_prm_swap.assert_psf_bonds_present",
+        return_value=400,
+    ), mock.patch.object(block_terms, "_import_pycharmm") as imp:
+        imp.return_value.coor.get_natom.return_value = 5
+        imp.return_value.psf.get_charges.return_value = [0.1] * 5
+        with pytest.warns(UserWarning, match="mlpot-use-block"):
+            block_terms.zero_mlpot_psf_mm_terms(sel)
+        imp.return_value.lingo.charmm_script.assert_not_called()
 
 
 def test_zero_mlpot_psf_mm_terms_periodic_external_also_bonded_only():
