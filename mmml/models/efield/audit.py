@@ -247,7 +247,32 @@ def verdict_from(
     state = (job or {}).get("state") or ""
     if log.get("crashes") or state.upper() in {"FAILED", "OUT_OF_MEMORY", "TIMEOUT", "NODE_FAIL"}:
         return "crashed", "log or sacct reports a failure (not a polar plateau)"
+    disk_best_epoch = None
+    if best and best.get("best_epoch") is not None:
+        disk_best_epoch = int(best["best_epoch"])
+    has_weight_file = any(
+        str(f.get("name", "")).startswith("params-best-") and not str(f.get("name")).endswith(".jsonl")
+        for f in files
+    )
+    running = state.upper() in {"RUNNING", "COMPLETING"}
+
     if not epochs:
+        # Disk beats an unflushed Slurm log. Epoch-1 ckpt + Validation Batch[0]
+        # as the last line is the 22826285 case, not a first-compile hang.
+        if disk_best_epoch is not None or has_weight_file:
+            loss = (best or {}).get("best_valid_loss")
+            if running:
+                return (
+                    "in_progress",
+                    "slurm log has no epoch lines (stdout often unflushed) but "
+                    f"disk has best_epoch={disk_best_epoch} best_valid_loss={loss}; "
+                    "later epochs only rewrite params-best-* if valid loss improves",
+                )
+            return (
+                "first_epoch",
+                f"log never flushed epoch metrics; disk best_epoch={disk_best_epoch} "
+                f"best_valid_loss={loss}",
+            )
         if log.get("compiling") or (log.get("saw_valid_batch") and not log.get("step_compiled")):
             return "compiling", "first train_step / polar JVP is still compiling; no epoch yet"
         if log.get("saw_valid_batch") or log.get("step_compiled"):

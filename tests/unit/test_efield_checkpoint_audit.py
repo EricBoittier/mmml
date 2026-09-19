@@ -123,6 +123,37 @@ def test_audit_missing_symlink_is_not_plateau(tmp_path: Path):
     assert "never improved" not in report.reason.lower()
 
 
+def test_audit_unflushed_log_with_disk_ckpt_is_not_compiling(tmp_path: Path):
+    """22826285: Validation Batch[0] still last in slurm.out, but uuid ckpt exists."""
+    write_best_valid(
+        tmp_path,
+        "441a9161-9eca-4563-9957-04c9d2ec5a34",
+        {
+            "best_valid_loss": 7.622156032889982e21,
+            "best_epoch": 1,
+            "uuid": "441a9161-9eca-4563-9957-04c9d2ec5a34",
+        },
+    )
+    (tmp_path / "params-best-441a9161-9eca-4563-9957-04c9d2ec5a34.json").write_text(
+        "{}", encoding="utf-8"
+    )
+    log = (
+        "Validation Batch[0]\n"
+        "┌────────────────┬──────────────────────────────────────────────────────┐\n"
+        "└────────────────┴──────────────────────────────────────────────────────┘\n"
+    )
+    report = audit_job(
+        ckpt_dir=tmp_path,
+        log_text=log,
+        job={"job_id": "22826285", "state": "RUNNING", "elapsed": "03:44:53"},
+    )
+    assert report.verdict == "in_progress"
+    assert report.best_epoch == 1
+    assert report.best_valid_loss == pytest.approx(7.622156032889982e21)
+    assert "compil" not in report.verdict
+    assert "unflushed" in report.reason
+
+
 def test_audit_plateau_from_history(tmp_path: Path):
     append_history(
         tmp_path,
