@@ -454,10 +454,15 @@ def resolve_dcd_nsavc_for_args(
     nstep: int | None = None,
     timestep_ps: float | None = None,
 ) -> int:
-    """Resolve DCD ``nsavc`` from a parsed ``md-system`` / PyCHARMM namespace."""
+    """Resolve DCD ``nsavc`` from a parsed ``md-system`` / PyCHARMM namespace.
+
+    ``--dcd-interval-ps`` needs a timestep; minimization callers pass none and
+    fall back to ``--dcd-nsavc``.
+    """
+    interval_ps = getattr(args, "dcd_interval_ps", None) if timestep_ps else None
     return resolve_dcd_nsavc(
         dcd_nsavc=int(getattr(args, "dcd_nsavc", 1)),
-        dcd_interval_ps=getattr(args, "dcd_interval_ps", None),
+        dcd_interval_ps=interval_ps,
         timestep_ps=timestep_ps,
         nstep=nstep,
         dcd_max_frames=getattr(args, "dcd_max_frames", 25),
@@ -4338,6 +4343,16 @@ def add_staged_md_args(parser: argparse.ArgumentParser) -> None:
         help="Production length in ps (default: --ps or 100)",
     )
     group.add_argument(
+        "--pbc-ensemble",
+        type=str,
+        choices=["npt", "nvt"],
+        default="npt",
+        help=(
+            "Periodic equi/prod ensemble (default: npt). nvt keeps the cell fixed "
+            "(CPT Hoover with pmass=0) so the box holds its built density."
+        ),
+    )
+    group.add_argument(
         "--npt-thermostat",
         type=str,
         choices=["hoover", "berendsen"],
@@ -4682,6 +4697,17 @@ def add_mlpot_lr_nonbond_args(parser: argparse.ArgumentParser) -> None:
         help=(
             "With periodic_external: keep CHARMM IMAGE VDW on (default). "
             "Use --no-periodic-charmm-vdw for ScaFaCoS Coulomb only (no CHARMM LJ)."
+        ),
+    )
+    group.add_argument(
+        "--charmm-zero-energy-terms",
+        type=str,
+        default=None,
+        metavar="TERMS",
+        help=(
+            "Comma-separated CHARMM ENER components to enforce at zero after MLpot "
+            "registration: vdw, elec, bonded, hbond. "
+            "--no-periodic-charmm-vdw implies vdw."
         ),
     )
     group.add_argument(
