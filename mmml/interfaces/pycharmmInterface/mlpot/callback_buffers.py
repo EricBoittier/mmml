@@ -22,7 +22,11 @@ def stack_charmm_xyz(x, y, z, n: int) -> np.ndarray:
 
 
 def subtract_forces_from_charmm_grad(dx, dy, dz, forces, n: int) -> None:
-    """``dx[i] -= F[i,0]`` (and y/z) via numpy views instead of a Python loop."""
+    """Accumulate ``dx[i] -= F[i,0]`` (and y/z) via numpy views.
+
+    CHARMM may already hold other contributions in ``dx/dy/dz``. This must
+    subtract into those buffers — a memmove or slice assign would drop them.
+    """
     f = np.asarray(forces, dtype=np.float64)
     n = int(n)
     for arr, col in ((dx, 0), (dy, 1), (dz, 2)):
