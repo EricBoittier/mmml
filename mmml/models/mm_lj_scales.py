@@ -33,6 +33,7 @@ __all__ = [
     "load_mm_lj_scales_sidecar",
     "mm_lj_scales_metadata",
     "out_of_bounds_mm_lj_scales",
+    "resolve_md_charge_scale",
     "resolve_md_lj_scales",
     "scales_to_atc",
     "split_mm_lj_scale_params",
@@ -517,3 +518,33 @@ def write_mm_lj_scales_into_hybrid_mm_json(
     with p.open("w", encoding="utf-8") as handle:
         json.dump(data, handle, indent=2)
         handle.write("\n")
+
+
+def resolve_md_charge_scale(
+    *,
+    scales_file: str | Path | None = None,
+    checkpoint: str | Path | None = None,
+) -> float:
+    """Uniform MM charge scale from the same sidecar as the LJ scales (default 1).
+
+    ``mmml tune-mm-nonbonded fit --sidecar`` writes ``mm_charge_scale`` next to
+    the LJ-scale block. Search order is :func:`lj_scales_sidecar_candidates`;
+    the first sidecar carrying learnable LJ scales wins, so LJ and charge
+    scales always come from one file.
+    """
+    import json
+
+    path = find_learnable_lj_scales_sidecar(scales_file=scales_file, checkpoint=checkpoint)
+    if path is None:
+        return 1.0
+    with Path(path).open(encoding="utf-8") as handle:
+        data = json.load(handle)
+    value = float(data.get("mm_charge_scale", 1.0))
+    if not np.isfinite(value) or value <= 0.0:
+        raise ValueError(f"{path}: mm_charge_scale must be positive and finite, got {value!r}")
+    if not (0.5 <= value <= 2.0):
+        warnings.warn(
+            f"{path}: mm_charge_scale={value} is far from 1 -- MM Coulomb scales by its square",
+            stacklevel=2,
+        )
+    return value
