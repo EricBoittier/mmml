@@ -115,20 +115,13 @@ def decompose_and_route_mlpot_mm_from_callback(
         _live_charmm_nonbonded_arrays,
     )
 
-    cached = getattr(calculator, "_live_charmm_nb_cache", None)
-    if isinstance(cached, tuple) and len(cached) == 4 and int(cached[0]) == n:
-        charges, eps, rmins = cached[1], cached[2], cached[3]
+    live = _live_charmm_nonbonded_arrays(n)
+    if live is not None:
+        charges, eps, rmins = live
+        charges = np.asarray(charges, dtype=np.float64)[:n]
+        eps = np.asarray(eps, dtype=np.float64)[:n]
+        rmins = np.asarray(rmins, dtype=np.float64)[:n]
     else:
-        live = _live_charmm_nonbonded_arrays(n)
-        if live is not None:
-            charges, eps, rmins = live
-            charges = np.asarray(charges, dtype=np.float64)[:n]
-            eps = np.asarray(eps, dtype=np.float64)[:n]
-            rmins = np.asarray(rmins, dtype=np.float64)[:n]
-            calculator._live_charmm_nb_cache = (n, charges, eps, rmins)
-        else:
-            charges = eps = rmins = None
-    if charges is None:
         try:
             import pycharmm.atom_info as atom_info
         except (ImportError, OSError):

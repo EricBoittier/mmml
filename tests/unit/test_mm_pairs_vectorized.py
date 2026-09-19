@@ -6,7 +6,11 @@ import numpy as np
 import pytest
 
 from mmml.interfaces.pycharmmInterface.mm_energy_forces import decompose_mlpot_mm_nb_eterms_kcalmol
-from mmml.interfaces.pycharmmInterface.nl_reference import apply_mm_pair_filters, mm_pair_filter_mask
+from mmml.interfaces.pycharmmInterface.nl_reference import (
+    apply_mm_pair_filters,
+    mm_pair_filter_mask,
+    unique_mic_orthorhombic,
+)
 
 L = 12.0
 APM = 3
@@ -140,9 +144,17 @@ def test_eterm_split_com_weighted_matches_per_pair_reference(complementary):
     assert fallback["mm_total"] != pytest.approx(got["mm_total"], rel=1e-6)
 
 
-@pytest.mark.parametrize("cutoff", [5.0, 7.0])  # 7 Å > L/2: pairs can appear through two images
+def test_unique_mic_orthorhombic_is_strict_at_two_cutoff():
+    cell = np.eye(3) * 12.0
+    assert unique_mic_orthorhombic(cell, 5.0)  # 12 > 10
+    assert not unique_mic_orthorhombic(cell, 6.0)  # 12 == 12: boundary
+    assert not unique_mic_orthorhombic(cell, 7.0)  # 12 < 14
+    assert unique_mic_orthorhombic(np.eye(3) * 12.0001, 6.0)
+
+
+@pytest.mark.parametrize("cutoff", [5.0, 6.0, 7.0])
 def test_vesin_mic_pair_arrays_sorted_unique_and_complete(cutoff):
-    """5 Å: unique-MIC skip (L=12 >= 10). 7 Å: L < 2*cutoff keeps sort-dedup."""
+    """5 Å: unique-MIC (L > 2c). 6 Å: L == 2c boundary. 7 Å: two-image box."""
     pytest.importorskip("vesin")
     from mmml.interfaces.pycharmmInterface.nl_reference import vesin_mic_pair_arrays
 
@@ -151,5 +163,34 @@ def test_vesin_mic_pair_arrays_sorted_unique_and_complete(cutoff):
     ref = {(a, b) for a, b, r in zip(i.tolist(), j.tolist(), d) if mid[a] != mid[b] and r < cutoff}
     pi, pj = vesin_mic_pair_arrays(R, np.eye(3) * L, cutoff, mid, monomer_offsets=offs)
     key = pi * (len(R) + 1) + pj
+    assert np.all(pi < pj)
     assert np.all(np.diff(key) > 0)  # lexicographically sorted, no duplicates
     assert set(zip(pi.tolist(), pj.tolist())) == ref
+
+
+def test_vesin_excludes_pair_exactly_at_cutoff_on_L_equals_2c_boundary():
+    """L = 2*cutoff: atoms L/2 apart have d == cutoff and must stay out (strict <)."""
+    pytest.importorskip("vesin")
+    from mmml.interfaces.pycharmmInterface.nl_reference import vesin_mic_pair_arrays
+
+    cutoff = 6.0
+    R = np.array(
+        [
+            [0.0, 0.0, 0.0],
+            [0.1, 0.0, 0.0],
+            [0.2, 0.0, 0.0],
+            [6.0, 0.0, 0.0],
+            [6.1, 0.0, 0.0],
+            [6.2, 0.0, 0.0],
+        ],
+        dtype=np.float64,
+    )
+    mid = np.array([0, 0, 0, 1, 1, 1], dtype=np.int64)
+    offs = np.array([0, 3, 6], dtype=np.int64)
+    pi, pj = vesin_mic_pair_arrays(R, np.eye(3) * 12.0, cutoff, mid, monomer_offsets=offs)
+    pairs = set(zip(pi.tolist(), pj.tolist()))
+    assert (0, 3) not in pairs  # |6.0 - 0.0| == cutoff
+    for a, b in pairs:
+        d = float(np.linalg.norm(_mic(R[b] - R[a])))
+        assert a < b
+        assert d < cutoff
