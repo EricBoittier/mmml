@@ -2173,25 +2173,6 @@ def build_mm_energy_forces_fn(
         _last_box = [None]
         _fallback_max_pairs_cell = [int(_n_static_pairs)]
 
-        def _record_pair_capacity(capacity: int, reason: str) -> None:
-            cap = int(capacity)
-            prev = int(_pair_stats.get("pair_capacity", cap))
-            if cap == prev:
-                return
-            _pair_stats["pair_capacity"] = cap
-            _pair_stats["pair_capacity_changes"] = int(
-                _pair_stats.get("pair_capacity_changes", 0)
-            ) + 1
-            history = list(_pair_stats.get("pair_capacity_history", []))
-            history.append(cap)
-            _pair_stats["pair_capacity_history"] = history[-16:]
-            _pair_stats["last_capacity_change_reason"] = reason
-            if os.environ.get("MMML_MM_NL_STRICT_CAPACITY") == "1":
-                raise RuntimeError(
-                    f"MM pair-list capacity changed from {prev} to {cap} ({reason}); "
-                    "this can trigger JAX recompilation"
-                )
-
         _pair_kw = dict(
             lambda_monomer=_lambda_monomer_jnp, monomer_id=_monomer_id_jnp,
             q_per_system=q_per_system, rmins_per_system=rmins_per_system,
@@ -2205,8 +2186,6 @@ def build_mm_energy_forces_fn(
                 positions, pair_idx, pair_mask, cell_for_mic, charges, **_pair_kw
             )
 
-        def _record_pair_occupancy(n_valid: int) -> None:
-            _pair_stats["pair_n_valid"] = int(n_valid)
         def calculate_mm_pair_energies_dynamic(
             positions: Array,
             pair_idx: Array,
@@ -2935,6 +2914,7 @@ def build_mm_energy_forces_fn(
             return dict(_pair_stats)
 
         update_mm_pairs.get_stats = _get_pair_update_stats
+        update_mm_pairs.fractional_coordinates = bool(fractional_coordinates)
         # jax-pme moves Coulomb/dispersion off the pair list, so the pair split would
         # not be the MM the hybrid evaluates; routing keeps its numpy fallback there.
         update_mm_pairs.mm_eterm_split = None if _use_jax_pme_coulomb else mm_eterm_split_dynamic
