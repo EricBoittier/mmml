@@ -21,6 +21,7 @@ from mmml.interfaces.pycharmmInterface.cutoffs import GAMMA_OFF, GAMMA_ON
 from mmml.interfaces.pycharmmInterface.ml_dtypes import resolve_ml_compute_dtype
 from mmml.interfaces.pycharmmInterface.pbc_utils_jax import (
     cell_inverse,
+    frac_coords,
     mic_displacement,
     mic_displacement_smooth,
     mic_displacements_batched,
@@ -980,6 +981,90 @@ def _wrap_mm_fn_with_jax_pme_coulomb(
     return wrapped
 
 
+def unswitched_pair_vdw_elec(
+    positions: Array,
+    pair_idx: Array,
+    pair_mask: Array,
+    cell_for_mic: Optional[Array],
+    charges: Optional[Array],
+    *,
+    lambda_monomer: Array,
+    monomer_id: Array,
+    q_per_system: Array,
+    rmins_per_system: Array,
+    epsilons_per_system: Array,
+    pbc_cell: Optional[Array],
+    use_smooth_mic: bool,
+    pair_vdw_energies: Callable[..., Array],
+    coulomb_fn: Callable[..., Array],
+    use_jax_pme_coulomb: bool,
+) -> Tuple[Array, Array, Array]:
+    """Unswitched per-pair ``(vdw, elec, r)``; elec is zero under jax-pme Coulomb."""
+    pair_i = pair_idx[:, 0]
+    pair_j = pair_idx[:, 1]
+    lam_a = jnp.take(lambda_monomer, monomer_id[pair_i])
+    lam_b = jnp.take(lambda_monomer, monomer_id[pair_j])
+    pair_lambda_mm_dyn = lam_a * lam_b * pair_mask
+
+    q_use = q_per_system if charges is None else charges
+    q_a = jnp.take(q_use, pair_i)
+    q_b = jnp.take(q_use, pair_j)
+    rm_a = jnp.take(rmins_per_system, pair_i)
+    rm_b = jnp.take(rmins_per_system, pair_j)
+    ep_a = jnp.take(epsilons_per_system, pair_i)
+    ep_b = jnp.take(epsilons_per_system, pair_j)
+    pair_qq_dyn = q_a * q_b * pair_lambda_mm_dyn
+    pair_rm_dyn = rm_a + rm_b
+    pair_ep_dyn = (ep_a * ep_b) ** 0.5 * pair_lambda_mm_dyn
+
+    cell_raw = cell_for_mic if cell_for_mic is not None else pbc_cell
+    cell = _box_to_cell_3x3(cell_raw)
+    mic_batched = mic_displacements_batched_smooth if use_smooth_mic else mic_displacements_batched
+    distances = safe_norm(mic_batched(positions[pair_j], positions[pair_i], cell), axis=1)
+    distances = jax.nn.softplus(20.0 * (distances - 0.6)) / 20.0 + 0.6
+    distances = jnp.where(pair_mask > 0, distances, 1e6)
+
+    pair_mask_ij = pair_i < pair_j
+    vdw = pair_vdw_energies(distances, pair_rm_dyn, pair_ep_dyn, pair_mask_ij)
+    if use_jax_pme_coulomb:
+        return vdw, jnp.zeros_like(vdw), distances
+    elec = coulomb_fn(distances, pair_qq_dyn) * pair_mask_ij
+    return vdw, elec, distances
+
+
+def switched_mm_eterm_split(
+    positions: Array,
+    pair_idx: Array,
+    pair_mask: Array,
+    box_override: Optional[Array],
+    *,
+    pair_vdw_elec: Callable[..., Tuple[Array, Array, Array]],
+    pbc_cell: Optional[Array],
+    monomer_id: Array,
+    dimer_lookup: Array,
+    apply_switching: Callable[..., Array],
+) -> Array:
+    """Switched MM split ``[vdw_primary, vdw_image, elec_primary, elec_image]`` (kcal/mol)."""
+    cell_raw = box_override if box_override is not None else pbc_cell
+    cell = _box_to_cell_3x3(cell_raw)
+    vdw, elec, distances = pair_vdw_elec(
+        positions, pair_idx, pair_mask, cell_for_mic=cell
+    )
+    pair_i, pair_j = pair_idx[:, 0], pair_idx[:, 1]
+    shift = jnp.round(frac_coords(positions[pair_j] - positions[pair_i], cell))
+    primary = jnp.all(shift == 0, axis=1).astype(vdw.dtype)
+    pdi = dimer_lookup[monomer_id[pair_i], monomer_id[pair_j]]
+
+    def _sw(e: Array) -> Array:
+        return apply_switching(
+            positions, e, distances=distances, pair_dimer_idx_arg=pdi, box_override=cell
+        )
+
+    return jnp.stack(
+        [_sw(vdw * primary), _sw(vdw * (1 - primary)), _sw(elec * primary), _sw(elec * (1 - primary))]
+    )
+
+
 def build_mm_energy_forces_fn(
     R: np.ndarray,
     *,
@@ -1848,51 +1933,18 @@ def build_mm_energy_forces_fn(
                     "this can trigger JAX recompilation"
                 )
 
-        def _dynamic_pair_vdw_elec(
-            positions: Array,
-            pair_idx: Array,
-            pair_mask: Array,
-            cell_for_mic: Optional[Array] = None,
-            charges: Optional[Array] = None,
-        ) -> Tuple[Array, Array, Array]:
-            """Unswitched per-pair (vdw, elec, r); elec is zero under jax-pme Coulomb."""
-            pair_i = pair_idx[:, 0]
-            pair_j = pair_idx[:, 1]
-            lam_a = jnp.take(_lambda_monomer_jnp, _monomer_id_jnp[pair_i])
-            lam_b = jnp.take(_lambda_monomer_jnp, _monomer_id_jnp[pair_j])
-            pair_lambda_mm_dyn = lam_a * lam_b * pair_mask
+        _pair_kw = dict(
+            lambda_monomer=_lambda_monomer_jnp, monomer_id=_monomer_id_jnp,
+            q_per_system=q_per_system, rmins_per_system=rmins_per_system,
+            epsilons_per_system=epsilons_per_system, pbc_cell=_pbc_cell_jnp,
+            use_smooth_mic=_use_smooth_mic, pair_vdw_energies=_pair_vdw_energies,
+            coulomb_fn=coulomb, use_jax_pme_coulomb=_use_jax_pme_coulomb,
+        )
 
-            q_use = q_per_system if charges is None else charges
-            q_a = jnp.take(q_use, pair_i)
-            q_b = jnp.take(q_use, pair_j)
-            rm_a = jnp.take(rmins_per_system, pair_i)
-            rm_b = jnp.take(rmins_per_system, pair_j)
-            ep_a = jnp.take(epsilons_per_system, pair_i)
-            ep_b = jnp.take(epsilons_per_system, pair_j)
-            pair_qq_dyn = q_a * q_b * pair_lambda_mm_dyn
-            pair_rm_dyn = rm_a + rm_b
-            pair_ep_dyn = (ep_a * ep_b) ** 0.5 * pair_lambda_mm_dyn
-
-            _cell_raw = cell_for_mic if cell_for_mic is not None else _pbc_cell_jnp
-            _cell = _box_to_cell_3x3(_cell_raw)
-            pos_dst = positions[pair_j]
-            pos_src = positions[pair_i]
-            mic_batched = mic_displacements_batched_smooth if _use_smooth_mic else mic_displacements_batched
-            displacements = mic_batched(pos_dst, pos_src, _cell)
-            distances = safe_norm(displacements, axis=1)
-
-            # Prevent hard 0.0 overlaps from generating Inf / NaN during 1/r^12 calculation.
-            # Using softplus for a C2 continuous soft-core boundary at 0.6 Å.
-            distances = jax.nn.softplus(20.0 * (distances - 0.6)) / 20.0 + 0.6
-
-            distances = jnp.where(pair_mask > 0, distances, 1e6)
-
-            pair_mask_ij = (pair_i < pair_j)
-            vdw = _pair_vdw_energies(distances, pair_rm_dyn, pair_ep_dyn, pair_mask_ij)
-            if _use_jax_pme_coulomb:
-                return vdw, jnp.zeros_like(vdw), distances
-            elec = coulomb(distances, pair_qq_dyn) * pair_mask_ij
-            return vdw, elec, distances
+        def _dynamic_pair_vdw_elec(positions, pair_idx, pair_mask, cell_for_mic=None, charges=None):
+            return unswitched_pair_vdw_elec(
+                positions, pair_idx, pair_mask, cell_for_mic, charges, **_pair_kw
+            )
 
         def calculate_mm_pair_energies_dynamic(
             positions: Array,
@@ -1959,39 +2011,14 @@ def build_mm_energy_forces_fn(
             switched_energy = jnp.where(jnp.isfinite(switched_energy), switched_energy, 0.0)
             return switched_energy, forces
 
-        @jax.jit
-        def mm_eterm_split_dynamic(
-            positions: Array,
-            pair_idx: Array,
-            pair_mask: Array,
-            box_override: Optional[Array] = None,
-        ) -> Array:
-            """Switched MM energy split for CHARMM ENER reporting (issue #218).
-
-            Same pair terms, λ, COM switching and MIC as the force path; returns
-            ``[vdw_primary, vdw_image, elec_primary, elec_image]`` (kcal/mol), where
-            image pairs are those whose minimum image needs a lattice shift.
-            """
-            from mmml.interfaces.pycharmmInterface.pbc_utils_jax import frac_coords
-
-            _cell_raw = box_override if box_override is not None else _pbc_cell_jnp
-            cell = _box_to_cell_3x3(_cell_raw)
-            vdw, elec, distances = _dynamic_pair_vdw_elec(
-                positions, pair_idx, pair_mask, cell_for_mic=cell
-            )
-            pair_i, pair_j = pair_idx[:, 0], pair_idx[:, 1]
-            shift = jnp.round(frac_coords(positions[pair_j] - positions[pair_i], cell))
-            primary = jnp.all(shift == 0, axis=1).astype(vdw.dtype)
-            pdi = _dimer_lookup_arr[_monomer_id_jnp[pair_i], _monomer_id_jnp[pair_j]]
-
-            def _sw(e: Array) -> Array:
-                return apply_switching_function(
-                    positions, e, distances=distances, pair_dimer_idx_arg=pdi, box_override=cell
-                )
-
-            return jnp.stack(
-                [_sw(vdw * primary), _sw(vdw * (1 - primary)), _sw(elec * primary), _sw(elec * (1 - primary))]
-            )
+        mm_eterm_split_dynamic = jax.jit(partial(
+            switched_mm_eterm_split,
+            pair_vdw_elec=_dynamic_pair_vdw_elec,
+            pbc_cell=_pbc_cell_jnp,
+            monomer_id=_monomer_id_jnp,
+            dimer_lookup=_dimer_lookup_arr,
+            apply_switching=apply_switching_function,
+        ))
 
         def _fallback_backend_request() -> str:
             resolved = resolve_mm_nl_backend(mm_nl_backend)
