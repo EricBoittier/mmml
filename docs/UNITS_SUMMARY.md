@@ -197,6 +197,10 @@ flowchart TB
   SUM --> MLPOT
 ```
 
+Trainers consume the **train** column. `mmml validate` / `npz_schema.py`
+still describe the **ingest** column. See
+[Training NPZ contract](training-npz-contract.md).
+
 ## Pipeline stage table
 
 | Stage | Coordinates | Energy | Forces | Dipole | Unit record |

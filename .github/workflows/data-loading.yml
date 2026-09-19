@@ -1,0 +1,46 @@
+name: Data loading
+
+# Synthetic NPZ / HDF5 contracts only. Never download Zenodo, SPICE, rMD17,
+# or any other remote dataset in this workflow.
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+concurrency:
+  group: data-loading-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  data-loading:
+    name: Data loading (synthetic)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/setup-mmml
+        with:
+          # Core + dev: h5py is a core dep. No jax-pme, no CHARMM, no datasets.
+          sync-args: "--extra dev"
+      - name: Run synthetic data-loading tests
+        run: |
+          mkdir -p .ci-reports
+          # Collect only these files so module-level skipif elsewhere
+          # (PyCHARMM / PySCF) does not inflate the JUnit skip count.
+          uv run pytest -v --color=yes -m data_loading \
+            --junitxml=.ci-reports/junit-data-loading.xml \
+            tests/unit/test_data_loading_contracts.py \
+            tests/unit/test_spice_alpha.py \
+            tests/unit/test_training_npz_contract.py \
+            tests/unit/test_npz_schema.py \
+            tests/unit/test_read_h5_helpers.py \
+            tests/unit/test_fix_and_split_units.py \
+            tests/unit/test_efield_polar_loss.py
+      - name: Data-loading suite ran for real
+        if: always()
+        run: |
+          uv run python scripts/ci/check_test_report.py \
+            .ci-reports/junit-data-loading.xml \
+            --label "data-loading suite" --min-passed 40 --max-skipped 0

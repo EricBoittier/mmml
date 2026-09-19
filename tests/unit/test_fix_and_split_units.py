@@ -15,6 +15,8 @@ from mmml.cli.misc.fix_and_split import (
 )
 from mmml.data.units import UnitsManifestV2, load_units_manifest
 
+pytestmark = pytest.mark.data_loading
+
 
 def test_convert_energy_array_hartree_to_ev() -> None:
     e_ha = np.array([-1.0, -2.0])

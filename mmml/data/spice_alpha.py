@@ -1,0 +1,511 @@
+"""SPICE-α (Zenodo 19205036) HDF5 → PhysNet train NPZ.
+
+The public release uses one HDF5 group per molecule and ``M`` conformers per
+group (``conformations`` of shape ``(M, N, 3)``). That is not the PhysNetJAX
+``mol_*`` / ``positions`` / ``total_forces`` layout in ``read_h5.py``.
+
+Bundled ``units_map`` is already MMML **train** units (Å, eV, eV/Å, e·Å)
+except ``dft_total_gradient``, which is ∇E. This module stores ``F = −∇E``.
+
+Never download Zenodo from here. Tests use synthetic HDF5 only.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, Iterator, Literal, Mapping, Sequence
+
+import numpy as np
+
+from mmml.data.units import polar_e_angstrom2_per_volt_to_bohr3
+
+UnitsKind = Literal["canonical", "atomic", "unknown"]
+
+# From SPICE-alpha/README.md inside the Zenodo zip (not inferred).
+SPICE_ALPHA_CANONICAL_UNITS: dict[str, str] = {
+    "atomic_numbers": "dimensionless",
+    "conformations": "Angstrom",
+    "dft_total_energy": "eV",
+    "dft_total_gradient": "eV/Angstrom",
+    "scf_dipole": "elementary_charge*Angstrom",
+    "polarizability": "e*Angstrom^2/volt",
+}
+
+TRAIN_NPZ_UNITS: dict[str, str] = {
+    "R": "angstrom",
+    "E": "ev",
+    "F": "ev_angstrom",
+    "D": "e_angstrom",
+    "force": "negated dft_total_gradient",
+    "source": "zenodo-19205036",
+}
+
+DEFAULT_CHARGE_TOL = 0.15
+PHYSNET_TRAIN_KEYS = ("R", "Z", "N", "E", "F")
+PHYSNET_OPTIONAL_KEYS = ("D", "Q", "polar", "Ef")
+PolarUnits = Literal["spice", "bohr3"]
+
+
+def normalize_unit_token(value: str) -> str:
+    """Collapse unit-string spelling so README / MACE / OpenMM variants match."""
+    text = str(value).strip().lower()
+    for old, new in (
+        ("·", "*"),
+        (" ", ""),
+        ("_", ""),
+        ("angstroms", "angstrom"),
+        ("ångstrom", "angstrom"),
+        ("elementarycharge", "e"),
+    ):
+        text = text.replace(old, new)
+    return text
+
+
+def classify_units_map(units_map: Mapping[str, Any] | None) -> UnitsKind:
+    """Return ``canonical`` (already train units), ``atomic`` (original SPICE), or ``unknown``."""
+    if not units_map:
+        return "unknown"
+    tokens = {key: normalize_unit_token(str(val)) for key, val in units_map.items()}
+    energy = tokens.get("dft_total_energy", "")
+    coords = tokens.get("conformations", "")
+    grad = tokens.get("dft_total_gradient", "")
+    if "hartree" in energy or "bohr" in coords or "hartree" in grad:
+        return "atomic"
+    if "ev" in energy and "angstrom" in coords and "ev" in grad:
+        return "canonical"
+    return "unknown"
+
+
+def parse_units_attr(raw: Any) -> dict[str, str]:
+    """Decode an HDF5 ``units_map`` attribute (JSON string or mapping)."""
+    if raw is None:
+        return {}
+    if isinstance(raw, bytes):
+        raw = raw.decode("utf-8", errors="replace")
+    if isinstance(raw, str):
+        loaded = json.loads(raw)
+        if isinstance(loaded, dict):
+            return {str(k): str(v) for k, v in loaded.items()}
+        return {}
+    if isinstance(raw, Mapping):
+        return {str(k): str(v) for k, v in raw.items()}
+    return {}
+
+
+def read_units_map(h5: Any) -> dict[str, str]:
+    """File-level ``units_map``, else the first group's."""
+    parsed = parse_units_attr(h5.attrs.get("units_map"))
+    if parsed:
+        return parsed
+    for name in h5.keys():
+        group = h5[name]
+        parsed = parse_units_attr(getattr(group, "attrs", {}).get("units_map"))
+        if parsed:
+            return parsed
+    return {}
+
+
+@dataclass(frozen=True)
+class SpiceAlphaFrame:
+    """One conformation after gradient → force conversion."""
+
+    Z: np.ndarray
+    R: np.ndarray
+    E: float
+    F: np.ndarray
+    D: np.ndarray
+    Q: float | None
+    polar: np.ndarray | None
+    group: str
+    iconf: int
+
+
+def _optional_charge(group: Any, n: int) -> np.ndarray | None:
+    if "mbis_charges" not in group:
+        return None
+    charges = np.asarray(group["mbis_charges"][()], dtype=np.float64)
+    return charges.reshape(n, -1).sum(axis=1)
+
+
+def iter_spice_alpha_frames(
+    h5: Any,
+    *,
+    flip_gradient: bool = True,
+    neutral_only: bool = False,
+    charge_tol: float = DEFAULT_CHARGE_TOL,
+) -> Iterator[SpiceAlphaFrame]:
+    """Yield frames from a SPICE-α-style HDF5 file object."""
+    for name in h5.keys():
+        group = h5[name]
+        if "conformations" not in group or "atomic_numbers" not in group:
+            continue
+        numbers = np.asarray(group["atomic_numbers"][()], dtype=np.int32)
+        positions = np.asarray(group["conformations"][()], dtype=np.float64)
+        if positions.ndim != 3 or positions.shape[-1] != 3:
+            raise ValueError(
+                f"{name}: conformations must be (M, N, 3), got {positions.shape}"
+            )
+        n_conf, n_atoms, _ = positions.shape
+        if numbers.shape != (n_atoms,):
+            raise ValueError(
+                f"{name}: atomic_numbers shape {numbers.shape} != ({n_atoms},)"
+            )
+        if "dft_total_energy" not in group or "dft_total_gradient" not in group:
+            continue
+        energy = np.asarray(group["dft_total_energy"][()], dtype=np.float64).reshape(-1)
+        gradient = np.asarray(group["dft_total_gradient"][()], dtype=np.float64)
+        if energy.shape != (n_conf,) or gradient.shape != (n_conf, n_atoms, 3):
+            raise ValueError(
+                f"{name}: energy/gradient shapes {energy.shape}/{gradient.shape} "
+                f"do not match conformations {positions.shape}"
+            )
+        if "scf_dipole" in group:
+            dipole = np.asarray(group["scf_dipole"][()], dtype=np.float64)
+            if dipole.shape != (n_conf, 3):
+                raise ValueError(f"{name}: scf_dipole shape {dipole.shape}")
+        else:
+            dipole = np.full((n_conf, 3), np.nan, dtype=np.float64)
+        polar = None
+        if "polarizability" in group:
+            polar = np.asarray(group["polarizability"][()], dtype=np.float64)
+            if polar.shape != (n_conf, 3, 3):
+                raise ValueError(f"{name}: polarizability shape {polar.shape}")
+        charges = _optional_charge(group, n_conf)
+        forces = -gradient if flip_gradient else gradient
+        for i in range(n_conf):
+            if not np.isfinite(energy[i]) or not np.isfinite(forces[i]).all():
+                continue
+            q = None if charges is None else float(charges[i])
+            if neutral_only and q is not None and abs(q) > charge_tol:
+                continue
+            yield SpiceAlphaFrame(
+                Z=numbers,
+                R=positions[i],
+                E=float(energy[i]),
+                F=np.asarray(forces[i], dtype=np.float64),
+                D=dipole[i],
+                Q=q,
+                polar=None if polar is None else polar[i],
+                group=str(name),
+                iconf=i,
+            )
+
+
+def pad_frames(
+    frames: Sequence[SpiceAlphaFrame],
+    *,
+    pad_atoms: int | None = None,
+    write_efield: bool = False,
+    polar_units: PolarUnits = "spice",
+) -> dict[str, np.ndarray]:
+    """Stack frames into a PhysNet-padded NPZ dict (Å / eV / eV/Å / e·Å)."""
+    if not frames:
+        raise ValueError("no frames")
+    pad = int(pad_atoms or max(int(fr.Z.shape[0]) for fr in frames))
+    n = len(frames)
+    R = np.zeros((n, pad, 3), dtype=np.float64)
+    F = np.zeros((n, pad, 3), dtype=np.float64)
+    Z = np.zeros((n, pad), dtype=np.int32)
+    N = np.zeros((n,), dtype=np.int32)
+    E = np.zeros((n,), dtype=np.float64)
+    D = np.zeros((n, 3), dtype=np.float64)
+    Q = np.zeros((n,), dtype=np.float64)
+    polar = np.full((n, 3, 3), np.nan, dtype=np.float64)
+    has_polar = False
+    for i, fr in enumerate(frames):
+        n_real = int(fr.Z.shape[0])
+        if n_real > pad:
+            raise ValueError(f"frame {i} has {n_real} atoms > pad_atoms={pad}")
+        Z[i, :n_real] = fr.Z
+        R[i, :n_real] = fr.R
+        F[i, :n_real] = fr.F
+        N[i] = n_real
+        E[i] = fr.E
+        D[i] = fr.D
+        Q[i] = 0.0 if fr.Q is None else fr.Q
+        if fr.polar is not None:
+            polar[i] = fr.polar
+            has_polar = True
+    units = dict(TRAIN_NPZ_UNITS)
+    if has_polar and polar_units == "bohr3":
+        polar = polar_e_angstrom2_per_volt_to_bohr3(polar)
+        units["polar"] = "bohr3"
+    elif has_polar:
+        units["polar"] = "e_angstrom2_per_volt"
+    out: dict[str, np.ndarray] = {
+        "R": R,
+        "Z": Z,
+        "N": N,
+        "E": E,
+        "F": F,
+        "D": D,
+        "Q": Q,
+        "_mmml_units": np.array(json.dumps(units)),
+    }
+    if has_polar:
+        out["polar"] = np.asarray(polar, dtype=np.float64)
+    if write_efield:
+        out["Ef"] = np.zeros((n, 3), dtype=np.float64)
+        units["Ef"] = "zero"
+        out["_mmml_units"] = np.array(json.dumps(units))
+    return out
+
+
+def assert_train_npz_contract(data: Mapping[str, Any]) -> None:
+    """Raise ``ValueError`` if arrays are not a PhysNet train NPZ."""
+    missing = [key for key in PHYSNET_TRAIN_KEYS if key not in data]
+    if missing:
+        raise ValueError(f"missing train keys: {missing}")
+    r = np.asarray(data["R"])
+    z = np.asarray(data["Z"])
+    f = np.asarray(data["F"])
+    n = np.asarray(data["N"]).reshape(-1)
+    e = np.asarray(data["E"]).reshape(-1)
+    if r.ndim != 3 or r.shape[-1] != 3:
+        raise ValueError(f"R must be (n, pad, 3), got {r.shape}")
+    n_struct, pad, _ = r.shape
+    if z.shape != (n_struct, pad) or f.shape != r.shape:
+        raise ValueError(f"Z/F shapes {z.shape}/{f.shape} do not match R {r.shape}")
+    if e.shape != (n_struct,) or n.shape != (n_struct,):
+        raise ValueError(f"E/N shapes {e.shape}/{n.shape} do not match n={n_struct}")
+    if np.any(n < 0) or np.any(n > pad):
+        raise ValueError("N must satisfy 0 <= N[i] <= pad")
+    if "D" in data:
+        d = np.asarray(data["D"])
+        if d.shape != (n_struct, 3):
+            raise ValueError(f"D must be (n, 3), got {d.shape}")
+    units = data.get("_mmml_units")
+    if units is not None:
+        parsed = json.loads(str(np.asarray(units).reshape(-1)[0]))
+        if parsed.get("E") not in {"ev", "eV"} or parsed.get("F") not in {
+            "ev_angstrom",
+            "ev/angstrom",
+            "eV/Angstrom",
+        }:
+            raise ValueError(f"_mmml_units is not train units: {parsed}")
+
+
+def max_atomic_number(data: Mapping[str, Any]) -> int:
+    """Largest real (non-pad) atomic number; 0 if empty."""
+    z = np.asarray(data["Z"])
+    n = np.asarray(data["N"]).reshape(-1)
+    found = 0
+    for i, n_real in enumerate(n):
+        if n_real:
+            found = max(found, int(z[i, : int(n_real)].max()))
+    return found
+
+
+def check_efield_train_npz(path: Path | str) -> list[str]:
+    """Return problems that would break ``efield-train --polar_weight``; empty = ok."""
+    dest = Path(path)
+    problems: list[str] = []
+    if not dest.is_file():
+        return [f"{dest}: not a file"]
+    raw = np.load(dest, allow_pickle=True)
+    files = set(raw.files)
+    for key in (*PHYSNET_TRAIN_KEYS, "Ef", "polar"):
+        if key not in files:
+            problems.append(f"{dest.name}: missing {key!r}")
+    if problems:
+        return problems
+    try:
+        assert_train_npz_contract({k: raw[k] for k in raw.files})
+    except ValueError as exc:
+        problems.append(f"{dest.name}: {exc}")
+    n = int(np.asarray(raw["E"]).reshape(-1).shape[0])
+    ef = np.asarray(raw["Ef"])
+    if ef.shape != (n, 3):
+        problems.append(f"{dest.name}: Ef shape {ef.shape} != {(n, 3)}")
+    elif not np.allclose(ef, 0.0, atol=1e-8):
+        problems.append(f"{dest.name}: Ef is not zero (SPICE-α is zero-field DFT)")
+    polar = np.asarray(raw["polar"])
+    if polar.shape != (n, 3, 3):
+        problems.append(f"{dest.name}: polar shape {polar.shape} != {(n, 3, 3)}")
+    else:
+        finite = np.isfinite(polar).all(axis=(-2, -1))
+        if not bool(finite.any()):
+            problems.append(f"{dest.name}: polar is all-NaN")
+    units_raw = raw["_mmml_units"] if "_mmml_units" in files else None
+    if units_raw is not None:
+        parsed = json.loads(str(np.asarray(units_raw).reshape(-1)[0]))
+        if str(parsed.get("E", "")).lower() not in {"ev"}:
+            problems.append(f"{dest.name}: _mmml_units E={parsed.get('E')!r} (want ev)")
+        if str(parsed.get("polar", "")).lower() != "bohr3":
+            problems.append(
+                f"{dest.name}: polar units {parsed.get('polar')!r} (want bohr3; reconvert with --polar-units bohr3)"
+            )
+    return problems
+
+
+def write_physnet_npz(data: Mapping[str, Any], path: Path | str) -> Path:
+    """Write a compressed NPZ after checking the train contract."""
+    assert_train_npz_contract(data)
+    dest = Path(path)
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    np.savez_compressed(dest, **{k: np.asarray(v) for k, v in data.items()})
+    return dest
+
+
+def convert_spice_alpha_hdf5(
+    paths: Sequence[Path | str],
+    out: Path | str,
+    *,
+    pad_atoms: int | None = None,
+    max_frames: int = 0,
+    flip_gradient: bool = True,
+    neutral_only: bool = False,
+    charge_tol: float = DEFAULT_CHARGE_TOL,
+    require_canonical_units: bool = True,
+    write_efield: bool = False,
+    polar_units: PolarUnits = "spice",
+) -> dict[str, np.ndarray]:
+    """Load one or more SPICE-α HDF5 files and write a PhysNet NPZ."""
+    import h5py
+
+    frames: list[SpiceAlphaFrame] = []
+    for path in paths:
+        with h5py.File(path, "r") as handle:
+            kind = classify_units_map(read_units_map(handle))
+            if require_canonical_units and kind == "atomic":
+                raise ValueError(
+                    f"{path}: units_map looks like original SPICE (Bohr/Hartree). "
+                    "Use fix-and-split defaults + --flip-forces, not this converter."
+                )
+            for frame in iter_spice_alpha_frames(
+                handle,
+                flip_gradient=flip_gradient,
+                neutral_only=neutral_only,
+                charge_tol=charge_tol,
+            ):
+                frames.append(frame)
+                if max_frames and len(frames) >= max_frames:
+                    break
+        if max_frames and len(frames) >= max_frames:
+            break
+    data = pad_frames(
+        frames,
+        pad_atoms=pad_atoms,
+        write_efield=write_efield,
+        polar_units=polar_units,
+    )
+    write_physnet_npz(data, out)
+    return data
+
+
+def split_npz(
+    data: Mapping[str, Any],
+    out_dir: Path | str,
+    *,
+    train_frac: float = 0.9,
+    valid_frac: float = 0.05,
+    test_frac: float = 0.05,
+    seed: int = 0,
+    prefix: str = "energies_forces_dipoles",
+) -> dict[str, Path]:
+    """Index-split a converted NPZ (keeps ``polar`` / ``Ef``)."""
+    n = int(np.asarray(data["E"]).reshape(-1).shape[0])
+    if abs(train_frac + valid_frac + test_frac - 1.0) > 1e-6:
+        raise ValueError("train/valid/test fractions must sum to 1")
+    rng = np.random.default_rng(seed)
+    perm = rng.permutation(n)
+    n_train = int(round(n * train_frac))
+    n_valid = int(round(n * valid_frac))
+    n_train = min(max(n_train, 0), n)
+    n_valid = min(max(n_valid, 0), n - n_train)
+    cuts = {
+        "train": perm[:n_train],
+        "valid": perm[n_train : n_train + n_valid],
+        "test": perm[n_train + n_valid :],
+    }
+    dest = Path(out_dir)
+    dest.mkdir(parents=True, exist_ok=True)
+    written: dict[str, Path] = {}
+    for name, idx in cuts.items():
+        part = {}
+        for key, val in data.items():
+            arr = np.asarray(val)
+            part[key] = arr[idx] if arr.shape[:1] == (n,) else arr
+        path = dest / f"{prefix}_{name}.npz"
+        write_physnet_npz(part, path)
+        written[name] = path
+    return written
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description="Convert SPICE-α HDF5 to a PhysNet train NPZ (F = −∇E)."
+    )
+    parser.add_argument("hdf5", nargs="+", type=Path)
+    parser.add_argument("-o", "--out", type=Path, required=True)
+    parser.add_argument("--pad", type=int, default=0, help="0 = max N in this extract")
+    parser.add_argument("--max-frames", type=int, default=0)
+    parser.add_argument("--neutral-only", action="store_true")
+    parser.add_argument("--no-flip-gradient", action="store_true")
+    parser.add_argument("--allow-atomic-units", action="store_true")
+    parser.add_argument(
+        "--efield",
+        action="store_true",
+        help="Write Ef = 0 (n, 3) for mmml efield-train (zero-field DFT).",
+    )
+    parser.add_argument(
+        "--polar-units",
+        choices=("spice", "bohr3"),
+        default="spice",
+        help="spice = e·Å²/V as released; bohr3 for efield polar loss",
+    )
+    parser.add_argument(
+        "--split-dir",
+        type=Path,
+        default=None,
+        help="Also write train/valid/test NPZs here (keeps polar and Ef)",
+    )
+    parser.add_argument("--train-frac", type=float, default=0.9)
+    parser.add_argument("--valid-frac", type=float, default=0.05)
+    parser.add_argument("--test-frac", type=float, default=0.05)
+    parser.add_argument("--seed", type=int, default=0)
+    return parser
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    args = build_parser().parse_args(argv)
+    data = convert_spice_alpha_hdf5(
+        args.hdf5,
+        args.out,
+        pad_atoms=args.pad or None,
+        max_frames=args.max_frames,
+        flip_gradient=not args.no_flip_gradient,
+        neutral_only=args.neutral_only,
+        require_canonical_units=not args.allow_atomic_units,
+        write_efield=args.efield,
+        polar_units=args.polar_units,
+    )
+    extra = []
+    if "Ef" in data:
+        extra.append("Ef=0")
+    if "polar" in data:
+        extra.append(f"polar={args.polar_units}")
+    print(
+        f"wrote {args.out} n={len(data['E'])} pad={data['R'].shape[1]} "
+        f"Zmax={max_atomic_number(data)}"
+        + (f" ({', '.join(extra)})" if extra else "")
+    )
+    if args.split_dir is not None:
+        written = split_npz(
+            data,
+            args.split_dir,
+            train_frac=args.train_frac,
+            valid_frac=args.valid_frac,
+            test_frac=args.test_frac,
+            seed=args.seed,
+        )
+        for name, path in written.items():
+            print(f"  {name}: {path}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

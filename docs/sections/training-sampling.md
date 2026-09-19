@@ -4,6 +4,12 @@ Fitting ML potentials — PhysNet, EF (electric field), KerNN, DCMNet — and th
 sampling methods that use them: reaction paths, diffusion Monte Carlo, and
 active learning.
 
+NPZ must already be in **train** units (Å / eV / eV/Å / e·Å). See the
+[Training NPZ contract](../training-npz-contract.md). Default
+`fix-and-split` converts PySCF Hartree dumps; use `--preserve-units` when
+the file is already eV ([SPICE-α](../spice-alpha.md),
+`pet-physnet-distill`).
+
 ```bash
 mmml fix-and-split --efd data.npz --output-dir ./splits
 mmml physnet-train --config train.yaml
@@ -33,6 +39,8 @@ mmml dmc --natm 20 --nwalker 512 --stepsize 5e-4 --nstep 5000 --eqstep 1000 \
 
 **How-to**
 
+- [Training NPZ contract](../training-npz-contract.md) — keys, units, total
+  vs interaction, `--hybrid-mm` extras.
 - [Bayesian design of compact PES datasets](../bayesian-pes-design.md) — the
   four intermolecular regions, physical candidate generation, RDF/SOAP
   compression, D-optimal acquisition, and `mmml pes-design` validation.

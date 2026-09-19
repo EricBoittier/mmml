@@ -88,6 +88,7 @@ Each section opens with what the area covers and links into the guides.
 - [Package architecture](package-architecture.md) — module layout and import graph
 - [Calculator capability matrix](calculator-capabilities.md) — what each calculator supports
 - [Units summary](UNITS_SUMMARY.md) — conventions and conversions
+- [Training NPZ contract](training-npz-contract.md) — keys, train units, total vs interaction
 - [API reference](api.md) — generated from docstrings
 - [Scientific code policy](scientific-code.md) — reproducibility, provenance, review checklist
 - [Contributor guide](development.md) — tests, linting, docs builds

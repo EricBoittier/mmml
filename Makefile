@@ -1,4 +1,4 @@
-.PHONY: help install install-native install-full doctor install-gpu install-dev install-all install-all-offline-cuda13 install-all-offline-cuda12 install-jupyter-kernel clean test test-unit test-extra docker-build docker-run micromamba-create micromamba-create-gpu micromamba-create-gpu-cuda13 micromamba-create-full micromamba-update micromamba-remove docker-clean lfs-summary lfs-audit lfs-setup-symlinks lfs-remove-hooks install-hooks docs-build docs-strict docs-pdf docs-serve docs-check docs-refresh lint-dupes merge-check test-ci coverage-gate check-prs-landed
+.PHONY: help install install-native install-full doctor install-gpu install-dev install-all install-all-offline-cuda13 install-all-offline-cuda12 install-jupyter-kernel clean test test-unit test-extra test-data-loading docker-build docker-run micromamba-create micromamba-create-gpu micromamba-create-gpu-cuda13 micromamba-create-full micromamba-update micromamba-remove docker-clean lfs-summary lfs-audit lfs-setup-symlinks lfs-remove-hooks install-hooks docs-build docs-strict docs-pdf docs-serve docs-check docs-refresh lint-dupes merge-check test-ci coverage-gate check-prs-landed
 
 help:
 	@echo "MMML - Makefile Commands"
@@ -39,6 +39,7 @@ help:
 	@echo "  make test              - Run unit/integration tests (skip live PyCHARMM/GPU/MLpot)"
 	@echo "  make test-unit          - Run tests/unit (CI Unit tests job)"
 	@echo "  make test-extra         - Run functionality/misc/integration (CI Functionality job)"
+	@echo "  make test-data-loading  - Synthetic NPZ/HDF5 contracts (no remote datasets)"
 	@echo "  make test-all          - Run full pytest suite (needs mpirun for charmm_mpi live tests)"
 	@echo "  make test-quick        - Run quick tests only"
 	@echo "  make test-coverage     - Run tests with coverage report"
@@ -214,6 +215,16 @@ test-unit:
 
 test-extra:
 	uv run pytest tests/functionality tests/misc tests/integration -m "not pycharmm"
+
+test-data-loading:
+	uv run pytest -m data_loading \
+		tests/unit/test_data_loading_contracts.py \
+		tests/unit/test_spice_alpha.py \
+		tests/unit/test_training_npz_contract.py \
+		tests/unit/test_npz_schema.py \
+		tests/unit/test_read_h5_helpers.py \
+		tests/unit/test_fix_and_split_units.py \
+		tests/unit/test_efield_polar_loss.py
 
 test-all:
 	uv run pytest tests

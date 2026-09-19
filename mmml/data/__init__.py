@@ -9,6 +9,7 @@ Main API:
     - molpro_to_npz: Convert MolproData to NPZ format
     - load_npz: Load NPZ files with validation
     - prepare_batches: Prepare batches for training
+    - convert_spice_alpha_hdf5: SPICE-α HDF5 → PhysNet train NPZ
 """
 
 from .npz_schema import (
@@ -36,6 +37,17 @@ from .rmd17 import (
     load_rmd17_npz,
     load_rmd17_official_splits,
     resolve_rmd17_splits_dir,
+)
+from .spice_alpha import (
+    SpiceAlphaFrame,
+    assert_train_npz_contract,
+    check_efield_train_npz,
+    classify_units_map,
+    convert_spice_alpha_hdf5,
+    iter_spice_alpha_frames,
+    pad_frames,
+    split_npz,
+    write_physnet_npz,
 )
 from .units import (
     CALCULATOR_UNITS,
@@ -84,6 +96,16 @@ __all__ = [
     "load_rmd17_npz",
     "load_rmd17_official_splits",
     "resolve_rmd17_splits_dir",
+    # SPICE-α (Zenodo 19205036) → PhysNet train NPZ
+    "SpiceAlphaFrame",
+    "assert_train_npz_contract",
+    "check_efield_train_npz",
+    "classify_units_map",
+    "convert_spice_alpha_hdf5",
+    "iter_spice_alpha_frames",
+    "pad_frames",
+    "split_npz",
+    "write_physnet_npz",
     # Units
     "CALCULATOR_UNITS",
     "CANONICAL_ENERGY_UNIT",

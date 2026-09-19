@@ -59,6 +59,27 @@ HARTREE_BOHR_TO_EV_ANG = HARTREE_BOHR_TO_EV_ANGSTROM
 EV_ANG_TO_HARTREE_BOHR = EV_ANGSTROM_TO_HARTREE_BOHR
 BOHR_TO_ANG = BOHR_TO_ANGSTROM
 
+# -----------------------------------------------------------------------------
+# Polarizability
+# -----------------------------------------------------------------------------
+# Atomic-unit electric field E_h/(e a0) expressed as V/Å. Same ratio as
+# Hartree/Bohr → eV/Å because eV/e = V.
+AU_ELECTRIC_FIELD_V_PER_ANGSTROM = HARTREE_TO_EV / BOHR_TO_ANGSTROM
+# SPICE-α / OpenMM ``e*Angstrom^2/volt`` → Bohr³ (au).
+# α_au = α_(e Å²/V) * (Å→a0) * (V/Å per au field).
+E_ANGSTROM2_PER_VOLT_TO_BOHR3 = ANGSTROM_TO_BOHR * AU_ELECTRIC_FIELD_V_PER_ANGSTROM
+BOHR3_TO_E_ANGSTROM2_PER_VOLT = 1.0 / E_ANGSTROM2_PER_VOLT_TO_BOHR3
+
+
+def polar_e_angstrom2_per_volt_to_bohr3(arr: Any) -> np.ndarray:
+    """Convert polarizability from e·Å²/V (SPICE-α) to Bohr³."""
+    return np.asarray(arr, dtype=np.float64) * E_ANGSTROM2_PER_VOLT_TO_BOHR3
+
+
+def polar_bohr3_to_e_angstrom2_per_volt(arr: Any) -> np.ndarray:
+    """Convert polarizability from Bohr³ to e·Å²/V."""
+    return np.asarray(arr, dtype=np.float64) * BOHR3_TO_E_ANGSTROM2_PER_VOLT
+
 EnergyUnit = Literal["ev", "hartree", "kcal_mol"]
 ForceUnit = Literal["ev_angstrom", "hartree_bohr", "kcal_mol_angstrom"]
 LengthUnit = Literal["angstrom", "bohr"]

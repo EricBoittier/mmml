@@ -35,6 +35,8 @@ usage: mmml efield-train [-h] [--data DATA] [--train-npz TRAIN_NPZ]
                          [--forces_weight FORCES_WEIGHT]
                          [--dipole_weight DIPOLE_WEIGHT]
                          [--charge_weight CHARGE_WEIGHT]
+                         [--polar_weight POLAR_WEIGHT]
+                         [--polar-at-zero-field | --no-polar-at-zero-field]
                          [--dipole_field_coupling] [--field_scale FIELD_SCALE]
                          [--electrostatics_damping_sigma ELECTROSTATICS_DAMPING_SIGMA]
                          [--zbl]
@@ -60,6 +62,9 @@ Scientific model:
   --charge_weight CHARGE_WEIGHT
                         Weight for charge neutrality loss (sum of charges per
                         molecule squared)
+  --polar-at-zero-field, --no-polar-at-zero-field
+                        Evaluate dμ/dEf at Ef=0 (default; SPICE-α / isolated
+                        DFT)
   --dipole_field_coupling
                         Add explicit E_total = E_nn + mu·Ef coupling
   --field_scale FIELD_SCALE
@@ -114,6 +119,9 @@ Other options:
   --restart RESTART
   --dipole_weight DIPOLE_WEIGHT
                         Weight for dipole loss in total loss
+  --polar_weight, --polar-weight POLAR_WEIGHT
+                        Weight for polarizability loss (Bohr³ vs dμ/dEf at
+                        Ef=0). 0 disables.
   --zbl                 Add ZBL nuclear repulsion for short-range stability
   --rot-augment         Apply random SO(3) rotation augmentation to batches (all
                         splits)
