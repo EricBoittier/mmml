@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterator, Literal, Mapping, Sequence
@@ -122,13 +123,21 @@ def parse_units_attr(raw: Any) -> dict[str, str]:
 
 
 def read_units_map(h5: Any) -> dict[str, str]:
-    """File-level ``units_map``, else the first group's."""
-    parsed = parse_units_attr(h5.attrs.get("units_map"))
-    if parsed:
-        return parsed
+    """File-level ``units_map`` if present, else the first non-empty group's.
+
+    A present but empty file-level attribute (published DES370K HDF5) must
+    not trigger a scan of every molecule group — that is minutes of random
+    HDF5 reads on a shared login filesystem.
+    """
+    attrs = getattr(h5, "attrs", None)
+    if attrs is not None and "units_map" in attrs:
+        return parse_units_attr(attrs.get("units_map"))
     for name in h5.keys():
         group = h5[name]
-        parsed = parse_units_attr(getattr(group, "attrs", {}).get("units_map"))
+        group_attrs = getattr(group, "attrs", None)
+        if group_attrs is None or "units_map" not in group_attrs:
+            continue
+        parsed = parse_units_attr(group_attrs.get("units_map"))
         if parsed:
             return parsed
     return {}
@@ -437,8 +446,14 @@ def convert_spice_alpha_hdf5(
 
     frames: list[SpiceAlphaFrame] = []
     for path in paths:
+        print(
+            f"convert: opening {path} (max_frames={max_frames or 'all'})",
+            file=sys.stderr,
+            flush=True,
+        )
         with h5py.File(path, "r") as handle:
             kind = classify_units_map(read_units_map(handle))
+            print(f"convert: units={kind}", file=sys.stderr, flush=True)
             if require_canonical_units and kind == "atomic":
                 raise ValueError(
                     f"{path}: units_map looks like original SPICE (Bohr/Hartree). "

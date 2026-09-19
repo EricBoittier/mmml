@@ -63,6 +63,24 @@ def test_parse_units_attr_json_bytes_and_dict():
     assert parse_units_attr(None) == {}
 
 
+def test_read_units_map_skips_group_scan_when_file_attr_exists():
+    class _BoomH5:
+        attrs = {"units_map": ""}
+
+        def keys(self):
+            raise AssertionError("empty file-level units_map must not scan groups")
+
+    assert read_units_map(_BoomH5()) == {}
+
+    class _CanonicalH5:
+        attrs = {"units_map": json.dumps({"dft_total_energy": "eV"})}
+
+        def keys(self):
+            raise AssertionError("present file-level units_map must not scan groups")
+
+    assert read_units_map(_CanonicalH5())["dft_total_energy"] == "eV"
+
+
 def test_parse_units_attr_empty_invalid_and_numpy_scalars():
     payload = {"dft_total_energy": "eV"}
     encoded = json.dumps(payload)

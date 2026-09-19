@@ -12,10 +12,11 @@ Labels are converted from the release unit `e·Å²/V` to Bohr³.
 Do not source that prolog for this job. No CHARMM.
 
 ```bash
-# 1. Inner HDF5 + NPZ splits (256 frames = smoke)
+# 1. Inner HDF5 + NPZ splits (256 frames = smoke; skips the 1.3 GB dimers)
 # Published DES370K HDF5 may have an empty units_map; convert treats that
 # as unknown and still writes Å/eV labels from the SPICE-α README.
 scripts/spice_alpha/prepare_efield_dataset.sh ~/data/spicealpha ./spice_mmml 256
+# dimers later: INCLUDE_DIMERS=1 scripts/spice_alpha/prepare_efield_dataset.sh ... 0
 python scripts/spice_alpha/check_efield_npz.py \
   ./spice_mmml/splits_des_mono/energies_forces_dipoles_{train,valid}.npz
 
