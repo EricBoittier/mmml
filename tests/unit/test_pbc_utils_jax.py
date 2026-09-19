@@ -61,6 +61,9 @@ def test_frac_coords_matches_linear_solve_cubic_and_sheared() -> None:
     np.testing.assert_allclose(
         np.asarray(cell_inverse(cubic)), np.diag([1.0 / 26.0] * 3), atol=1e-15
     )
+    # NPT: a new box must produce a new transform (do not cache across steps).
+    grown = jnp.diag(jnp.array([27.0, 27.0, 27.0]))
+    assert not np.allclose(np.asarray(cell_inverse(grown)), np.asarray(cell_inverse(cubic)))
 
 
 @pytest.mark.unit

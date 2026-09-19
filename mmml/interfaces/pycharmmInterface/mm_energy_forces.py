@@ -2387,7 +2387,7 @@ def build_mm_energy_forces_fn(
                 _mic_cell = _reuse_mic_cell(box)
                 if _mic_cell is not None:
                     cell_j = jnp.asarray(_mic_cell, dtype=d_jax.dtype)
-                    frac_j = d_jax @ jnp.linalg.inv(cell_j)
+                    frac_j = d_jax @ cell_inverse(cell_j)
                     d_jax = (frac_j - jnp.round(frac_j)) @ cell_j
                 max_disp = float(
                     jax.device_get(jnp.max(jnp.linalg.norm(d_jax, axis=1)))
