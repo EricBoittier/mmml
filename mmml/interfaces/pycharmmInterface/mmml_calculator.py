@@ -1686,6 +1686,12 @@ def setup_calculator(
             _cached_sparse_batch_structure = prepare_batch_structure(n_monomers + _max_active_dimers, max_atoms)
         except Exception:
             pass
+    # Skip PhysNet chunks that hold only unused sparse-dimer padding (the cap is
+    # sized for the densest case; ETOH:181 uses ~1.8k of 4.2k slots). Set
+    # MMML_MLPOT_SKIP_PADDING_CHUNKS=0 to evaluate every slot (A/B parity checks).
+    _skip_padding_chunks = (
+        os.environ.get("MMML_MLPOT_SKIP_PADDING_CHUNKS") or "1"
+    ).strip().lower() not in ("0", "false", "no", "off")
 
     _jax_md_skin_distance = float(jax_md_skin_distance)
 
@@ -2474,6 +2480,9 @@ def setup_calculator(
         padded individually to ``max_atoms`` (the largest dimer atom count).
         When ml_sparse_dimers=True, only evaluates dimers within mm_switch_on. """
         batch_data: Dict[str, Array] = {}
+        # Batch slots whose ML output is used (None: all). Chunked PhysNet skips
+        # chunks made only of padding past this count.
+        _n_valid_systems = None
 
         dimer_n_a = dimer_n_atoms_a_jnp
         dimer_n_b = dimer_n_atoms_b_jnp
@@ -2633,6 +2642,8 @@ def setup_calculator(
             batches["_sparse_active_indices"] = active_indices
             batches["_sparse_n_dimers"] = n_dimers
             _effective_batch_size = sparse_batch_size
+            # Active slots are packed first; the rest pad to the static cap.
+            _n_valid_systems = n_monomers + jnp.minimum(_n_active_true, _max_active_dimers)
         else:
             batch_data["R"] = jnp.concatenate([monomer_positions, dimer_positions])
             batch_data["Z"] = jnp.concatenate([monomer_atomic, dimer_atomic])
@@ -2742,6 +2753,7 @@ def setup_calculator(
                     n_gpus=_ml_n_gpus,
                     apply_one_chunk=apply_one_chunk,
                     has_aux=_needs_ml_mm_charges,
+                    n_valid=_n_valid_systems if _skip_padding_chunks else None,
                 )
                 if _needs_ml_mm_charges:
                     e_out, f_out, q_out = chunked_out

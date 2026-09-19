@@ -31,8 +31,18 @@ def run_chunked_model_apply(
     n_gpus: int,
     apply_one_chunk: Callable[[Array, Array, Array], Tuple[Array, Array]],
     has_aux: bool = False,
+    n_valid: Array | int | None = None,
 ) -> tuple:
-    """Evaluate PhysNet chunks; use ``jax.pmap`` when ``n_gpus > 1``."""
+    """Evaluate PhysNet chunks; use ``jax.pmap`` when ``n_gpus > 1``.
+
+    ``n_valid`` (may be traced): only the first ``n_valid`` batch slots hold
+    systems whose output is used; the rest are padding (e.g. unused sparse
+    dimer slots, which ``jnp.nonzero(..., size=cap)`` packs at the end). On a
+    single GPU, chunks that lie entirely past ``n_valid`` are skipped with
+    ``lax.cond`` and return zeros instead of running the model on padding.
+    Chunks that are evaluated see exactly the same inputs, so used outputs are
+    unchanged, and the chunk shape stays static (no recompiles).
+    """
     from mmml.interfaces.pycharmmInterface.mlpot.ml_profile import (
         get_mlpot_profile_stats,
         mlpot_profiling_enabled,
@@ -42,10 +52,27 @@ def run_chunked_model_apply(
     t0 = time.perf_counter() if profile else None
 
     if n_gpus <= 1:
-        mapped = jax.lax.map(
-            lambda i: apply_one_chunk(R_chunks[i], Z_chunks[i], N_chunks[i]),
-            jnp.arange(n_chunks),
-        )
+        if n_valid is None:
+
+            def one_chunk(i):
+                return apply_one_chunk(R_chunks[i], Z_chunks[i], N_chunks[i])
+
+        else:
+            out_struct = jax.eval_shape(apply_one_chunk, R_chunks[0], Z_chunks[0], N_chunks[0])
+
+            def _zeros_like_out():
+                return jax.tree_util.tree_map(
+                    lambda s: jnp.zeros(s.shape, s.dtype), out_struct
+                )
+
+            def one_chunk(i):
+                return jax.lax.cond(
+                    i * chunk_size < n_valid,
+                    lambda: apply_one_chunk(R_chunks[i], Z_chunks[i], N_chunks[i]),
+                    _zeros_like_out,
+                )
+
+        mapped = jax.lax.map(one_chunk, jnp.arange(n_chunks))
         if has_aux:
             e_list, f_list, aux_list = mapped
         else:
