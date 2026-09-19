@@ -187,10 +187,11 @@ def test_jaxmd_pair_sites_use_updater_frame_helper() -> None:
     ).read_text(encoding="utf-8")
     assert src.count("refresh_mm_pairs(") >= 8
     assert "fractional_coordinates=is_npt" not in src
-    npt_init = src.split('if args.ensemble == "npt" and use_pbc:', 1)[1]
+    npt_init = src.split("md_pos_frac = as_jaxmd_dtype", 1)[1]
     npt_init = npt_init.split("state = init_fn", 1)[0]
-    assert "positions_are_cartesian=False" in npt_init
-    assert "md_pos_frac" in npt_init.split("refresh_mm_pairs(", 1)[1]
+    refresh = npt_init.split("refresh_mm_pairs(", 1)[1].split(")", 1)[0]
+    assert "md_pos_frac" in refresh
+    assert "positions_are_cartesian=False" in refresh
     assert "MM pair list is empty with MM enabled" not in src
     assert "_cart_nl_positions" not in src
     jaxmd_setup = (
