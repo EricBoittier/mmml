@@ -156,6 +156,12 @@ def maybe_configure_stage_pressure_tensor_io(
     pressure_log_interval: int,
 ) -> None:
     """Wire high-frequency piston logging when ``pressure_log_interval > 0``."""
+    # Known limitation (not fixed): ``CharmmTrajectoryFiles.open_for_run`` opens
+    # the pressure-tensor log with ``append=False`` on every ``dyna`` call, so
+    # when NPT CPT runs in stability sub-chunks (``_run_cpt_stability_subchunked``)
+    # or overlap chunks each call truncates the log and only the last call's
+    # piston/tensor rows survive. Unlike the DCD there is no per-sub-chunk file
+    # and merge step for this log yet.
     if int(pressure_log_interval) <= 0 or log_path is None:
         return
     if not bool(kw.get("cpt")):
