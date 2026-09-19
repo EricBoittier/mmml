@@ -77,7 +77,7 @@ def make_tune_figures(
         for key, color, lab in (
             ("ml_pairs", STUDENT, "student ML pairs"),
             ("mm_tail", CGENFF if "CGenFF" in name else _variant_color(name), None),
-            ("underlay", UNDERLAY, "MM underlay (ML region)"),
+            ("underlay", "#F0E442", "MM underlay (ML region)"),
         ):
             v = float(b[key])
             if abs(v) < 1e-6:
