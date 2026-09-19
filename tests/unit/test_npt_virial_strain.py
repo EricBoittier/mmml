@@ -185,6 +185,73 @@ def test_custom_vjp_perturbation_cotangent_matches_autodiff_and_fd(p0):
         assert got == pytest.approx(3 * L_BOX**3 * _reference_dE_dV(frac, box), rel=1e-7)
 
 
+def test_position_cotangent_is_real_space_gradient_like_jax_md():
+    """jax-md convention: grad(E)(frac) is dE/dreal (space.transform custom JVP).
+
+    npt_nose_hoover uses -grad as a real-space force; returning the exact
+    dE/dfrac = (-F) @ box scales every force by the box length.
+    """
+    raw_fn, npt_energy_fn = _make()
+    frac = _lattice_frac(6)
+    box = jnp.eye(3, dtype=jnp.float64) * L_BOX
+    got = jax.grad(lambda f: npt_energy_fn(f, box, None, None, None, None))(frac)
+    want_autodiff = jax.grad(lambda f: raw_fn(f, box=box))(frac)
+    want_force = -_mic_lj_force_of_real(space.transform(box, frac), box)
+    np.testing.assert_allclose(np.asarray(got), np.asarray(want_autodiff), rtol=1e-8, atol=1e-12)
+    np.testing.assert_allclose(np.asarray(got), np.asarray(want_force), rtol=1e-8, atol=1e-12)
+
+
+def _native_lj_setup():
+    box = jnp.eye(3, dtype=jnp.float64) * L_BOX
+    displacement, shift = space.periodic_general(box, fractional_coordinates=True)
+    native = jmd_energy.lennard_jones_pair(
+        displacement, sigma=SIGMA, epsilon=EPS, r_onset=4.0, r_cutoff=5.5
+    )
+
+    def energy_of_real(real_pos, box_eff, neighbor=None):
+        return native(space.transform(jnp.linalg.inv(box_eff), real_pos), box=box_eff)
+
+    def force_of_real(real_pos, box_eff, neighbor=None):
+        return -jax.grad(energy_of_real)(real_pos, box_eff)
+
+    return box, shift, native, energy_of_real, force_of_real
+
+
+def test_npt_trajectory_matches_native_jax_md_and_conserves_invariant():
+    """Wrapping jax-md's own LJ in the runner's VJP must not change NpT dynamics."""
+    box, shift, native, eor, forr = _native_lj_setup()
+    _, runner_fn = runner.make_npt_energy_fn(eor, forr, dtype=jnp.float64)
+    frac = _lattice_frac(4, jitter=0.02)
+    kT = 8.617333262e-5 * 120.0
+    dt = 0.002
+    P0 = 1e-5
+
+    def run(fn, n=300):
+        init_fn, apply_fn = simulate.npt_nose_hoover(
+            fn, shift, dt=dt, pressure=P0, kT=kT,
+            barostat_kwargs=runner.default_nhc_kwargs(100 * dt),
+            thermostat_kwargs=runner.default_nhc_kwargs(20 * dt),
+        )
+        st = init_fn(jax.random.PRNGKey(0), frac, box=box, mass=39.95)
+        h0 = float(simulate.npt_nose_hoover_invariant(native, st, P0, kT))
+        step = jax.jit(apply_fn)
+        for _ in range(n):
+            st = step(st)
+        h1 = float(simulate.npt_nose_hoover_invariant(native, st, P0, kT))
+        return st, h1 - h0
+
+    st_nat, drift_nat = run(native)
+    st_run, drift_run = run(runner_fn)
+    np.testing.assert_allclose(
+        np.asarray(st_run.position), np.asarray(st_nat.position), atol=1e-6
+    )
+    assert float(simulate.npt_box(st_run)[0, 0]) == pytest.approx(
+        float(simulate.npt_box(st_nat)[0, 0]), rel=1e-8
+    )
+    assert abs(drift_run) < 5e-3, drift_run
+    assert drift_run == pytest.approx(drift_nat, abs=1e-5)
+
+
 def test_selfcheck_uses_independent_reference_and_flags_legacy():
     _, fixed = _make()
     legacy = _legacy_volume_factor_npt(_mic_lj_energy_of_real, _mic_lj_force_of_real)

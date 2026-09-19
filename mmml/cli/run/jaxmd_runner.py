@@ -934,7 +934,8 @@ def make_npt_energy_fn(
         ``(raw_fn, npt_energy_fn)``. ``npt_energy_fn(frac_pos, box, neighbor,
         perturbation, kT, mass)`` is a ``jax.custom_vjp`` whose cotangents are
 
-        * frac_pos: ``(-F) @ box_eff`` (chain rule through real = box . frac);
+        * frac_pos: ``-F`` in real space -- jax-md's fractional-coordinate
+          convention (``space.transform``'s custom JVP), see ``bwd``;
         * perturbation: dE/dp for the LINEAR strain box -> box * p. At p = 1
           that is ``-sum_i F_i . r_i`` plus the explicit box dependence of the
           calculator (minimum-image shifts, cutoffs/switching, Ewald/PME). The
@@ -966,14 +967,15 @@ def make_npt_energy_fn(
         box_eff = apply_perturbation(box, perturbation, dtype)
         real_pos = space.transform(box_eff, jnp.asarray(frac_pos, dtype=dtype))
         F = jnp.asarray(force_of_real(real_pos, box_eff, neighbor), dtype=dtype)
-        # real = frac @ box_eff^T  ->  dE/dfrac = dE/dreal @ box_eff = (-F) @ box_eff.
-        # (Without the box factor the position gradient is under-scaled by L;
-        # measured 28.09x on a 28.0 A TIP3 cell.)
-        box_m = box_eff if box_eff.ndim == 2 else (
-            jnp.diag(box_eff) if box_eff.ndim == 1
-            else jnp.eye(F.shape[-1], dtype=dtype) * box_eff
-        )
-        grad_frac = jnp.asarray((-F @ box_m) * g, dtype=jnp.asarray(frac_pos).dtype)
+        # Position cotangent: the REAL-SPACE gradient -F, not (-F) @ box.
+        # jax-md's space.transform carries a custom JVP that passes dR through
+        # unscaled, so for any native jax-md energy grad(E)(frac) is dE/dreal,
+        # and npt_nose_hoover uses -grad as a real-space force (momenta are
+        # real; shift_fn maps real dR to fractional with inv(box)). Returning
+        # the mathematically exact dE/dfrac = (-F) @ box, as fbe69d1bc did,
+        # scales every NpT force by the box length (~23x for the acetone
+        # bench boxes) and breaks the npt_nose_hoover invariant.
+        grad_frac = jnp.asarray(-F * g, dtype=jnp.asarray(frac_pos).dtype)
 
         # dE/d(perturbation): the virial the barostat needs. A None/zero
         # cotangent collapses P to the kinetic term (the 4059 atm TIP3 blow-up).
@@ -2371,13 +2373,12 @@ def set_up_nhc_sim_routine(
                     )
                     _unit_p_atm = float(unit["pressure"]) * 1.01325
                     _rel = _vc["rel_err"]
-                    # Also check the POSITION cotangent. The bwd returns -F, the
-                    # real-space force, as dE/d(frac). But E depends on frac via
-                    # real = box . frac, so dE/dfrac = box^T . dE/dreal -- a
-                    # factor of the box (28x for this cell) that is missing. A
-                    # mis-scaled position gradient corrupts the very first
-                    # integration step, which is what "E_pot = 8e7 eV at step 1
-                    # after a minimisation that ended at -8751 eV" looks like.
+                    # Also check the POSITION cotangent against jax-md's
+                    # fractional-coordinate convention: grad(E)(frac) must be the
+                    # REAL-SPACE gradient dE/dreal (space.transform's custom JVP),
+                    # because npt_nose_hoover uses -grad as a real force. So move
+                    # atom 0 by a REAL displacement _d along x (a fractional step
+                    # of inv(box) @ e_x) and compare with the analytic cotangent.
                     _i0 = 0
                     _d = 1.0e-4
                     _fp = md_pos_frac
@@ -2386,8 +2387,14 @@ def set_up_nhc_sim_routine(
                     def _e_at(fp):
                         return float(npt_energy_fn(fp, box_curr, _nb, _pert1, kT, Si_mass))
 
-                    _fp_p = _fp.at[_i0, 0].add(_d)
-                    _fp_m = _fp.at[_i0, 0].add(-_d)
+                    _box_m = jnp.asarray(box_curr, dtype=_JAXMD_DTYPE)
+                    _box_m = _box_m if _box_m.ndim == 2 else (
+                        jnp.diag(_box_m) if _box_m.ndim == 1
+                        else jnp.eye(3, dtype=_JAXMD_DTYPE) * _box_m
+                    )
+                    _dfrac = jnp.linalg.inv(_box_m)[:, 0] * _d
+                    _fp_p = _fp.at[_i0].add(_dfrac)
+                    _fp_m = _fp.at[_i0].add(-_dfrac)
                     _fd_frac = (_e_at(_fp_p) - _e_at(_fp_m)) / (2.0 * _d)
                     _an_frac = float(
                         jax.grad(lambda fp: npt_energy_fn(fp, box_curr, _nb, _pert1, kT, Si_mass))(_fp)[_i0, 0]
@@ -2431,9 +2438,9 @@ def set_up_nhc_sim_routine(
                         f"P_vir reference (-dE/dV, explicit V) {_vc['p_vir_reference'] / _unit_p_atm:.3f} atm\n"
                         f"ratio barostat/reference {_vc['ratio']:.4f}   relative difference {_rel:.3%}\n"
                         f"{'OK' if _rel < 0.05 else 'MISMATCH - barostat pressure will be wrong'}\n"
-                        f"---- position cotangent (atom 0, x) ----\n"
-                        f"dE/dfrac analytic {_an_frac:.6e} eV\n"
-                        f"dE/dfrac central-difference {_fd_frac:.6e} eV\n"
+                        f"---- position cotangent (atom 0, real x; jax-md convention dE/dreal) ----\n"
+                        f"dE/dx analytic {_an_frac:.6e} eV/A\n"
+                        f"dE/dx central-difference {_fd_frac:.6e} eV/A\n"
                         f"relative difference {_rel_frac:.3%}   fd/analytic = {_ratio:.4f}\n"
                         f"{'OK' if _rel_frac < 0.05 else 'MISMATCH - integration will be wrong'}",
                         title="[bold]NPT VJP self-check[/bold]",
