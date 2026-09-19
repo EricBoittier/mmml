@@ -10,10 +10,25 @@ import pytest
 pytest.importorskip("jax")
 
 from mmml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
+from mmml.interfaces.pycharmmInterface.mlpot import callback_failstop
+from mmml.interfaces.pycharmmInterface.mlpot.callback_failstop import (
+    MlpotCallbackAborted,
+)
 from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import (
     DecomposedMlpotCalculator,
     DecomposedMlpotModel,
 )
+
+
+def _stub_live_box(monkeypatch, side_A: float = 30.0) -> None:
+    """Keep ``_sync_callback_pbc_box`` off native CHARMM / libcharmm."""
+    from mmml.interfaces.pycharmmInterface.mlpot import pbc_env
+
+    monkeypatch.setattr(
+        pbc_env,
+        "resolve_mlpot_mic_box_side_A",
+        lambda **_kw: (float(side_A), "pbound"),
+    )
 
 
 def test_resolve_ml_callback_slice_all_ml_default():
@@ -74,7 +89,13 @@ def test_get_pycharmm_calculator_stores_ml_atom_indices():
 
 
 def test_calculate_charmm_partial_ml_scatters_forces(monkeypatch):
-    """Full-system CHARMM coords + 9-atom model → evaluate ML slice only."""
+    """Full-system CHARMM coords + 9-atom model → evaluate ML slice only.
+
+    ``cell=30`` makes ``calculate_charmm`` refresh the PBC box before wrapping.
+    That path must not import ``libcharmm`` here; the live-box resolver is
+    stubbed. Failstop stays on the decorated method.
+    """
+    _stub_live_box(monkeypatch, 30.0)
     z = np.array([7, 1, 1, 1, 6, 17, 1, 1, 1], dtype=int)
     n_full = 20
     ml_idx = np.arange(9, dtype=int)
@@ -98,6 +119,7 @@ def test_calculate_charmm_partial_ml_scatters_forces(monkeypatch):
     )
     calc._get_spherical_forward_fn = MagicMock(return_value=_fake_forward)
     calc._resolve_mm_pairs = MagicMock(return_value=(None, None, False))
+    assert getattr(DecomposedMlpotCalculator.calculate_charmm, "__wrapped__", None) is not None
     monkeypatch.setattr(
         "mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge.mlpot_runs_on_this_rank",
         lambda: True,
@@ -151,6 +173,36 @@ def test_calculate_charmm_partial_ml_scatters_forces(monkeypatch):
     assert calc.last_ml_forces is not None
     assert calc.last_ml_forces.shape == (n_full, 3)
     np.testing.assert_allclose(calc.last_ml_forces[9:], 0.0)
+
+    def _boom(*_a, **_k):
+        raise ValueError("forced scatter-path failure")
+
+    calc._get_spherical_forward_fn = MagicMock(return_value=_boom)
+    try:
+        with pytest.raises(MlpotCallbackAborted, match="forced scatter-path failure"):
+            calc.calculate_charmm(
+                n_full,
+                0,
+                n_full,
+                [0] * n_full,
+                x,
+                y,
+                zc,
+                dx,
+                dy,
+                dz,
+                0,
+                0,
+                [],
+                [],
+                [],
+                [],
+                [],
+                [],
+                [],
+            )
+    finally:
+        callback_failstop._first_error = None
 
 
 def test_calculate_charmm_ctypes_accumulates_into_resident_grad(monkeypatch):
