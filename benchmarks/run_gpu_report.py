@@ -104,17 +104,22 @@ are not the production ETOH PyCHARMM workload. Unit gates do not establish long-
 
 
 def main(argv=None) -> int:
+    global ROOT
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--repo', type=Path, default=ROOT, help='Clean checkout to benchmark (allows keeping this runner outside it)')
     parser.add_argument('--gpu', default='1', help='Physical NVIDIA GPU index (default: 1)')
     parser.add_argument('--bench', default=DEFAULT_BENCH, help='ASV benchmark regex')
     parser.add_argument('--x64', choices=['0', '1'], default='1')
     parser.add_argument('--threads', type=int, default=1)
-    parser.add_argument('--checkpoint', type=Path, default=ROOT / 'examples/ckpts_json/DESdimers_params.json')
-    parser.add_argument('--output', type=Path, default=ROOT / '.asv/gpu-reports')
+    parser.add_argument('--checkpoint', type=Path, default=None)
+    parser.add_argument('--output', type=Path, default=None)
     parser.add_argument('--serve', action='store_true', help='Serve this report until Ctrl-C, including during execution')
     parser.add_argument('--port', type=int, default=8765)
     parser.add_argument('--dry-run', action='store_true', help='Print configuration without running tests or using a GPU')
     args = parser.parse_args(argv)
+    ROOT = args.repo.expanduser().resolve()
+    args.checkpoint = args.checkpoint or ROOT / 'examples/ckpts_json/DESdimers_params.json'
+    args.output = args.output or ROOT / '.asv/gpu-reports'
     if not re.fullmatch(r'\d+', args.gpu) or args.threads < 1:
         parser.error('--gpu must be an index and --threads must be positive')
     if args.dry_run:
@@ -146,7 +151,8 @@ def main(argv=None) -> int:
             'gpu': selected, 'all_gpus_before': rows, 'x64': args.x64,
             'threads': args.threads, 'benchmark_regex': args.bench,
             'checkpoint': str(ckpt), 'checkpoint_sha256': ckpt_hash,
-            'python': sys.executable, 'scope': 'ASV suite; no production trajectory replay or NVE campaign'}
+            'python': sys.executable, 'runner_sha256': checkpoint_hash(Path(__file__).resolve()),
+            'scope': 'ASV suite; no production trajectory replay or NVE campaign'}
     write_status(run, info)
     server = None
     if args.serve:
@@ -171,7 +177,8 @@ assert pathlib.Path(mmml.__file__).resolve().is_relative_to(pathlib.Path.cwd())
 """
         execute('preflight', [sys.executable, '-c', probe])
         info['runtime'] = json.loads((run / 'preflight.log').read_text().strip().splitlines()[-1])
-        execute('packages', [sys.executable, '-m', 'pip', 'freeze'])
+        execute('packages', [sys.executable, '-c',
+                             'import importlib.metadata as m, json; print(json.dumps(sorted((d.metadata.get("Name", ""), d.version) for d in m.distributions()), indent=2))'])
         execute('gate', [sys.executable, '-m', 'pytest', '-q', *GATES, f'--junitxml={run / "gate.xml"}'])
         info['gate'] = require_gate_report(run / 'gate.xml')
         machine = re.sub(r'[^a-zA-Z0-9_-]', '-', f'{socket.gethostname()}-{selected[1]}-x64{args.x64}-t{args.threads}-ck{ckpt_hash[:10]}')

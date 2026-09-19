@@ -13,6 +13,11 @@ a shared CI runner is neither.
 
 ---
 
+## GPU 1 with a browser report
+
+Use [the GPU report runner](GPU_REPORT.md) for a clean-checkout correctness gate,
+GPU selection, provenance, raw ASV samples and a private browser endpoint over SSH.
+
 ## Quick start
 
 ```bash
