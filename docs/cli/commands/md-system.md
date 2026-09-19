@@ -1303,10 +1303,10 @@ Full help (all categories). Short index: -h One category: -hN or -halias (see
   --mm-nl-backend {auto,vesin,cell_list,jax_md}
                         MM neighbor-list builder for jaxmd (default:
                         MMML_MM_NL_BACKEND or auto→vesin).
-  --mm-nl-device {cpu,gpu}
-                        MM Vesin rebuild device for jaxmd (default:
-                        MMML_MM_NL_DEVICE or cpu; gpu falls back to cpu on CuPy
-                        failure).
+  --mm-nl-device {auto,cpu,gpu}
+                        MM Vesin pair-list rebuild device (default:
+                        MMML_MM_NL_DEVICE or auto: GPU when CuPy + a JAX GPU are
+                        present, else cpu).
   --nhc-tau MULT        jaxmd: Nose–Hoover thermostat coupling multiplier (tau =
                         nhc_tau * dt; default 100 in the jaxmd suite).
   --nhc-barostat-tau MULT

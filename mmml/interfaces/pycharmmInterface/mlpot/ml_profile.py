@@ -42,6 +42,7 @@ class MlpotProfileStats:
     max_n_gpus: int = 0
     mm_pair_calls: int = 0
     mm_pair_rebuilds: int = 0
+    mm_pair_gpu_rebuilds: int = 0
     _last_callback_end: Optional[float] = field(default=None, repr=False)
 
     def record_ml(self, elapsed_s: float) -> None:
@@ -81,6 +82,7 @@ class MlpotProfileStats:
         """Latest cumulative MM pair-list counters (``update_mm_pairs.get_stats()``)."""
         self.mm_pair_calls = int(stats.get("calls", 0))
         self.mm_pair_rebuilds = int(stats.get("updates", 0))
+        self.mm_pair_gpu_rebuilds = int(stats.get("gpu_rebuilds", 0))
 
     def summary_line(self) -> str:
         parts: list[str] = []
@@ -110,8 +112,8 @@ class MlpotProfileStats:
             )
         if self.mm_pair_calls > 0:
             parts.append(
-                f"MM pair list: {self.mm_pair_rebuilds} rebuilds / "
-                f"{self.mm_pair_calls} calls"
+                f"MM pair list: {self.mm_pair_rebuilds} rebuilds "
+                f"({self.mm_pair_gpu_rebuilds} on GPU) / {self.mm_pair_calls} calls"
             )
         if not parts:
             return "MLpot profile: no samples"
@@ -145,6 +147,7 @@ class MlpotProfileStats:
             "max_n_gpus": self.max_n_gpus,
             "mm_pair_calls": self.mm_pair_calls,
             "mm_pair_rebuilds": self.mm_pair_rebuilds,
+            "mm_pair_gpu_rebuilds": self.mm_pair_gpu_rebuilds,
             "summary": self.summary_line(),
         }
 
