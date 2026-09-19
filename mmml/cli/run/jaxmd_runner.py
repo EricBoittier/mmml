@@ -2880,7 +2880,7 @@ def set_up_nhc_sim_routine(
             if is_npt and npt_pair_idx is not None:
                 box_one = simulate.npt_box(state_one)
                 out1 = _eval_at_position(
-                    state_one.position,
+                    space.transform(box_one, state_one.position),
                     box=box_one,
                     pair_idx=npt_pair_idx,
                     pair_mask=npt_pair_mask,
@@ -3240,8 +3240,10 @@ def set_up_nhc_sim_routine(
                 out_dyn = None
                 if is_npt and npt_pair_idx is not None:
                     box_curr = simulate.npt_box(state)
+                    # NPT state.position is fractional; the calculator wants Cartesian
+                    # (the integrator's npt_energy_fn transforms the same way).
                     out_dyn = _eval_at_position(
-                        state.position,
+                        space.transform(box_curr, state.position),
                         box=box_curr,
                         pair_idx=npt_pair_idx,
                         pair_mask=npt_pair_mask,
