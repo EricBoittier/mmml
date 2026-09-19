@@ -924,7 +924,21 @@ def run_asv(
         machine=machine,
     )
     print("==> asv " + " ".join(argv), flush=True)
-    subprocess.run([*cmd, *argv], cwd=repo_root, check=True)
+    try:
+        subprocess.run([*cmd, *argv], cwd=repo_root, check=True)
+    except subprocess.CalledProcessError as exc:
+        # asv's own convention (asv/commands/run.py): exit 2 means "one or
+        # more individual benchmarks errored", not that the run itself failed
+        # to execute. Swallowing that here means a single flaky/OOM'd
+        # parameter (observed on a small GPU under memory pressure) no longer
+        # discards every other benchmark's results by skipping publish.
+        if exc.returncode != 2:
+            raise
+        print(
+            f"WARNING: asv run reported benchmark failures (exit {exc.returncode}); "
+            "publishing the results collected so far anyway",
+            flush=True,
+        )
 
 
 def publish_asv(*, repo_root: Path) -> None:

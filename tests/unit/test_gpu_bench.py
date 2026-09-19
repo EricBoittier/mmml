@@ -11,6 +11,8 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
+import subprocess
+
 from benchmarks.gpu_bench_lib import (
     CheckResult,
     TimingRow,
@@ -31,6 +33,7 @@ from benchmarks.gpu_bench_lib import (
     render_gpu_report_html,
     render_gpu_report_json,
     resolve_asv_command,
+    run_asv,
     run_correctness_checks,
     run_gpu_benchmark,
     select_correctness_checks,
@@ -199,6 +202,28 @@ def test_resolve_asv_command_prefers_venv(tmp_path: Path):
 
 def test_resolve_asv_command_falls_back_to_uv(tmp_path: Path):
     assert resolve_asv_command(tmp_path) == ["uv", "run", "--extra", "dev", "asv"]
+
+
+def test_run_asv_swallows_partial_benchmark_failures(monkeypatch, tmp_path: Path):
+    """asv exits 2 when some benchmark params errored, not when the run itself failed."""
+    monkeypatch.setattr("benchmarks.gpu_bench_lib.ensure_asv_machine", lambda *_a, **_k: None)
+
+    def _fake_run(argv, **_kwargs):
+        raise subprocess.CalledProcessError(2, argv)
+
+    monkeypatch.setattr("benchmarks.gpu_bench_lib.subprocess.run", _fake_run)
+    run_asv(repo_root=tmp_path, commit="abc123", bench=None, append_samples=False, machine=None)
+
+
+def test_run_asv_reraises_other_failures(monkeypatch, tmp_path: Path):
+    monkeypatch.setattr("benchmarks.gpu_bench_lib.ensure_asv_machine", lambda *_a, **_k: None)
+
+    def _fake_run(argv, **_kwargs):
+        raise subprocess.CalledProcessError(1, argv)
+
+    monkeypatch.setattr("benchmarks.gpu_bench_lib.subprocess.run", _fake_run)
+    with pytest.raises(subprocess.CalledProcessError):
+        run_asv(repo_root=tmp_path, commit="abc123", bench=None, append_samples=False, machine=None)
 
 
 def test_prepare_bench_env_sets_gpu_defaults(monkeypatch, tmp_path: Path):
