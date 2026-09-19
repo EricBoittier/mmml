@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from argparse import Namespace
 from pathlib import Path
 from types import SimpleNamespace
@@ -223,6 +224,14 @@ def test_prepare_bench_env_respects_allow_cpu(monkeypatch, tmp_path: Path):
     monkeypatch.delenv("JAX_PLATFORMS", raising=False)
     env = prepare_bench_env(tmp_path, allow_cpu=True)
     assert "JAX_PLATFORMS" not in env or env.get("JAX_PLATFORMS") != "cuda"
+
+
+def test_prepare_bench_env_does_not_leak_mmml_ckpt(monkeypatch, tmp_path: Path):
+    monkeypatch.delenv("MMML_CKPT", raising=False)
+    monkeypatch.delenv("MMML_CHECKPOINT", raising=False)
+    monkeypatch.delenv("MMML_BENCH_CKPT", raising=False)
+    prepare_bench_env(tmp_path, allow_cpu=True)
+    assert "MMML_CKPT" not in os.environ
 
 
 def test_latest_asv_result_files_skips_metadata(tmp_path: Path):

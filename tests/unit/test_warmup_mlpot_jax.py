@@ -67,9 +67,12 @@ def test_warmup_mlpot_jax_restores_prior_warmup_only_env(tmp_path, monkeypatch):
 
 
 def test_warmup_mlpot_jax_missing_checkpoint_exits(monkeypatch):
+    # GPU-bench helpers used to setdefault MMML_CKPT on the process; isolate
+    # every fallback so this case still proves the missing-path SystemExit.
     monkeypatch.delenv("MMML_CKPT", raising=False)
     monkeypatch.delenv("MMML_CHECKPOINT", raising=False)
-    with pytest.raises(SystemExit):
+    monkeypatch.delenv("MMML_BENCH_CKPT", raising=False)
+    with pytest.raises(SystemExit, match="provide --checkpoint"):
         wm._resolve_checkpoint(None)
 
 
