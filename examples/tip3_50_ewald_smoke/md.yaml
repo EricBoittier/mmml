@@ -24,7 +24,7 @@ defaults:
   mm_switch_width: 5.0
   ps_heat: 2.0
   ps_nve: 2.0
-  density_prep_mode: off
+  density_prep_mode: "off"
   mc_density_equalize: false
 
 campaign_output: scratch/tip3_50_ewald_smoke

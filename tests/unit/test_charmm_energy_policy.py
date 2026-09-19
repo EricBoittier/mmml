@@ -174,6 +174,11 @@ def test_apply_before_pbc_writes_epsilon_zero_overlay(tmp_path: Path, monkeypatc
     assert "NONBONDED" in text
     assert "-0.1200" not in text
     assert any("scalar vdw" in s.lower() for s in scripts)
+    # eval_charmm_script does no case folding: lowercase commands are
+    # "Unrecognized" and silently skipped, so every script must be uppercase.
+    assert all(s == s.upper() for s in scripts), scripts
+    # The ε=0 APPEND overlay does not replace the live VDW table; SKIPE does.
+    assert "SKIPE VDW IMNB" in scripts
 
 
 def test_policy_violation_detects_imnb():

@@ -20,9 +20,11 @@ DEFAULT_PRE_MLPOT_H_H_MIN_A = 0.45
 # Hard abort before MLpot SD when hybrid forces are already catastrophic.
 DEFAULT_MLPOT_REGISTRATION_MAX_GRMS_KCALMOL_A = 500.0
 
-# CHARMM <MKIMAT2> group Min-Distance before MLpot USER (looser than MIC prep floors).
-# Atom-pair prep gates remain element-aware (≈2.0–2.5 Å); override via CLI/config when needed.
-DEFAULT_CHARMM_IMAGE_MLPOT_MIN_A = 1.0
+# CHARMM <MKIMAT2> "Min-Distance" is a group bounding-box gap, set to 0 whenever
+# any image group falls inside CUTIM (image/upimag.F90). It is not an atom-pair
+# distance, so the default floor is off; the element-aware MIC prep gate is the
+# atom-overlap check. Raise via --charmm-image-mlpot-min-distance to opt back in.
+DEFAULT_CHARMM_IMAGE_MLPOT_MIN_A = 0.0
 # When MKIMAT2 cannot be captured, MIC must clear the IMAGE floor (no extra slack).
 DEFAULT_MIC_MKIMAT2_REGISTRATION_SLACK_A = 0.0
 

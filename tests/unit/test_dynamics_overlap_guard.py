@@ -4562,6 +4562,19 @@ def test_resolve_dcd_nsavc_strictly_below_nstep():
     assert resolve_dcd_nsavc(dcd_nsavc=0, nstep=50) == 0
 
 
+def test_resolve_dcd_nsavc_for_args_interval_needs_timestep():
+    import argparse
+
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+        resolve_dcd_nsavc_for_args,
+    )
+
+    args = argparse.Namespace(dcd_nsavc=10, dcd_interval_ps=0.5, dcd_max_frames=0)
+    # Minimization has no timestep: fall back to --dcd-nsavc.
+    assert resolve_dcd_nsavc_for_args(args, nstep=50) == 10
+    assert resolve_dcd_nsavc_for_args(args, nstep=10000, timestep_ps=0.0005) == 1000
+
+
 def test_overlap_reseeds_rng_before_each_chunk():
     cfg = DynamicsOverlapConfig(
         action="error",
