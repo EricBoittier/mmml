@@ -736,11 +736,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument(
         "--mm-nl-device",
-        choices=["cpu", "gpu"],
+        choices=["auto", "cpu", "gpu"],
         default=None,
         help=(
-            "MM Vesin rebuild device (default: MMML_MM_NL_DEVICE or cpu). "
-            "gpu needs working CuPy JIT + vesin; falls back to cpu on failure."
+            "MM Vesin rebuild device (default: MMML_MM_NL_DEVICE or auto). "
+            "auto/gpu use CuPy + vesin>=0.6.1 when JAX runs on a GPU; else cpu."
         ),
     )
     p.add_argument(
@@ -950,7 +950,7 @@ def main(argv: list[str] | None = None) -> int:
         os.environ["MMML_MM_NL_BACKEND"] = str(args.mm_nl_backend)
     if getattr(args, "mm_nl_device", None):
         os.environ["MMML_MM_NL_DEVICE"] = str(args.mm_nl_device)
-    if (os.environ.get("MMML_MM_NL_DEVICE") or "").strip().lower() == "gpu":
+    if (os.environ.get("MMML_MM_NL_DEVICE") or "auto").strip().lower() in ("auto", "gpu"):
         # Repair stale /usr/local/cuda→cuda-9.0 before the first CuPy JIT.
         try:
             from mmml.interfaces.pycharmmInterface.nl_gpu import ensure_cupy_cuda_path

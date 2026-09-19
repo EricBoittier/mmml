@@ -294,3 +294,112 @@ def test_hybrid_jax_split_matches_mm_energy_and_numpy():
     ref = decompose_mlpot_mm_nb_eterms_kcalmol(R, np.asarray(pidx), np.asarray(pmask) > 0, np.eye(3) * box, **kw)
     keys = ["vdw_primary", "vdw_image", "elec_primary", "elec_image"]
     assert got == pytest.approx([ref[k] for k in keys], rel=1e-6, abs=1e-9)
+
+
+# --- GPU (Vesin + CuPy) rebuild: identical pair set and order to the CPU path ---
+
+
+def _gpu_pairlist_or_skip():
+    pytest.importorskip("vesin")
+    pytest.importorskip("cupy")
+    import jax
+
+    from mmml.interfaces.pycharmmInterface import nl_gpu
+
+    try:
+        if not jax.devices("gpu"):
+            pytest.skip("no JAX GPU device")
+    except RuntimeError:
+        pytest.skip("no JAX GPU device")
+    if not nl_gpu.gpu_nl_path_available("gpu", positions=jax.device_put(np.zeros((1, 3)), jax.devices("gpu")[0])):
+        pytest.skip("GPU pair-list path unavailable (CuPy JIT / vesin>=0.6.1)")
+    return nl_gpu
+
+
+def _mixed_size_frame(L_box=26.0, seed=5):
+    """ETOH (9) + water (3) + DCM-like (5) monomers: exercises the non-uniform COM path."""
+    rng = np.random.default_rng(seed)
+    sizes = np.tile([9, 3, 5], 50)
+    centers = rng.uniform(0.0, L_box, (len(sizes), 3))
+    R = np.concatenate([c + rng.normal(scale=0.5, size=(k, 3)) for c, k in zip(centers, sizes)])
+    offs = np.concatenate([[0], np.cumsum(sizes)])
+    return R % L_box, np.repeat(np.arange(len(sizes)), sizes), offs
+
+
+@pytest.mark.parametrize("frame", ["etoh181", "mixed"])
+@pytest.mark.parametrize("cutoff", [7.5, 12.47, 13.0])
+@pytest.mark.parametrize("mm_r_min", [None, 4.05])
+def test_gpu_rebuild_identical_to_cpu(frame, cutoff, mm_r_min):
+    """GPU pairs == CPU pairs element-wise (same set, same lexicographic order), host or device input."""
+    nl_gpu = _gpu_pairlist_or_skip()
+    import jax
+
+    from mmml.interfaces.pycharmmInterface.nl_backend import build_mm_pairs_with_backend
+
+    L_box = 26.0
+    R, mid, offs = _etoh_like_liquid_frame() if frame == "etoh181" else _mixed_size_frame()
+    if frame == "etoh181":
+        R = R.copy()
+        R[0] = [0.0, 0.5, 0.5]
+        R[9] = [cutoff, 0.5, 0.5]  # exactly at the cutoff: excluded by both
+    cell = np.eye(3) * L_box
+    ci, cj, cmask, n_cpu, cap, used = build_mm_pairs_with_backend(
+        "vesin", positions=R, box=cell, cutoff=cutoff, monomer_offsets=offs, mm_r_min=mm_r_min,
+        total_atoms=len(R),
+    )
+    assert used == "vesin" and n_cpu > 0
+    for pos in (R, jax.device_put(R, jax.devices("gpu")[0])):
+        idx, mask, label = nl_gpu.rebuild_vesin_pairs_gpu(
+            pos, cell, cutoff=cutoff, monomer_offsets=offs, mm_r_min=mm_r_min, max_pairs=cap,
+            total_atoms=len(R),
+        )
+        assert label == "vesin_gpu"
+        assert list(idx.devices())[0].platform == "gpu"  # stays on device
+        idx, mask = np.asarray(idx), np.asarray(mask)
+        assert idx.shape == (cap, 2) and mask.shape == (cap,)
+        np.testing.assert_array_equal(mask, cmask)
+        np.testing.assert_array_equal(idx[:, 0], ci)
+        np.testing.assert_array_equal(idx[:, 1], cj)
+    bf = _brute_intermonomer_pairs(R, mid, L_box, cutoff)
+    if mm_r_min is None:
+        assert set(zip(ci[cmask].tolist(), cj[cmask].tolist())) == bf
+
+
+def test_gpu_rebuild_truncation_raises():
+    nl_gpu = _gpu_pairlist_or_skip()
+    from mmml.interfaces.pycharmmInterface.cell_list import PairListTruncationError
+
+    R, _, offs = _etoh_like_liquid_frame()
+    with pytest.raises(PairListTruncationError):
+        nl_gpu.rebuild_vesin_pairs_gpu(R, np.eye(3) * 26.0, cutoff=7.5, monomer_offsets=offs, max_pairs=16)
+
+
+def test_mm_nl_device_request_resolution(monkeypatch):
+    from mmml.interfaces.pycharmmInterface import nl_gpu
+
+    monkeypatch.delenv("MMML_MM_NL_DEVICE", raising=False)
+    assert nl_gpu.resolve_mm_nl_device_request() == "auto"
+    monkeypatch.setenv("MMML_MM_NL_DEVICE", "CPU")
+    assert nl_gpu.resolve_mm_nl_device_request() == "cpu"
+    assert nl_gpu.resolve_mm_nl_device() == "cpu"
+    assert not nl_gpu.gpu_nl_path_available()  # never probes CuPy
+    assert nl_gpu.resolve_mm_nl_device_request("gpu") == "gpu"
+    monkeypatch.setenv("MMML_MM_NL_DEVICE", "tpu")
+    with pytest.raises(ValueError):
+        nl_gpu.resolve_mm_nl_device_request()
+
+
+def test_auto_falls_back_to_cpu_without_cupy_or_jax_gpu(monkeypatch):
+    import jax
+
+    from mmml.interfaces.pycharmmInterface import nl_gpu
+
+    monkeypatch.delenv("MMML_MM_NL_DEVICE", raising=False)
+    monkeypatch.setattr(nl_gpu, "have_cupy", lambda: False)
+    assert not nl_gpu.gpu_nl_path_available()
+    assert nl_gpu.resolve_mm_nl_device() == "cpu"
+    # CuPy present but JAX runs on CPU: pairs must stay on the CPU path.
+    monkeypatch.setattr(nl_gpu, "have_cupy", lambda: True)
+    monkeypatch.setattr(nl_gpu, "_jax_target_device", lambda positions=None: jax.devices("cpu")[0])
+    monkeypatch.setattr(nl_gpu, "cupy_runtime_ok", lambda **kw: pytest.fail("must not probe CuPy"))
+    assert not nl_gpu.gpu_nl_path_available()

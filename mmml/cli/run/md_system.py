@@ -2000,11 +2000,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--mm-nl-device",
-        choices=["cpu", "gpu"],
+        choices=["auto", "cpu", "gpu"],
         default=None,
         help=(
-            "MM Vesin rebuild device for jaxmd "
-            "(default: MMML_MM_NL_DEVICE or cpu; gpu falls back to cpu on CuPy failure)."
+            "MM Vesin pair-list rebuild device "
+            "(default: MMML_MM_NL_DEVICE or auto: GPU when CuPy + a JAX GPU are present, else cpu)."
         ),
     )
     parser.add_argument(
@@ -4202,6 +4202,9 @@ def main() -> int:
         os.environ["MMML_JAX_PROFILER_DIR"] = str(
             Path(args.jax_profiler_dir).expanduser().resolve()
         )
+    if getattr(args, "mm_nl_device", None):
+        # Read by nl_gpu in every backend (pycharmm MLpot rebuilds in-process).
+        os.environ["MMML_MM_NL_DEVICE"] = str(args.mm_nl_device)
     started_at = datetime.now(timezone.utc).isoformat()
     backend: str | None = None
     argv: list[str] | None = None
