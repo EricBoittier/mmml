@@ -77,3 +77,36 @@ def write_spice_h5(
         skip = handle.create_group("metadata_only")
         skip.create_dataset("note", data=np.array([1]))
     return path
+
+
+def write_water_spice_h5(path: Path, *, n_confs: int = 8) -> Path:
+    """Same-N water frames with polarizability (for efield-train smoke)."""
+    if n_confs < 1:
+        raise ValueError("n_confs must be >= 1")
+    z = np.array([8, 1, 1], np.int32)
+    base = np.array(
+        [[0.0, 0.0, 0.0], [0.96, 0.0, 0.0], [-0.24, 0.93, 0.0]],
+        dtype=np.float64,
+    )
+    coords = np.zeros((n_confs, 3, 3), np.float64)
+    energy = np.zeros(n_confs, np.float64)
+    gradient = np.zeros((n_confs, 3, 3), np.float64)
+    dipole = np.zeros((n_confs, 3), np.float64)
+    polar = np.zeros((n_confs, 3, 3), np.float64)
+    for i in range(n_confs):
+        coords[i] = base + 0.02 * i
+        energy[i] = -14.0 + 0.01 * i
+        gradient[i, 0, 0] = 0.05 * i
+        dipole[i] = (0.0, 0.0, 0.4 + 0.01 * i)
+        polar[i] = np.eye(3) * (1.1 + 0.02 * i)
+    with h5py.File(path, "w") as handle:
+        handle.attrs["units_map"] = json.dumps(SPICE_ALPHA_CANONICAL_UNITS)
+        water = handle.create_group("O")
+        water.create_dataset("atomic_numbers", data=z)
+        water.create_dataset("conformations", data=coords)
+        water.create_dataset("dft_total_energy", data=energy)
+        water.create_dataset("dft_total_gradient", data=gradient)
+        water.create_dataset("scf_dipole", data=dipole)
+        water.create_dataset("polarizability", data=polar)
+        water.create_dataset("mbis_charges", data=np.zeros((n_confs, 3, 1)))
+    return path

@@ -69,6 +69,7 @@ def test_data_loading_tests_have_no_remote_dataset_urls():
         _REPO / "tests" / "unit" / "test_data_loading_contracts.py",
         _REPO / "tests" / "unit" / "spice_alpha_fixtures.py",
         _REPO / "tests" / "unit" / "test_efield_polar_loss.py",
+        _REPO / "tests" / "unit" / "test_spice_alpha_efield_train.py",
     ]
     leaked: list[str] = []
     for path in roots:
