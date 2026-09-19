@@ -602,6 +602,31 @@ class DecomposedMlpotCalculator:
             return jax_cpu_until_mlpot_registered()
         return mlpot_jax_device_context()
 
+    def _sync_callback_pbc_box(self):
+        """Refresh ``self._cell`` from live CHARMM pbound before wrap / MIC.
+
+        Under CPT the box changes every step. Wrapping with the previous
+        ``_cell`` leaves a molecule split across the new primary cell (NPT
+        ETOH: 21.4 Å raw extent, then the pair-list guard raises).
+        """
+        if not (self._cell or self._requires_callback_pbc_box()):
+            self._current_box = None
+            return None
+        from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+            cubic_box_matrix_from_side,
+            resolve_mlpot_mic_box_side_A,
+        )
+
+        fallback_side_A, restart_path = self._callback_box_resolution_inputs()
+        side, _ = resolve_mlpot_mic_box_side_A(
+            fallback_side_A=fallback_side_A,
+            restart_path=restart_path,
+        )
+        self._cell = side
+        box = jnp.asarray(cubic_box_matrix_from_side(side))
+        self._current_box = box
+        return box
+
     def _maybe_rewrap_primary_cell_in_callback(
         self,
         pos: np.ndarray,
@@ -609,6 +634,8 @@ class DecomposedMlpotCalculator:
         x,
         y,
         z,
+        *,
+        box_side_A: float | None = None,
     ) -> np.ndarray:
         """Periodic copy of ``pos`` with each molecule's COM in the primary cell.
 
@@ -620,14 +647,17 @@ class DecomposedMlpotCalculator:
         integrator's coordinates mid-step broke NVE (+289 kcal/mol in 0.25 ps
         on ETOH:181; conserved once removed). ``x``, ``y``, ``z`` are left
         untouched; post-SD recentering lives in ``dynamics._rewrap_mlpot_pbc_after_sd``.
+
+        ``box_side_A`` is the live CHARMM cell (pbound). If omitted, ``self._cell``
+        is used — callers that run under NPT must refresh that first.
         """
         del x, y, z
-        if not self._cell or not self._atoms_per_monomer:
+        L = float(box_side_A) if box_side_A is not None else (float(self._cell) if self._cell else 0.0)
+        if L <= 0.0 or not self._atoms_per_monomer:
             return pos
         from mmml.interfaces.pycharmmInterface.mlpot.mc_density import monomer_offsets_from_atoms_per
         from mmml.utils.geometry_checks import wrap_monomers_primary_cell
 
-        L = float(self._cell)
         offsets = monomer_offsets_from_atoms_per(list(self._atoms_per_monomer))
         # CHARMM frame is [-L/2, L/2]; wrap in [0, L) and shift back.
         wrapped = (
@@ -669,25 +699,14 @@ class DecomposedMlpotCalculator:
         )
 
         pos_full = stack_charmm_xyz(x, y, z, n)
-        pos_full = self._maybe_rewrap_primary_cell_in_callback(pos_full, n, x, y, z)
+        box = self._sync_callback_pbc_box()
+        live_side = float(self._cell) if self._cell else None
+        pos_full = self._maybe_rewrap_primary_cell_in_callback(
+            pos_full, n, x, y, z, box_side_A=live_side
+        )
         ml_idx = self._resolve_ml_callback_slice(n)
         n_ml = int(ml_idx.size)
         pos = pos_full[ml_idx]
-        box = None
-        if self._cell or self._requires_callback_pbc_box():
-            from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
-                cubic_box_matrix_from_side,
-                resolve_mlpot_mic_box_side_A,
-            )
-
-            fallback_side_A, restart_path = self._callback_box_resolution_inputs()
-            side, _ = resolve_mlpot_mic_box_side_A(
-                fallback_side_A=fallback_side_A,
-                restart_path=restart_path,
-            )
-            self._cell = side
-            box = jnp.asarray(cubic_box_matrix_from_side(side))
-        self._current_box = box
         from mmml.interfaces.pycharmmInterface.mlpot.ml_profile import (
             get_mlpot_profile_stats,
             mlpot_profiling_enabled,
