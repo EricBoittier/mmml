@@ -138,3 +138,17 @@ def test_eterm_split_com_weighted_matches_per_pair_reference(complementary):
     # The COM path must actually differ from the atom-distance fallback.
     fallback = decompose_mlpot_mm_nb_eterms_kcalmol(R, pidx, mask, cell, **kw)
     assert fallback["mm_total"] != pytest.approx(got["mm_total"], rel=1e-6)
+
+
+@pytest.mark.parametrize("cutoff", [5.0, 7.0])  # 7 Å > L/2: pairs can appear through two images
+def test_vesin_mic_pair_arrays_sorted_unique_and_complete(cutoff):
+    pytest.importorskip("vesin")
+    from mmml.interfaces.pycharmmInterface.nl_reference import vesin_mic_pair_arrays
+
+    _, R, mid, offs, i, j = _system(seed=3)
+    d = np.linalg.norm(_mic(R[j] - R[i]), axis=1)
+    ref = {(a, b) for a, b, r in zip(i.tolist(), j.tolist(), d) if mid[a] != mid[b] and r < cutoff}
+    pi, pj = vesin_mic_pair_arrays(R, np.eye(3) * L, cutoff, mid, monomer_offsets=offs)
+    key = pi * (len(R) + 1) + pj
+    assert np.all(np.diff(key) > 0)  # lexicographically sorted, no duplicates
+    assert set(zip(pi.tolist(), pj.tolist())) == ref
