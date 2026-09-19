@@ -51,13 +51,44 @@ def push_mlpot_nb_components_to_charmm(
     )
 
 
+#: MM bucket -> CHARMM energy term it is routed into (``mlpot_call`` in api_func.F90).
+_NB_BUCKET_TERMS: dict[str, str] = {
+    "vdw_primary": "VDW",
+    "vdw_image": "IMNB",
+    "elec_primary": "ELEC",
+    "elec_image": "IMEL",
+}
+
+
+def _skipped_nb_buckets() -> list[str]:
+    from mmml.interfaces.pycharmmInterface.mlpot.charmm_energy_policy import (
+        charmm_skipped_terms,
+    )
+
+    skipped = charmm_skipped_terms()
+    return [k for k, term in _NB_BUCKET_TERMS.items() if term in skipped]
+
+
 def route_mlpot_callback_energy_kcalmol(
     energy_kcal: float,
     components: dict[str, float],
     *,
     route: bool = True,
 ) -> float:
-    """Push MM buckets to CHARMM eterm slots; return USER energy (ML + LR not routed)."""
+    """Push MM buckets to CHARMM eterm slots; return USER energy (ML + LR not routed).
+
+    Buckets whose CHARMM term was removed with ``SKIPE`` stay in USER: CHARMM
+    adds a routed bucket only when its term is active, so routing it would drop
+    that energy from ENER.
+    """
+    skipped = _skipped_nb_buckets()
+    if skipped:
+        components = dict(components)
+        for key in skipped:
+            components[key] = 0.0
+        components["mm_total"] = float(
+            sum(float(components.get(k, 0.0)) for k in _NB_BUCKET_TERMS)
+        )
     mm_total = float(components.get("mm_total", 0.0))
     energy_kcal = float(energy_kcal)
     do_route = bool(route and mlpot_route_mm_to_charmm_eterms_enabled())
