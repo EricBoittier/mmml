@@ -182,6 +182,112 @@ def nsavc_for_chunk_preserving_interval(
     return harmonize_nsavc_frequency(min(target, cap), n)
 
 
+@dataclass(frozen=True)
+class CptDcdSegment:
+    """DCD plan of one CPT stability ``dyna`` call (see :func:`cpt_dcd_segment`).
+
+    ``nsavc is None`` means no trajectory for this call. Otherwise CHARMM writes
+    frames at local steps ``nsavc, 2*nsavc, ... <= nstep`` (continuation calls do
+    not repeat the origin frame); ``keep`` lists the 0-based indices of those
+    frames that land on a global save step (``None`` = all of them). ``dropped``
+    lists global save steps the call cannot write (1-step call, ``nsavc < nstep``).
+    """
+
+    start: int
+    nstep: int
+    nsavc: int | None
+    keep: tuple[int, ...] | None = None
+    dropped: tuple[int, ...] = ()
+
+    def written_steps(self) -> list[int]:
+        """Global steps of every frame CHARMM writes for this call."""
+        if self.nsavc is None:
+            return []
+        return [self.start + k * self.nsavc for k in range(1, self.nstep // self.nsavc + 1)]
+
+    def kept_steps(self) -> list[int]:
+        """Global steps of the frames kept after filtering (the stage saves)."""
+        steps = self.written_steps()
+        if self.keep is None:
+            return steps
+        return [steps[i] for i in self.keep if i < len(steps)]
+
+
+def _largest_proper_divisor(n: int) -> int:
+    n = int(n)
+    d = 2
+    while d * d <= n:
+        if n % d == 0:
+            return n // d
+        d += 1
+    return 1
+
+
+def cpt_dcd_segment(start: int, nstep: int, target_nsavc: int) -> CptDcdSegment:
+    """``nsavc`` / frame filter that saves exactly the global multiples of ``target``.
+
+    The steps saved are ``{g : g % target == 0, start < g <= start + nstep}``, each
+    at step ``g`` exactly, always with CHARMM's ``nsavc < nstep``:
+
+    * no save in the call: no trajectory;
+    * ``start`` a multiple of ``target`` and ``target < nstep``: ``nsavc = target``;
+    * one save strictly inside the call and ``nstep < 2 * rel``: ``nsavc = rel``;
+    * otherwise ``nsavc`` = a common divisor of the save offsets (below ``nstep``)
+      and ``keep`` drops the extra frames when the sub-DCDs are merged.
+
+    A 1-step call holding a save cannot satisfy ``nsavc < nstep``: it gets no
+    trajectory and the save is reported in ``dropped``. :func:`cpt_subchunk_nstep`
+    only yields 1-step calls when the stability size is 1 or 2.
+    """
+    from math import gcd
+
+    t = max(1, int(target_nsavc))
+    p = int(start)
+    n = int(nstep)
+    if n < 1:
+        raise ValueError(f"CPT DCD segment needs nstep >= 1 (got {n})")
+    q = p + n
+    first = (p // t + 1) * t
+    if first > q:
+        return CptDcdSegment(p, n, None)
+    n_saves = q // t - p // t
+    if p % t == 0 and t < n:
+        return CptDcdSegment(p, n, t)
+    rel = first - p
+    if n_saves == 1 and rel < n < 2 * rel:
+        return CptDcdSegment(p, n, rel)
+    if n < 2:
+        # CHARMM needs ``nsavc < nstep``: a 1-step call cannot write its save.
+        return CptDcdSegment(p, n, None, dropped=(first,))
+    d = gcd(rel, t) if n_saves > 1 else rel
+    if d >= n:
+        d = _largest_proper_divisor(n)
+    keep = tuple(k - 1 for k in range(1, n // d + 1) if (p + k * d) % t == 0)
+    return CptDcdSegment(p, n, d, keep)
+
+
+def cpt_subchunk_nstep(steps_done: int, total: int, max_nstep: int) -> int:
+    """Length of the next CPT stability sub-chunk (independent of the DCD cadence).
+
+    Sub-chunks are ``max_nstep`` long with a shorter last one, except that a
+    1-step remainder is avoided by ending with ``max_nstep - 1`` then ``2`` steps
+    (a 1-step call cannot save a frame under CHARMM's ``nsavc < nstep``). Each
+    in-memory continuation redraws velocities (``iasvel=1``), so the boundaries
+    deliberately depend only on ``total`` and ``max_nstep``, never on ``nsavc``:
+    the DCD cadence must not change the dynamics. Exact save steps come from
+    :func:`cpt_dcd_segment` instead (filtered frames on these fixed calls).
+    """
+    remaining = int(total) - int(steps_done)
+    S = max(1, int(max_nstep))
+    if remaining <= 0:
+        raise ValueError(f"CPT sub-chunk: no steps left ({steps_done}/{total})")
+    if remaining <= S:
+        return remaining
+    if remaining - S == 1 and S >= 3:
+        return S - 1
+    return S
+
+
 def expected_overlap_chunk_dcd_frame_count(
     *,
     total_nstep: int,
@@ -237,6 +343,16 @@ def expected_overlap_chunk_dcd_frame_count(
     if cold_start_first_chunk and completed == 1:
         return expected_dcd_frame_count(nstep=chunk_nstep, nsavc=sav)
     return per_restart * completed
+
+
+def expected_overlap_stage_dcd_frame_count(*, total_nstep: int, nsavc: int) -> int:
+    """Frames at the stage's global save cadence (``total_nstep // nsavc``).
+
+    Unlike :func:`expected_overlap_chunk_dcd_frame_count` this does not drop to
+    0 when ``nsavc`` is at least the overlap chunk length: chunk runners place
+    such saves on the chunk that contains the global save step.
+    """
+    return max(0, int(total_nstep)) // max(1, int(nsavc))
 
 
 def _parse_fortran_d_float(token: str) -> float:
@@ -1335,6 +1451,17 @@ def assert_stage_dynamics_completed(
             problems.append(
                 f"{label} has {n_frames} readable frame(s), "
                 f"expected >= {min_frames} (~{expected_frames} total{chunk_note})"
+            )
+
+    if not problems and dcd_path is not None and chunk_paths:
+        global_frames = expected_overlap_stage_dcd_frame_count(total_nstep=step_for_frames, nsavc=nsavc)
+        if n_frames < global_frames:
+            print(
+                f"WARN: {stage.upper()} {len(chunk_paths)} overlap chunk DCD(s) for "
+                f"{dcd_path.name} hold {n_frames} readable frame(s), fewer than the "
+                f"{global_frames} global saves at nsavc={nsavc} over "
+                f"{step_for_frames} steps (some chunk frames were not written)",
+                flush=True,
             )
 
     if not problems:
