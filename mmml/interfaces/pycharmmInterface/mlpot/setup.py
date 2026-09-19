@@ -646,7 +646,17 @@ def assert_mlpot_user_active(
 
     In all-ML workflows CHARMM bonded/nonbonded terms are intentionally zeroed by
     BLOCK, so a missing USER term leaves dynamics integrating a free gas.
+
+    Disarms ``set_mlpot_dynamics_armed`` while probing: the recovery ladder below
+    needs the zero USER return from ``_CallbackPairListUnavailable``. Once USER is
+    verified it arms, so from then on a lost pair list ends the run (see
+    ``callback_failstop``). The deferred-probe path is unverified and stays disarmed.
     """
+    from mmml.interfaces.pycharmmInterface.mlpot.callback_failstop import (
+        set_mlpot_dynamics_armed,
+    )
+
+    set_mlpot_dynamics_armed(False)
     if mlpot_defer_charmm_hybrid_ener(ctx):
         sync_mlpot_fortran_registration(ctx, verbose=False)
         if not quiet:
@@ -725,6 +735,7 @@ def assert_mlpot_user_active(
             f"USER active before {context}: {format_energy_kcal_ev(float(user))}",
             tag_style="bold green",
         )
+    set_mlpot_dynamics_armed(True)
     return float(user)
 
 

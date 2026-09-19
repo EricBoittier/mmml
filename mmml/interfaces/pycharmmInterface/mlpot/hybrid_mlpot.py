@@ -757,6 +757,12 @@ class DecomposedMlpotCalculator:
                             pos, box
                         )
                 except _CallbackPairListUnavailable as exc:
+                    from mmml.interfaces.pycharmmInterface.mlpot.callback_failstop import (
+                        mlpot_dynamics_armed,
+                    )
+
+                    if mlpot_dynamics_armed():
+                        raise  # failstop_calculate_charmm ends the run
                     msg = str(exc)
                     self._last_callback_error = msg
                     self._last_callback_hybrid_energy_kcal = 0.0

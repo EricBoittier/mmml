@@ -99,7 +99,19 @@ def test_rebind_registers_failstop_wrapper(monkeypatch):
 
 
 def test_abort_stop_falls_through_to_exit_when_charmm_stop_fails(monkeypatch):
+    import sys
+    from types import ModuleType, SimpleNamespace
+
     monkeypatch.setenv(ABORT_ENV, "stop")
+    # Where libcharmm loads, a real STOP ends the pytest process with status 0.
+    fake = ModuleType("pycharmm")
+
+    def _stop_fails(_script):
+        raise RuntimeError("CHARMM STOP unavailable")
+
+    fake.lingo = SimpleNamespace(charmm_script=_stop_fails)
+    monkeypatch.setitem(sys.modules, "pycharmm", fake)
+    monkeypatch.setitem(sys.modules, "mmml.interfaces.pycharmmInterface.import_pycharmm", ModuleType("x"))
     exited = {}
 
     def _fake_exit(code):
