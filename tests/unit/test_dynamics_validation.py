@@ -572,11 +572,12 @@ def test_patch_restart_global_step_preserves_fortran_restart_format(tmp_path):
     res = tmp_path / "overlap_a.res"
     res.write_text(stub.read_text(encoding="utf-8"), encoding="utf-8")
 
+    header_before = res.read_text(encoding="utf-8").splitlines()[0]
     assert patch_restart_global_step(res, 500)
 
     lines = res.read_text(encoding="utf-8").splitlines()
-    assert lines[0].startswith("REST")
-    assert lines[0][10:20] == "       500"
+    # REST header is (A4,2I6,...) = HDR, IVERS, LDYNA: never a step counter (#219).
+    assert lines[0] == header_before
     assert read_restart_last_step(res) == 500
     natom_line = lines[7]
     assert "0.314159000000000D+06" in natom_line
@@ -1168,9 +1169,6 @@ def test_rewrite_dynamics_restart_validated_patches_negative_step(tmp_path, monk
     from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
         rewrite_dynamics_restart_validated,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
-        read_restart_last_step,
-    )
 
     path = tmp_path / "baseline.res"
 
@@ -1189,8 +1187,11 @@ def test_rewrite_dynamics_restart_validated_patches_negative_step(tmp_path, monk
     )
 
     assert rewrite_dynamics_restart_validated(path) is True
-    # Verify it has been patched to 0
-    assert read_restart_last_step(path) == 0
+    # JHSTRT is patched to 0; the REST header (IVERS, LDYNA) is left for READYN (#219).
+    lines = path.read_text(encoding="utf-8").splitlines()
+    assert lines[0].startswith("REST    48    -1")
+    natom_idx = next(i for i, ln in enumerate(lines) if "!NATOM" in ln)
+    assert lines[natom_idx + 1].split()[5] == "0"
 
 
 def test_integrated_step_from_restart_negative_aborted_step(tmp_path):
@@ -1417,6 +1418,48 @@ def test_assert_stage_dynamics_completed_rejects_empty_dcd_after_full_integratio
             restart_path=None,
             integrated_step=100000,
         )
+
+
+def _charmm_rest_header_ldyna(line: str) -> int:
+    """LDYNA as CHARMM ``READYN`` parses it: ``READ(U,'(A4,2I6,...)')``; blank -> 0."""
+    field = line[10:16].strip()
+    return int(field) if field else 0
+
+
+@pytest.mark.parametrize("step", [50, 500, 123456])
+@pytest.mark.parametrize("patcher", ["global_step", "readyn_handoff"])
+def test_restart_patchers_keep_rest_header_ldyna_issue_219(tmp_path, step, patcher):
+    """Overlap chunk handoff must not rewrite LDYNA in the REST header (#219).
+
+    ``READYN`` converts Verlet->leap-frog (``X = X - XOLD``) when LDYNA differs from
+    the running integrator, turning the step-displacement array into
+    ``disp - positions`` and giving KE ~1e9 on the first post-handoff step.
+    """
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        patch_restart_global_step,
+        patch_restart_readyn_handoff,
+        read_restart_last_step,
+    )
+
+    stub = (
+        Path(__file__).resolve().parents[1]
+        / "functionality/mlpot/output/dynamics/nve_stub.res"
+    )
+    res = tmp_path / "nve.a.res"
+    res.write_text(stub.read_text(encoding="utf-8"), encoding="utf-8")
+    header_before = res.read_text(encoding="utf-8").splitlines()[0]
+    assert _charmm_rest_header_ldyna(header_before) == 1
+
+    if patcher == "global_step":
+        assert patch_restart_global_step(res, step)
+    else:
+        assert patch_restart_readyn_handoff(res, global_step=step, nsavc=8, nsavv=50)
+
+    header_after = res.read_text(encoding="utf-8").splitlines()[0]
+    assert header_after == header_before
+    assert _charmm_rest_header_ldyna(header_after) == 1
+    assert header_after[18:22] == header_before[18:22]  # XTLTPR (crystal type)
+    assert read_restart_last_step(res) == step
 
 
 def test_expected_overlap_stage_dcd_frame_count_uses_global_cadence():

@@ -1027,40 +1027,6 @@ def resolve_integrated_restart_step(
     return step
 
 
-def _field_span(line: str, index: int) -> tuple[int, int] | None:
-    """Character span ``(start, end)`` of the ``index``-th whitespace-delimited field."""
-    field = -1
-    i = 0
-    n = len(line)
-    while i < n:
-        while i < n and line[i].isspace():
-            i += 1
-        if i >= n:
-            return None
-        start = i
-        while i < n and not line[i].isspace():
-            i += 1
-        field += 1
-        if field == index:
-            return start, i
-    return None
-
-
-def _replace_field_preserve_width(
-    line: str, index: int, value: int, *, min_width: int = 1
-) -> str:
-    """Replace one field in-place, keeping its original column width."""
-    span = _field_span(line, index)
-    if span is None:
-        return line
-    start, end = span
-    width = max(min_width, end - start)
-    new = f"{int(value):>{width}d}"
-    if len(new) > width:
-        new = new[-width:]
-    return line[:start] + new + line[end:]
-
-
 def _replace_i10_field(line: str, index: int, value: int) -> str:
     """Replace one Fortran ``I10`` field without disturbing trailing formatted data."""
     start = index * 10
@@ -1198,16 +1164,11 @@ def patch_restart_global_step(path: Path, global_step: int) -> bool:
     if not lines:
         return False
 
+    # Never touch the ``REST`` header: it is ``(A4,2I6,2X,A4,...)`` =
+    # HDR, IVERS, LDYNA (integrator flag), XTLTPR.  Writing the step there makes
+    # ``READYN`` see LDYNAR != LDYNA and convert Verlet->leap-frog
+    # (``X = X - XOLD``), which blows up the first post-handoff step (#219).
     patched = False
-    if lines[0].strip().upper().startswith("REST"):
-        # CHARMM REST line: A4 title + I10 step counter at column 11 (0-based offset 10).
-        rest = lines[0]
-        if len(rest) >= 20:
-            lines[0] = _replace_i10_field(rest, 1, step)
-        else:
-            lines[0] = _replace_field_preserve_width(rest, 2, step, min_width=10)
-        patched = True
-
     for i, raw in enumerate(lines):
         tag = raw.strip().split()[0] if raw.strip() else ""
         if not (tag.startswith("!NATOM") or tag.startswith("NATOM")):
@@ -1253,15 +1214,11 @@ def patch_restart_readyn_handoff(
     if not lines:
         return False
 
+    # Never touch the ``REST`` header: it is ``(A4,2I6,2X,A4,...)`` =
+    # HDR, IVERS, LDYNA (integrator flag), XTLTPR.  Writing the step there makes
+    # ``READYN`` see LDYNAR != LDYNA and convert Verlet->leap-frog
+    # (``X = X - XOLD``), which blows up the first post-handoff step (#219).
     patched = False
-    if lines[0].strip().upper().startswith("REST"):
-        rest = lines[0]
-        if len(rest) >= 20:
-            lines[0] = _replace_i10_field(rest, 1, step)
-        else:
-            lines[0] = _replace_field_preserve_width(rest, 2, step, min_width=10)
-        patched = True
-
     for i, raw in enumerate(lines):
         tag = raw.strip().split()[0] if raw.strip() else ""
         if not (tag.startswith("!NATOM") or tag.startswith("NATOM")):

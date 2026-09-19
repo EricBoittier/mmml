@@ -11,7 +11,7 @@ from unittest import mock
 import numpy as np
 import pytest
 
-from tests.unit.conftest import write_minimal_restart
+from tests.unit.conftest import restart_stub_text, write_minimal_restart
 
 from mmml.interfaces.pycharmmInterface.mlpot.overlap_guard import (
     DynamicsOverlapConfig,
@@ -338,7 +338,7 @@ def test_overlap_early_abort_multi_chunk_cpt_uses_in_memory_handoff(tmp_path, ca
         calls.append((dict(kw), _io))
         if _io is not None and _io.restart_write is not None:
             step = 500 if len(calls) == 1 else (501 if len(calls) == 2 else 1000)
-            Path(_io.restart_write).write_text(f"REST {step} 0\n", encoding="utf-8")
+            Path(_io.restart_write).write_text(restart_stub_text(step), encoding="utf-8")
         return mock.Mock()
 
     with mock.patch(
@@ -491,7 +491,7 @@ def test_overlap_early_abort_disk_recovery_cpt_retries_in_memory(tmp_path, capsy
         calls.append((dict(kw), _io))
         if _io is not None and _io.restart_write is not None:
             step = 500 if len(calls) == 1 else (501 if len(calls) == 2 else 1000)
-            Path(_io.restart_write).write_text(f"REST {step} 0\n", encoding="utf-8")
+            Path(_io.restart_write).write_text(restart_stub_text(step), encoding="utf-8")
         return mock.Mock()
 
     with mock.patch(
@@ -561,7 +561,7 @@ def test_overlap_early_abort_disk_recovery_non_cpt_retries_in_memory(tmp_path):
 
     final_res = tmp_path / "heat.res"
     slot_a = tmp_path / "heat.overlap_a.res"
-    slot_a.write_text("REST 640 0\n", encoding="utf-8")
+    slot_a.write_text(restart_stub_text(640), encoding="utf-8")
     cfg = DynamicsOverlapConfig(
         action="rescue",
         min_distance_A=0.5,
@@ -580,7 +580,7 @@ def test_overlap_early_abort_disk_recovery_non_cpt_retries_in_memory(tmp_path):
                 step = 640
             else:
                 step = 1280
-            Path(_io.restart_write).write_text(f"REST {step} 0\n", encoding="utf-8")
+            Path(_io.restart_write).write_text(restart_stub_text(step), encoding="utf-8")
         return mock.Mock()
 
     with mock.patch(
@@ -2173,7 +2173,7 @@ def test_overlap_checks_run_after_each_successful_chunk(tmp_path):
         chunk_count += 1
         if _io is not None and _io.restart_write is not None:
             Path(_io.restart_write).write_text(
-                f"REST {500 * chunk_count} 1\n", encoding="utf-8"
+                restart_stub_text(500 * chunk_count), encoding="utf-8"
             )
         return mock.Mock()
 
@@ -2220,7 +2220,7 @@ def test_overlap_checks_run_when_restart_reports_segment_nstep_only(tmp_path):
 
     def fake_chunk(kw, _io, *, extra_iokw=None, **kwargs):
         if _io is not None and _io.restart_write is not None:
-            Path(_io.restart_write).write_text("REST 500 1\n", encoding="utf-8")
+            Path(_io.restart_write).write_text(restart_stub_text(500), encoding="utf-8")
         return mock.Mock()
 
     def track_overlap(_cfg, *, context, step, mlpot_ctx=None):
@@ -2477,7 +2477,7 @@ def test_post_rescue_in_memory_handoff_limited_to_next_chunk(tmp_path, monkeypat
         )
         if _io is not None and _io.restart_write is not None:
             step = 500 * len(restart_reads)
-            Path(_io.restart_write).write_text(f"REST {step} 0\n", encoding="utf-8")
+            Path(_io.restart_write).write_text(restart_stub_text(step), encoding="utf-8")
         return mock.Mock()
 
     def track_overlap(_cfg, *, context, step, mlpot_ctx=None):
