@@ -82,7 +82,9 @@ dimers and **not** PBC boxes unless a lattice is present.
 `mmml.models.physnetjax.physnetjax.data.read_h5` loads groups named `mol_*`
 with `positions`, `formation_energy`, `total_forces`. SPICE-style files
 (one group per molecule, `conformations` of shape `(M, N, 3)`) match
-**zero** groups — convert first ([SPICE-α](spice-alpha.md)).
+**zero** groups — convert first with `mmml.data.spice_alpha`
+([SPICE-α](spice-alpha.md)). `pytest -m data_loading` covers the converter
+and this contract on synthetic HDF5 only.
 
 ## Forbidden mixes
 

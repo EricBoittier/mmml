@@ -60,67 +60,29 @@ split **per subset** — those index files are not in the zip.
 
 ## Convert
 
-`F = −dft_total_gradient`. Then split **without** reconverting:
+`F = −dft_total_gradient`. Use the importable converter
+(`mmml.data.spice_alpha`); then split **without** reconverting:
 
 ```bash
-# after writing spice_des_mono.npz with R,Z,N,E,F,D in Å/eV/eV/Å/e·Å
+python -m mmml.data.spice_alpha DES370K_Monomers.hdf5 -o spice_des_mono.npz
+# optional: --max-frames 64 --neutral-only --pad 22
 mmml fix-and-split --efd spice_des_mono.npz -o splits_des_mono --preserve-units \
   --train-frac 0.9 --valid-frac 0.05 --test-frac 0.05
 ```
 
-Default `fix-and-split` assumes Hartree / Hartree/Bohr / Debye and will
-**destroy** this dataset.
-
-Sketch (stream HDF5 → padded NPZ):
-
 ```python
-import json
-from pathlib import Path
-import h5py
-import numpy as np
+from mmml.data import convert_spice_alpha_hdf5
 
-def iter_frames(h5):
-    for name in h5.keys():
-        g = h5[name]
-        if "conformations" not in g or "atomic_numbers" not in g:
-            continue
-        Z = np.asarray(g["atomic_numbers"][()], dtype=np.int32)
-        R = np.asarray(g["conformations"][()], dtype=np.float64)
-        n = int(R.shape[0])
-        E = np.asarray(g["dft_total_energy"][()], dtype=np.float64)
-        G = np.asarray(g["dft_total_gradient"][()], dtype=np.float64)
-        D = np.asarray(g["scf_dipole"][()], dtype=np.float64) if "scf_dipole" in g else np.full((n, 3), np.nan)
-        for i in range(n):
-            yield Z, R[i], float(E[i]), -G[i], D[i]
-
-def to_npz(paths, out: Path, pad: int | None = None, max_frames: int = 0):
-    frames = []
-    for path in paths:
-        with h5py.File(path, "r") as h5:
-            for fr in iter_frames(h5):
-                frames.append(fr)
-                if max_frames and len(frames) >= max_frames:
-                    break
-        if max_frames and len(frames) >= max_frames:
-            break
-    pad = pad or max(len(z) for z, *_ in frames)
-    n = len(frames)
-    R = np.zeros((n, pad, 3)); F = np.zeros((n, pad, 3))
-    Z = np.zeros((n, pad), np.int32); N = np.zeros((n,), np.int32)
-    E = np.zeros((n,)); D = np.zeros((n, 3))
-    for i, (z, r, e, f, d) in enumerate(frames):
-        na = len(z)
-        Z[i, :na] = z; R[i, :na] = r; F[i, :na] = f
-        N[i] = na; E[i] = e; D[i] = d
-    units = dict(R="angstrom", E="ev", F="ev_angstrom", D="e_angstrom",
-                 force="negated dft_total_gradient", source="zenodo-19205036")
-    np.savez_compressed(out, R=R, Z=Z, N=N, E=E, F=F, D=D,
-                        _mmml_units=np.array(json.dumps(units)))
+convert_spice_alpha_hdf5(["DES370K_Monomers.hdf5"], "spice_des_mono.npz")
 ```
 
-Inspect `units_map` on the first HDF5 group before converting. If you see
-Bohr/Hartree, treat it as original SPICE and use default `fix-and-split`
-(plus `--flip-forces`).
+Default `fix-and-split` assumes Hartree / Hartree/Bohr / Debye and will
+**destroy** this dataset. The converter refuses a Bohr/Hartree `units_map`
+unless you pass `--allow-atomic-units` (then use default `fix-and-split`
+plus `--flip-forces` instead).
+
+Synthetic contract tests (no Zenodo download): `pytest -m data_loading`
+or `make test-data-loading`. CI: `.github/workflows/data-loading.yml`.
 
 XYZ benches: IR-R-7193 has `dipole_eAA` and `polarizability_eAA2_per_V`,
 `pbc="F F F"`. R-3B69 also has `energy_eV` and per-atom **forces** (do not

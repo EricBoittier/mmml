@@ -38,8 +38,8 @@ What trainers accept (keys, units, total vs interaction, gradient sign):
   before you train on its output.
 - [Training NPZ contract](../training-npz-contract.md) — ingest vs train
   units, energy meaning, padding, hybrid extras.
-- [SPICE-α (Zenodo 19205036)](../spice-alpha.md) — extract HDF5, flip
-  gradients, split with `--preserve-units`.
+- [SPICE-α (Zenodo 19205036)](../spice-alpha.md) — `mmml.data.spice_alpha`
+  (flip gradients), then `fix-and-split --preserve-units`.
 - [Preparing hybrid ML/MM datasets](../hybrid-mm-dataset-preparation.md) —
   assigning CGenFF types and charges to a dimer NPZ.
 - [Dimer scans (DCM / ACO)](../functionality/dimer_scans/README.md) and
