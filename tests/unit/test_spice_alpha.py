@@ -362,6 +362,46 @@ def test_max_atomic_number_empty_n_is_zero():
     assert max_atomic_number(data) == 0
 
 
+def test_extract_des370k_hdf5_accepts_dot_slash_members(tmp_path):
+    import io
+    import tarfile
+
+    from mmml.data.spice_alpha import extract_des370k_hdf5
+
+    archive = tmp_path / "SPICE-alpha.tar.gz"
+    dest = tmp_path / "out"
+    with tarfile.open(archive, "w:gz") as handle:
+        for name in ("./DES370K_Monomers.hdf5", "./DES370K_Dimers.hdf5"):
+            payload = name.encode()
+            info = tarfile.TarInfo(name=name)
+            info.size = len(payload)
+            handle.addfile(info, io.BytesIO(payload))
+    written = extract_des370k_hdf5(archive, dest)
+    assert {path.name for path in written} == {
+        "DES370K_Monomers.hdf5",
+        "DES370K_Dimers.hdf5",
+    }
+    assert (dest / "DES370K_Monomers.hdf5").is_file()
+
+
+def test_extract_des370k_hdf5_accepts_bare_members(tmp_path):
+    import io
+    import tarfile
+
+    from mmml.data.spice_alpha import extract_des370k_hdf5
+
+    archive = tmp_path / "bare.tar.gz"
+    dest = tmp_path / "out"
+    with tarfile.open(archive, "w:gz") as handle:
+        for name in ("DES370K_Monomers.hdf5", "DES370K_Dimers.hdf5"):
+            payload = b"x"
+            info = tarfile.TarInfo(name=name)
+            info.size = 1
+            handle.addfile(info, io.BytesIO(payload))
+    written = extract_des370k_hdf5(archive, dest)
+    assert len(written) == 2
+
+
 def test_check_efield_train_npz_accepts_bohr3_zero_field(tmp_path):
     from mmml.data.spice_alpha import check_efield_train_npz
 

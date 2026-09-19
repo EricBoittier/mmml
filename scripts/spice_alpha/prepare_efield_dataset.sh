@@ -23,9 +23,9 @@ if [[ ! -f "$H5_DIR/DES370K_Monomers.hdf5" ]]; then
     echo "missing $TAR — unzip SPICE-alpha.zip first" >&2
     exit 1
   fi
-  echo "extracting DES370K monomers/dimers from tarball (this can take a while)"
-  tar -xzf "$TAR" --transform='s|^\./||' -C "$H5_DIR" \
-    DES370K_Monomers.hdf5 DES370K_Dimers.hdf5
+  echo "extracting DES370K monomers/dimers from tarball (members are ./DES370K_*.hdf5)"
+  EXTRACT_TAR="$TAR" EXTRACT_DIR="$H5_DIR" python -c \
+    'import os; from mmml.data.spice_alpha import extract_des370k_hdf5; extract_des370k_hdf5(os.environ["EXTRACT_TAR"], os.environ["EXTRACT_DIR"])'
 fi
 
 MAX_ARGS=()

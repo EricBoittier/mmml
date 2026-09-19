@@ -41,7 +41,7 @@ unzip SPICE-alpha.zip \
   'R-3B69/R-3B69.xyz'
 unzip SPICE-alpha.zip 'SPICE-alpha/SPICE-alpha.tar.gz'
 tar -xzf SPICE-alpha/SPICE-alpha.tar.gz --transform='s|^\./||' \
-  DES370K_Dimers.hdf5 DES370K_Monomers.hdf5
+  ./DES370K_Dimers.hdf5 ./DES370K_Monomers.hdf5
 ```
 
 Keep ~25 GB free if you also unpack PubChem. The tarball’s first member is
@@ -100,7 +100,7 @@ On the machine that already unzipped `SPICE-alpha.zip`:
 ```bash
 # inner HDF5 (DES only)
 tar -xzf SPICE-alpha/SPICE-alpha.tar.gz --transform='s|^\./||' -C SPICE-alpha \
-  DES370K_Monomers.hdf5 DES370K_Dimers.hdf5
+  ./DES370K_Monomers.hdf5 ./DES370K_Dimers.hdf5
 
 # smoke (256 frames) or drop --max-frames for the full monomer set
 python -m mmml.data.spice_alpha SPICE-alpha/DES370K_Monomers.hdf5 \

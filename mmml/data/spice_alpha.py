@@ -299,6 +299,49 @@ def max_atomic_number(data: Mapping[str, Any]) -> int:
     return found
 
 
+DES370K_HDF5 = ("DES370K_Monomers.hdf5", "DES370K_Dimers.hdf5")
+
+
+def extract_des370k_hdf5(tar_path: Path | str, dest: Path | str) -> list[Path]:
+    """Extract DES370K monomer/dimer HDF5 from the Zenodo tarball.
+
+    Members are stored as ``./DES370K_*.hdf5``. GNU ``tar ... DES370K_*.hdf5``
+    (no ``./``) fails with ``Not found in archive``.
+    """
+    import tarfile
+
+    archive = Path(tar_path)
+    out_dir = Path(dest)
+    if not archive.is_file():
+        raise FileNotFoundError(f"missing tarball: {archive}")
+    out_dir.mkdir(parents=True, exist_ok=True)
+    written: list[Path] = []
+    with tarfile.open(archive, "r:*") as handle:
+        for member in DES370K_HDF5:
+            dest_file = out_dir / member
+            if dest_file.is_file():
+                written.append(dest_file)
+                continue
+            extracted = False
+            for key in (f"./{member}", member):
+                try:
+                    handle.extract(key, path=out_dir, filter="data")
+                except KeyError:
+                    continue
+                extracted = True
+                break
+            if not dest_file.is_file():
+                alt = out_dir / Path(member).name
+                if alt.is_file() and alt != dest_file:
+                    alt.rename(dest_file)
+            if not extracted or not dest_file.is_file():
+                raise FileNotFoundError(
+                    f"{archive}: missing {member} (tried './{member}' and {member!r})"
+                )
+            written.append(dest_file)
+    return written
+
+
 def check_efield_train_npz(path: Path | str) -> list[str]:
     """Return problems that would break ``efield-train --polar_weight``; empty = ok."""
     dest = Path(path)
