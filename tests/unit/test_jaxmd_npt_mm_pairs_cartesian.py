@@ -135,3 +135,33 @@ def test_mm_pair_positions_for_update_both_directions() -> None:
         )
         is R
     )
+
+
+def test_nl_valid_pair_count_always_returns_a_bound_value() -> None:
+    """Mask-sum failures must keep the fallback, not leave the name unset."""
+    from mmml.cli.run.jaxmd_runner import _nl_valid_pair_count
+
+    assert _nl_valid_pair_count(np.array([1, 0, 1, 1])) == 3
+    assert _nl_valid_pair_count(None, fallback=7) == 7
+
+    class _Unsummable:
+        def __array__(self, dtype=None):
+            raise TypeError("cannot form an array")
+
+    assert _nl_valid_pair_count(_Unsummable(), fallback=4) == 4
+    assert _nl_valid_pair_count(_Unsummable(), fallback=None) is None
+
+
+def test_jaxmd_npt_init_refreshes_from_fractional_integrator_state() -> None:
+    """NPT init_fn takes md_pos_frac; the pair refresh must use that same frame."""
+    from pathlib import Path
+
+    src = (
+        Path(__file__).resolve().parents[2] / "mmml/cli/run/jaxmd_runner.py"
+    ).read_text(encoding="utf-8")
+    block = src.split("md_pos_frac = as_jaxmd_dtype", 1)[1]
+    block = block.split("state = init_fn", 1)[0]
+    refresh = block.split("refresh_mm_pairs(", 1)[1].split(")", 1)[0]
+    assert "md_pos_frac" in refresh
+    assert "positions_are_cartesian=False" in refresh
+    assert "md_pos_wrapped" not in refresh

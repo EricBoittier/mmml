@@ -73,6 +73,16 @@ def _box_nl_debug_label(box_nl) -> str:
     return f"L={float(flat[0]):.4f}"
 
 
+def _nl_valid_pair_count(pair_mask, fallback: int | None = None) -> int | None:
+    """Host count of valid MM pairs; keep ``fallback`` if the mask cannot be summed."""
+    if pair_mask is None:
+        return fallback
+    try:
+        return int(np.sum(np.asarray(pair_mask)))
+    except Exception:
+        return fallback
+
+
 def directional_force_energy_error(
     energy_plus: float,
     energy_minus: float,
@@ -1227,11 +1237,7 @@ def set_up_nhc_sim_routine(
                 _nl_n_valid = int(_nl_stats["pair_n_valid"])
         except Exception:
             _nl_radius = None
-    if pair_mask is not None:
-        try:
-            _nl_n_valid = int(np.sum(np.asarray(pair_mask)))
-        except Exception:
-            pass
+    _nl_n_valid = _nl_valid_pair_count(pair_mask, fallback=_nl_n_valid)
     _nl_extra = {"mm_radius_breakdown": _nl_radius} if _nl_radius else None
     if use_pbc and (pair_idx is not None or _nl_capacity is not None):
         emit_md_system_calculator_report(
@@ -2217,13 +2223,14 @@ def set_up_nhc_sim_routine(
             _cell_jax = jnp.asarray(atoms.get_cell()[:], dtype=jnp.float32)
             md_pos_wrapped = _wrap_monomers(jnp.asarray(md_pos), _cell_jax)
             md_pos_frac = as_jaxmd_dtype(md_pos_wrapped / float(args.cell))  # cubic: frac = R / L
-            # Integrator state is fractional; updater frame is its own config.
+            # Integrator state is fractional; pass that frame so refresh matches
+            # later NPT steps (state.position + positions_are_cartesian=False).
             box_nl = np.array([float(args.cell)] * 3, dtype=np.float64)
             pair_idx, pair_mask = refresh_mm_pairs(
                 update_fn,
-                md_pos_wrapped,
+                md_pos_frac,
                 box_nl,
-                positions_are_cartesian=True,
+                positions_are_cartesian=False,
             )
             state = init_fn(
                 key, md_pos_frac, box=box_curr,
