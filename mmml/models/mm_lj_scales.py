@@ -532,11 +532,16 @@ def resolve_md_charge_scale(
     the first sidecar carrying learnable LJ scales wins, so LJ and charge
     scales always come from one file.
     """
-    import json
-
     path = find_learnable_lj_scales_sidecar(scales_file=scales_file, checkpoint=checkpoint)
     if path is None:
         return 1.0
+    return load_md_charge_scale(path)
+
+
+def load_md_charge_scale(path: str | Path) -> float:
+    """Read charge scaling from an already resolved sidecar."""
+    import json
+
     with Path(path).open(encoding="utf-8") as handle:
         data = json.load(handle)
     value = float(data.get("mm_charge_scale", 1.0))
