@@ -86,7 +86,11 @@ def test_efield_train_wrapper_disables_x64():
     assert "JAX_ENABLE_X64=0" in sbatch
     assert "scicore_env.sh" in sbatch
     assert '--polar_weight "$POLAR_WEIGHT"' in text
+    assert "--num_basis_functions" in text
     assert 'POLAR_WEIGHT="${POLAR_WEIGHT:-100}"' in sbatch
+    assert 'MODE" == "big"' in sbatch
+    assert 'FEATURES="${FEATURES:-64}"' in sbatch
+    assert 'NUM_ITERATIONS="${NUM_ITERATIONS:-3}"' in sbatch
 
 
 def test_efield_train_wrapper_keeps_splits_dir(tmp_path):

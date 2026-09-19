@@ -26,6 +26,7 @@ BATCH_SIZE="${BATCH_SIZE:-64}"
 FEATURES="${FEATURES:-32}"
 MAX_DEGREE="${MAX_DEGREE:-2}"
 NUM_ITERATIONS="${NUM_ITERATIONS:-2}"
+NUM_BASIS_FUNCTIONS="${NUM_BASIS_FUNCTIONS:-10}"
 CUTOFF="${CUTOFF:-10.0}"
 ENERGY_WEIGHT="${ENERGY_WEIGHT:-1.0}"
 POLAR_WEIGHT="${POLAR_WEIGHT:-1.0}"
@@ -57,5 +58,6 @@ mmml efield-train \
   --features "$FEATURES" \
   --max_degree "$MAX_DEGREE" \
   --num_iterations "$NUM_ITERATIONS" \
+  --num_basis_functions "$NUM_BASIS_FUNCTIONS" \
   --cutoff "$CUTOFF" \
   "${EXTRA[@]}"
