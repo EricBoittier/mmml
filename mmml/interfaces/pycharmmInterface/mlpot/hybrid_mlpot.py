@@ -60,7 +60,24 @@ _BUDGET_DEFAULT = object()
 
 
 class _CallbackPairListUnavailable(RuntimeError):
-    """Raised internally when CHARMM callback pair lists are unusable."""
+    """Raised when CHARMM callback pair lists are unusable.
+
+    During setup (guard disarmed) ``calculate_charmm`` still returns 0.0 so
+    ``assert_mlpot_user_active`` can rebind and rebuild. Once that check arms
+    the guard, this exception propagates into
+    ``callback_failstop.fail_closed_callback`` and the process exits 86.
+    """
+
+
+ALLOW_MISSING_CALLBACK_PAIRS_ENV = "MMML_MLPOT_ALLOW_MISSING_CALLBACK_PAIRS"
+"""Test-only: ``1`` restores the old zero-energy return on missing pair lists."""
+
+ALLOW_PERIODIC_COULOMB_FAILURE_ENV = "MMML_MLPOT_ALLOW_PERIODIC_COULOMB_FAILURE"
+"""Test-only: ``1`` continues with an ML-only USER term if periodic Coulomb fails."""
+
+
+def _callback_opt_out(env_name: str) -> bool:
+    return os.environ.get(env_name, "").strip().lower() in {"1", "true", "yes", "on"}
 
 
 def resolve_mm_pair_source(
@@ -843,8 +860,21 @@ class DecomposedMlpotCalculator:
                     if parent is not None:
                         parent._last_callback_error = msg
                         parent._last_ml_forces = self.last_ml_forces
+                    from mmml.interfaces.pycharmmInterface.mlpot.callback_failstop import (
+                        mlpot_dynamics_armed,
+                    )
+
+                    if mlpot_dynamics_armed() and not _callback_opt_out(
+                        ALLOW_MISSING_CALLBACK_PAIRS_ENV
+                    ):
+                        # Dynamics: fail closed. The guarded entry point exits 86.
+                        raise
                     if not self._callback_pair_warned:
-                        print(f"WARN: {msg}", flush=True)
+                        print(
+                            f"WARN: {msg} ({ALLOW_MISSING_CALLBACK_PAIRS_ENV}=1: "
+                            "returning zero USER energy and forces)",
+                            flush=True,
+                        )
                         self._callback_pair_warned = True
                     return 0.0
                 positions_jax = as_ml_array(
@@ -917,6 +947,10 @@ class DecomposedMlpotCalculator:
                     if charmm_lib_links_mpi():
                         recover_mpi_for_charmm_after_jax(phase="after MLpot gete")
                 except Exception:
+                    # Deliberately non-fatal: energy and forces are already on the
+                    # host; this only re-syncs MPI/OpenMP state for CHARMM. A real
+                    # MPI breakage surfaces in the next collective, not as a wrong
+                    # energy.
                     pass
             parent = getattr(self, "_parent_model", None)
             if parent is not None:
@@ -956,13 +990,16 @@ class DecomposedMlpotCalculator:
                 forces = np.asarray(forces, dtype=np.float64, copy=True)
                 forces[ml_idx] = np.asarray(forces_ml_cb, dtype=np.float64)
             except Exception as exc:
-                # ScaFaCoS/MPI failures inside the CHARMM callback must not zero the
-                # whole USER term (ML energy was already computed above).
+                # Continuing without the periodic Coulomb term switches the
+                # Hamiltonian mid-run (wrong energy and forces), so fail closed.
+                if not _callback_opt_out(ALLOW_PERIODIC_COULOMB_FAILURE_ENV):
+                    raise
                 import sys
 
                 print(
                     f"WARN: periodic Coulomb callback failed ({exc}); "
-                    "continuing with ML-only USER energy",
+                    f"continuing with ML-only USER energy "
+                    f"({ALLOW_PERIODIC_COULOMB_FAILURE_ENV}=1)",
                     file=sys.stderr,
                     flush=True,
                 )
@@ -1317,6 +1354,8 @@ class DecomposedMlpotModel:
             if charmm_lib_links_mpi():
                 recover_mpi_for_charmm_after_jax(phase="after MLpot JAX GPU promote")
         except Exception:
+            # Non-fatal by design: MPI/GPU re-sync only; the promoted JAX factory
+            # is already installed and evaluates the same energy.
             pass
 
     def _build_registered_calculator(
