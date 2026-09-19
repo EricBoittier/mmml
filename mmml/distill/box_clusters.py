@@ -40,6 +40,10 @@ class BoxClusterConfig:
     max_monomers_per_frame: int = 8
     max_dimers_per_frame: int = 24
     seed: int = 0
+    # Drop molecules whose covalent bonds (graph from the reference monomer)
+    # stretch past this: reactive frames (e.g. an H hopped to a neighbour) keep
+    # atom indices but no longer hold intact molecules. None disables.
+    max_bond_stretch_A: float | None = 0.4
 
 
 def _mic(delta: np.ndarray, cell: np.ndarray) -> np.ndarray:
@@ -61,6 +65,28 @@ def whole_molecules(atoms: Atoms, atoms_per_monomer: int) -> np.ndarray:
     anchor = pos[:, :1, :]
     delta = _mic((pos - anchor).reshape(-1, 3), cell).reshape(pos.shape)
     return anchor + delta
+
+
+_COVALENT_R_A = {1: 0.31, 6: 0.76, 7: 0.71, 8: 0.66, 9: 0.57, 16: 1.05, 17: 1.02}
+
+
+def bond_graph(numbers: np.ndarray, positions: np.ndarray, scale: float = 1.2) -> np.ndarray:
+    """``(n_bonds, 2)`` atom pairs closer than ``scale`` × covalent radius sum."""
+    z = np.asarray(numbers, dtype=int)
+    r = np.asarray(positions, dtype=np.float64)
+    rad = np.array([_COVALENT_R_A.get(int(a), 0.8) for a in z])
+    d = np.linalg.norm(r[:, None] - r[None], axis=-1)
+    i, j = np.triu_indices(len(z), 1)
+    keep = d[i, j] < scale * (rad[i] + rad[j])
+    return np.stack([i[keep], j[keep]], axis=1)
+
+
+def intact_molecules(mols: np.ndarray, bonds: np.ndarray, ref_lengths: np.ndarray, tol_A: float) -> np.ndarray:
+    """Bool per molecule: every reference bond within ``tol_A`` of its reference length."""
+    if len(bonds) == 0:
+        return np.ones(mols.shape[0], dtype=bool)
+    d = np.linalg.norm(mols[:, bonds[:, 0]] - mols[:, bonds[:, 1]], axis=-1)
+    return np.all(np.abs(d - ref_lengths[None, :]) <= float(tol_A), axis=1)
 
 
 def _stratified_pick(
@@ -86,11 +112,14 @@ def box_cluster_pool(
     cfg: BoxClusterConfig,
     *,
     reference_monomer: Atoms | None = None,
+    stats: dict | None = None,
 ) -> list[Geometry]:
     """Monomers + dimers (centroid distance < ``dimer_com_cutoff_A``) from each frame.
 
     ``reference_monomer`` (e.g. the gas-phase equilibrium xyz) is emitted first
-    as ``pdb_eq`` so interaction-mode labels have an ``E_ref``.
+    as ``pdb_eq`` so mlmm/interaction labels have an ``E_ref``; its bond graph
+    also drives the intact-molecule filter. ``stats`` (if given) receives
+    ``n_broken_molecules``.
     """
     apm = int(cfg.atoms_per_monomer)
     rng = np.random.default_rng(int(cfg.seed))
@@ -110,6 +139,12 @@ def box_cluster_pool(
                 atoms_per_monomer=(apm,),
             )
         )
+    bonds = ref_lengths = None
+    n_broken = 0
+    if cfg.max_bond_stretch_A is not None and reference_monomer is not None:
+        ref_r = np.asarray(reference_monomer.get_positions(), dtype=np.float64)
+        bonds = bond_graph(reference_monomer.get_atomic_numbers(), ref_r)
+        ref_lengths = np.linalg.norm(ref_r[bonds[:, 0]] - ref_r[bonds[:, 1]], axis=-1)
     edges = np.asarray(
         [e for e in cfg.dimer_r_bins_A if e < float(cfg.dimer_com_cutoff_A)]
         + [float(cfg.dimer_com_cutoff_A)],
@@ -124,8 +159,13 @@ def box_cluster_pool(
         cell = np.asarray(frame.get_cell(), dtype=np.float64)
         periodic = bool(np.any(frame.get_pbc())) and abs(np.linalg.det(cell)) > 1e-9
         n_mol = mols.shape[0]
+        if bonds is not None:
+            ok = intact_molecules(mols, bonds, ref_lengths, float(cfg.max_bond_stretch_A))
+        else:
+            ok = np.ones(n_mol, dtype=bool)
+        n_broken += int((~ok).sum())
 
-        for i in rng.permutation(n_mol)[: int(cfg.max_monomers_per_frame)]:
+        for i in rng.permutation(np.nonzero(ok)[0])[: int(cfg.max_monomers_per_frame)]:
             geos.append(
                 Geometry(
                     numbers=z_mol.copy(),
@@ -139,12 +179,16 @@ def box_cluster_pool(
 
         pairs: list[tuple[int, int, np.ndarray, float]] = []
         for i in range(n_mol):
+            if not ok[i]:
+                continue
             d = com[i + 1 :] - com[i]
             if periodic:
                 d = _mic(d, cell)
             r = np.linalg.norm(d, axis=1)
             for k in np.nonzero(r < float(cfg.dimer_com_cutoff_A))[0]:
                 j = i + 1 + int(k)
+                if not ok[j]:
+                    continue
                 pairs.append((i, j, d[k], float(r[k])))
         if not pairs:
             continue
@@ -164,4 +208,7 @@ def box_cluster_pool(
                     atoms_per_monomer=(apm, apm),
                 )
             )
+    if stats is not None:
+        stats["n_broken_molecules"] = n_broken
+        stats["topology_filter"] = bonds is not None
     return geos

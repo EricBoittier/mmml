@@ -81,3 +81,21 @@ def test_append_training_frame_round_trip(tmp_path) -> None:
     assert frames[0].pbc.all()
     assert frames[0].get_potential_energy() == pytest.approx(atoms.get_potential_energy())
     assert np.allclose(frames[0].get_forces(), atoms.get_forces())
+
+
+def test_topology_filter_drops_reacted_molecule() -> None:
+    atoms = _box()
+    pos = atoms.get_positions()
+    pos[4] += [0.0, 0.0, 3.0]  # molecule 1 loses an H (index 4 = its 2nd atom's H)
+    atoms.set_positions(pos)
+    stats: dict = {}
+    geos = box_cluster_pool(
+        [atoms],
+        BoxClusterConfig(atoms_per_monomer=3, dimer_com_cutoff_A=8.0, max_dimers_per_frame=10),
+        reference_monomer=Atoms("OH2", positions=WATER),
+        stats=stats,
+    )
+    assert stats["n_broken_molecules"] == 1
+    assert len([g for g in geos if g.source == SOURCE_BOX_MONOMER]) == 2
+    # only the m0-m2 pair survives; every pair with molecule 1 is gone
+    assert len([g for g in geos if g.source == SOURCE_BOX_DIMER]) == 1

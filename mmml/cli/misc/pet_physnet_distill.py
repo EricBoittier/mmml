@@ -205,13 +205,16 @@ def _box_pool(args: argparse.Namespace):
         max_dimers_per_frame=int(args.max_dimers_per_frame),
         seed=int(args.seed),
     )
-    return box_cluster_pool(frames, cfg, reference_monomer=ref), len(frames)
+    stats: dict = {}
+    geos = box_cluster_pool(frames, cfg, reference_monomer=ref, stats=stats)
+    stats["n_box_frames"] = len(frames)
+    return geos, stats
 
 
 def run(args: argparse.Namespace) -> dict:
-    n_box_frames = None
+    box_stats = None
     if args.from_box_extxyz:
-        geos, n_box_frames = _box_pool(args)
+        geos, box_stats = _box_pool(args)
         pad_atoms = 2 * int(args.atoms_per_monomer)
     else:
         extra = tuple(Path(p) for p in (args.extra_extxyz or ()))
@@ -274,9 +277,9 @@ def run(args: argparse.Namespace) -> dict:
         "seed": int(args.seed),
         "n_geometries": len(geos),
     }
-    if n_box_frames is not None:
+    if box_stats is not None:
         metadata["box_extxyz"] = [str(Path(p).resolve()) for p in args.from_box_extxyz]
-        metadata["n_box_frames"] = int(n_box_frames)
+        metadata.update(box_stats)
     paths = write_distill_npz(
         labeled,
         out_dir,
