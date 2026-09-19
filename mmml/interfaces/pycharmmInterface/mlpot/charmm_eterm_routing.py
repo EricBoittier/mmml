@@ -1,4 +1,15 @@
-"""Route MLpot MM nonbond components into CHARMM VDW/ELEC/IMNB/IMEL eterm slots."""
+"""Route MLpot MM nonbond components into CHARMM VDW/ELEC/IMNB/IMEL eterm slots.
+
+``MMML_MLPOT_ETERM_SPLIT_SOURCE`` selects the split (reporting only; forces and the
+total energy are unaffected):
+
+* ``charmm`` (default): CHARMM's live q/ε with the CHARMM LJ form. In all-ML runs
+  those are zeroed, so the pair pass is skipped (#226) and VDW/ELEC report 0 with
+  all MM energy in USER. Costs nothing per step there.
+* ``hybrid`` (opt-in): the hybrid JAX MM's own split (``update_mm_pairs.mm_eterm_split``),
+  so VDW/ELEC/IMNB/IMEL show the true MM contribution, at the cost of one extra
+  MM forward (no grad) per force call.
+"""
 
 from __future__ import annotations
 
@@ -89,10 +100,9 @@ def _hybrid_mm_eterm_split(
 
     CHARMM's live charges/ε are zeroed for ML atoms in all-ML runs, so a split
     built from them always reports VDW = ELEC = 0 and leaves the MM in USER.
-    Costs about one MM forward (no grad) per callback; set
-    ``MMML_MLPOT_ETERM_SPLIT_SOURCE=charmm`` for the old CHARMM-param split.
+    Opt-in (``MMML_MLPOT_ETERM_SPLIT_SOURCE=hybrid``): one MM forward per callback.
     """
-    if (os.environ.get("MMML_MLPOT_ETERM_SPLIT_SOURCE") or "hybrid").strip().lower() == "charmm":
+    if (os.environ.get("MMML_MLPOT_ETERM_SPLIT_SOURCE") or "charmm").strip().lower() != "hybrid":
         return None
     update_fn = getattr(calculator, "_cached_update_fn", None)
     get_update_fn = getattr(calculator, "_get_update_fn", None)

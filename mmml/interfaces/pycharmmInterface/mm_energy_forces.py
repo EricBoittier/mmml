@@ -2722,8 +2722,8 @@ def decompose_mlpot_mm_nb_eterms_kcalmol(
 
     Primary pairs have zero MIC lattice shift; image pairs use a non-zero translation.
     ``rmins_A`` is the per-atom CHARMM ``Rmin/2``; ``epsilons_kcal`` the per-atom ε.
-    MLpot routing prefers the hybrid's own JAX split (``update_fn.mm_eterm_split``)
-    and uses this only as a fallback (jax-pme, or no JAX MM factory).
+    Default MLpot routing split; ``MMML_MLPOT_ETERM_SPLIT_SOURCE=hybrid`` uses the
+    hybrid's own JAX split (``update_fn.mm_eterm_split``) instead where available.
     """
     from mmml.interfaces.pycharmmInterface.cutoffs import GAMMA_OFF, GAMMA_ON
 

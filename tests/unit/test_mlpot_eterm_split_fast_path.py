@@ -28,7 +28,7 @@ class _NoHostCopy:
 def _calc(n_mono: int, atoms_per: int):
     calc = MagicMock()
     calc._do_mm = True
-    calc._cached_update_fn = None  # no hybrid JAX split: exercise the CHARMM-param path
+    calc._cached_update_fn = None  # no hybrid JAX split, even if opted in
     calc._get_update_fn = None
     calc._atoms_per_monomer = [atoms_per] * n_mono
     calc.cutoff_params = MagicMock(
@@ -132,10 +132,13 @@ def test_fast_path_matches_full_split_on_zeroed_params():
     assert out == routing._zero_nb_components()
 
 
-@pytest.mark.parametrize("source", ["hybrid", "charmm"])
-def test_hybrid_split_preferred_unless_charmm_source(source, monkeypatch):
+@pytest.mark.parametrize("source", [None, "charmm", "hybrid"])
+def test_hybrid_split_only_when_opted_in(source, monkeypatch):
     monkeypatch.setenv("MMML_MLPOT_ROUTE_MM_ETERMS", "1")
-    monkeypatch.setenv("MMML_MLPOT_ETERM_SPLIT_SOURCE", source)
+    if source is None:
+        monkeypatch.delenv("MMML_MLPOT_ETERM_SPLIT_SOURCE", raising=False)
+    else:
+        monkeypatch.setenv("MMML_MLPOT_ETERM_SPLIT_SOURCE", source)
     calc = _calc(2, 9)
     calc._cached_update_fn = MagicMock(mm_eterm_split=lambda *a: np.array([-1.0, -0.5, 2.0, 0.25]))
     zeros = np.zeros(18)
@@ -145,7 +148,7 @@ def test_hybrid_split_preferred_unless_charmm_source(source, monkeypatch):
         user = routing.decompose_and_route_mlpot_mm_from_callback(
             calc, np.zeros((18, 3)), np.array([[0, 9]]), np.array([True]), None, 10.0, use_mm_pairs=True
         )
-    if source == "charmm":  # live CHARMM params are zeroed (all-ML): everything stays in USER
+    if source != "hybrid":  # default: zeroed live params (all-ML) -> #226 fast path, all in USER
         assert user == 10.0 and calc._last_mm_nb_components_kcalmol["mm_total"] == 0.0
     else:
         assert user == pytest.approx(10.0 - 0.75)
