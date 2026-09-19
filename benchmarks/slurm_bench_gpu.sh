@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# GPU Slurm job: run the mmml asv suite and refresh the HTML report.
+# GPU Slurm job: correctness probes, then the mmml asv suite, then HTML reports.
 #
 # Submit:
 #   sbatch ~/mmml/benchmarks/slurm_bench_gpu.sh
@@ -8,8 +8,12 @@
 # Monitor:
 #   tail -f ~/tests/runs/slurm-mmml-bench-*.out
 #
-# Results land in $REPO_ROOT/benchmarks/results/<machine>/ — commit them to keep
-# the history, since asv's regression view is only as long as what is checked in.
+# Opens in a browser:
+#   benchmarks/html/gpu-report.html   # correctness + timing snapshot
+#   benchmarks/html/index.html        # full asv graphs (also: uv run asv preview)
+#
+# Results JSON lands in $REPO_ROOT/benchmarks/results/<machine>/ — commit that
+# to keep history. CI does not publish these numbers; asv publish is local.
 #
 #SBATCH --job-name=mmml-bench
 #SBATCH --partition=gpu
@@ -27,7 +31,8 @@ REPO_ROOT="${REPO_ROOT:-$HOME/mmml}"
 cd "${REPO_ROOT}"
 
 # GPU: benchmarking the CPU fallback by accident is the classic way to waste a
-# GPU allocation, so fail loudly instead of silently falling back.
+# GPU allocation. Pin CUDA here (before JAX imports) and let gpu_bench.py
+# refuse any other backend.
 export JAX_PLATFORMS="${JAX_PLATFORMS:-cuda}"
 export MMML_BENCH_X64="${MMML_BENCH_X64:-1}"
 export JAX_ENABLE_X64="${JAX_ENABLE_X64:-${MMML_BENCH_X64}}"
@@ -37,7 +42,7 @@ export MMML_CKPT="${MMML_CKPT:-${REPO_ROOT}/examples/ckpts_json/DESdimers_params
 # different series and the history fragments.
 export ASV_MACHINE="${ASV_MACHINE:-${SLURM_JOB_PARTITION:-gpu}-$(scontrol show job "${SLURM_JOB_ID:-0}" 2>/dev/null | awk -F= '/GRES=/{print $NF; exit}' || echo gpu)}"
 
-echo "=== mmml asv benchmark job ==="
+echo "=== mmml GPU asv benchmark job ==="
 echo "host          : $(hostname)"
 echo "repo          : ${REPO_ROOT} ($(git rev-parse --short HEAD 2>/dev/null || echo '?'))"
 echo "asv machine   : ${ASV_MACHINE}"
@@ -45,32 +50,19 @@ echo "JAX_PLATFORMS : ${JAX_PLATFORMS}"
 echo "x64           : ${MMML_BENCH_X64}"
 nvidia-smi --query-gpu=name,memory.total,driver_version --format=csv,noheader || true
 
-.venv/bin/python - <<'PY'
-import jax
-devices = jax.devices()
-print(f"jax devices   : {devices}")
-if devices[0].platform != "gpu":
-    raise SystemExit(
-        f"refusing to burn a GPU allocation on the {devices[0].platform} backend"
-    )
-PY
-
-if [[ ! -f "$HOME/.asv-machine.json" ]]; then
-  .venv/bin/asv machine --yes --machine "${ASV_MACHINE}"
-fi
-
-# --set-commit-hash is required for results to be saved at all under
-# environment_type=existing; see the note in benchmarks/run_bench.sh.
-RUN_ARGS=(
-  run
-  --machine "${ASV_MACHINE}"
-  --set-commit-hash "$(git rev-parse HEAD)"
-)
+ARGS=()
 if [[ -n "${BENCH_PATTERN:-}" ]]; then
-  RUN_ARGS+=(--bench "${BENCH_PATTERN}")
+  ARGS+=(--bench "${BENCH_PATTERN}")
+fi
+if [[ "${BENCH_APPEND_SAMPLES:-0}" == "1" ]]; then
+  ARGS+=(--append-samples)
 fi
 
-.venv/bin/asv "${RUN_ARGS[@]}"
-.venv/bin/asv publish
+PYTHON="${REPO_ROOT}/.venv/bin/python"
+if [[ -x "${PYTHON}" ]]; then
+  "${PYTHON}" "${REPO_ROOT}/benchmarks/gpu_bench.py" "${ARGS[@]}"
+else
+  uv run python "${REPO_ROOT}/benchmarks/gpu_bench.py" "${ARGS[@]}"
+fi
 
-echo "=== done: benchmarks/html/index.html refreshed ==="
+echo "=== done: benchmarks/html/gpu-report.html  (+ asv index.html) ==="

@@ -36,16 +36,29 @@ bash benchmarks/run_bench.sh MDSystemSize
 bash benchmarks/run_bench.sh 'MMNonbonded.time_forces'
 ```
 
-On a cluster:
+On a cluster (or an interactive GPU node):
 
 ```bash
+# interactive: correctness probes, then asv, then HTML
+uv run python benchmarks/gpu_bench.py
+uv run python benchmarks/gpu_bench.py --bench bench_ml_physnet
+uv run python benchmarks/gpu_bench.py --checks-only   # probes only
+
 sbatch benchmarks/slurm_bench_gpu.sh
 sbatch --export=ALL,BENCH_PATTERN=bench_ml_physnet benchmarks/slurm_bench_gpu.sh
 ```
 
-The Slurm job refuses to run if JAX comes up on the CPU backend, so a
-misconfigured environment fails fast instead of quietly producing CPU numbers
-under a GPU machine name.
+`benchmarks/gpu_bench.py` is the GPU entry point. It refuses a CPU JAX
+backend, runs a cheap correctness gate on the same kernels asv times
+(PhysNet energy/forces, switched MM + one-component force–energy
+consistency, SHAKE residuals), and **only then** starts `asv run`. A
+failed probe writes the HTML report and exits without burning the
+allocation on timings. Open `benchmarks/html/gpu-report.html` in a
+browser for the snapshot; `uv run asv preview` still serves the full
+asv graphs.
+
+The Slurm job wraps that script (and still pins `JAX_PLATFORMS=cuda`
+before Python starts).
 
 ---
 
@@ -126,7 +139,7 @@ module.
 
 ---
 
-## How results accumulate
+## How results accumulate — and how they are published
 
 asv writes one JSON per commit under `benchmarks/results/<machine>/`, so
 repeated runs on *different* commits build history rather than replacing it.
@@ -134,9 +147,24 @@ Re-running the **same** commit replaces that commit's entry; set
 `BENCH_APPEND_SAMPLES=1` to merge new samples into the existing one instead.
 
 `benchmarks/html/` is fully regenerated from `benchmarks/results/` by
-`asv publish`, so it is safe to delete and pointless to edit. Commit the
-`results/` JSON — `asv publish`'s regression view is only as long as the history
-that is checked in.
+`asv publish`, so it is safe to delete and pointless to edit. The GPU
+runner writes `gpu-report.html` into that directory *after* publish; a
+later `make bench-publish` will wipe the snapshot (re-run
+`benchmarks/gpu_bench.py` or copy the file out if you need to keep it).
+
+**Nothing in CI publishes these numbers.** `.github/workflows/` builds
+unit tests and MkDocs only. There is no GitHub Pages / ReadTheDocs /
+`asv gh-pages` hook. The browser-readable artifacts are local:
+
+| Artifact | Produced by | Git |
+| --- | --- | --- |
+| `benchmarks/results/<machine>/*.json` | `asv run` | tracked (commit this) |
+| `benchmarks/html/index.html` | `asv publish` | gitignored |
+| `benchmarks/html/gpu-report.html` | `benchmarks/gpu_bench.py` | gitignored |
+
+Commit the `results/` JSON — `asv publish`'s regression view is only as
+long as the history that is checked in. View a publish with
+`uv run asv preview` or by opening the HTML files directly.
 
 `asv.conf.json` lists only `main` under `branches`, so a run on a feature branch
 records its JSON but `asv publish` reports
