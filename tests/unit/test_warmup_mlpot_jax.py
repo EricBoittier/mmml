@@ -66,7 +66,9 @@ def test_warmup_mlpot_jax_restores_prior_warmup_only_env(tmp_path, monkeypatch):
     assert __import__("os").environ.get("MMML_WARMUP_MLPOT_JAX_ONLY") == "0"
 
 
-def test_warmup_mlpot_jax_missing_checkpoint_exits():
+def test_warmup_mlpot_jax_missing_checkpoint_exits(monkeypatch):
+    monkeypatch.delenv("MMML_CKPT", raising=False)
+    monkeypatch.delenv("MMML_CHECKPOINT", raising=False)
     with pytest.raises(SystemExit):
         wm._resolve_checkpoint(None)
 
