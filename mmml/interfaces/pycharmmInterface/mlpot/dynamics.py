@@ -7158,6 +7158,10 @@ def _cpt_stability_chunk_nstep(kw: dict[str, Any], total_nstep: int) -> int | No
 
     if not bool(kw.get("cpt")) or total_nstep <= 0:
         return None
+    if kw.get("pmass") is not None and float(kw["pmass"]) == 0.0:
+        # Constant-volume CPT (--pbc-ensemble nvt): no piston to stabilise, and
+        # micro-chunks inside an overlap chunk drop all but one sub-chunk's DCD.
+        return None
     raw = os.environ.get("MMML_CPT_DYNAMICS_CHUNK_NSTEP")
     chunk = (
         int(raw)
