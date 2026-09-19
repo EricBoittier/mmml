@@ -121,28 +121,42 @@ def check_jax_gpu_device(devices: Sequence[Any] | None = None) -> CheckResult:
     )
 
 
-def prepare_bench_env(repo_root: Path, *, allow_cpu: bool) -> dict[str, str]:
-    """Match ``run_bench.sh`` / ``slurm_bench_gpu.sh`` so numbers stay comparable."""
+def prepare_bench_env(
+    repo_root: Path,
+    *,
+    allow_cpu: bool,
+    apply: bool = False,
+) -> dict[str, str]:
+    """Match ``run_bench.sh`` / ``slurm_bench_gpu.sh`` so numbers stay comparable.
+
+    Returns the planned env. Does not write ``os.environ`` unless ``apply`` is
+    true — unit tests that only inspect the dict must not leak ``MMML_CKPT``
+    into later cases (that took down ``test_warmup_mlpot_jax_missing_checkpoint_exits``).
+    """
     x64 = os.environ.get("MMML_BENCH_X64", "1")
-    os.environ.setdefault("MMML_BENCH_X64", x64)
-    os.environ.setdefault("JAX_ENABLE_X64", os.environ.get("JAX_ENABLE_X64", x64))
-    os.environ.setdefault("OMP_NUM_THREADS", "1")
+    planned: dict[str, str] = {
+        "MMML_BENCH_X64": x64,
+        "JAX_ENABLE_X64": os.environ.get("JAX_ENABLE_X64", x64),
+        "OMP_NUM_THREADS": os.environ.get("OMP_NUM_THREADS", "1"),
+    }
     ckpt = os.environ.get("MMML_CKPT") or os.environ.get("MMML_BENCH_CKPT")
-    if not ckpt:
+    if ckpt:
+        planned["MMML_CKPT"] = ckpt
+        bench_ckpt = os.environ.get("MMML_BENCH_CKPT")
+        if bench_ckpt:
+            planned["MMML_BENCH_CKPT"] = bench_ckpt
+    else:
         default = Path(repo_root) / "examples" / "ckpts_json" / "DESdimers_params.json"
-        os.environ.setdefault("MMML_CKPT", str(default))
+        planned["MMML_CKPT"] = str(default)
     if not allow_cpu:
-        os.environ.setdefault("JAX_PLATFORMS", "cuda")
-    keys = (
-        "MMML_BENCH_X64",
-        "JAX_ENABLE_X64",
-        "OMP_NUM_THREADS",
-        "JAX_PLATFORMS",
-        "MMML_CKPT",
-        "MMML_BENCH_CKPT",
-        "ASV_MACHINE",
-    )
-    return {k: os.environ[k] for k in keys if k in os.environ}
+        planned["JAX_PLATFORMS"] = os.environ.get("JAX_PLATFORMS", "cuda")
+    machine = os.environ.get("ASV_MACHINE")
+    if machine:
+        planned["ASV_MACHINE"] = machine
+    if apply:
+        for key, value in planned.items():
+            os.environ.setdefault(key, value)
+    return planned
 
 
 def build_asv_run_argv(
@@ -950,7 +964,7 @@ def run_gpu_benchmark(args: Any) -> int:
     force = bool(getattr(args, "force", False))
     publish = bool(getattr(args, "publish", True))
 
-    prepare_bench_env(repo_root, allow_cpu=allow_cpu)
+    prepare_bench_env(repo_root, allow_cpu=allow_cpu, apply=True)
     meta = collect_run_meta(repo_root=repo_root, allow_cpu=allow_cpu)
     if meta.get("dirty"):
         print(
