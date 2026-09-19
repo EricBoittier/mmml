@@ -32,6 +32,7 @@ def run_chunked_model_apply(
     apply_one_chunk: Callable[[Array, Array, Array], Tuple[Array, Array]],
     has_aux: bool = False,
     n_valid: Array | int | None = None,
+    n_eval_chunks: int | None = None,
 ) -> tuple:
     """Evaluate PhysNet chunks; use ``jax.pmap`` when ``n_gpus > 1``.
 
@@ -42,6 +43,13 @@ def run_chunked_model_apply(
     ``lax.cond`` and return zeros instead of running the model on padding.
     Chunks that are evaluated see exactly the same inputs, so used outputs are
     unchanged, and the chunk shape stays static (no recompiles).
+
+    The ``lax.cond`` predicate lives on the device, so XLA:GPU copies it to the
+    host and blocks once per chunk. ``n_eval_chunks`` (a Python int, static)
+    avoids that: only the first ``n_eval_chunks`` chunks are evaluated, with a
+    compile-time trip count, and the rest return zeros. The caller must ensure
+    every used slot lies in those chunks (see ``mlpot.ml_chunk_budget``).
+    ``n_eval_chunks`` takes precedence over ``n_valid``.
     """
     from mmml.interfaces.pycharmmInterface.mlpot.ml_profile import (
         get_mlpot_profile_stats,
@@ -52,12 +60,22 @@ def run_chunked_model_apply(
     t0 = time.perf_counter() if profile else None
 
     if n_gpus <= 1:
-        if n_valid is None:
 
-            def one_chunk(i):
-                return apply_one_chunk(R_chunks[i], Z_chunks[i], N_chunks[i])
+        def one_chunk(i):
+            return apply_one_chunk(R_chunks[i], Z_chunks[i], N_chunks[i])
 
-        else:
+        if n_eval_chunks is not None:
+            # Static trip count: no per-chunk predicate, no host round trip.
+            n_eval = max(1, min(int(n_eval_chunks), int(n_chunks)))
+            mapped = jax.lax.map(one_chunk, jnp.arange(n_eval))
+            if n_eval < n_chunks:
+                mapped = jax.tree_util.tree_map(
+                    lambda a: jnp.concatenate(
+                        [a, jnp.zeros((n_chunks - n_eval,) + a.shape[1:], a.dtype)]
+                    ),
+                    mapped,
+                )
+        elif n_valid is not None:
             out_struct = jax.eval_shape(apply_one_chunk, R_chunks[0], Z_chunks[0], N_chunks[0])
 
             def _zeros_like_out():
@@ -65,14 +83,16 @@ def run_chunked_model_apply(
                     lambda s: jnp.zeros(s.shape, s.dtype), out_struct
                 )
 
-            def one_chunk(i):
+            def cond_chunk(i):
                 return jax.lax.cond(
                     i * chunk_size < n_valid,
-                    lambda: apply_one_chunk(R_chunks[i], Z_chunks[i], N_chunks[i]),
+                    lambda: one_chunk(i),
                     _zeros_like_out,
                 )
 
-        mapped = jax.lax.map(one_chunk, jnp.arange(n_chunks))
+            mapped = jax.lax.map(cond_chunk, jnp.arange(n_chunks))
+        else:
+            mapped = jax.lax.map(one_chunk, jnp.arange(n_chunks))
         if has_aux:
             e_list, f_list, aux_list = mapped
         else:

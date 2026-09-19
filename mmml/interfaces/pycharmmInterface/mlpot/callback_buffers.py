@@ -33,7 +33,10 @@ def subtract_forces_from_charmm_grad(dx, dy, dz, forces, n: int) -> None:
     n = int(n)
     for arr, col in ((dx, 0), (dy, 1), (dz, 2)):
         # as_array(list) succeeds but copies (owndata=True); only ctypes views write back.
-        if isinstance(arr, ctypes.Array):
+        # CHARMM's MLpot callback passes POINTER(c_double) (``ctypes._Pointer``):
+        # ``ptr[:n] -= ...`` there builds a Python list and writes it back one
+        # float at a time (~1.5 ms/step for 1.6k atoms); the numpy view is ~20 us.
+        if isinstance(arr, (ctypes.Array, ctypes._Pointer)):
             view = np.ctypeslib.as_array(arr, shape=(n,))
             view[:n] -= f[:n, col]
             continue

@@ -1693,6 +1693,28 @@ def setup_calculator(
     _skip_padding_chunks = (
         os.environ.get("MMML_MLPOT_SKIP_PADDING_CHUNKS") or "1"
     ).strip().lower() not in ("0", "false", "no", "off")
+    # Chunk geometry of the sparse-dimer PhysNet batch, for callers that pick a
+    # static chunk budget on the host (``spherical_cutoff_calculator(...,
+    # ml_eval_chunks=k)``, see mlpot.ml_chunk_budget). None: not applicable.
+    _ml_chunk_layout = None
+    if (
+        ml_sparse_dimers
+        and _max_active_dimers < n_dimers_total
+        and ml_batch_size
+        and n_monomers + _max_active_dimers > int(ml_batch_size)
+        and not (_jax_mm_spoof_mode or _kernnn_mode or _metatomic_mode)
+    ):
+        from mmml.interfaces.pycharmmInterface.mlpot.ml_chunk_budget import MlChunkLayout
+        from mmml.interfaces.pycharmmInterface.mlpot_gpu import effective_ml_gpu_count
+
+        _layout_n_chunks = -(-(n_monomers + _max_active_dimers) // int(ml_batch_size))
+        if effective_ml_gpu_count(ml_gpu_count, n_chunks=_layout_n_chunks) <= 1:
+            _ml_chunk_layout = MlChunkLayout(
+                n_monomers=int(n_monomers),
+                max_active_dimers=int(_max_active_dimers),
+                chunk_size=int(ml_batch_size),
+                n_chunks=int(_layout_n_chunks),
+            )
 
     _jax_md_skin_distance = float(jax_md_skin_distance)
 
@@ -2106,6 +2128,7 @@ def setup_calculator(
             "doML_dimer",
             "debug",
             "use_mm_charges_override",
+            "ml_eval_chunks",
         ],
     )
     def spherical_cutoff_calculator(
@@ -2124,6 +2147,7 @@ def setup_calculator(
         spatial_dimer_indices: Optional[Array] = None,
         use_mm_charges_override: bool = False,
         mm_charges_override: Optional[Array] = None,
+        ml_eval_chunks: Optional[int] = None,
     ) -> ModelOutput:
         """Calculates energy and forces using combined ML/MM potential.
         
@@ -2140,6 +2164,10 @@ def setup_calculator(
                 ``E_MM`` Coulomb instead of assembling charges from the ML head
                 (Hellmann–Feynman NVE preflight / frozen-q diagnostics).
             mm_charges_override: Per-atom charges (e), shape ``(n_atoms,)``.
+            ml_eval_chunks: Static count of leading PhysNet chunks to evaluate
+                on the sparse-dimer path (see ``mlpot.ml_chunk_budget``); the
+                caller checks ``ModelOutput.ml_n_active_dimers`` against it.
+                ``None`` keeps the traced ``lax.cond`` padding skip.
             
         Returns:
             ModelOutput containing total energy and forces
@@ -2190,7 +2218,9 @@ def setup_calculator(
                 mic_pbc_cell=mic_pbc_cell,
                 spatial_monomer_indices=spatial_monomer_indices,
                 spatial_dimer_indices=spatial_dimer_indices,
+                ml_eval_chunks=ml_eval_chunks,
             )
+            outputs["ml_n_active_dimers"] = ml_out.get("ml_n_active_dimers", -1)
             # Get ML forces from calculate_ml_contributions
             # CRITICAL: These forces are ALREADY correctly mapped to atoms 0 to (total_atoms - 1)
             # via segment_sum in process_monomer_forces and process_dimer_forces
@@ -2464,6 +2494,9 @@ def setup_calculator(
             mbd_E=outputs.get("mbd_E", 0.0),
             wall_E=outputs.get("wall_E", 0.0),
             mm_charges=_mm_charges_out,
+            ml_n_active_dimers=jnp.asarray(
+                outputs.get("ml_n_active_dimers", -1), dtype=jnp.int32
+            ),
         )
 
     def get_ML_energy_fn(
@@ -2474,6 +2507,7 @@ def setup_calculator(
         mic_pbc_cell: Optional[Array] = None,
         spatial_monomer_indices: Optional[Array] = None,
         spatial_dimer_indices: Optional[Array] = None,
+        ml_eval_chunks: Optional[int] = None,
     ) -> Tuple[Any, Dict[str, Array]]:
         """Prepares the ML model and batching for energy calculations.
 
@@ -2608,25 +2642,29 @@ def setup_calculator(
                 dimer_positions, dimer_n_a, dimer_n_b)
             active_mask = com_dists < active_radius
             _n_active_true = jnp.sum(active_mask)
-            jax.lax.cond(
-                _n_active_true > _max_active_dimers,
-                lambda n: jax.debug.print(
-                    "mmml WARNING: sparse active-dimer cap saturated: "
-                    "{n_true} in-range dimer pairs > cap={cap}. "
-                    "{dropped} pairs are being silently truncated by "
-                    "jnp.nonzero's fixed-size selection (first-by-enumeration-"
-                    "order, not nearest); this can discontinuously toggle "
-                    "unrelated pairs on/off as any atom moves and inject "
-                    "spurious forces. Raise ml_max_active_dimers / "
-                    "MMML_MLPOT_MAX_ACTIVE_DIMERS well above {n_true}, or "
-                    "increase box_volume awareness in resolve_max_active_dimers.",
-                    n_true=n,
-                    cap=_max_active_dimers,
-                    dropped=n - _max_active_dimers,
-                ),
-                lambda n: None,
-                _n_active_true,
-            )
+            # With a host-chosen chunk budget the host reads this count back
+            # with the forces and warns there; the in-graph warning is a
+            # lax.cond whose predicate XLA:GPU copies to the host every step.
+            if ml_eval_chunks is None:
+                jax.lax.cond(
+                    _n_active_true > _max_active_dimers,
+                    lambda n: jax.debug.print(
+                        "mmml WARNING: sparse active-dimer cap saturated: "
+                        "{n_true} in-range dimer pairs > cap={cap}. "
+                        "{dropped} pairs are being silently truncated by "
+                        "jnp.nonzero's fixed-size selection (first-by-enumeration-"
+                        "order, not nearest); this can discontinuously toggle "
+                        "unrelated pairs on/off as any atom moves and inject "
+                        "spurious forces. Raise ml_max_active_dimers / "
+                        "MMML_MLPOT_MAX_ACTIVE_DIMERS well above {n_true}, or "
+                        "increase box_volume awareness in resolve_max_active_dimers.",
+                        n_true=n,
+                        cap=_max_active_dimers,
+                        dropped=n - _max_active_dimers,
+                    ),
+                    lambda n: None,
+                    _n_active_true,
+                )
             active_indices = jnp.nonzero(active_mask, size=_max_active_dimers, fill_value=n_dimers)[0]
             active_indices_safe = jnp.where(active_indices < n_dimers, active_indices, 0)
             sparse_dimer_positions = dimer_positions[active_indices_safe]
@@ -2642,6 +2680,7 @@ def setup_calculator(
             batches = prepare_batches_md(batch_data, batch_size=sparse_batch_size, num_atoms=max_atoms, cached_structure=cached)[0]
             batches["_sparse_active_indices"] = active_indices
             batches["_sparse_n_dimers"] = n_dimers
+            batches["_sparse_n_active_true"] = _n_active_true
             _effective_batch_size = sparse_batch_size
             # Active slots are packed first; the rest pad to the static cap.
             _n_valid_systems = n_monomers + jnp.minimum(_n_active_true, _max_active_dimers)
@@ -2755,6 +2794,7 @@ def setup_calculator(
                     apply_one_chunk=apply_one_chunk,
                     has_aux=_needs_ml_mm_charges,
                     n_valid=_n_valid_systems if _skip_padding_chunks else None,
+                    n_eval_chunks=ml_eval_chunks if use_sparse else None,
                 )
                 if _needs_ml_mm_charges:
                     e_out, f_out, q_out = chunked_out
@@ -2879,6 +2919,7 @@ def setup_calculator(
         mic_pbc_cell: Optional[Array] = None,
         spatial_monomer_indices: Optional[Array] = None,
         spatial_dimer_indices: Optional[Array] = None,
+        ml_eval_chunks: Optional[int] = None,
     ) -> Dict[str, Array]:
         """Calculate ML energy and force contributions (heterogeneous-safe)."""
         # Get model predictions
@@ -2890,7 +2931,10 @@ def setup_calculator(
             mic_pbc_cell=mic_pbc_cell,
             spatial_monomer_indices=spatial_monomer_indices,
             spatial_dimer_indices=spatial_dimer_indices,
+            ml_eval_chunks=ml_eval_chunks,
         )
+        # In-range dimer count of the sparse path (-1: dense/spatial batch).
+        _n_active_out = batches.get("_sparse_n_active_true", -1)
         output = apply_model(batches["Z"], batches["R"])
 
         f = output["forces"] * ml_force_conversion_factor
@@ -3024,6 +3068,7 @@ def setup_calculator(
                     ml_internal_E=monomer_contribs["internal_E"])
             if q_ml_global is not None:
                 out["q_ml_global"] = q_ml_global
+            out["ml_n_active_dimers"] = _n_active_out
             return out
 
         # Calculate dimer contributions
@@ -3082,6 +3127,7 @@ def setup_calculator(
             out["ml_internal_E"] = monomer_contribs["internal_E"]
         if q_ml_global is not None:
             out["q_ml_global"] = q_ml_global
+        out["ml_n_active_dimers"] = _n_active_out
         return out
 
     def calculate_monomer_contributions(
@@ -3781,6 +3827,7 @@ def setup_calculator(
                 doML_dimer=doML_dimer,
                 debug=debug,
             )
+            configured_spherical_cutoff.ml_chunk_layout = _ml_chunk_layout
 
             def get_update_fn(positions, cutoff_params_arg, box=None):
                 """Ensure MM fn is built and return update_mm_pairs, or None for cell-list path."""

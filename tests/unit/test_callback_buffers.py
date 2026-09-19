@@ -43,6 +43,17 @@ def test_subtract_forces_from_charmm_grad_matches_python_loop() -> None:
     np.testing.assert_allclose([dz[i] for i in range(n)], [dz_ref[i] for i in range(n)])
 
 
+def test_subtract_forces_into_charmm_pointer_args() -> None:
+    """CHARMM's MLpot callback passes ``POINTER(c_double)``; write through a view."""
+    n = 5
+    bufs = [(ctypes.c_double * n)(*([1.5] * n)) for _ in range(3)]
+    ptrs = [ctypes.cast(b, ctypes.POINTER(ctypes.c_double)) for b in bufs]
+    forces = np.arange(n * 3, dtype=np.float64).reshape(n, 3)
+    subtract_forces_from_charmm_grad(*ptrs, forces, n)
+    for col, buf in enumerate(bufs):
+        np.testing.assert_array_equal(np.array(buf[:n]), 1.5 - forces[:, col])
+
+
 def test_subtract_forces_from_python_lists() -> None:
     """Unit tests and some hosts pass lists; as_array must not silently no-op."""
     n = 3

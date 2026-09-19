@@ -122,3 +122,59 @@ def test_gradients_flow_through_evaluated_chunks():
     g_skip = jax.grad(loss)(r, jnp.asarray(n_valid_static))
     g_full = jax.grad(loss)(r, None)
     np.testing.assert_allclose(np.asarray(g_skip), np.asarray(g_full), rtol=0, atol=0)
+
+
+def _run_static(n_eval_chunks, r, z, n, apply_one=_apply_one):
+    return run_chunked_model_apply(
+        R_chunks=r,
+        Z_chunks=z,
+        N_chunks=n,
+        n_chunks=N_CHUNKS,
+        effective_batch_size=BATCH,
+        chunk_size=CHUNK,
+        max_atoms=MAX_ATOMS,
+        n_gpus=1,
+        apply_one_chunk=apply_one,
+        has_aux=True,
+        n_eval_chunks=n_eval_chunks,
+    )
+
+
+@pytest.mark.parametrize("n_eval", [1, 2, 3, 5, 9])
+def test_static_chunk_budget_matches_cond_skip_bitwise(n_eval):
+    """A static trip count gives the same outputs as the traced lax.cond skip."""
+    r, z, n = _inputs()
+    n_valid = min(n_eval, N_CHUNKS) * CHUNK
+    ref = _run(jnp.asarray(n_valid), r, z, n)
+    out = _run_static(n_eval, r, z, n)
+    for a, b in zip(out, ref):
+        assert a.shape == b.shape
+        np.testing.assert_array_equal(np.asarray(a), np.asarray(b))
+
+
+def test_static_chunk_budget_has_no_conditional_and_runs_only_budget_chunks():
+    r, z, n = _inputs()
+    calls = []
+
+    def counting_apply(rc, zc, nc):
+        jax.debug.callback(lambda: calls.append(1))
+        return _apply_one(rc, zc, nc)
+
+    jax.block_until_ready(_run_static(2, r, z, n, counting_apply))
+    assert len(calls) == 2
+    jaxpr = str(jax.make_jaxpr(lambda rr: _run_static(2, rr, z, n))(r))
+    assert "cond[" not in jaxpr
+    # the chunk loop is a scan with a compile-time length
+    assert "length=2" in jaxpr
+
+
+def test_static_chunk_budget_gradients_match_full():
+    r, z, n = _inputs()
+
+    def loss(rr, n_eval):
+        e, _, _ = _run_static(n_eval, rr, z, n)
+        return jnp.sum(e[:9])
+
+    np.testing.assert_array_equal(
+        np.asarray(jax.grad(loss)(r, 3)), np.asarray(jax.grad(loss)(r, N_CHUNKS))
+    )
