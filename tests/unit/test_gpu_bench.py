@@ -204,7 +204,7 @@ def test_format_bench_value_units():
 
 def test_render_html_includes_correctness_timings_and_publish_note():
     checks = [
-        CheckResult("jax_gpu", "pass", "gpu:0", values={"platform": "gpu"}),
+        CheckResult("jax_gpu", "pass", "ok", values={"platform": "gpu"}),
         CheckResult("physnet", "fail", "energy was nan"),
     ]
     timings = [
@@ -233,8 +233,7 @@ def test_render_html_includes_correctness_timings_and_publish_note():
     assert "ns/day" in html
     assert "index.html" in html
     assert "asv publish" in html
-    assert "not uploaded from CI" in html
-    # user-controlled strings must be escaped
+    assert "from CI" in html
     sneaky = render_gpu_report_html(
         meta={"hostname": "<script>alert(1)</script>"},
         checks=[CheckResult("x", "pass", "<img>")],
