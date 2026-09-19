@@ -864,6 +864,198 @@ def default_nhc_kwargs(tau, overrides=None):
     return {k: overrides.get(k, default_kwargs[k]) for k in default_kwargs}
 
 
+# ---------------------------------------------------------------------------
+# NpT energy for jax-md's barostat.
+#
+# CONVENTION (jax_md/quantity.py ``pressure`` / ``stress`` and the
+# ``npt_nose_hoover`` box force): the energy function receives
+# ``perturbation = 1 + eps`` and ``eps`` is a LINEAR strain. Every
+# displacement is scaled by ``perturbation`` (space.periodic_general does
+# ``dR -> perturbation @ dR``), i.e. the box becomes ``box * (1 + eps)`` and
+# the volume ``V * (1 + eps)**dim``. jax-md then computes
+#
+#     P = (2 K - dU/deps) / (dim * V)          with dU/deps = dim * V * dU/dV
+#
+# An earlier version applied ``perturbation**(1/3)`` to the box, i.e. treated
+# ``perturbation`` as a VOLUME factor. dU/deps was then dim*V*dU/dV / 3, so the
+# barostat (and every logged P) saw P_kin + P_vir / 3.
+# ---------------------------------------------------------------------------
+
+
+def apply_npt_perturbation(box, perturbation, dtype=None):
+    """Return the strained box jax-md means by ``perturbation`` (linear strain).
+
+    Scalar ``perturbation`` p: ``box * p`` (lengths scale by p, V by p**dim).
+    Matrix ``perturbation`` P (``quantity.stress``): displacements map as
+    ``d -> P @ d``; with real = box @ frac that is ``box' = P @ box``.
+    """
+    dtype = _JAXMD_DTYPE if dtype is None else dtype
+    box = jnp.asarray(box, dtype=dtype)
+    if perturbation is None:
+        return box
+    p = jnp.asarray(perturbation, dtype=dtype)
+    if p.ndim == 0:
+        return box * p
+    dim = p.shape[0]
+    if box.ndim == 0:
+        box_m = jnp.eye(dim, dtype=dtype) * box
+    elif box.ndim == 1:
+        box_m = jnp.diag(box)
+    else:
+        box_m = box
+    return p @ box_m
+
+
+def _npt_fd_step(dtype) -> float:
+    return 1.0e-3 if jnp.dtype(dtype) == jnp.float32 else 1.0e-5
+
+
+def make_npt_energy_fn(
+    energy_of_real: Callable,
+    force_of_real: Callable,
+    *,
+    dtype=None,
+    fd_step: float | None = None,
+    apply_perturbation: Callable = None,
+):
+    """Build the fractional-coordinate NpT energy handed to ``npt_nose_hoover``.
+
+    Args:
+        energy_of_real: ``(real_pos, box, neighbor) -> scalar`` energy.
+        force_of_real: ``(real_pos, box, neighbor) -> (N, dim)`` forces
+            (``-dE/dreal``), used because ``jax.grad`` through the hybrid
+            calculator returns NaN.
+        dtype: compute dtype for box/positions (default: JAX-MD state dtype).
+        fd_step: strain step for the ``perturbation`` cotangent.
+        apply_perturbation: ``(box, perturbation, dtype) -> box`` (default
+            :func:`apply_npt_perturbation`; overridable only for tests).
+
+    Returns:
+        ``(raw_fn, npt_energy_fn)``. ``npt_energy_fn(frac_pos, box, neighbor,
+        perturbation, kT, mass)`` is a ``jax.custom_vjp`` whose cotangents are
+
+        * frac_pos: ``(-F) @ box_eff`` (chain rule through real = box . frac);
+        * perturbation: dE/dp for the LINEAR strain box -> box * p. At p = 1
+          that is ``-sum_i F_i . r_i`` plus the explicit box dependence of the
+          calculator (minimum-image shifts, cutoffs/switching, Ewald/PME). The
+          atomic-virial form alone misses the MIC image term under PBC, so the
+          derivative is taken as a central difference of the real energy along
+          the strain, which includes every channel by construction.
+    """
+    dtype = _JAXMD_DTYPE if dtype is None else dtype
+    h_default = _npt_fd_step(dtype) if fd_step is None else float(fd_step)
+    if apply_perturbation is None:
+        apply_perturbation = apply_npt_perturbation
+
+    def raw_fn(frac_pos, box=None, neighbor=None, perturbation=None, **kwargs):
+        box_eff = apply_perturbation(box, perturbation, dtype)
+        real_pos = space.transform(box_eff, jnp.asarray(frac_pos, dtype=dtype))
+        return energy_of_real(real_pos, box_eff, neighbor)
+
+    @jax.custom_vjp
+    def npt_energy_fn(frac_pos, box=None, neighbor=None, perturbation=None, kT=None, mass=None):
+        """NpT energy with custom VJP (explicit calculator forces)."""
+        return raw_fn(frac_pos, box=box, neighbor=neighbor, perturbation=perturbation)
+
+    def fwd(frac_pos, box, neighbor, perturbation, kT, mass):
+        E = raw_fn(frac_pos, box=box, neighbor=neighbor, perturbation=perturbation)
+        return E, (frac_pos, box, neighbor, perturbation)
+
+    def bwd(res, g):
+        frac_pos, box, neighbor, perturbation = res
+        box_eff = apply_perturbation(box, perturbation, dtype)
+        real_pos = space.transform(box_eff, jnp.asarray(frac_pos, dtype=dtype))
+        F = jnp.asarray(force_of_real(real_pos, box_eff, neighbor), dtype=dtype)
+        # real = frac @ box_eff^T  ->  dE/dfrac = dE/dreal @ box_eff = (-F) @ box_eff.
+        # (Without the box factor the position gradient is under-scaled by L;
+        # measured 28.09x on a 28.0 A TIP3 cell.)
+        box_m = box_eff if box_eff.ndim == 2 else (
+            jnp.diag(box_eff) if box_eff.ndim == 1
+            else jnp.eye(F.shape[-1], dtype=dtype) * box_eff
+        )
+        grad_frac = jnp.asarray((-F @ box_m) * g, dtype=jnp.asarray(frac_pos).dtype)
+
+        # dE/d(perturbation): the virial the barostat needs. A None/zero
+        # cotangent collapses P to the kinetic term (the 4059 atm TIP3 blow-up).
+        if perturbation is None:
+            grad_pert = None
+        else:
+            p = jnp.asarray(perturbation, dtype=dtype)
+            flat = p.reshape(-1)
+            h = jnp.asarray(h_default, dtype=dtype)
+            comps = []
+            for k in range(flat.size):
+                e_k = jnp.zeros_like(flat).at[k].set(h)
+                e_plus = raw_fn(frac_pos, box=box, neighbor=neighbor,
+                                perturbation=(flat + e_k).reshape(p.shape))
+                e_minus = raw_fn(frac_pos, box=box, neighbor=neighbor,
+                                 perturbation=(flat - e_k).reshape(p.shape))
+                comps.append((e_plus - e_minus) / (2.0 * h))
+            grad_pert = jnp.asarray(
+                jnp.stack(comps).reshape(p.shape) * g,
+                dtype=jnp.asarray(perturbation).dtype,
+            )
+        return (grad_frac, None, None, grad_pert, None, None)
+
+    npt_energy_fn.defvjp(fwd, bwd)
+    return raw_fn, npt_energy_fn
+
+
+def barostat_dU_deps(npt_energy_fn, frac_pos, box, neighbor=None):
+    """dU/deps exactly as ``quantity.pressure`` / the NpT box force take it."""
+    return jax.grad(
+        lambda eps: npt_energy_fn(
+            frac_pos, box=box, neighbor=neighbor, perturbation=1.0 + eps
+        )
+    )(jnp.asarray(0.0, dtype=jnp.asarray(frac_pos).dtype))
+
+
+def independent_dE_dV(energy_of_real, frac_pos, box, neighbor=None, *, rel_dv=1.0e-4, dtype=None):
+    """Reference dE/dV that never touches ``perturbation`` or the custom VJP.
+
+    Changes the volume explicitly, V -> V (1 +/- rel_dv), rescales the box
+    isotropically to match (L -> L (V'/V)**(1/dim)) at fixed fractional
+    coordinates, and calls the real-space energy directly.
+    """
+    dtype = _JAXMD_DTYPE if dtype is None else dtype
+    frac = jnp.asarray(frac_pos, dtype=dtype)
+    dim = frac.shape[-1]
+    box = jnp.asarray(box, dtype=dtype)
+    V = quantity.volume(dim, box)
+    energies = []
+    for sgn in (1.0, -1.0):
+        V_s = V * (1.0 + sgn * rel_dv)
+        box_s = box * (V_s / V) ** (1.0 / dim)
+        energies.append(energy_of_real(space.transform(box_s, frac), box_s, neighbor))
+    return (energies[0] - energies[1]) / (2.0 * rel_dv * V)
+
+
+def npt_virial_selfcheck(npt_energy_fn, energy_of_real, frac_pos, box, neighbor=None, *, dtype=None):
+    """Compare the barostat's virial pressure with an independent -dE/dV.
+
+    Returns a dict of floats (energy/volume units). ``ratio`` is
+    P_vir(barostat) / P_vir(reference) and must be ~1; the old volume-factor
+    convention gave 1/3.
+    """
+    dtype = _JAXMD_DTYPE if dtype is None else dtype
+    frac = jnp.asarray(frac_pos, dtype=dtype)
+    dim = frac.shape[-1]
+    V = float(quantity.volume(dim, jnp.asarray(box, dtype=dtype)))
+    dU_deps = float(barostat_dU_deps(npt_energy_fn, frac, box, neighbor))
+    p_vir_barostat = -dU_deps / (dim * V)
+    p_vir_ref = -float(independent_dE_dV(energy_of_real, frac, box, neighbor, dtype=dtype))
+    denom = max(abs(p_vir_ref), 1.0e-300)
+    return {
+        "volume": V,
+        "dU_deps": dU_deps,
+        "p_vir_barostat": p_vir_barostat,
+        "p_vir_reference": p_vir_ref,
+        "ratio": p_vir_barostat / p_vir_ref if p_vir_ref != 0.0 else float("nan"),
+        "rel_err": abs(p_vir_barostat - p_vir_ref) / denom,
+    }
+
+
+
 def _run_npt_diagnostics(
     *,
     state,
@@ -918,7 +1110,9 @@ def _run_npt_diagnostics(
         E_pert = float(npt_energy_fn(R, box=box_curr, neighbor=neighbor, perturbation=pert))
         t2.add_row(f"{eps:.0e}", f"{E_pert:.6f}")
     dE = float(npt_energy_fn(R, box=box_curr, neighbor=neighbor, perturbation=1.0 + 1e-5)) - E0
-    dUdV_fd = dE / (vol * 1e-5)  # finite-diff approx
+    # perturbation = 1 + eps is a LINEAR strain (jax-md convention): V' = V (1+eps)^dim,
+    # so dU/dV = (dU/deps) / (dim * V).
+    dUdV_fd = dE / (dim * vol * 1e-5)  # finite-diff approx
     t2.add_row("dUdV (finite diff)", f"{dUdV_fd:.4f} eV/Å³")
     t2.add_row("volume", f"{vol:.2f} Å³")
     c.print(Panel(t2, title="NPT Diagnostic [2]", border_style="blue"))
@@ -1529,15 +1723,7 @@ def set_up_nhc_sim_routine(
             'sy_steps': nhc_sy_steps,
         }
 
-        def _npt_energy_fn_raw(frac_pos, box=None, neighbor=None, perturbation=None, **kwargs):
-            """Energy in fractional coords: transform to real, then evaluate.
-            Supports perturbation=(1+eps) for NPT barostat stress (dU/dV)."""
-            box_eff = jnp.asarray(box, dtype=jnp.float32)
-            if perturbation is not None:
-                # Isotropic: V' = V * perturbation, so L' = L * perturbation^(1/3)
-                scale = jnp.power(jnp.asarray(perturbation, dtype=jnp.float32), 1.0 / 3.0)
-                box_eff = box_eff * scale
-            real_pos = space.transform(box_eff, frac_pos)
+        def _npt_energy_of_real(real_pos, box_eff, neighbor):
             pair_idx, pair_mask = neighbor if neighbor is not None else (None, None)
             result = evaluate_energies_and_forces(
                 atomic_numbers=atomic_numbers,
@@ -1548,100 +1734,21 @@ def set_up_nhc_sim_routine(
             )
             return result.energy.reshape(-1)[0]
 
-        @jax.custom_vjp
-        def npt_energy_fn(frac_pos, box=None, neighbor=None, perturbation=None, kT=None, mass=None):
-            """NPT energy with custom VJP: use explicit calculator forces (jax.grad gives NaN).
-            All kwargs as explicit params so JAX resolve_kwargs can bind them to positions."""
-            return _npt_energy_fn_raw(
-                frac_pos, box=box, neighbor=neighbor, perturbation=perturbation
-            )
-
-        def npt_energy_fn_fwd(frac_pos, box, neighbor, perturbation, kT, mass):
-            E = _npt_energy_fn_raw(
-                frac_pos, box=box, neighbor=neighbor, perturbation=perturbation
-            )
-            return E, (frac_pos, box, neighbor, perturbation)
-
-        def npt_energy_fn_bwd(res, g):
-            frac_pos, box, neighbor, perturbation = res
-            box_eff = jnp.asarray(box, dtype=jnp.float32)
-            if perturbation is not None:
-                scale = jnp.power(jnp.asarray(perturbation, dtype=jnp.float32), 1.0 / 3.0)
-                box_eff = box_eff * scale
-            real_pos = space.transform(box_eff, frac_pos)
+        def _npt_force_of_real(real_pos, box_eff, neighbor):
             pair_idx, pair_mask = neighbor if neighbor is not None else (None, None)
-            F = jax_md_force_fn(
+            return jax_md_force_fn(
                 real_pos,
                 mm_pair_idx=pair_idx,
                 mm_pair_mask=pair_mask,
                 box=box_eff,
             )
-            # grad(E) = -F in REAL space. The primal argument is FRACTIONAL, and
-            # real = box . frac, so the cotangent needs the chain-rule factor:
-            #     dE/dfrac = box^T . dE/dreal   ->   (-F) @ box_eff
-            # Returning -F alone under-scales the position gradient by the box
-            # length, which for a 28.0 A cell is 28x. Measured by the in-situ
-            # self-check (MMML_NPT_VIRIAL_SELFCHECK=1) on the certified TIP3 box:
-            #     dE/dfrac analytic            -4.196231e-01 eV
-            #     dE/dfrac central difference  -1.178808e+01 eV
-            #     ratio fd/analytic             28.0921      (box side 28.0 A)
-            # A mis-scaled position gradient corrupts the first integration step,
-            # which is what "E_pot = 8e7 eV at step 1, immediately after a
-            # minimisation that ended at -8751 eV, with T and the cell both
-            # healthy" looks like.
-            grad_frac = as_jaxmd_dtype((-F @ box_eff) * g)
 
-            # dE/d(perturbation) is the VIRIAL, and returning None for it makes
-            # the barostat blind to the potential.
-            #
-            # jax-md gets the internal pressure by differentiating this energy
-            # with respect to `perturbation` at eps=0 (quantity.pressure builds
-            # U(eps) = energy_fn(..., perturbation=1+eps) and takes grad(U)(0.)).
-            # With a None cotangent that derivative is identically zero, so
-            #     P_int = 2*KE/(3V) + 0
-            # i.e. the ideal-gas term alone. That was measured, not inferred: a
-            # 732-TIP3 box at 297.87 K in 21955.3 A^3 reported P_meas = 4059.58
-            # atm against a 1 atm target, and the kinetic-only value is 4059.63
-            # atm -- agreement to 0.001%. The barostat then drove the cell on a
-            # 4000x pressure error, which is what produced the 8e7 eV blow-up.
-            #
-            # For isotropic scaling r = p^(1/3) r0:
-            #     dE/dp = sum_i (dE/dr_i) . (r_i / 3p) = -(1/3p) sum_i F_i . r_i
-            # Both F and real_pos are already in hand above, so this costs
-            # nothing extra.
-            if perturbation is None:
-                grad_pert = None
-            else:
-                # NOTE: -(1/3p) * sum_i F_i . r_i is WRONG here, and was tried.
-                # That is the *atomic* virial, valid only without minimum-image
-                # wrapping. Under PBC the energy depends on `perturbation`
-                # through two channels -- the positions scale AND the box scales,
-                # which rescales the MIC displacements -- and the correct object
-                # is the *pair* virial sum_ij f_ij . d_ij, which this backward
-                # pass cannot see (it has forces, not pair displacements). The
-                # in-situ self-check (MMML_NPT_VIRIAL_SELFCHECK=1) reported the
-                # atomic form as +3.971e2 eV against a central difference of
-                # -3.319e1 eV: wrong sign, 1296% off.
-                #
-                # Differentiate the real energy instead. Two extra evaluations
-                # per backward pass, but it captures both channels by
-                # construction and needs no assumption about the MIC.
-                p_val = jnp.asarray(perturbation, dtype=jnp.float32)
-                _h = jnp.asarray(1.0e-3, dtype=jnp.float32)
-                _e_plus = _npt_energy_fn_raw(
-                    frac_pos, box=box, neighbor=neighbor,
-                    perturbation=p_val * (1.0 + _h),
-                )
-                _e_minus = _npt_energy_fn_raw(
-                    frac_pos, box=box, neighbor=neighbor,
-                    perturbation=p_val * (1.0 - _h),
-                )
-                grad_pert = as_jaxmd_dtype(
-                    (_e_plus - _e_minus) / (2.0 * _h * p_val) * g
-                )
-            return (grad_frac, None, None, grad_pert, None, None)
-
-        npt_energy_fn.defvjp(npt_energy_fn_fwd, npt_energy_fn_bwd)
+        # ``perturbation`` is jax-md's LINEAR strain (box -> box * p); see
+        # make_npt_energy_fn. It used to be applied as p**(1/3), which made
+        # the barostat see P_kin + P_vir/3.
+        _npt_energy_fn_raw, npt_energy_fn = make_npt_energy_fn(
+            _npt_energy_of_real, _npt_force_of_real, dtype=_JAXMD_DTYPE,
+        )
         npt_energy_fn = jit(npt_energy_fn)
         init_fn, apply_fn = simulate.npt_nose_hoover(
             npt_energy_fn,
@@ -2240,36 +2347,30 @@ def set_up_nhc_sim_routine(
             current_neighbors = (npt_pair_idx, npt_pair_mask)
             npt_pressure = pressure  # Use same pressure as NPT block (handles --pressure 0)
 
-            # MMML_NPT_VIRIAL_SELFCHECK=1: verify the barostat actually sees the
-            # potential. The custom VJP supplies dE/d(perturbation) analytically
-            # (the virial); if that cotangent is wrong or dropped, jax-md's
-            # pressure silently degrades to the kinetic term alone and the
-            # barostat drives the cell on a huge phantom pressure error. That is
-            # exactly the failure this check exists to catch, so compare the
-            # analytic derivative against a central difference of the SAME
-            # energy function -- no reference implementation required.
+            # MMML_NPT_VIRIAL_SELFCHECK=1: verify the barostat sees the right
+            # potential pressure. It compares the virial pressure jax-md derives
+            # from dU/d(perturbation) -- through the custom VJP, exactly as
+            # quantity.pressure and the NpT box force take it -- with an
+            # INDEPENDENT reference: -dE/dV from an explicit isotropic volume
+            # change at fixed fractional coordinates, evaluated on the real-space
+            # energy without ever passing `perturbation`.
+            #
+            # An earlier version compared the VJP against a finite difference of
+            # the SAME perturbation path. That only checks the VJP against its own
+            # forward, so it reported 0.000% while the forward applied
+            # perturbation**(1/3) (a volume factor) where jax-md means a linear
+            # strain, and the barostat saw P_kin + P_vir/3.
             import os as _os
 
             if _os.environ.get("MMML_NPT_VIRIAL_SELFCHECK") == "1":
                 try:
                     _nb = (npt_pair_idx, npt_pair_mask)
-                    _h = 1.0e-3
-                    _e_plus = float(
-                        npt_energy_fn(md_pos_frac, box_curr, _nb, 1.0 + _h, kT, Si_mass)
+                    _vc = npt_virial_selfcheck(
+                        npt_energy_fn, _npt_energy_of_real,
+                        md_pos_frac, box_curr, _nb, dtype=_JAXMD_DTYPE,
                     )
-                    _e_minus = float(
-                        npt_energy_fn(md_pos_frac, box_curr, _nb, 1.0 - _h, kT, Si_mass)
-                    )
-                    _fd = (_e_plus - _e_minus) / (2.0 * _h)
-                    _analytic = float(
-                        jax.grad(
-                            lambda _p: npt_energy_fn(
-                                md_pos_frac, box_curr, _nb, _p, kT, Si_mass
-                            )
-                        )(1.0)
-                    )
-                    _denom = max(abs(_fd), 1.0e-12)
-                    _rel = abs(_analytic - _fd) / _denom
+                    _unit_p_atm = float(unit["pressure"]) * 1.01325
+                    _rel = _vc["rel_err"]
                     # Also check the POSITION cotangent. The bwd returns -F, the
                     # real-space force, as dE/d(frac). But E depends on frac via
                     # real = box . frac, so dE/dfrac = box^T . dE/dreal -- a
@@ -2325,10 +2426,10 @@ def set_up_nhc_sim_routine(
                         f"E via npt_energy_fn (fractional) {_e_npt:.6e} eV\n"
                         f"E via real-space calculator      {_e_real:.6e} eV\n"
                         f"difference                       {_e_npt - _e_real:.6e} eV\n"
-                        f"---- derivatives ----\n"
-                        f"dE/dp analytic {_analytic:.6e} eV\n"
-                        f"dE/dp central-difference (h={_h}) {_fd:.6e} eV\n"
-                        f"relative difference {_rel:.3%}\n"
+                        f"---- virial pressure (independent reference) ----\n"
+                        f"P_vir barostat (-dU/deps / 3V)      {_vc['p_vir_barostat'] / _unit_p_atm:.3f} atm\n"
+                        f"P_vir reference (-dE/dV, explicit V) {_vc['p_vir_reference'] / _unit_p_atm:.3f} atm\n"
+                        f"ratio barostat/reference {_vc['ratio']:.4f}   relative difference {_rel:.3%}\n"
                         f"{'OK' if _rel < 0.05 else 'MISMATCH - barostat pressure will be wrong'}\n"
                         f"---- position cotangent (atom 0, x) ----\n"
                         f"dE/dfrac analytic {_an_frac:.6e} eV\n"
