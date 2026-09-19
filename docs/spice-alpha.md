@@ -119,6 +119,42 @@ mmml efield-train \
 Wrappers: `scripts/spice_alpha/prepare_efield_dataset.sh` and
 `train_efield_polar.sh`. Iodine is Z=53; the efield model max Z is 55.
 
+### Cluster (login12 / SciCORE)
+
+Do **not** `source scripts/scicore_env.sh` for this train. That prolog sets
+`JAX_ENABLE_X64=1`; e3x `Embed` stays float32 and `MessagePass` promotes, so
+`EFieldPhysNet.init` dies in `e3x.nn.add`. The train wrapper and sbatch force
+`JAX_ENABLE_X64=0`. No CHARMM, no Zenodo pull.
+
+```bash
+# 0. This branch (until merged)
+cd "$HOME/mmml"
+git fetch origin cursor/spice-alpha-training-docs-f8f6
+git checkout cursor/spice-alpha-training-docs-f8f6
+git pull origin cursor/spice-alpha-training-docs-f8f6
+
+# 1. Inner HDF5 + 256-frame smoke NPZ (CPU / login is fine)
+scripts/spice_alpha/prepare_efield_dataset.sh ~/data/spicealpha ~/data/spicealpha/mmml_efield 256
+python scripts/spice_alpha/check_efield_npz.py \
+  ~/data/spicealpha/mmml_efield/splits_des_mono/energies_forces_dipoles_{train,valid}.npz
+
+# 2. GPU smoke (2 epochs, B=8, features=16, max_degree=1)
+mkdir -p artifacts/spice_ef_polar
+sbatch scripts/spice_alpha/train_efield_polar.sbatch
+
+# 3. After smoke writes params-*.json and logs "polar mae"
+sbatch --partition=rtx4090 --qos=rtx4090-6hours --time=06:00:00 \
+  --export=ALL,MODE=full,EPOCHS=100 \
+  scripts/spice_alpha/train_efield_polar.sbatch
+```
+
+Pass: check script exits 0; smoke log has `polar mae` / `polar MSE` (finite);
+`ckpts/spice_ef_polar/params-*.json` exists. Epoch-1 energy MAE of tens–hundreds
+of eV is expected (zero-init heads, total E, no atom refs). Fail: `e3x.nn.add`
+dtype error (x64 still on); `polar_weight is set but NPZ has no 'polar'`;
+energy stuck after many epochs at hundreds of eV (default `fix-and-split`
+double-converted eV→eV). OOM: `BATCH_SIZE=4 GRADIENT_CHECKPOINT=1`.
+
 ## Train
 
 Iodine is Z=53. Example yaml uses `max_atomic_number: 35` (Br). Total
@@ -165,4 +201,5 @@ targets (Debye left in `D` — should not happen if `scf_dipole` was used).
 | No PBC | `--no-pbc` |
 | `N` = 3–110 | Pad per subset (22 / 34 / 50 / 110) |
 | Charged systems | Filter; paper trained neutrals |
-| Polarizability | Unused by PhysNet (`polar` is optional storage) |
+| Polarizability | PhysNet ignores `polar`. Efield-train: `--polar_weight` + `--polar-units bohr3` + `Ef=0` |
+| `JAX_ENABLE_X64=1` | Breaks `EFieldPhysNet.init`. Use the train wrapper / sbatch (`X64=0`) |

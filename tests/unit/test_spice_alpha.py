@@ -362,6 +362,25 @@ def test_max_atomic_number_empty_n_is_zero():
     assert max_atomic_number(data) == 0
 
 
+def test_check_efield_train_npz_accepts_bohr3_zero_field(tmp_path):
+    from mmml.data.spice_alpha import check_efield_train_npz
+
+    src = _write_spice_h5(tmp_path / "spice.hdf5", extra_group=False)
+    out = tmp_path / "ef.npz"
+    convert_spice_alpha_hdf5([src], out, write_efield=True, polar_units="bohr3")
+    assert check_efield_train_npz(out) == []
+
+
+def test_check_efield_train_npz_rejects_spice_polar_units(tmp_path):
+    from mmml.data.spice_alpha import check_efield_train_npz
+
+    src = _write_spice_h5(tmp_path / "spice.hdf5", extra_group=False)
+    out = tmp_path / "ef.npz"
+    convert_spice_alpha_hdf5([src], out, write_efield=True, polar_units="spice")
+    problems = check_efield_train_npz(out)
+    assert any("bohr3" in item for item in problems)
+
+
 def test_efield_flag_writes_zero_field_and_bohr3_polar(tmp_path):
     from mmml.data.units import E_ANGSTROM2_PER_VOLT_TO_BOHR3
 

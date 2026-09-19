@@ -77,6 +77,15 @@ def test_data_loading_tests_have_no_remote_dataset_urls():
     assert leaked == []
 
 
+def test_efield_train_wrapper_disables_x64():
+    """SciCORE defaults JAX_ENABLE_X64=1; e3x Embed/MessagePass then mismatch."""
+    text = (_REPO / "scripts" / "spice_alpha" / "train_efield_polar.sh").read_text()
+    assert "JAX_ENABLE_X64=0" in text
+    sbatch = (_REPO / "scripts" / "spice_alpha" / "train_efield_polar.sbatch").read_text()
+    assert "JAX_ENABLE_X64=0" in sbatch
+    assert "scicore_env.sh" in sbatch
+
+
 def test_workflow_selects_marker_and_forbids_dataset_pulls():
     workflow = (_REPO / ".github" / "workflows" / "data-loading.yml").read_text()
     assert "-m data_loading" in workflow

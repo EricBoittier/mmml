@@ -299,6 +299,48 @@ def max_atomic_number(data: Mapping[str, Any]) -> int:
     return found
 
 
+def check_efield_train_npz(path: Path | str) -> list[str]:
+    """Return problems that would break ``efield-train --polar_weight``; empty = ok."""
+    dest = Path(path)
+    problems: list[str] = []
+    if not dest.is_file():
+        return [f"{dest}: not a file"]
+    raw = np.load(dest, allow_pickle=True)
+    files = set(raw.files)
+    for key in (*PHYSNET_TRAIN_KEYS, "Ef", "polar"):
+        if key not in files:
+            problems.append(f"{dest.name}: missing {key!r}")
+    if problems:
+        return problems
+    try:
+        assert_train_npz_contract({k: raw[k] for k in raw.files})
+    except ValueError as exc:
+        problems.append(f"{dest.name}: {exc}")
+    n = int(np.asarray(raw["E"]).reshape(-1).shape[0])
+    ef = np.asarray(raw["Ef"])
+    if ef.shape != (n, 3):
+        problems.append(f"{dest.name}: Ef shape {ef.shape} != {(n, 3)}")
+    elif not np.allclose(ef, 0.0, atol=1e-8):
+        problems.append(f"{dest.name}: Ef is not zero (SPICE-α is zero-field DFT)")
+    polar = np.asarray(raw["polar"])
+    if polar.shape != (n, 3, 3):
+        problems.append(f"{dest.name}: polar shape {polar.shape} != {(n, 3, 3)}")
+    else:
+        finite = np.isfinite(polar).all(axis=(-2, -1))
+        if not bool(finite.any()):
+            problems.append(f"{dest.name}: polar is all-NaN")
+    units_raw = raw["_mmml_units"] if "_mmml_units" in files else None
+    if units_raw is not None:
+        parsed = json.loads(str(np.asarray(units_raw).reshape(-1)[0]))
+        if str(parsed.get("E", "")).lower() not in {"ev"}:
+            problems.append(f"{dest.name}: _mmml_units E={parsed.get('E')!r} (want ev)")
+        if str(parsed.get("polar", "")).lower() != "bohr3":
+            problems.append(
+                f"{dest.name}: polar units {parsed.get('polar')!r} (want bohr3; reconvert with --polar-units bohr3)"
+            )
+    return problems
+
+
 def write_physnet_npz(data: Mapping[str, Any], path: Path | str) -> Path:
     """Write a compressed NPZ after checking the train contract."""
     assert_train_npz_contract(data)

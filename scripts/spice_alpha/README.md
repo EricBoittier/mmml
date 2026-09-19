@@ -7,15 +7,30 @@ Polarizability is trained on the **efield** model as an extra loss term:
 `α = dμ/dEf` evaluated at **Ef = 0** (`mmml.models.efield.model_functions`).
 Labels are converted from the release unit `e·Å²/V` to Bohr³.
 
+`train_efield_polar.sh` **forces `JAX_ENABLE_X64=0`**. SciCORE's
+`scripts/scicore_env.sh` defaults x64 on and will crash `EFieldPhysNet.init`.
+Do not source that prolog for this job. No CHARMM.
+
 ```bash
 # 1. Inner HDF5 + NPZ splits (256 frames = smoke)
 scripts/spice_alpha/prepare_efield_dataset.sh ~/data/spicealpha ./spice_mmml 256
+python scripts/spice_alpha/check_efield_npz.py \
+  ./spice_mmml/splits_des_mono/energies_forces_dipoles_{train,valid}.npz
 
 # 2. Full DES370K monomers (max_frames=0)
 scripts/spice_alpha/prepare_efield_dataset.sh ~/data/spicealpha ./spice_mmml 0
 
-# 3. Train (GPU)
-scripts/spice_alpha/train_efield_polar.sh ./spice_mmml/splits_des_mono ./ckpts/spice_ef_polar 100
+# 3. GPU smoke, then full
+sbatch scripts/spice_alpha/train_efield_polar.sbatch
+sbatch --time=06:00:00 --qos=rtx4090-6hours --export=ALL,MODE=full \
+  scripts/spice_alpha/train_efield_polar.sbatch
 ```
 
-Equivalent one-liners without the shell wrappers are in `docs/spice-alpha.md`.
+Interactive GPU (after an allocation):
+
+```bash
+BATCH_SIZE=8 FEATURES=16 MAX_DEGREE=1 \
+  scripts/spice_alpha/train_efield_polar.sh ./spice_mmml/splits_des_mono ./ckpts/spice_ef_polar 2
+```
+
+Equivalent one-liners: `docs/spice-alpha.md`.

@@ -41,6 +41,7 @@ from .rmd17 import (
 from .spice_alpha import (
     SpiceAlphaFrame,
     assert_train_npz_contract,
+    check_efield_train_npz,
     classify_units_map,
     convert_spice_alpha_hdf5,
     iter_spice_alpha_frames,
@@ -98,6 +99,7 @@ __all__ = [
     # SPICE-α (Zenodo 19205036) → PhysNet train NPZ
     "SpiceAlphaFrame",
     "assert_train_npz_contract",
+    "check_efield_train_npz",
     "classify_units_map",
     "convert_spice_alpha_hdf5",
     "iter_spice_alpha_frames",
