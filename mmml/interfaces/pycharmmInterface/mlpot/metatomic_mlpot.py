@@ -20,6 +20,8 @@ from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Any
 
+import time
+
 import numpy as np
 from ase.calculators.calculator import Calculator
 
@@ -203,6 +205,15 @@ class MetatomicMlpotCalculator:
     ) -> float:
         """CHARMM USER energy in kcal/mol; accumulate kcal/mol/Å into ``dx/dy/dz``."""
         del Ntrans, Natim, idxp, Nmlp, Nmlmmp, idxi, idxj, idxjp, idxu, idxv, idxup, idxvp
+        from mmml.interfaces.pycharmmInterface.mlpot.ml_profile import (
+            get_mlpot_profile_stats,
+            mlpot_profiling_enabled,
+        )
+
+        profile = mlpot_profiling_enabled()
+        if profile:
+            get_mlpot_profile_stats().record_charmm_gap()
+        t0 = time.perf_counter()
         n = int(Natom)
         pos_full = np.array([x[:n], y[:n], z[:n]], dtype=np.float64).T
         ml_idx = self._resolve_ml_slice(n)
@@ -221,6 +232,10 @@ class MetatomicMlpotCalculator:
             )
         self.last_ml_forces = forces_kcal
         self._last_ml_forces = forces_kcal
+        if profile:
+            # Forces are host numpy here (synchronised). Same scope as the PhysNet
+            # MLpot callback timer: the write-back to CHARMM falls in the gap.
+            get_mlpot_profile_stats().record_ml(time.perf_counter() - t0)
         for local_i, atom_i in enumerate(ml_idx):
             ai = int(atom_i)
             dx[ai] -= float(forces_kcal[local_i, 0])
