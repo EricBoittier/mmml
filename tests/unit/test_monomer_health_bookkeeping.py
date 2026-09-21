@@ -893,3 +893,54 @@ def test_bond_stretch_flags_geometry() -> None:
         )
     assert 0 in flagged
     assert any("bond" in r for r in flagged[0])
+
+
+def test_intra_contact_flag_works_on_read_only_positions_and_does_not_modify_them() -> None:
+    """CHARMM hands out a read-only coordinate view; the intra-contact audit must copy it."""
+    from mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping import (
+        MonomerHealthConfig,
+        flag_geometry_problem_monomers,
+    )
+
+    offsets = np.array([0, 3, 6], dtype=int)
+    pos = np.array(
+        [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0],  # monomer 0
+         [10.0, 0.0, 0.0], [10.3, 0.0, 0.0], [10.0, 1.0, 0.0]],  # monomer 1: 0.3 A contact
+        dtype=np.float64,
+    )
+    pos.setflags(write=False)
+    before = pos.copy()
+    overlap = SimpleNamespace(
+        max_monomer_extent_A=0.0,
+        intra_min_distance_A=0.5,
+        use_pbc=False,
+        fallback_box_side_A=None,
+        intra_exclude_1_3=True,
+    )
+    with (
+        patch(
+            "mmml.interfaces.pycharmmInterface.mlpot.setup.get_charmm_positions_array",
+            return_value=pos,
+        ),
+        patch(
+            "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard._overlap_cell",
+            return_value=None,
+        ),
+        patch(
+            "mmml.interfaces.pycharmmInterface.mlpot.overlap_guard._bond_exclusion_pairs",
+            return_value=set(),
+        ),
+        patch(
+            "mmml.interfaces.pycharmmInterface.mlpot.monomer_health_bookkeeping._flag_bond_stretch_monomers",
+            return_value={},
+        ),
+    ):
+        flagged = flag_geometry_problem_monomers(
+            SimpleNamespace(),
+            overlap,
+            offsets=offsets,
+            health_config=MonomerHealthConfig(com_flyoff_A=0.0),
+        )
+    assert 1 in flagged and any("intra" in r for r in flagged[1])
+    assert 0 not in flagged
+    np.testing.assert_array_equal(pos, before)

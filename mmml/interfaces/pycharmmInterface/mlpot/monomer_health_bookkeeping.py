@@ -771,7 +771,11 @@ def flag_geometry_problem_monomers(
             exclude_1_3=bool(getattr(overlap_config, "intra_exclude_1_3", True))
         )
         marked: set[int] = set()
-        work_pos = np.asarray(pos, dtype=np.float64)
+        # Scratch copy: the loop collapses each found pair to find the next one.
+        # np.asarray would alias the CHARMM coordinate view (read-only -> ValueError
+        # "assignment destination is read-only" after a completed run; writable ->
+        # the audit would move real atoms).
+        work_pos = np.array(pos, dtype=np.float64, copy=True)
         for _ in range(max(1, n_monomers * 2)):
             dist, viol = find_worst_intramonomer_close_contact(
                 work_pos,
