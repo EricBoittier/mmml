@@ -41,17 +41,33 @@ bash benchmarks/run_bench.sh MDSystemSize
 bash benchmarks/run_bench.sh 'MMNonbonded.time_forces'
 ```
 
+Named **groups** (related modules) avoid memorising asv regexes. `--group` can
+be repeated or comma-separated; combine with `--bench` to add a class:
+
+```bash
+uv run python benchmarks/gpu_bench.py --list-groups
+uv run python benchmarks/gpu_bench.py --group md              # JaxmdDriver ns/day
+uv run python benchmarks/gpu_bench.py --group throughput      # md + neighbors + SHAKE
+uv run python benchmarks/gpu_bench.py --group ml              # PhysNet + calculator
+uv run python benchmarks/gpu_bench.py --group md,neighbors
+make bench-gpu-local GROUP=md
+sbatch --export=ALL,BENCH_GROUP=md benchmarks/slurm_bench_gpu.sh
+```
+
 On a cluster (or an interactive GPU node):
 
 ```bash
 # interactive: correctness probes, then asv, then HTML
 uv run python benchmarks/gpu_bench.py
+uv run python benchmarks/gpu_bench.py --group md
 uv run python benchmarks/gpu_bench.py --bench bench_ml_physnet   # PhysNet probe + that asv module
 uv run python benchmarks/gpu_bench.py --check neighbors --checks-only
+uv run python benchmarks/gpu_bench.py --list-groups
 uv run python benchmarks/gpu_bench.py --list-checks
 uv run python benchmarks/gpu_bench.py --checks-only   # all probes, no timings
 
 sbatch benchmarks/slurm_bench_gpu.sh
+sbatch --export=ALL,BENCH_GROUP=md benchmarks/slurm_bench_gpu.sh
 sbatch --export=ALL,BENCH_PATTERN=bench_ml_physnet benchmarks/slurm_bench_gpu.sh
 ```
 
