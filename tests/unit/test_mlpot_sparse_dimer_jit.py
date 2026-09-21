@@ -56,7 +56,7 @@ def test_sparse_dimer_jit_with_traced_box() -> None:
             defer_xla_gpu_warmup=True,
             verbose=False,
             ml_sparse_dimers=True,
-            ml_max_active_dimers=10,
+            ml_max_active_dimers=28,
         )
         _, spherical_fn, _ = factory(
             atomic_numbers=z,
@@ -121,7 +121,8 @@ def test_sparse_dimer_padded_slots_add_no_forces(close_pair: str) -> None:
 
     cp = CutoffParameters(mm_switch_on=6.0, ml_switch_width=1.5)
 
-    def evaluate(sparse: bool):
+    def evaluate(sparse: bool, positions=None):
+        pos = r0 if positions is None else jnp.asarray(positions)
         with patch(
             "mmml.interfaces.pycharmmInterface.mmml_calculator.build_mm_energy_forces_fn",
             side_effect=fake_build_mm,
@@ -154,7 +155,7 @@ def test_sparse_dimer_padded_slots_add_no_forces(close_pair: str) -> None:
             )
             return spherical_fn(
                 atomic_numbers=z,
-                positions=r0,
+                positions=pos,
                 n_monomers=n_monomers,
                 cutoff_params=cp,
                 doML=True,
@@ -167,6 +168,94 @@ def test_sparse_dimer_padded_slots_add_no_forces(close_pair: str) -> None:
     np.testing.assert_allclose(float(sparse.energy), float(dense.energy), rtol=1e-6)
     np.testing.assert_allclose(np.asarray(sparse.forces), np.asarray(dense.forces), atol=1e-3)
 
+    # Energy stencil on the close pair: sparse and dense must agree. jax_mm_clone
+    # is a bonded spoof (not a clean FD target for analytic F); the switch
+    # product rule is FD-checked in test_ml_switch_support and
+    # test_ase_fragment_hybrid. PBC sparse trajectories recorded before #252
+    # (3e8c9478c), including ETOH student NVE with ml_sparse_dimers True,
+    # should be revalidated. That bug inflated forces only on the two
+    # highest-index molecules when that pair was inside mm_switch_on; it does
+    # not explain every observed NVE instability.
+    atom = (n_monomers - 1) * n_mono if close_pair == "last" else 0
+    h = 1.0e-3
+    pos = np.asarray(r0, dtype=np.float64)
+    plus, minus = pos.copy(), pos.copy()
+    plus[atom, 0] += h
+    minus[atom, 0] -= h
+    fd_dense = -(float(evaluate(False, plus).energy) - float(evaluate(False, minus).energy)) / (2.0 * h)
+    fd_sparse = -(float(evaluate(True, plus).energy) - float(evaluate(True, minus).energy)) / (2.0 * h)
+    assert fd_sparse == pytest.approx(fd_dense, rel=2e-2, abs=5e-2)
+
+
+def test_sparse_dimer_cap_overflow_fails_closed() -> None:
+    """Two in-range pairs and cap=1 must abort, not drop a dimer."""
+    from mmml.interfaces.pycharmmInterface.mlpot.mlpot_sparse_dimer_policy import (
+        SparseDimerCapOverflow,
+    )
+    from mmml.interfaces.pycharmmInterface.mmml_calculator import setup_calculator
+
+    n_mono, n_monomers, box = 5, 3, 40.0
+    n_atoms = n_mono * n_monomers
+    z = jnp.full((n_atoms,), 6, dtype=jnp.int32)
+    rng = np.random.default_rng(1)
+    base = rng.normal(scale=0.2, size=(n_mono, 3))
+    centers = [[0.0, 0.0, 0.0], [3.0, 0.0, 0.0], [1.5, 2.5, 0.0]]
+    r0 = jnp.asarray(
+        np.concatenate([np.asarray(c) + base for c in centers])
+    )
+    fake_mm_fn = lambda *a, **k: (jnp.array(0.0), jnp.zeros((n_atoms, 3)))
+    fake_update_fn = lambda *a, **k: (
+        jnp.zeros((1, 2), dtype=jnp.int32),
+        jnp.ones((1,), dtype=bool),
+    )
+
+    def fake_build_mm(*args, **kwargs):
+        if kwargs.get("use_jax_md_neighbor_list", True):
+            return fake_mm_fn, fake_update_fn
+        return fake_mm_fn
+
+    cp = CutoffParameters(mm_switch_on=6.0, ml_switch_width=1.5)
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mmml_calculator.build_mm_energy_forces_fn",
+        side_effect=fake_build_mm,
+    ):
+        factory = setup_calculator(
+            ATOMS_PER_MONOMER=n_mono,
+            N_MONOMERS=n_monomers,
+            model_restart_path=None,
+            ml_potential_mode="jax_mm_clone",
+            doML=True,
+            doMM=False,
+            doML_dimer=True,
+            MAX_ATOMS_PER_SYSTEM=10,
+            cell=box,
+            defer_xla_gpu_warmup=True,
+            verbose=False,
+            ml_sparse_dimers=True,
+            ml_max_active_dimers=1,
+        )
+        _, spherical_fn, _ = factory(
+            atomic_numbers=z,
+            atomic_positions=r0,
+            n_monomers=n_monomers,
+            cutoff_params=cp,
+            doML=True,
+            doMM=False,
+            doML_dimer=True,
+            backprop=False,
+            create_ase_calculator=False,
+        )
+        with pytest.raises((SparseDimerCapOverflow, Exception), match="cap saturated"):
+            spherical_fn(
+                atomic_numbers=z,
+                positions=r0,
+                n_monomers=n_monomers,
+                cutoff_params=cp,
+                doML=True,
+                doMM=False,
+                doML_dimer=True,
+                box=jnp.eye(3) * box,
+            )
 
 def test_dimer_active_margin_does_not_change_energy_or_forces() -> None:
     """Pairs past mm_switch_on have zero switched weight, so the old 1.5 A margin is dead work.
@@ -248,3 +337,4 @@ def test_dimer_active_margin_does_not_change_energy_or_forces() -> None:
     assert f_scale > 1e-3  # the check is not vacuous
     np.testing.assert_allclose(float(new.energy), float(old.energy), rtol=1e-6)
     np.testing.assert_allclose(np.asarray(new.forces), np.asarray(old.forces), atol=1e-5 * f_scale)
+

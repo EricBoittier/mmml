@@ -465,6 +465,7 @@ def _mm_pair_stats_init(
         "device_skin_checks": 0,
         "cpu_rebuilds": 0,
         "gpu_rebuilds": 0,
+        "last_rebuild_backend": None,
         "capacity_grows": 0,
         "com_filter_calls": 0,
         "capacity_multiplier": float(capacity_multiplier),
@@ -503,6 +504,19 @@ def _record_pair_occupancy(stats: dict[str, Any], n_valid: int) -> None:
     stats["pair_n_valid"] = int(n_valid)
 
 
+def gpu_pair_builder_saving_is_claimable(stats: dict) -> bool:
+    """True only when this process actually rebuilt on the GPU Vesin path.
+
+    Isolated CPU-vs-GPU benches are not evidence that a production MD run
+    selected that backend. Do not add those stage estimates into an
+    end-to-end step-time promise.
+    """
+    return (
+        stats.get("last_rebuild_backend") == "vesin_gpu"
+        and int(stats.get("gpu_rebuilds") or 0) > 0
+    )
+
+
 def format_mm_pair_update_stats_summary(stats: dict) -> str:
     """One-line neighbor-list cache summary for jaxmd suite logs."""
     calls = int(stats.get("calls", 0))
@@ -514,6 +528,8 @@ def format_mm_pair_update_stats_summary(stats: dict) -> str:
     device_skin_checks = int(stats.get("device_skin_checks", 0))
     cpu_rebuilds = int(stats.get("cpu_rebuilds", 0))
     gpu_rebuilds = int(stats.get("gpu_rebuilds", 0))
+    last_backend = stats.get("last_rebuild_backend")
+    backend_bit = f", last_backend={last_backend}" if last_backend else ""
     capacity_grows = int(stats.get("capacity_grows", 0))
     capacity_changes = int(stats.get("pair_capacity_changes", 0))
     pct = 100.0 * reused / max(1, calls)
@@ -540,7 +556,7 @@ def format_mm_pair_update_stats_summary(stats: dict) -> str:
         f"{updates} rebuilds (cpu={cpu_rebuilds}, gpu={gpu_rebuilds}), "
         f"host_syncs={host_syncs}, device_skin_checks={device_skin_checks}, "
         f"capacity_grows={capacity_grows}, capacity_changes={capacity_changes}, "
-        f"reallocs={reallocs}, fallbacks={fallbacks}{occ}{radius_bit}"
+        f"reallocs={reallocs}, fallbacks={fallbacks}{occ}{radius_bit}{backend_bit}"
     )
 
 
@@ -2487,6 +2503,7 @@ def build_mm_energy_forces_fn(
                             label=used,
                         )
                     _pair_stats["gpu_rebuilds"] += 1
+                    _pair_stats["last_rebuild_backend"] = used
                     return pair_idx, pair_mask
                 except PairListTruncationError:
                     raise
@@ -2556,6 +2573,7 @@ def build_mm_energy_forces_fn(
                     label=used,
                 )
             _pair_stats["cpu_rebuilds"] += 1
+            _pair_stats["last_rebuild_backend"] = used
             return (
                 pair_idx_out,
                 pair_mask_out,

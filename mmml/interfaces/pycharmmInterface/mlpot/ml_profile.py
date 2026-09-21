@@ -43,6 +43,8 @@ class MlpotProfileStats:
     mm_pair_calls: int = 0
     mm_pair_rebuilds: int = 0
     mm_pair_gpu_rebuilds: int = 0
+    last_rebuild_backend: Optional[str] = None
+    last_callback_stages_ms: dict[str, float] = field(default_factory=dict)
     _last_callback_end: Optional[float] = field(default=None, repr=False)
     # Per-call samples for steady-state statistics (first ``warmup_calls`` skipped).
     warmup_calls: int = 100
@@ -131,6 +133,17 @@ class MlpotProfileStats:
         self.mm_pair_calls = int(stats.get("calls", 0))
         self.mm_pair_rebuilds = int(stats.get("updates", 0))
         self.mm_pair_gpu_rebuilds = int(stats.get("gpu_rebuilds", 0))
+        backend = stats.get("last_rebuild_backend")
+        self.last_rebuild_backend = str(backend) if backend else None
+
+    def record_callback_stages(self, stages_ms: dict[str, float]) -> None:
+        """Nested wall times of one live CHARMM callback, not independent benches.
+
+        Keys are stage names; values are milliseconds. These must not be
+        subtracted from each other (or from ``ml_seconds``) to invent a
+        leftover. Use a profiler dump for time inside the jitted forward.
+        """
+        self.last_callback_stages_ms = {str(k): float(v) for k, v in stages_ms.items()}
 
     def summary_line(self) -> str:
         parts: list[str] = []
@@ -159,10 +172,17 @@ class MlpotProfileStats:
                 f"batch={self.last_effective_batch_size})"
             )
         if self.mm_pair_calls > 0:
+            backend = self.last_rebuild_backend or "unrecorded"
             parts.append(
                 f"MM pair list: {self.mm_pair_rebuilds} rebuilds "
-                f"({self.mm_pair_gpu_rebuilds} on GPU) / {self.mm_pair_calls} calls"
+                f"({self.mm_pair_gpu_rebuilds} on GPU, last_backend={backend}) "
+                f"/ {self.mm_pair_calls} calls"
             )
+        if self.last_callback_stages_ms:
+            stage_bits = ", ".join(
+                f"{k}={v:.2f}ms" for k, v in self.last_callback_stages_ms.items()
+            )
+            parts.append(f"callback stages (nested, not additive): {stage_bits}")
         if not parts:
             return "MLpot profile: no samples"
         return "MLpot profile: " + "; ".join(parts)
@@ -196,6 +216,8 @@ class MlpotProfileStats:
             "mm_pair_calls": self.mm_pair_calls,
             "mm_pair_rebuilds": self.mm_pair_rebuilds,
             "mm_pair_gpu_rebuilds": self.mm_pair_gpu_rebuilds,
+            "last_rebuild_backend": self.last_rebuild_backend,
+            "last_callback_stages_ms": dict(self.last_callback_stages_ms),
             "steady_state": self.steady_state(),
             "summary": self.summary_line(),
         }

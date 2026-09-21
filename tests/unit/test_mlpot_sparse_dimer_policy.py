@@ -3,10 +3,14 @@
 from __future__ import annotations
 
 import numpy as np
+import pytest
 
 from mmml.interfaces.pycharmmInterface.mlpot.mlpot_sparse_dimer_policy import (
+    SparseDimerCapOverflow,
     max_dimer_pairs,
+    raise_if_sparse_cap_saturated,
     resolve_max_active_dimers,
+    sparse_dimer_active_radius,
     validate_sparse_dimer_cap,
 )
 
@@ -135,6 +139,23 @@ def test_resolve_max_active_dimers_density_aware_never_below_flat_fallback():
         n_monomers, n_dimers_total, box_volume=huge_box_volume, active_radius=6.0
     )
     assert cap >= max(4005, 6 * n_monomers)
+
+
+def test_sparse_dimer_active_radius_is_mm_switch_on():
+    """Outer switch support ends at mm_switch_on; extra width is not extra radius."""
+    assert sparse_dimer_active_radius(6.0, 1.5) == 6.0
+    assert sparse_dimer_active_radius(8.0, 1.5) == 8.0
+    assert sparse_dimer_active_radius(6.0, 1.5, margin=1.5) == 7.5
+    with pytest.raises(ValueError, match="margin"):
+        sparse_dimer_active_radius(6.0, margin=-0.1)
+
+
+def test_raise_if_sparse_cap_saturated():
+    raise_if_sparse_cap_saturated(-1, 10)
+    raise_if_sparse_cap_saturated(10, 10)
+    with pytest.raises(SparseDimerCapOverflow) as exc:
+        raise_if_sparse_cap_saturated(11, 10)
+    assert "would be dropped" in str(exc.value)
 
 
 def test_resolve_max_active_dimers_without_density_info_unchanged():

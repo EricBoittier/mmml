@@ -93,6 +93,7 @@ for mode, dev_input in (("cpu", False), ("auto", False), ("auto", True)):
     res[key] = dict(
         mean=statistics.mean(ts), std=statistics.stdev(ts), median=statistics.median(ts), n=len(ts),
         gpu_rebuilds=gpu_rebuilds, cpu_rebuilds=cpu_rebuilds, fallbacks=fallbacks,
+        last_rebuild_backend=st.get("last_rebuild_backend"),
         capacity=int(pidx.shape[0]), n_valid=int(np.asarray(pmask).sum()),
         n_frames=len(frames), n_mismatch=n_mismatch,
     )
@@ -102,6 +103,11 @@ for mode, dev_input in (("cpu", False), ("auto", False), ("auto", True)):
             failures.append(
                 f"{key}: expected GPU rebuilds only, got gpu={gpu_rebuilds} "
                 f"cpu={cpu_rebuilds} fallbacks={fallbacks}"
+            )
+        if st.get("last_rebuild_backend") != "vesin_gpu":
+            failures.append(
+                f"{key}: last_rebuild_backend={st.get('last_rebuild_backend')!r} "
+                "(not vesin_gpu); do not claim the GPU pair-builder saving"
             )
         res[f"identical_{key}"] = n_mismatch == 0
         print("identical to cpu", key, n_mismatch == 0, f"checked {len(frames)} frames", flush=True)

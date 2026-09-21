@@ -80,3 +80,21 @@ def test_profile_git_metadata_sidecar(tmp_path):
     assert "timestamp_utc" in payload
     assert "repo_root" in payload
     assert "git_commit" in payload or "git_error" in payload
+
+
+def test_callback_stages_are_nested_not_subtracted():
+    reset_mlpot_profile_stats()
+    stats = get_mlpot_profile_stats()
+    stats.record_callback_stages(
+        {
+            "mm_pairs": 4.0,
+            "spherical_forward": 40.0,
+            "host_writeback": 3.0,
+            "callback_total": 48.0,
+        }
+    )
+    line = stats.summary_line()
+    assert "nested, not additive" in line
+    assert "spherical_forward=40.00ms" in line
+    payload = stats.to_dict()
+    assert payload["last_callback_stages_ms"]["callback_total"] == 48.0

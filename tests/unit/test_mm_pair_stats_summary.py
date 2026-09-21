@@ -56,3 +56,24 @@ def test_mm_pair_stats_init_seeds_occupancy_from_mask():
     )
     assert stats["pair_n_valid"] == 2
     assert "occupancy=2/100" in format_mm_pair_update_stats_summary(stats)
+
+
+def test_summary_includes_last_rebuild_backend():
+    line = format_mm_pair_update_stats_summary(
+        {"calls": 4, "updates": 4, "gpu_rebuilds": 4, "last_rebuild_backend": "vesin_gpu"}
+    )
+    assert "last_backend=vesin_gpu" in line
+
+
+def test_gpu_pair_builder_saving_requires_recorded_backend():
+    from mmml.interfaces.pycharmmInterface.mm_energy_forces import (
+        gpu_pair_builder_saving_is_claimable,
+    )
+
+    assert not gpu_pair_builder_saving_is_claimable({"gpu_rebuilds": 10})
+    assert not gpu_pair_builder_saving_is_claimable(
+        {"gpu_rebuilds": 10, "last_rebuild_backend": "vesin"}
+    )
+    assert gpu_pair_builder_saving_is_claimable(
+        {"gpu_rebuilds": 3, "last_rebuild_backend": "vesin_gpu"}
+    )
