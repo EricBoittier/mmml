@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import time
 
+import numpy as np
 
 from ._common import require_jax, require_jax_md, skip, synthetic_system
 
@@ -67,17 +68,26 @@ class _DriverBase:
             raise skip(f"mmml.md driver stack unavailable: {exc}") from exc
 
         system, box = synthetic_system(int(n_waters))
+        self.box_L = float(box["box_L"])
+        if self.box_L < 2.0 * CUTOFF_A:
+            raise skip(
+                f"L={self.box_L:.2f} Å < 2×cutoff={2.0 * CUTOFF_A:.1f} Å "
+                "(sub-MIC pair list; not an honest MD size)"
+            )
         self.system = system
         self.energy = _hybrid_mm_energy(system)
 
         params = {"masses": box["masses"], "seed": 0}
 
+        neighbor_fn = make_intermolecular_neighbor_fn(
+            system, CUTOFF_A, on_overflow="warn", skin_A=float(skin_A)
+        )
+        pairs = neighbor_fn(np.asarray(system.R), np.asarray(system.box))
+        self.n_pairs = int(np.asarray(pairs["pair_mask"]).sum())
         self.driver = JaxmdDriver(
             record_every=max(self.n_steps, 1),
             block_size=int(block_size),
-            neighbor_fn=make_intermolecular_neighbor_fn(
-                system, CUTOFF_A, on_overflow="warn", skin_A=float(skin_A)
-            ),
+            neighbor_fn=neighbor_fn,
         )
         self.ensemble = EnsembleSpec(
             ensemble=ensemble,
@@ -100,9 +110,13 @@ class _DriverBase:
 
 
 class MDSystemSize(_DriverBase):
-    """MM/NVE throughput vs. box size — the headline scaling curve."""
+    """MM/NVE throughput vs. box size — the headline scaling curve.
 
-    params = [216, 512, 1000]
+    Sizes start at 512 waters so ``L >= 2 × 12 Å`` (the unique-MIC floor). 216
+    waters is sub-MIC at liquid density and is skipped by ``_build``.
+    """
+
+    params = [512, 1000, 1728]
     param_names = ["n_waters"]
 
     def setup(self, n_waters):
@@ -116,13 +130,27 @@ class MDSystemSize(_DriverBase):
 
     track_ns_per_day.unit = "ns/day"
 
+    def track_box_length_A(self, n_waters):
+        return float(self.box_L)
+
+    track_box_length_A.unit = "angstrom"
+
+    def track_n_pairs(self, n_waters):
+        return float(self.n_pairs)
+
+    track_n_pairs.unit = "pairs"
+
 
 class MDEnsemble(_DriverBase):
     """Cost of the thermostat / barostat machinery on a fixed 512-water box.
 
-    NpT is expected to be the slow one: the strain derivative differentiates the
-    energy with respect to the cell as well as the positions, so every step pays
-    an extra pass over the pair list.
+    NpT pays a cell derivative on every step, so it is *expected* to be the
+    slow one. A GPU run on an RTX 2070 nevertheless saw NVE ~3× slower than
+    NVT/NpT (0.50 vs 1.66 / 1.43 ns/day) with the same block size, neighbor
+    cadence, and step count. ``tests/unit/test_jaxmd_driver_block_stepping.py``
+    checks that NVE and NVT dispatch the same number of block kernels and
+    neighbor refreshes; if that holds, the gap is jax-md NVE vs Nose-Hoover
+    kernel cost, not a missed ``fori_loop``.
     """
 
     params = ["nve", "nvt", "npt"]

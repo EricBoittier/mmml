@@ -126,7 +126,9 @@ classes start at 512 waters because the 12 Å production cutoff needs
 `L >= 2 × cutoff`. Below that, `_build_pair_indices` drops off Vesin onto
 chunked NumPy and the pair list degenerates to nearly all pairs — a regime no
 real run is in, which would make the small end of every scaling curve
-meaningless.
+meaningless. The headline `MDSystemSize` curve is 512 / 1000 / 1728 waters
+(`L ≈ 24.9 Å` at 512, the smallest honest MIC box); `_DriverBase._build`
+skips any size with `L < 2 × cutoff` so 216 cannot sneak back in.
 
 **A missing dependency skips, it does not fail.** Heavy imports live inside
 `setup()` and raise `_common.skip(...)`, which asv treats as a skip. One
