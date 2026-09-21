@@ -339,6 +339,10 @@ def main():
         from .misc import tune_mm_nonbonded
         return tune_mm_nonbonded.main(args.args)
 
+    elif command == "fit-liquid":
+        from .misc import fit_liquid
+        return fit_liquid.main(args.args)
+
     elif command == "pet-interaction-pes":
         from .misc import pet_interaction_pes
         return pet_interaction_pes.main(args.args)
