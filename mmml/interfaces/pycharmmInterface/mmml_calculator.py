@@ -4114,7 +4114,11 @@ def setup_calculator(
             dimer_pos_padded = dimer_pos_padded[idx]
             dimer_energies_all = dimer_energies[idx]
             dimer_forces_all = dimer_forces_flat.reshape(n_dimers_full, max_atoms, 3)[idx].reshape(-1, 3)
-            atom_mask_all = dimer_atom_mask_jnp[idx]
+            # Unused sparse slots hold fill_value=n_dimers; JAX clamps that
+            # out-of-range gather to the last dimer, so without this mask every
+            # padded slot re-adds the last pair's switched forces.
+            in_range = (idx < n_dimers_full).astype(dimer_atom_mask_jnp.dtype)
+            atom_mask_all = dimer_atom_mask_jnp[idx] * in_range[:, None]
             force_segments = dimer_idx_arr_jnp[idx].reshape(-1)
             na_arr = dimer_n_atoms_a_jnp[idx]
             nb_arr = dimer_n_atoms_b_jnp[idx]
