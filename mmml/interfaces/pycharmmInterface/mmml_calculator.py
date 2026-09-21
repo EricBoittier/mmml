@@ -797,6 +797,8 @@ def setup_calculator(
     ml_gpu_count: int = 1,
     ml_max_active_dimers: Optional[int] = None,
     ml_dimer_active_margin: Optional[float] = None,
+    ml_dimer_centroid_nl: Optional[bool] = None,
+    ml_dimer_centroid_nl_skin: Optional[float] = None,
     mm_r_min: Optional[float] = None,
     jax_md_capacity_multiplier: float = DEFAULT_JAX_MD_CAPACITY_MULTIPLIER,
     jax_md_capacity_growth_factor: float = 1.5,
@@ -893,6 +895,16 @@ def setup_calculator(
             no energy, force or latent-charge weight. The old implicit margin
             was ``ml_switch_width`` (e.g. 6.0-7.5 Å), roughly doubling the
             dimer slots for zero contribution.
+        ml_dimer_centroid_nl: Attach a host Verlet list over molecule
+            centroids (``spherical_fn.dimer_centroid_nl``, see
+            ``mlpot.dimer_centroid_nl``) whose candidates the MLpot callback
+            passes as ``ml_dimer_candidates``, replacing the all-pairs
+            sparse-dimer selection. Same active set (exact parity) while the
+            list is valid. Default on; env ``MMML_ML_DIMER_CENTROID_NL=0``
+            (or ``False`` here) keeps the all-pairs path.
+        ml_dimer_centroid_nl_skin: Centroid-list skin in Å (default 1.0; env
+            ``MMML_ML_DIMER_CENTROID_NL_SKIN_A``). Rebuilt when a centroid has
+            moved more than skin/2 or the box changed.
         mm_r_min: Optional inner cutoff (Å) for MM neighbor list. Pairs with dimer
             COM distance < mm_r_min are excluded. Defaults: complementary_handoff=False
             -> mm_switch_on * 0.9; complementary_handoff=True -> (mm_switch_on - ml_switch_width) * 0.9
@@ -1776,6 +1788,33 @@ def setup_calculator(
 
     _jax_md_skin_distance = float(jax_md_skin_distance)
 
+    from mmml.interfaces.pycharmmInterface.mlpot.dimer_centroid_nl import (
+        CentroidDimerNeighborList,
+        resolve_centroid_nl_enabled,
+        resolve_centroid_nl_skin_A,
+    )
+
+    _centroid_nl_enabled = (
+        resolve_centroid_nl_enabled(ml_dimer_centroid_nl)
+        and bool(ml_sparse_dimers)
+        and _max_active_dimers < n_dimers_total
+    )
+    _centroid_nl_skin = resolve_centroid_nl_skin_A(ml_dimer_centroid_nl_skin)
+
+    def _make_dimer_centroid_nl(ml_dimers_on: bool):
+        """Fresh host list per calculator (its build state is per trajectory)."""
+        if not (_centroid_nl_enabled and ml_dimers_on):
+            return None
+        return CentroidDimerNeighborList(
+            monomer_idx_arr,
+            monomer_atom_mask_arr,
+            active_radius=_dimer_active_radius,
+            skin=_centroid_nl_skin,
+            cell=None if pbc_cell is None else np.asarray(pbc_cell, dtype=np.float64),
+            ml_perm=ml_reorder_indices,
+            verbose=bool(verbose),
+        )
+
     _density_est = cell_list_density_estimate if cell_list_density_estimate is not None else 0.03
     from mmml.interfaces.pycharmmInterface.long_range_backend import collect_lr_solver_mapping
 
@@ -1796,6 +1835,9 @@ def setup_calculator(
         "ml_sparse_dimers": ml_sparse_dimers,
         "dimers_total": n_dimers_total,
         "max_active_dimers": _max_active_dimers,
+        "dimer_centroid_nl": (
+            f"on (skin {_centroid_nl_skin:g} Å)" if _centroid_nl_enabled else "off"
+        ),
         "ml_batch_size": ml_batch_size if ml_batch_size is not None else "all",
         "ml_gpu_count": ml_gpu_count,
         "jax_md_skin_Å": _jax_md_skin_distance,
@@ -2201,6 +2243,7 @@ def setup_calculator(
         use_mm_charges_override: bool = False,
         mm_charges_override: Optional[Array] = None,
         ml_eval_chunks: Optional[int] = None,
+        ml_dimer_candidates: Optional[Array] = None,
     ) -> ModelOutput:
         """Calculates energy and forces using combined ML/MM potential.
         
@@ -2221,6 +2264,11 @@ def setup_calculator(
                 on the sparse-dimer path (see ``mlpot.ml_chunk_budget``); the
                 caller checks ``ModelOutput.ml_n_active_dimers`` against it.
                 ``None`` keeps the traced ``lax.cond`` padding skip.
+            ml_dimer_candidates: Optional sparse-dimer candidate list from
+                ``mlpot.dimer_centroid_nl.CentroidDimerNeighborList`` (int32,
+                sorted global dimer ids padded with ``n_dimers``). The exact
+                ``com_dist < active_radius`` selection then runs on these pairs
+                only; results equal the all-pairs path while the list is valid.
             
         Returns:
             ModelOutput containing total energy and forces
@@ -2272,6 +2320,7 @@ def setup_calculator(
                 spatial_monomer_indices=spatial_monomer_indices,
                 spatial_dimer_indices=spatial_dimer_indices,
                 ml_eval_chunks=ml_eval_chunks,
+                ml_dimer_candidates=ml_dimer_candidates,
             )
             outputs["ml_n_active_dimers"] = ml_out.get("ml_n_active_dimers", -1)
             # Get ML forces from calculate_ml_contributions
@@ -2560,6 +2609,7 @@ def setup_calculator(
         spatial_monomer_indices: Optional[Array] = None,
         spatial_dimer_indices: Optional[Array] = None,
         ml_eval_chunks: Optional[int] = None,
+        ml_dimer_candidates: Optional[Array] = None,
     ) -> Tuple[Any, Dict[str, Array]]:
         """Prepares the ML model and batching for energy calculations.
 
@@ -2590,8 +2640,6 @@ def setup_calculator(
 
         # --- Dimer data (vectorized gather) ---
         n_dimers = len(all_dimer_idxs)
-        dimer_positions = positions[dimer_idx_arr_jnp]  # (n_dimers, max_atoms, 3)
-
         cell_for_mic = mic_pbc_cell if mic_pbc_cell is not None else pbc_cell
         if cell_for_mic is not None:
             mic_fn = mic_displacement_smooth if use_smooth_mic else mic_displacement
@@ -2611,15 +2659,30 @@ def setup_calculator(
                 shift_b = jax.lax.stop_gradient(com_a + d - com_b)
                 return pos_di + shift_b * mask_b[:, None]
 
-            dimer_positions = jax.vmap(_wrap_dimer_coords, in_axes=(0, 0, 0))(
-                dimer_positions, dimer_n_a, dimer_n_b
-            )
+        def _dimer_arrays(sel=None):
+            """Wrapped, padded dimer inputs for all pairs (``sel=None``) or ``sel``.
 
-        dimer_atomic = atomic_numbers[dimer_idx_arr_jnp]
-        dimer_N_arr = dimer_n_a + dimer_n_b
-        dimer_mask = jnp.arange(max_atoms)[None, :] < dimer_N_arr[:, None]
-        dimer_positions = jnp.where(dimer_mask[:, :, None], dimer_positions, pad_positions[None, :, :])
-        dimer_atomic = jnp.where(dimer_mask, dimer_atomic, 0)
+            Per-pair arithmetic is identical either way, so a subset is
+            bit-identical to the same rows of the all-pairs arrays.
+            """
+            idx_arr = dimer_idx_arr_jnp if sel is None else dimer_idx_arr_jnp[sel]
+            na = dimer_n_a if sel is None else dimer_n_a[sel]
+            nb = dimer_n_b if sel is None else dimer_n_b[sel]
+            pos_d = positions[idx_arr]  # (n_sel, max_atoms, 3)
+            if cell_for_mic is not None:
+                pos_d = jax.vmap(_wrap_dimer_coords, in_axes=(0, 0, 0))(pos_d, na, nb)
+            atomic_d = atomic_numbers[idx_arr]
+            n_d = na + nb
+            mask_d = jnp.arange(max_atoms)[None, :] < n_d[:, None]
+            pos_d = jnp.where(mask_d[:, :, None], pos_d, pad_positions[None, :, :])
+            atomic_d = jnp.where(mask_d, atomic_d, 0)
+            return pos_d, atomic_d, n_d, na, nb
+
+        use_candidates = ml_dimer_candidates is not None
+        if not use_candidates:
+            # All-pairs arrays (unused -- and dead-code eliminated -- on the
+            # candidate-list path).
+            dimer_positions, dimer_atomic, dimer_N_arr, _, _ = _dimer_arrays()
 
         use_spatial = (
             spatial_monomer_indices is not None and spatial_dimer_indices is not None
@@ -2631,7 +2694,10 @@ def setup_calculator(
             and _max_active_dimers < n_dimers
             and cutoff_params is not None
         )
-        cell_for_mic = mic_pbc_cell if mic_pbc_cell is not None else pbc_cell
+        if use_candidates and not use_sparse:
+            # Candidate list only feeds the sparse selection; fall back to the
+            # all-pairs arrays for the dense / spatial batches.
+            dimer_positions, dimer_atomic, dimer_N_arr, _, _ = _dimer_arrays()
         if use_spatial:
             mono_idx = jnp.asarray(spatial_monomer_indices, dtype=jnp.int32)
             dimer_idx = jnp.asarray(spatial_dimer_indices, dtype=jnp.int32)
@@ -2686,9 +2752,21 @@ def setup_calculator(
                 )
                 return jnp.linalg.norm(d)
 
-            com_dists = jax.vmap(_dimer_com_dist, in_axes=(0, 0, 0))(
-                dimer_positions, dimer_n_a, dimer_n_b)
-            active_mask = com_dists < active_radius
+            if use_candidates:
+                # Host Verlet list over molecule centroids (dimer_centroid_nl):
+                # sorted global ids padded with n_dimers. Same COM test on the
+                # candidates only; padding is masked before any gather.
+                cand = jnp.asarray(ml_dimer_candidates, dtype=jnp.int32)
+                n_cand = int(cand.shape[0])
+                cand_valid = cand < n_dimers
+                cand_safe = jnp.where(cand_valid, cand, 0)
+                c_pos, _, _, c_na, c_nb = _dimer_arrays(cand_safe)
+                com_dists = jax.vmap(_dimer_com_dist, in_axes=(0, 0, 0))(c_pos, c_na, c_nb)
+                active_mask = cand_valid & (com_dists < active_radius)
+            else:
+                com_dists = jax.vmap(_dimer_com_dist, in_axes=(0, 0, 0))(
+                    dimer_positions, dimer_n_a, dimer_n_b)
+                active_mask = com_dists < active_radius
             _n_active_true = jnp.sum(active_mask)
             # jnp.nonzero(..., size=cap) still truncates (static shape). Fail
             # closed instead of returning those forces: the CHARMM host path
@@ -2708,12 +2786,26 @@ def setup_calculator(
                     lambda n: n,
                     _n_active_true,
                 )
-            active_indices = jnp.nonzero(active_mask, size=_max_active_dimers, fill_value=n_dimers)[0]
+            if use_candidates:
+                local = jnp.nonzero(active_mask, size=_max_active_dimers, fill_value=n_cand)[0]
+                local_valid = local < n_cand
+                local_safe = jnp.where(local_valid, local, 0)
+                # Candidates are sorted, so this equals the all-pairs nonzero.
+                active_indices = jnp.where(local_valid, cand_safe[local_safe], n_dimers)
+            else:
+                active_indices = jnp.nonzero(active_mask, size=_max_active_dimers, fill_value=n_dimers)[0]
+            # Unused slots (index n_dimers) evaluate dimer 0; they are dropped
+            # by the scatter-back and masked in apply_dimer_switching. Both
+            # selection paths build the batch from the selected ids with the
+            # same ops, so their batches (and outputs) are bit-identical.
             active_indices_safe = jnp.where(active_indices < n_dimers, active_indices, 0)
-            sparse_dimer_positions = dimer_positions[active_indices_safe]
-            sparse_dimer_atomic = dimer_atomic[active_indices_safe]
-            sparse_dimer_N = jnp.where(active_indices < n_dimers, dimer_N_arr[active_indices], dimer_N_arr[0])
-            sparse_dimer_n_a = jnp.where(active_indices < n_dimers, dimer_n_a[active_indices], dimer_n_a[0])
+            (
+                sparse_dimer_positions,
+                sparse_dimer_atomic,
+                sparse_dimer_N,
+                sparse_dimer_n_a,
+                _,
+            ) = _dimer_arrays(active_indices_safe)
             batch_data["R"] = jnp.concatenate([monomer_positions, sparse_dimer_positions])
             batch_data["Z"] = jnp.concatenate([monomer_atomic, sparse_dimer_atomic])
             batch_data["N"] = jnp.concatenate([monomer_N_arr, sparse_dimer_N])
@@ -3025,6 +3117,7 @@ def setup_calculator(
         spatial_monomer_indices: Optional[Array] = None,
         spatial_dimer_indices: Optional[Array] = None,
         ml_eval_chunks: Optional[int] = None,
+        ml_dimer_candidates: Optional[Array] = None,
     ) -> Dict[str, Array]:
         """Calculate ML energy and force contributions (heterogeneous-safe)."""
         # Get model predictions
@@ -3037,6 +3130,7 @@ def setup_calculator(
             spatial_monomer_indices=spatial_monomer_indices,
             spatial_dimer_indices=spatial_dimer_indices,
             ml_eval_chunks=ml_eval_chunks,
+            ml_dimer_candidates=ml_dimer_candidates,
         )
         # In-range dimer count of the sparse path (-1: dense/spatial batch).
         _n_active_out = batches.get("_sparse_n_active_true", -1)
@@ -3933,6 +4027,9 @@ def setup_calculator(
                 debug=debug,
             )
             configured_spherical_cutoff.ml_chunk_layout = _ml_chunk_layout
+            configured_spherical_cutoff.dimer_centroid_nl = _make_dimer_centroid_nl(
+                doML and doML_dimer and cutoff_params is not None
+            )
 
             def get_update_fn(positions, cutoff_params_arg, box=None):
                 """Ensure MM fn is built and return update_mm_pairs, or None for cell-list path."""

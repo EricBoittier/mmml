@@ -45,6 +45,10 @@ class MlpotProfileStats:
     mm_pair_gpu_rebuilds: int = 0
     last_rebuild_backend: Optional[str] = None
     last_callback_stages_ms: dict[str, float] = field(default_factory=dict)
+    dimer_nl_calls: int = 0
+    dimer_nl_builds: int = 0
+    dimer_nl_capacity: int = 0
+    dimer_nl_candidates: int = 0
     _last_callback_end: Optional[float] = field(default=None, repr=False)
     # Per-call samples for steady-state statistics (first ``warmup_calls`` skipped).
     warmup_calls: int = 100
@@ -145,6 +149,13 @@ class MlpotProfileStats:
         """
         self.last_callback_stages_ms = {str(k): float(v) for k, v in stages_ms.items()}
 
+    def record_dimer_centroid_nl(self, stats: dict[str, Any]) -> None:
+        """Latest cumulative centroid dimer-list counters (``CentroidDimerNeighborList.stats()``)."""
+        self.dimer_nl_calls = int(stats.get("calls", 0))
+        self.dimer_nl_builds = int(stats.get("builds", 0))
+        self.dimer_nl_capacity = int(stats.get("capacity") or 0)
+        self.dimer_nl_candidates = int(stats.get("candidates", 0))
+
     def summary_line(self) -> str:
         parts: list[str] = []
         total_cb = self.ml_seconds + self.charmm_gap_seconds
@@ -183,6 +194,12 @@ class MlpotProfileStats:
                 f"{k}={v:.2f}ms" for k, v in self.last_callback_stages_ms.items()
             )
             parts.append(f"callback stages (nested, not additive): {stage_bits}")
+        if self.dimer_nl_calls > 0:
+            parts.append(
+                f"ML dimer centroid list: {self.dimer_nl_builds} rebuilds / "
+                f"{self.dimer_nl_calls} calls, {self.dimer_nl_candidates} candidates "
+                f"(capacity {self.dimer_nl_capacity})"
+            )
         if not parts:
             return "MLpot profile: no samples"
         return "MLpot profile: " + "; ".join(parts)
@@ -218,6 +235,10 @@ class MlpotProfileStats:
             "mm_pair_gpu_rebuilds": self.mm_pair_gpu_rebuilds,
             "last_rebuild_backend": self.last_rebuild_backend,
             "last_callback_stages_ms": dict(self.last_callback_stages_ms),
+            "dimer_nl_calls": self.dimer_nl_calls,
+            "dimer_nl_builds": self.dimer_nl_builds,
+            "dimer_nl_capacity": self.dimer_nl_capacity,
+            "dimer_nl_candidates": self.dimer_nl_candidates,
             "steady_state": self.steady_state(),
             "summary": self.summary_line(),
         }
