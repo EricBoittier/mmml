@@ -33,6 +33,7 @@ import pandas as pd
 import jax
 import jax.numpy as jnp
 from mmml.interfaces.pycharmmInterface.pbc_utils_jax import (
+    _cell_as_matrix,
     cart_coords,
     frac_coords,
     mic_displacement,
@@ -711,6 +712,23 @@ def metatomic_zero_fragment_output(
     }
 
 
+def make_monomers_whole(positions, cell, anchor_idx):
+    """Rejoin molecules split across the cell: each atom goes to its minimum image around its molecule's first atom.
+
+    Engines that wrap atoms one at a time (jax-md ``periodic_general`` with fractional
+    coordinates, ASE ``wrap()``) hand the calculator molecules split across a face; the
+    ML monomer/dimer terms use in-molecule Cartesian geometry, so a split molecule gave
+    a different energy (+385 kcal/mol on a 308-DCM 32 Å frame). The shift is
+    ``-(n @ cell)`` with the integer image count under stop_gradient: forces are
+    unchanged and the energy stays differentiable in the cell (strain virial). Exact
+    while every molecule spans less than half the cell.
+    """
+    cell_m = _cell_as_matrix(cell)
+    d = positions - positions[anchor_idx]
+    n = jax.lax.stop_gradient(jnp.round(frac_coords(d, cell_m)))
+    return positions - cart_coords(n, cell_m)
+
+
 def _dimer_lattice_shift(com_a, com_b, cell):
     """Lattice vector that moves monomer B to its minimum image around monomer A.
 
@@ -1018,6 +1036,8 @@ def setup_calculator(
     for i, n in enumerate(atoms_per_monomer_list):
         monomer_offsets[i + 1] = monomer_offsets[i] + n
     total_atoms = int(monomer_offsets[-1])
+    # First atom of each atom's molecule (make_monomers_whole anchor).
+    _monomer_anchor_idx = np.repeat(monomer_offsets[:-1], np.asarray(atoms_per_monomer_list, dtype=int)).astype(np.int32)
 
     if mm_atomic_numbers is not None:
         _mm_atomic_numbers = np.asarray(mm_atomic_numbers, dtype=int).reshape(-1)
@@ -2291,6 +2311,8 @@ def setup_calculator(
         n_dimers = len(dimer_permutations(n_monomers))
         n_atoms = positions.shape[0]
         mic_pbc_cell = box if box is not None else pbc_cell
+        if mic_pbc_cell is not None and n_atoms == total_atoms:
+            positions = make_monomers_whole(positions, mic_pbc_cell, _monomer_anchor_idx)
         
         # Optional: reorder to model order for ML, then remap back
         ml_perm = None

@@ -872,16 +872,85 @@ class DecomposedMlpotCalculator:
         from mmml.utils.geometry_checks import wrap_monomers_primary_cell
 
         offsets = monomer_offsets_from_atoms_per(list(self._atoms_per_monomer))
+        whole = np.asarray(pos[:n], dtype=np.float64)
+        n_mol_atoms = int(offsets[-1])
+        if n_mol_atoms <= n:
+            # Rejoin molecules an engine wrapped atom by atom (jax-md, ASE wrap()) before
+            # anything uses molecule COMs (this wrap, MM pair list, dimer candidates).
+            # CHARMM hands over whole molecules, so this is a no-op in the callback.
+            sizes = np.diff(offsets).astype(int)
+            anchor = np.repeat(offsets[:-1], sizes)
+            d = whole[:n_mol_atoms] - whole[anchor]
+            whole = whole.copy()
+            whole[:n_mol_atoms] -= np.round(d / L) * L
         # CHARMM frame is [-L/2, L/2]; wrap in [0, L) and shift back.
         wrapped = (
-            wrap_monomers_primary_cell(
-                np.asarray(pos[:n], dtype=np.float64) + 0.5 * L, offsets, np.diag([L, L, L])
-            )
+            wrap_monomers_primary_cell(whole + 0.5 * L, offsets, np.diag([L, L, L]))
             - 0.5 * L
         )
         out = np.array(pos, dtype=np.float64, copy=True)
         out[:n] = wrapped
         return out
+
+    def evaluate_hybrid_ev(
+        self,
+        positions: np.ndarray,
+        box_side_A: float,
+        *,
+        with_box_grad: bool = False,
+    ) -> tuple[float, np.ndarray, np.ndarray | None]:
+        """Hybrid energy (eV), forces (eV/Å) and optionally dE/d(box) exactly as the CHARMM callback computes them.
+
+        Same steps as :meth:`calculate_charmm` without CHARMM: record the live box,
+        rewrap each molecule's COM into the primary cell (a copy), resolve the MM pair
+        list and the centroid dimer candidates, run the cached forward and honour the
+        sparse chunk budget. For engines that need the callback's Hamiltonian off
+        CHARMM (JAX-MD, ASE, strain finite differences). Cubic cells only.
+        """
+        from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import cubic_box_matrix_from_side
+
+        if self.do_mm and self._mm_pair_source == "charmm_callback":
+            raise RuntimeError("evaluate_hybrid_ev needs mm_pair_source='jax' (CHARMM pair lists exist only inside ENER)")
+        side = float(box_side_A)
+        pos_full = np.asarray(positions, dtype=np.float64).reshape(-1, 3)
+        n = int(pos_full.shape[0])
+        self._cell = side
+        box = jnp.asarray(cubic_box_matrix_from_side(side))
+        self._set_live_callback_box(box)
+        pos_full = self._maybe_rewrap_primary_cell_in_callback(pos_full, n, None, None, None, box_side_A=side)
+        ml_idx = self._resolve_ml_callback_slice(n)
+        pos = pos_full[ml_idx]
+        n_ml = int(ml_idx.size)
+        with self._mlpot_eval_device_context():
+            mm_pair_idx, mm_pair_mask, use_mm_pairs = self._resolve_mm_pairs(pos, box)
+            positions_jax = as_ml_array(
+                pos, dtype=resolve_ml_compute_dtype(getattr(self, "_ml_compute_dtype", None))
+            )
+            forward_fn = self._get_spherical_forward_fn(
+                n_atoms=n_ml,
+                atomic_numbers_jax=jnp.asarray(self.atomic_numbers[:n_ml]),
+                box_jax=box,
+            )
+            if with_box_grad:
+                forward_fn = getattr(self._grad_cache_owner(), "_spherical_forward_vir_fn", None)
+                if forward_fn is None:
+                    raise RuntimeError("box-gradient forward unavailable (no periodic box)")
+            empty = jnp.zeros((0,), dtype=jnp.int32)
+            fwd_args = (positions_jax, mm_pair_idx, mm_pair_mask, use_mm_pairs, empty, empty, False)
+            fwd_kwargs = self._resolve_ml_dimer_candidates(pos, box, use_spatial=False)
+            fwd_out = forward_fn(*fwd_args, **fwd_kwargs)
+            self._last_fwd_out = fwd_out
+            e_raw, forces_ev = fwd_out[0], fwd_out[1]
+            budget = getattr(self._grad_cache_owner(), "_ml_chunk_budget", None)
+            if budget is not None and len(fwd_out) > 2:
+                e_raw, forces_ev = self._check_ml_chunk_budget(budget, forward_fn, fwd_args, fwd_out, fwd_kwargs)
+            dE_dbox = (
+                np.asarray(jax.device_get(self._last_fwd_out[3]), dtype=np.float64) if with_box_grad else None
+            )
+            e_ev = float(jax.device_get(e_raw))
+            forces = np.zeros((n, 3), dtype=np.float64)
+            forces[ml_idx] = np.asarray(jax.device_get(forces_ev), dtype=np.float64)
+        return e_ev, forces, dE_dbox
 
     @failstop_calculate_charmm
     def calculate_charmm(
