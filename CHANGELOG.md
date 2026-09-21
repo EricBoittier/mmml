@@ -12,6 +12,40 @@ and versioning process.
 
 ### Changed
 
+- **PyCHARMM hybrid ML/MM MD on ETOH:181 (26 Å, RTX 5090) went from 199.8 ms/step
+  mean to 74.8 ms (median 164 → 60, p95 119).** One measured A/B on gpu09
+  (19 Sep 2026): the tree before #226 versus the integration of #226–#228 plus
+  the already-landed pair-list vectorization. Stage times on that run must not
+  be added: overlap and critical-path shifts change the combined effect, and the
+  13 ms/step mean rebuild cost is the ceiling for deleting that stage on this
+  box. The supposed dispatch regression after #227 was the profiler moving GPU
+  wait from `device_get` into the dispatch window (`e76fc342a` + `93eb6f481`).
+
+  Per-PR measurements (same box unless noted):
+
+  - **#214** (`fcb2a9c93`): vectorized MM pair rebuild and eterm split. Pair
+    search+filter 2.0 → 0.3 s, eterm split 8.0 → 0.05 s; pair sets and energies
+    identical to 1e-13. (The split is reporting-only; forces stay in JAX.)
+  - **#226** (`e9c450283`): skip the eterm split when CHARMM's live charges and
+    epsilons are all zero (all-ML registration). That pass was ~1/3 of a step
+    on 6.6e5 pairs and produced exact zeros.
+  - **#227** (`e76fc342a`): skip PhysNet chunks that hold only sparse-dimer
+    padding. ML forward 61 → 26 ms; energies bitwise equal, max |ΔF|/max|F| ≤
+    5e-14. CPU student-A force call 2.28 s → 919 ms with the same skip.
+  - **#228** (`93eb6f481`): Verlet reuse uses MIC displacement so a primary-cell
+    wrap is not an L-sized jump. Rebuilds drop to the real skin crossings.
+  - **#230** (`f1be736ee`): sort-based vesin pair dedup. `np.unique` was ~130 ms
+    per rebuild vs ~3 ms to sort+mask the same unique keys (vesin itself ~8 ms).
+
+  **`891cae3c4` (already on main)** added a COM–COM eligibility table, vectorized
+  CHARMM coord/force copies and monomer wrap, and `cell_inverse` (`1/L` on
+  cubic boxes). Those are not a second measured step-time delta. Follow-ups
+  still open: #236 (write-back accumulation contract), #237 (strict
+  `L > 2·cutoff` vesin path + drop the unkeyed CHARMM param cache), #238
+  (`solve` → one inverse; GPU `trsm` attribution still unverified). Pair-capacity
+  occupancy (~18 % on this box) is the next experiment after a combined
+  before/after table vs `891cae3c4`, not another estimated sum.
+
 - **Fixed a double-count in the intermolecular pair capacity, and bounded it by
   the pairs that can exist.** `shell_capacity` returns the neighbours of *one*
   atom; the neighbour builder multiplied that by the atom count, which counts
@@ -184,6 +218,21 @@ and versioning process.
   by the discovered `setup/charmm` tree.
 
 ### Fixed
+
+- **An exception in the PyCHARMM MLpot energy callback no longer lets dynamics
+  continue.** ctypes swallowed it and handed CHARMM an undefined USER energy, so
+  runs kept integrating and then wrote restarts, stage summaries and `next_run`
+  advice (a 7 ps CGenFF NVE and a 6 ps NPT on ETOH:181 were lost this way). The
+  ctypes entry point is now wrapped by `callback_failstop.fail_closed_callback`:
+  it prints the traceback, flushes output and ends the process with **exit code
+  86** (`os._exit`, so nothing is written afterwards). This builds on
+  `e3eab95e6`, whose default CHARMM `STOP` exits with status 0 and whose
+  `raise` mode was active in production whenever CuPy had imported `pytest`.
+  An empty ML/MM callback pair list with MM on fails closed **after** USER is
+  verified (dynamics armed); during setup it still returns 0 so
+  `assert_mlpot_user_active` can recover. Non-finite metatomic/PhysNet
+  energies and periodic Coulomb failures fail closed. See
+  `docs/mlpot-settings.md`. Combines #247 (arming) and #250 (ctypes exit 86).
 
 - CI unit tests: extract metatomic MM-only helpers from `setup_calculator` and
   split `build_decomposed_mlpot_model` so the function-size ratchet stays

@@ -217,11 +217,16 @@ class CharmmTrajectoryFiles:
         *,
         append: bool = False,
     ) -> tuple[list[Any], dict[str, int]]:
-        """Open the DCD once (for multi-chunk overlap runs; append across ``dyna`` calls).
+        """Open the DCD on an explicit unit for a continuous (non-split) overlap run.
+
+        This does **not** make CHARMM append across ``dyna`` calls: ``WRITCV``
+        writes a DCD header on every ``DYNA`` call and closes ``IUNCRD`` at that
+        call's last save, so a unit opened once only records the first ``DYNA``
+        call's frames (later calls run with ``iuncrd=-1``). To keep frames from
+        several ``dyna`` calls, write each call to its own file and merge them
+        afterwards (see :func:`_merge_cpt_subchunk_dcds`).
 
         Pass ``append=True`` only when resuming an existing trajectory on disk.
-        Overlap chunking passes ``iuncrd`` on the first ``dyna`` call only so
-        PyCHARMM does not reopen/truncate the file on every restart chunk.
         """
         import pycharmm
 
@@ -3670,7 +3675,9 @@ def _apply_npt_cpt_kwargs(
     )
 
     if pmass is None or tmass is None:
-        pmass, tmass = compute_cpt_piston_masses()
+        default_pmass, default_tmass = compute_cpt_piston_masses()
+        pmass = default_pmass if pmass is None else pmass
+        tmass = default_tmass if tmass is None else tmass
     kw.update(
         {
             "leap": True,
@@ -7156,6 +7163,10 @@ def _cpt_stability_chunk_nstep(kw: dict[str, Any], total_nstep: int) -> int | No
 
     if not bool(kw.get("cpt")) or total_nstep <= 0:
         return None
+    if kw.get("pmass") is not None and float(kw["pmass"]) == 0.0:
+        # Constant-volume CPT (--pbc-ensemble nvt): no piston to stabilise, and
+        # micro-chunks inside an overlap chunk drop all but one sub-chunk's DCD.
+        return None
     raw = os.environ.get("MMML_CPT_DYNAMICS_CHUNK_NSTEP")
     chunk = (
         int(raw)
@@ -7292,6 +7303,155 @@ def _bussi_subchunk_grms_blocks_continuation(
     return True
 
 
+def _cpt_subchunk_restart_is_short(
+    restart_step: int | None,
+    *,
+    global_step_offset: int,
+    steps_done: int,
+    n: int,
+    restart_handoff: bool = False,
+) -> bool:
+    """True when a CPT sub-chunk's restart shows CHARMM stopped before ``n`` steps.
+
+    The expected ``JHSTRT`` depends on the handoff mode in use:
+
+    * READYN restart handoff (``restart_handoff=True``): every sub-chunk reads the
+      previous restart, so the counter is global; complete iff it reaches
+      ``global_step_offset + steps_done + n``.
+    * in-memory handoff (default): CHARMM restarts its counter for each overlap
+      chunk, so the restart holds a chunk-local step (e.g. 250 for global
+      500-750; reading it as global stopped every overlap chunk after the first
+      after one sub-chunk). Complete iff it equals ``steps_done + n`` exactly. A
+      value at or past the global end is also accepted, since a chunk entered
+      through a READYN restart may carry the restart's global counter; a
+      0-step sub-chunk (counter still at ``steps_done``) is short either way.
+
+    Negative steps are CHARMM abort markers.
+    """
+    if restart_step is None:
+        return False
+    step = int(restart_step)
+    if step < 0:
+        return True
+    chunk_end = int(steps_done) + int(n)
+    global_end = int(global_step_offset) + chunk_end
+    if step >= global_end:
+        return False
+    if restart_handoff:
+        return True
+    return step != chunk_end
+
+
+def _cpt_subchunk_trajectory_path(chunk_traj: Path, k: int) -> Path:
+    """Per-CPT-sub-chunk DCD next to ``chunk_traj`` (``prod.0003.cptsub001.dcd``).
+
+    Deliberately not ``stem.NNNN.dcd``: overlap chunk discovery / validation
+    (``_is_numbered_chunk_dcd_name``) must never count it, while the
+    ``stem.*.dcd`` stage cleanup glob still sweeps up leftovers.
+    """
+    p = Path(chunk_traj)
+    return p.with_name(f"{p.stem}.cptsub{int(k):03d}{p.suffix}")
+
+
+def _remove_dcd_staging_alias(path: Path) -> None:
+    try:
+        from mmml.interfaces.pycharmmInterface.charmm_paths import (
+            remove_charmm_io_write_staging_alias,
+        )
+
+        remove_charmm_io_write_staging_alias(path)
+    except Exception:  # noqa: BLE001 - best-effort cleanup
+        pass
+
+
+def _merge_cpt_subchunk_dcds(
+    sub_paths: list[Path],
+    chunk_traj: Path,
+    *,
+    context: str | None = None,
+    segments: dict[Path, Any] | None = None,
+    target_nsavc: int | None = None,
+) -> int:
+    """Merge per-CPT-sub-chunk DCDs into ``chunk_traj``; return its frame count.
+
+    CHARMM truncates the DCD on every ``dyna`` open (and ``WRITCV`` rewrites the
+    header per call), so each CPT stability sub-chunk writes its own file. Empty,
+    header-only or unreadable sub-files are skipped. With no frames left,
+    ``chunk_traj`` is removed (same as a chunk that never saved).
+
+    ``segments`` maps a sub-file to its planned
+    :class:`~mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.CptDcdSegment`:
+    frames outside the stage's global save steps are dropped (``keep``), and the
+    merged header gets ``NSAVC = target_nsavc`` and ``ISTART`` = the global step of
+    the first kept frame, so ``ISTART + i * NSAVC`` is the step of frame ``i``.
+
+    Sub-files (and their staging aliases) are removed only after a successful
+    merge; if merging raises they are kept for inspection and the error
+    propagates.
+    """
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        count_dcd_frames,
+    )
+    from mmml.utils.dcd_writer import _dcd_header_byte_size, concat_dcd_files
+
+    chunk_traj = Path(chunk_traj)
+    kept: list[Path] = []
+    for p in sub_paths:
+        p = Path(p)
+        try:
+            if not p.is_file() or p.stat().st_size == 0:
+                continue
+            with p.open("rb") as fh:
+                head = fh.read(65536)
+            _dcd_header_byte_size(head)
+        except (OSError, ValueError):
+            continue
+        if count_dcd_frames(p) <= 0:
+            continue
+        kept.append(p)
+    n_frames = 0
+    if not kept:
+        chunk_traj.unlink(missing_ok=True)
+    elif segments is None:
+        if len(kept) == 1:
+            os.replace(kept[0], chunk_traj)
+            n_frames = int(count_dcd_frames(chunk_traj))
+        else:
+            n_frames = int(concat_dcd_files(kept, chunk_traj))
+    else:
+        keeps = []
+        istart = None
+        for p in kept:
+            seg = segments.get(p)
+            keeps.append(seg.keep if seg is not None else None)
+            if istart is None and seg is not None:
+                n_avail = int(count_dcd_frames(p))
+                steps = seg.written_steps()[:n_avail]
+                idx = range(len(steps)) if seg.keep is None else seg.keep
+                first = [steps[i] for i in idx if i < len(steps)]
+                if first:
+                    istart = int(first[0])
+        n_frames = int(
+            concat_dcd_files(
+                kept,
+                chunk_traj,
+                frame_keep=keeps,
+                nsavc=int(target_nsavc) if target_nsavc is not None else None,
+                istart=istart,
+            )
+        )
+        if n_frames <= 0:
+            chunk_traj.unlink(missing_ok=True)
+    for p in sub_paths:
+        Path(p).unlink(missing_ok=True)
+        _remove_dcd_staging_alias(Path(p))
+    _emit_overlap_log(
+        f"CPT DCD merged {len(kept)} sub-file(s) -> {chunk_traj.name} ({n_frames} frames)",
+        context=context,
+    )
+    return n_frames
+
+
 def _run_cpt_stability_subchunked(
     kw: dict[str, Any],
     io: Optional[CharmmTrajectoryFiles],
@@ -7310,8 +7470,6 @@ def _run_cpt_stability_subchunked(
     """Integrate CPT dynamics in short ``dyn.run()`` segments with state checks."""
 
     total = int(total_nstep if total_nstep is not None else kw.get("nstep", 0))
-    steps_done = 0
-    last_dyn = None
     n_subchunks = (total + chunk_nstep - 1) // chunk_nstep
     use_in_memory = _cpt_subchunk_use_in_memory_handoff()
     final_write = (
@@ -7325,7 +7483,6 @@ def _run_cpt_stability_subchunked(
         if final_write is not None
         else (None, None)
     )
-    prev_write: Path | None = None
     if log_banner and n_subchunks > 1:
         mode = (
             "in-memory"
@@ -7338,8 +7495,143 @@ def _run_cpt_stability_subchunked(
             f"({mode}; Hoover CPT barostat kept in RAM between sub-chunks)",
             flush=True,
         )
+    # CHARMM truncates the DCD on each ``dyna`` open, so sub-chunks sharing
+    # ``io.trajectory`` would keep only the last writer's frames. Give each
+    # sub-chunk its own file and merge into ``io.trajectory`` afterwards.
+    chunk_traj = Path(io.trajectory) if io is not None and io.trajectory is not None else None
+    sub_paths: list[Path] = []
+    use_sub_files = chunk_traj is not None and n_subchunks > 1
+    # Per-sub-chunk nsavc + merge-time frame filter so the merged frames are
+    # exactly the stage's global save steps (see ``cpt_dcd_segment``). The
+    # sub-chunk boundaries themselves never depend on nsavc (``cpt_subchunk_nstep``).
+    # Not for a continuous stage DCD opened by the caller (``extra_iokw``): its
+    # frames cannot be filtered, so that path keeps the per-sub-chunk harmonization.
+    dcd_target = _cpt_subchunk_dcd_target(kw) if use_sub_files and not extra_iokw else None
+    segments: dict[Path, Any] | None = {} if dcd_target is not None else None
+    loop_kwargs = dict(
+        overlap_context=overlap_context,
+        rng_base=rng_base,
+        chunk_nstep=chunk_nstep,
+        total=total,
+        n_subchunks=n_subchunks,
+        extra_iokw=extra_iokw,
+        rng_salt_base=rng_salt_base,
+        loose_pbc=loose_pbc,
+        global_step_offset=global_step_offset,
+        mlpot_ctx=mlpot_ctx,
+        use_restart_handoff=use_restart_handoff,
+        final_write=final_write,
+        slot_a=slot_a,
+        slot_b=slot_b,
+        chunk_traj=chunk_traj if use_sub_files else None,
+        sub_paths=sub_paths,
+        dcd_target=dcd_target,
+        segments=segments,
+    )
+
+    def _merge() -> None:
+        _merge_cpt_subchunk_dcds(
+            sub_paths,
+            chunk_traj,
+            context=overlap_context,
+            segments=segments,
+            target_nsavc=dcd_target,
+        )
+
+    try:
+        result = _run_cpt_stability_subchunk_loop(kw, io, **loop_kwargs)
+    except BaseException:
+        if use_sub_files and chunk_traj is not None:
+            # Salvage frames already written, but never mask the dynamics error.
+            try:
+                _merge()
+            except Exception as merge_exc:  # noqa: BLE001
+                _emit_overlap_log(
+                    f"CPT DCD merge after failed dynamics also failed ({merge_exc}); "
+                    f"sub-files kept next to {chunk_traj.name}",
+                    context=overlap_context,
+                )
+        raise
+    if use_sub_files and chunk_traj is not None:
+        _merge()
+    return result
+
+
+def _cpt_subchunk_dcd_target(kw: dict[str, Any]) -> int | None:
+    """Stage DCD save interval for CPT sub-chunk planning (``None`` = no DCD)."""
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        resolve_target_dcd_nsavc,
+    )
+
+    if "nsavc" not in kw:
+        return None
+    target = resolve_target_dcd_nsavc(kw)
+    if target is None:
+        target = int(kw["nsavc"])
+    return max(1, int(target))
+
+
+def _run_cpt_stability_subchunk_loop(
+    kw: dict[str, Any],
+    io: Optional[CharmmTrajectoryFiles],
+    *,
+    overlap_context: str,
+    rng_base: int | None,
+    chunk_nstep: int,
+    total: int,
+    n_subchunks: int,
+    extra_iokw: dict[str, int] | None,
+    rng_salt_base: int,
+    loose_pbc: bool,
+    global_step_offset: int,
+    mlpot_ctx: Optional["MlpotContext"],
+    use_restart_handoff: bool,
+    final_write: Path | None,
+    slot_a: Path | None,
+    slot_b: Path | None,
+    chunk_traj: Path | None,
+    sub_paths: list[Path],
+    dcd_target: int | None = None,
+    segments: dict[Path, Any] | None = None,
+) -> Any:
+    """Body of :func:`_run_cpt_stability_subchunked`; returns the last ``dyna`` result.
+
+    When ``chunk_traj`` is set, each sub-chunk that writes a DCD is redirected to
+    ``_cpt_subchunk_trajectory_path(chunk_traj, k)`` and recorded in ``sub_paths``.
+
+    Sub-chunk lengths come from :func:`cpt_subchunk_nstep` (``<= chunk_nstep``,
+    independent of ``nsavc``: each continuation redraws velocities, so the DCD
+    cadence must not move the call boundaries). With ``dcd_target`` set, each
+    sub-chunk's ``nsavc`` and merge-time frame filter come from
+    :func:`cpt_dcd_segment` so the frames kept are exactly the global steps
+    ``g % dcd_target == 0``; each sub-file's plan is recorded in ``segments``.
+    Otherwise ``nsavc`` comes from :func:`_harmonize_overlap_chunk_frequencies`.
+    """
+    import dataclasses
+
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        cpt_dcd_segment,
+        cpt_subchunk_nstep,
+    )
+
+    steps_done = 0
+    last_dyn = None
+    prev_write: Path | None = None
+    k = -1
+    global_start = int(global_step_offset)
     while steps_done < total:
-        n = min(chunk_nstep, total - steps_done)
+        k += 1
+        seg = None
+        n = cpt_subchunk_nstep(steps_done, total, chunk_nstep)
+        if dcd_target is not None:
+            seg = cpt_dcd_segment(global_start + steps_done, n, dcd_target)
+            if seg.dropped:
+                _emit_overlap_log(
+                    f"CPT sub-chunk {k} is {n} step(s) long and cannot write DCD "
+                    f"save step(s) {list(seg.dropped)} (CHARMM needs nsavc < nstep); "
+                    "raise MMML_CPT_DYNAMICS_CHUNK_NSTEP above 2 for exact saves",
+                    context=overlap_context,
+                )
         sub_kw = dict(kw)
         sub_kw["nstep"] = n
         is_continuation = steps_done > 0
@@ -7348,12 +7640,19 @@ def _run_cpt_stability_subchunked(
                 _apply_cpt_restart_continuation_kw(sub_kw)
             else:
                 _apply_cpt_in_memory_continuation_kw(sub_kw)
+        if seg is not None:
+            # The plan owns this sub-chunk's DCD cadence; keep the harmonizer
+            # (list/print frequencies) away from ``nsavc``.
+            sub_kw.pop("nsavc", None)
+            sub_kw.pop("_suppress_trajectory", None)
         _harmonize_overlap_chunk_frequencies(
             sub_kw,
             n,
             loose_pbc=loose_pbc,
             global_step_start=int(global_step_offset) + steps_done,
         )
+        if seg is not None:
+            _apply_cpt_dcd_segment_nsavc(sub_kw, seg)
 
         sub_io = io
         write_path: Path | None = None
@@ -7406,6 +7705,19 @@ def _run_cpt_stability_subchunked(
             )
             else {}
         )
+        if (
+            chunk_traj is not None
+            and sub_io is not None
+            and sub_io.trajectory is not None
+            and not sub_traj_iokw
+        ):
+            sub_path = _cpt_subchunk_trajectory_path(chunk_traj, k)
+            sub_path.unlink(missing_ok=True)
+            _remove_dcd_staging_alias(sub_path)
+            sub_io = dataclasses.replace(sub_io, trajectory=sub_path)
+            sub_paths.append(sub_path)
+            if segments is not None and seg is not None:
+                segments[sub_path] = seg
         global_end = int(global_step_offset) + steps_done + n
         if "_numbered_restart_stage_path" in sub_kw:
             sub_kw["_numbered_restart_global_step"] = global_end
@@ -7416,6 +7728,23 @@ def _run_cpt_stability_subchunked(
             rng_base=rng_base,
             rng_salt=rng_salt_base + steps_done,
         )
+        if (
+            os.environ.get("MMML_TRACE_DYNAMICS_COMMAND") == "1"
+            and sub_io is not None
+            and sub_io.trajectory is not None
+        ):
+            from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+                count_dcd_frames,
+            )
+
+            _traj = Path(sub_io.trajectory)
+            print(
+                f"MMML CPT SUB-CHUNK DCD: {overlap_context} sub-chunk {k} "
+                f"global {global_end - n}-{global_end} nsavc={sub_kw.get('nsavc')} "
+                f"-> {_traj.name} frames={count_dcd_frames(_traj)} "
+                f"bytes={_traj.stat().st_size if _traj.is_file() else -1}",
+                flush=True,
+            )
         restart_path = (
             write_path
             if write_path is not None
@@ -7438,11 +7767,22 @@ def _run_cpt_stability_subchunked(
             )
 
             actual_global = read_restart_last_step(Path(restart_path))
-            if actual_global is not None:
+            if _cpt_subchunk_restart_is_short(
+                actual_global,
+                global_step_offset=int(global_step_offset),
+                steps_done=steps_done,
+                n=n,
+                restart_handoff=use_restart_handoff,
+            ):
                 actual_in_segment = int(actual_global) - int(global_step_offset)
-                if actual_in_segment < chunk_end:
-                    steps_done = max(steps_done, actual_in_segment)
-                    break
+                _emit_overlap_log(
+                    f"CPT sub-chunk {k} restart step {actual_global} is short of "
+                    f"global step {int(global_step_offset) + chunk_end}; stopping "
+                    "this chunk's sub-chunks",
+                    context=overlap_context,
+                )
+                steps_done = max(steps_done, actual_in_segment)
+                break
         global_step = max(0, int(global_step_offset) + chunk_end)
         if (
             use_restart_handoff
@@ -7459,6 +7799,19 @@ def _run_cpt_stability_subchunked(
             prev_write = write_path
         steps_done += n
     return last_dyn
+
+
+def _apply_cpt_dcd_segment_nsavc(sub_kw: dict[str, Any], seg: Any) -> None:
+    """Set a CPT sub-chunk's DCD keywords from its planned ``CptDcdSegment``."""
+    n = int(seg.nstep)
+    if seg.nsavc is None:
+        # Same shape as ``_harmonize_overlap_chunk_frequencies``' skip branch.
+        sub_kw["nsavc"] = max(1, n - 1)
+        sub_kw["_suppress_trajectory"] = True
+        sub_kw["nsavv"] = n
+    else:
+        sub_kw["nsavc"] = int(seg.nsavc)
+        sub_kw.pop("_suppress_trajectory", None)
 
 
 def _run_bussi_heat_subchunked(
@@ -7571,6 +7924,8 @@ def _run_bussi_heat_subchunked(
         # Open CHARMM DCD once per outer overlap leg: on the micro-chunk that
         # contains a global save, otherwise on the last micro-chunk (guarantees
         # ≥1 frame per overlap chunk even when nsavc > micro nstep).
+        # Frames from other micro-chunks are dropped; per-micro-chunk files merged
+        # with ``_merge_cpt_subchunk_dcds`` (as CPT does) would keep them all.
         wants_dcd = (traj_active or continuous_dcd) and not dcd_opened_this_leg and (
             per is not None or is_last_sub
         )
@@ -7744,7 +8099,11 @@ def _run_cpt_stability_chunked_dynamics(
     rng_base: int | None,
     chunk_nstep: int,
 ) -> Any:
-    """Integrate NPT CPT in short segments with finite-state checks between chunks."""
+    """Integrate NPT CPT in short segments with finite-state checks between chunks.
+
+    Each segment writes its own ``stem.cptsubNNN.dcd``; they are merged back into
+    the stage DCD by :func:`_run_cpt_stability_subchunked`.
+    """
     from mmml.interfaces.pycharmmInterface.mlpot.force_checkpoint import (
         maybe_record_forces,
     )

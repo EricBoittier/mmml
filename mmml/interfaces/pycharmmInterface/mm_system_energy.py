@@ -27,7 +27,7 @@ from mmml.interfaces.pycharmmInterface.long_range_backend import (
     resolve_jax_pme_dispersion,
     resolve_jax_pme_method,
 )
-from mmml.interfaces.pycharmmInterface.pbc_utils_jax import mic_displacement
+from mmml.interfaces.pycharmmInterface.pbc_utils_jax import cell_inverse, mic_displacement
 
 COULOMB_KCAL = 332.063711
 
@@ -71,7 +71,8 @@ def _eval_mic_pair_nonbonded_energies_jax(
 
     ri = pos[pi]
     rj = pos[pj]
-    disp = jax.vmap(lambda a, b: mic_displacement(a, b, cell_j))(ri, rj)
+    inv_cell = cell_inverse(cell_j)
+    disp = jax.vmap(lambda a, b: mic_displacement(a, b, cell_j, inv_cell=inv_cell))(ri, rj)
     r = jnp.linalg.norm(disp, axis=-1)
     within_ctof = r * r < c2of
 
@@ -899,7 +900,8 @@ def nonbonded_energy_and_forces(
     def _pair_terms(positions_arg: Array) -> tuple[Array, Array, Array]:
         ri = positions_arg[pi]
         rj = positions_arg[pj]
-        disp = jax.vmap(lambda a, b: mic_displacement(a, b, cell_j))(ri, rj)
+        inv_cell = cell_inverse(cell_j)
+        disp = jax.vmap(lambda a, b: mic_displacement(a, b, cell_j, inv_cell=inv_cell))(ri, rj)
         r = jnp.linalg.norm(disp, axis=-1)
         r_sq = r * r
         within_ctof = r_sq < c2of

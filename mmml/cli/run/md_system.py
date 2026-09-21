@@ -1003,6 +1003,16 @@ def build_parser() -> argparse.ArgumentParser:
         help="pycharmm: production length in ps (default: --ps)",
     )
     parser.add_argument(
+        "--pbc-ensemble",
+        type=str,
+        choices=["npt", "nvt"],
+        default="npt",
+        help=(
+            "pycharmm: periodic equi/prod ensemble (default: npt). nvt keeps the "
+            "cell fixed (CPT Hoover, pmass=0) at the built density."
+        ),
+    )
+    parser.add_argument(
         "--npt-thermostat",
         type=str,
         choices=["hoover", "berendsen"],
@@ -1990,11 +2000,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--mm-nl-device",
-        choices=["cpu", "gpu"],
+        choices=["auto", "cpu", "gpu"],
         default=None,
         help=(
-            "MM Vesin rebuild device for jaxmd "
-            "(default: MMML_MM_NL_DEVICE or cpu; gpu falls back to cpu on CuPy failure)."
+            "MM Vesin pair-list rebuild device "
+            "(default: MMML_MM_NL_DEVICE or auto: GPU when CuPy + a JAX GPU are present, else cpu)."
         ),
     )
     parser.add_argument(
@@ -2868,6 +2878,8 @@ def _append_box_sizing_args(cmd: list[str], args: argparse.Namespace) -> None:
         cmd.append("--cleanup")
     else:
         mode = getattr(args, "density_prep_mode", None)
+        if mode is False:  # YAML 1.1 reads a bare ``off`` as False
+            mode = "off"
         # Forward explicit off as well (pycharmm defaults off, but resilient
         # / liquid-prep paths must be able to opt out from the outer CLI).
         if mode is not None and str(mode).strip():
@@ -3194,6 +3206,8 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
         str(args.ps_heat),
         "--ps-equi",
         str(args.ps_equi),
+        "--pbc-ensemble",
+        str(getattr(args, "pbc_ensemble", "npt")),
         "--npt-thermostat",
         str(getattr(args, "npt_thermostat", "hoover")),
         "--npt-pressure",
@@ -4188,6 +4202,9 @@ def main() -> int:
         os.environ["MMML_JAX_PROFILER_DIR"] = str(
             Path(args.jax_profiler_dir).expanduser().resolve()
         )
+    if getattr(args, "mm_nl_device", None):
+        # Read by nl_gpu in every backend (pycharmm MLpot rebuilds in-process).
+        os.environ["MMML_MM_NL_DEVICE"] = str(args.mm_nl_device)
     started_at = datetime.now(timezone.utc).isoformat()
     backend: str | None = None
     argv: list[str] | None = None

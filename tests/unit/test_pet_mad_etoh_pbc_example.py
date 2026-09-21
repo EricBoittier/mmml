@@ -258,3 +258,27 @@ def test_nve_conservation_stats_rejects_bad_traces() -> None:
             np.array([0.0, 1.0]), np.array([0.0, np.nan]), n_atoms=1
         )
 
+
+
+def test_pbc_nvt_yaml_command_parses_in_pycharmm_backend(tmp_path: Path) -> None:
+    """Every flag md-system forwards must be accepted by the PyCHARMM backend."""
+    from mmml.cli.run.md_pbc_suite.pycharmm_mlpot import parse_args as parse_backend
+
+    dummy = tmp_path / "pet-mad.pt"
+    dummy.write_bytes(b"not-a-real-model")
+    args = parse_md_system_args(
+        [
+            "--config",
+            str(YAML),
+            "--job-id",
+            "nvt",
+            "--checkpoint",
+            str(dummy),
+            "--pbc-ensemble",
+            "nvt",
+        ]
+    )
+    backend = parse_backend(build_pycharmm_command(args))
+    assert backend.charmm_zero_energy_terms == "vdw,elec,bonded"
+    assert backend.density_prep_mode == "off"
+    assert backend.pbc_ensemble == "nvt"

@@ -19,9 +19,9 @@ flowchart TB
   end
 
   subgraph mmml_pkg["mmml package"]
-    CLI["cli\n130 modules"]
-    IFACE["interfaces\n236 modules"]
-    MODELS["models\n146 modules"]
+    CLI["cli\n132 modules"]
+    IFACE["interfaces\n240 modules"]
+    MODELS["models\n147 modules"]
     UTILS["utils\n51 modules"]
     DATA["data\n18 modules"]
     GEN["generate\n15 modules"]
@@ -139,7 +139,7 @@ code should use the canonical paths above.
 
 ```mermaid
 flowchart TB
-  MAIN["cli/__main__.py\n69 subcommands"]
+  MAIN["cli/__main__.py\n71 subcommands"]
 
   subgraph make["cli/make"]
     MKRES["make_res"]

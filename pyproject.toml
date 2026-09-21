@@ -110,9 +110,13 @@ nvalchemiops-pme = [
 
 # Metatomic (TorchScript AtomisticModel) ASE calculator + CHARMM MLpot adapter.
 # Optional: CI does not install this extra. Device via MMML_METATOMIC_DEVICE.
+# upet: PET-MAD / PET-OMAD etc. download + metatomic export (larger PET teachers).
+# metatrain: train/fine-tune PET models and export them as metatomic .pt.
 metatomic = [
     "metatomic-ase>=0.1.1",
     "metatomic-torch>=0.1.12",
+    "upet>=0.3.0",
+    "metatrain>=2026.4",
 ]
 
 # jax-pme long-range Coulomb backend (--lr-solver jax_pme). The native
@@ -145,6 +149,14 @@ md-cpu = [
 # Multistate Bennett acceptance ratio (also in core deps; kept for explicit installs)
 mbar = [
     "pymbar>=4.0",
+]
+
+# GPU MM pair-list rebuild (Vesin + CuPy, DLPack into JAX). Selected automatically
+# when importable and JAX runs on a GPU; MMML_MM_NL_DEVICE=cpu forces the CPU path.
+# CUDA 13 wheel (matches jax[cuda13]); same <14 cap as the gpu extra below.
+nl-gpu = [
+    "vesin>=0.6.1",
+    "cupy-cuda13x>=13.0.0,<14",
 ]
 
 # GPU/CUDA support (CUDA 13, default)

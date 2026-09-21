@@ -10,6 +10,7 @@ import jax.numpy as jnp
 
 from mmml.interfaces.pycharmmInterface.pbc_utils_jax import (
     cart_coords,
+    cell_inverse,
     frac_coords,
     group_ids_from_groups,
     mic_displacement,
@@ -36,6 +37,78 @@ def _reference_wrap_groups_loop(R, groups, cell, mass=None):
         cart_shift = cart_coords(lattice_shift[None, :], cell)[0]
         R_out = R_out.at[g].add(cart_shift)
     return R_out
+
+
+@pytest.mark.unit
+def test_frac_coords_matches_linear_solve_cubic_and_sheared() -> None:
+    """inv(cell) multiply must match solve(cell.T, R.T).T (the old trsm path)."""
+    import jax.scipy.linalg
+
+    rng = np.random.default_rng(0)
+    R = jnp.asarray(rng.normal(size=(40, 3)))
+    cubic = jnp.diag(jnp.array([26.0, 26.0, 26.0]))
+    sheared = jnp.array(
+        [[20.0, 0.4, 0.1], [0.2, 18.0, -0.3], [0.0, 0.5, 22.0]],
+        dtype=jnp.float64,
+    )
+    for cell in (cubic, sheared):
+        got = frac_coords(R, cell)
+        ref = jax.scipy.linalg.solve(cell.T, R.T, assume_a="gen").T
+        np.testing.assert_allclose(np.asarray(got), np.asarray(ref), rtol=1e-10, atol=1e-10)
+        np.testing.assert_allclose(
+            np.asarray(R @ cell_inverse(cell)), np.asarray(ref), rtol=1e-10, atol=1e-10
+        )
+    np.testing.assert_allclose(
+        np.asarray(cell_inverse(cubic)), np.diag([1.0 / 26.0] * 3), atol=1e-15
+    )
+    # NPT: a new box must produce a new transform (do not cache across steps).
+    grown = jnp.diag(jnp.array([27.0, 27.0, 27.0]))
+    assert not np.allclose(np.asarray(cell_inverse(grown)), np.asarray(cell_inverse(cubic)))
+
+
+@pytest.mark.unit
+def test_cell_inverse_jitted_cond_is_traced_not_a_host_bool() -> None:
+    """``lax.cond`` must stay a device predicate (not ``bool(is_diag)`` on the host)."""
+
+    @jax.jit
+    def inv(cell):
+        return cell_inverse(cell)
+
+    cubic = jnp.diag(jnp.array([26.0, 26.0, 26.0]))
+    sheared = jnp.array(
+        [[20.0, 0.4, 0.1], [0.2, 18.0, -0.3], [0.0, 0.5, 22.0]],
+        dtype=jnp.float64,
+    )
+    np.testing.assert_allclose(np.asarray(inv(cubic)), np.diag([1.0 / 26.0] * 3), atol=1e-15)
+    np.testing.assert_allclose(np.asarray(inv(sheared) @ sheared), np.eye(3), atol=1e-10)
+    jaxpr = str(jax.make_jaxpr(inv)(cubic))
+    assert "cond" in jaxpr
+    assert "bool(" not in jaxpr
+
+
+@pytest.mark.unit
+def test_mic_displacement_energy_forces_match_solve() -> None:
+    import jax.scipy.linalg
+
+    ri = jnp.array([1.0, 2.0, 3.0])
+    rj = jnp.array([8.0, 4.0, 5.0])
+    cubic = jnp.diag(jnp.array([26.0, 26.0, 26.0]))
+
+    def e_new(a, b, cell):
+        d = mic_displacement(a, b, cell)
+        return 0.5 * jnp.sum(d * d)
+
+    def e_old(a, b, cell):
+        dR = b - a
+        dS = jax.scipy.linalg.solve(cell.T, dR.T, assume_a="gen").T
+        d = (dS - jnp.round(dS)) @ cell
+        return 0.5 * jnp.sum(d * d)
+
+    en, gn = jax.value_and_grad(e_new, argnums=(0, 1))(ri, rj, cubic)
+    eo, go = jax.value_and_grad(e_old, argnums=(0, 1))(ri, rj, cubic)
+    np.testing.assert_allclose(float(en), float(eo), rtol=1e-12, atol=1e-12)
+    np.testing.assert_allclose(np.asarray(gn[0]), np.asarray(go[0]), rtol=1e-10, atol=1e-10)
+    np.testing.assert_allclose(np.asarray(gn[1]), np.asarray(go[1]), rtol=1e-10, atol=1e-10)
 
 
 @pytest.mark.unit

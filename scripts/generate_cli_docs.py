@@ -102,7 +102,9 @@ CLI_NAV_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
         "ML training & MD",
         (
             "physnet-train",
+            "pet-box-dataset",
             "pet-physnet-distill",
+            "tune-mm-nonbonded",
             "physnet-evaluate",
             "physnet-md",
             "neb",
@@ -212,6 +214,9 @@ RELATED_DOCS: dict[str, list[tuple[str, str]]] = {
     "pes-design": [
         ("Bayesian PES design", "../../bayesian-pes-design.md"),
     ],
+    "pet-box-dataset": [
+        ("Metatomic in MMML", "../../metatomic.md"),
+    ],
     "pet-physnet-distill": [
         ("Metatomic in MMML", "../../metatomic.md"),
         ("Bayesian PES design", "../../bayesian-pes-design.md"),
@@ -228,6 +233,9 @@ RELATED_DOCS: dict[str, list[tuple[str, str]]] = {
     "analyze-liquid": [
         ("Liquid box workflow", "../../liquid-box-workflow.md"),
         ("Plotting style guide", "../../plotting-style-guide.md"),
+    ],
+    "tune-mm-nonbonded": [
+        ("Trainable hybrid MM LJ scales", "../../hybrid-mm-lj-scales.md"),
     ],
     "umbrella-sample": [
         ("Batched umbrella sampling", "../../umbrella.md"),

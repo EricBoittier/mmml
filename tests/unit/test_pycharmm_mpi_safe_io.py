@@ -81,6 +81,28 @@ def test_write_charmm_restart_from_memory_roundtrip(tmp_path):
     assert "9.000000000000000D-01" in text
 
 
+def test_write_charmm_restart_from_memory_header_ldyna_not_step(tmp_path):
+    """REST header (A4,2I6) is HDR, IVERS, LDYNA: the step goes in JHSTRT (#219)."""
+    from mmml.interfaces.pycharmmInterface.charmm_restart_io import (
+        write_charmm_restart_from_memory,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        read_restart_last_step,
+    )
+
+    res = tmp_path / "snap.res"
+    write_charmm_restart_from_memory(
+        res,
+        positions=np.zeros((3, 3)),
+        global_step=750,
+        include_crystal=False,
+        include_velocities=False,
+    )
+    header = res.read_text(encoding="ascii").splitlines()[0]
+    assert int(header[10:16]) == 1
+    assert read_restart_last_step(res) == 750
+
+
 def test_write_charmm_restart_from_memory_sets_nsavv(tmp_path):
     from mmml.interfaces.pycharmmInterface.charmm_restart_io import (
         write_charmm_restart_from_memory,

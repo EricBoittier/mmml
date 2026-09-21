@@ -4,7 +4,6 @@ from typing import Optional
 
 import jax
 import jax.numpy as jnp
-import jax.scipy.linalg
 
 Array = jnp.ndarray
 
@@ -40,11 +39,54 @@ def _smooth_frac_to_mic(frac: Array, k: float = SMOOTH_MIC_K) -> Array:
     return frac - 0.5 - 0.5 * jnp.tanh(k * (frac - 0.5))
 
 
-def frac_coords(R: Array, cell: Array) -> Array:
-    """Cartesian -> fractional (row-vectors) using a stable linear solve."""
+def cell_inverse(cell: Array) -> Array:
+    """Inverse of a 3×3 cell. Diagonal boxes use ``1/L`` (no LU / trsm).
+
+    The ``solve``/``inv`` replacements below are implemented. Whether they
+    account for the gpu09 ``trsm_left_kernel<double>`` hotspot (~96 launches /
+    step) is still unverified — re-count launches after this lands.
+
+    Sites that used a per-call cell solve or inverse:
+
+    * ``mpnn_kernels.pair_displacements`` — ``solve(cell.T, dR.T)`` when
+      ``use_pbc`` (whole-box PhysNet; fragment ML/MM is usually vacuum).
+    * ``frac_coords`` / ``mic_displacement`` / ``wrap_dimer_monomer_b`` —
+      this inverse; pass ``inv_cell`` so a vmap does not invert per pair.
+    * ``mm_energy_forces`` Verlet reuse and the COM filter.
+    * ``mm_system_energy`` pair VDW/Coulomb ``vmap(mic_displacement)``.
+
+    Recompute when NPT changes the box; keep the incoming dtype (do not
+    downcast the Verlet check to float32).
+    """
     cell = _cell_as_matrix(cell)
-    S_T = jax.scipy.linalg.solve(cell.T, R.T, assume_a='gen')
-    return S_T.T
+    diag = jnp.diag(cell)
+    off = cell - jnp.diag(diag)
+    scale = jnp.maximum(jnp.max(jnp.abs(diag)), jnp.asarray(1.0, dtype=cell.dtype))
+    is_diag = jnp.all(jnp.abs(off) <= jnp.asarray(1.0e-12, dtype=cell.dtype) * scale)
+
+    def _diag_inv() -> Array:
+        return jnp.diag(
+            jnp.where(
+                jnp.abs(diag) > jnp.asarray(1.0e-18, dtype=cell.dtype),
+                1.0 / diag,
+                0.0,
+            )
+        )
+
+    # lax.cond so cubic MD does not launch the general 3×3 inv/trsm per pair.
+    return jax.lax.cond(is_diag, _diag_inv, lambda: jnp.linalg.inv(cell))
+
+
+def frac_coords(R: Array, cell: Array, inv_cell: Array | None = None) -> Array:
+    """Cartesian → fractional (row-vectors) via one inverse multiply.
+
+    ``solve(cell.T, R.T)`` launched a float64 trsm per call site (~96/step on
+    the GPU profile). ``R @ inv(cell)`` is the same map; compute ``inv`` once
+    per force call (or pass ``inv_cell``) so pair MIC is a GEMM.
+    """
+    R = jnp.asarray(R)
+    inv = cell_inverse(cell) if inv_cell is None else jnp.asarray(inv_cell)
+    return R @ inv
 
 
 def cart_coords(S: Array, cell: Array) -> Array:
@@ -158,10 +200,10 @@ def wrap_groups(
     return wrap_groups_by_id(R, group_id, len(groups), cell, mass=mass)
 
 
-def mic_displacement(Ri: Array, Rj: Array, cell: Array) -> Array:
+def mic_displacement(Ri: Array, Rj: Array, cell: Array, inv_cell: Array | None = None) -> Array:
     """Minimum-image displacement vector r_j - r_i under PBC."""
     dR = Rj - Ri
-    dS = frac_coords(dR, cell)
+    dS = frac_coords(dR, cell, inv_cell=inv_cell)
     dS_mic = dS - jnp.round(dS)
     return cart_coords(dS_mic, cell)
 
@@ -204,10 +246,11 @@ def wrap_dimer_monomer_b(
     n_b_safe = jnp.maximum(jnp.sum(mask_b), jnp.asarray(1e-10, dtype=dtype))
     com_a = jnp.sum(pos_di * mask_a[:, None], axis=0) / n_a_safe
     com_b = jnp.sum(pos_di * mask_b[:, None], axis=0) / n_b_safe
+    inv = None if smooth else cell_inverse(cell)
     d = (
         mic_displacement_smooth(com_a, com_b, cell, k=k)
         if smooth
-        else mic_displacement(com_a, com_b, cell)
+        else mic_displacement(com_a, com_b, cell, inv_cell=inv)
     )
     shift_b = com_a + d - com_b
     if detach_shift:
@@ -240,8 +283,9 @@ def vjp_wrap_dimer_monomer_b_forces(
 
 def mic_displacements_batched(positions_dst: Array, positions_src: Array, cell: Array) -> Array:
     """MIC displacement for batched pairs. positions_dst/src shape (n_edges, 3)."""
+    inv = cell_inverse(cell)
     dR = positions_src - positions_dst
-    dS = frac_coords(dR, cell)
+    dS = frac_coords(dR, cell, inv_cell=inv)
     dS_mic = dS - jnp.round(dS)
     return cart_coords(dS_mic, cell)
 

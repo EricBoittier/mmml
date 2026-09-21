@@ -60,6 +60,7 @@ from mmml.interfaces.pycharmmInterface.mm_energy_forces import (
     DEFAULT_JAX_MD_CAPACITY_MULTIPLIER,
     DEFAULT_JAX_MD_SKIN_DISTANCE_A,
     build_mm_energy_forces_fn,
+    mm_pair_update_positions,
 )
 from mmml.utils.jax_gpu_warmup import (
     apply_xla_cuda_timer_log_filter,
@@ -708,6 +709,46 @@ def metatomic_zero_fragment_output(
     }
 
 
+def _resolve_ml_chunk_layout(ml_sparse_dimers, _max_active_dimers, n_dimers_total, ml_batch_size, n_monomers, _jax_mm_spoof_mode, _kernnn_mode, _metatomic_mode, ml_gpu_count):
+    _ml_chunk_layout = None
+    if (
+        ml_sparse_dimers
+        and _max_active_dimers < n_dimers_total
+        and ml_batch_size
+        and n_monomers + _max_active_dimers > int(ml_batch_size)
+        and not (_jax_mm_spoof_mode or _kernnn_mode or _metatomic_mode)
+    ):
+        from mmml.interfaces.pycharmmInterface.mlpot.ml_chunk_budget import MlChunkLayout
+        from mmml.interfaces.pycharmmInterface.mlpot_gpu import effective_ml_gpu_count
+
+        _layout_n_chunks = -(-(n_monomers + _max_active_dimers) // int(ml_batch_size))
+        if effective_ml_gpu_count(ml_gpu_count, n_chunks=_layout_n_chunks) <= 1:
+            _ml_chunk_layout = MlChunkLayout(
+                n_monomers=int(n_monomers),
+                max_active_dimers=int(_max_active_dimers),
+                chunk_size=int(ml_batch_size),
+                n_chunks=int(_layout_n_chunks),
+            )
+
+    return _ml_chunk_layout
+
+
+def _scaled_live_psf_charges(total_atoms, mm_charge_scale):
+    """Read live PSF charges and apply the configured MM charge scale."""
+    from mmml.interfaces.pycharmmInterface.mm_energy_forces import (
+        _get_actual_psf_charges,
+        apply_mm_charge_scale,
+    )
+
+    q_np = apply_mm_charge_scale(
+        np.asarray(
+            _get_actual_psf_charges(total_atoms)[:total_atoms], dtype=np.float64
+        ),
+        mm_charge_scale,
+    )
+    return q_np
+
+
 def setup_calculator(
     ATOMS_PER_MONOMER: Union[int, List[int], Sequence[int]],
     N_MONOMERS: int = 2,
@@ -725,6 +766,7 @@ def setup_calculator(
     debug: bool = False,
     ep_scale=None,
     sig_scale=None,
+    mm_charge_scale: float = 1.0,
     model_restart_path=None,
     MAX_ATOMS_PER_SYSTEM: int = 20,
     short_range_wall: bool = True,
@@ -1686,6 +1728,16 @@ def setup_calculator(
             _cached_sparse_batch_structure = prepare_batch_structure(n_monomers + _max_active_dimers, max_atoms)
         except Exception:
             pass
+    # Skip PhysNet chunks that hold only unused sparse-dimer padding (the cap is
+    # sized for the densest case; ETOH:181 uses ~1.8k of 4.2k slots). Set
+    # MMML_MLPOT_SKIP_PADDING_CHUNKS=0 to evaluate every slot (A/B parity checks).
+    _skip_padding_chunks = (
+        os.environ.get("MMML_MLPOT_SKIP_PADDING_CHUNKS") or "1"
+    ).strip().lower() not in ("0", "false", "no", "off")
+    _ml_chunk_layout = _resolve_ml_chunk_layout(
+        ml_sparse_dimers, _max_active_dimers, n_dimers_total, ml_batch_size,
+        n_monomers, _jax_mm_spoof_mode, _kernnn_mode, _metatomic_mode, ml_gpu_count,
+    )
 
     _jax_md_skin_distance = float(jax_md_skin_distance)
 
@@ -1885,6 +1937,7 @@ def setup_calculator(
             shared_cutoff=shared_cutoff,
             ep_scale=ep_scale,
             sig_scale=sig_scale,
+            charge_scale=mm_charge_scale,
             at_codes_override=at_codes_override,
             atomic_numbers=_mm_atomic_numbers,
             pbc_cell=cell_for_build,
@@ -2019,13 +2072,7 @@ def setup_calculator(
                 from mmml.interfaces.pycharmmInterface.long_range_backend import (
                     per_atom_monomer_ids,
                 )
-                from mmml.interfaces.pycharmmInterface.mm_energy_forces import (
-                    _get_actual_psf_charges,
-                )
-
-                q_np = np.asarray(
-                    _get_actual_psf_charges(total_atoms)[:total_atoms], dtype=np.float64
-                )
+                q_np = _scaled_live_psf_charges(total_atoms, mm_charge_scale)
                 mid_np = per_atom_monomer_ids(
                     total_atoms, monomer_offsets, n_monomers
                 )
@@ -2099,6 +2146,7 @@ def setup_calculator(
             "doML_dimer",
             "debug",
             "use_mm_charges_override",
+            "ml_eval_chunks",
         ],
     )
     def spherical_cutoff_calculator(
@@ -2117,6 +2165,7 @@ def setup_calculator(
         spatial_dimer_indices: Optional[Array] = None,
         use_mm_charges_override: bool = False,
         mm_charges_override: Optional[Array] = None,
+        ml_eval_chunks: Optional[int] = None,
     ) -> ModelOutput:
         """Calculates energy and forces using combined ML/MM potential.
         
@@ -2133,6 +2182,10 @@ def setup_calculator(
                 ``E_MM`` Coulomb instead of assembling charges from the ML head
                 (Hellmann–Feynman NVE preflight / frozen-q diagnostics).
             mm_charges_override: Per-atom charges (e), shape ``(n_atoms,)``.
+            ml_eval_chunks: Static count of leading PhysNet chunks to evaluate
+                on the sparse-dimer path (see ``mlpot.ml_chunk_budget``); the
+                caller checks ``ModelOutput.ml_n_active_dimers`` against it.
+                ``None`` keeps the traced ``lax.cond`` padding skip.
             
         Returns:
             ModelOutput containing total energy and forces
@@ -2183,7 +2236,9 @@ def setup_calculator(
                 mic_pbc_cell=mic_pbc_cell,
                 spatial_monomer_indices=spatial_monomer_indices,
                 spatial_dimer_indices=spatial_dimer_indices,
+                ml_eval_chunks=ml_eval_chunks,
             )
+            outputs["ml_n_active_dimers"] = ml_out.get("ml_n_active_dimers", -1)
             # Get ML forces from calculate_ml_contributions
             # CRITICAL: These forces are ALREADY correctly mapped to atoms 0 to (total_atoms - 1)
             # via segment_sum in process_monomer_forces and process_dimer_forces
@@ -2457,6 +2512,9 @@ def setup_calculator(
             mbd_E=outputs.get("mbd_E", 0.0),
             wall_E=outputs.get("wall_E", 0.0),
             mm_charges=_mm_charges_out,
+            ml_n_active_dimers=jnp.asarray(
+                outputs.get("ml_n_active_dimers", -1), dtype=jnp.int32
+            ),
         )
 
     def get_ML_energy_fn(
@@ -2467,6 +2525,7 @@ def setup_calculator(
         mic_pbc_cell: Optional[Array] = None,
         spatial_monomer_indices: Optional[Array] = None,
         spatial_dimer_indices: Optional[Array] = None,
+        ml_eval_chunks: Optional[int] = None,
     ) -> Tuple[Any, Dict[str, Array]]:
         """Prepares the ML model and batching for energy calculations.
 
@@ -2474,6 +2533,9 @@ def setup_calculator(
         padded individually to ``max_atoms`` (the largest dimer atom count).
         When ml_sparse_dimers=True, only evaluates dimers within mm_switch_on. """
         batch_data: Dict[str, Array] = {}
+        # Batch slots whose ML output is used (None: all). Chunked PhysNet skips
+        # chunks made only of padding past this count.
+        _n_valid_systems = None
 
         dimer_n_a = dimer_n_atoms_a_jnp
         dimer_n_b = dimer_n_atoms_b_jnp
@@ -2598,25 +2660,29 @@ def setup_calculator(
                 dimer_positions, dimer_n_a, dimer_n_b)
             active_mask = com_dists < active_radius
             _n_active_true = jnp.sum(active_mask)
-            jax.lax.cond(
-                _n_active_true > _max_active_dimers,
-                lambda n: jax.debug.print(
-                    "mmml WARNING: sparse active-dimer cap saturated: "
-                    "{n_true} in-range dimer pairs > cap={cap}. "
-                    "{dropped} pairs are being silently truncated by "
-                    "jnp.nonzero's fixed-size selection (first-by-enumeration-"
-                    "order, not nearest); this can discontinuously toggle "
-                    "unrelated pairs on/off as any atom moves and inject "
-                    "spurious forces. Raise ml_max_active_dimers / "
-                    "MMML_MLPOT_MAX_ACTIVE_DIMERS well above {n_true}, or "
-                    "increase box_volume awareness in resolve_max_active_dimers.",
-                    n_true=n,
-                    cap=_max_active_dimers,
-                    dropped=n - _max_active_dimers,
-                ),
-                lambda n: None,
-                _n_active_true,
-            )
+            # With a host-chosen chunk budget the host reads this count back
+            # with the forces and warns there; the in-graph warning is a
+            # lax.cond whose predicate XLA:GPU copies to the host every step.
+            if ml_eval_chunks is None:
+                jax.lax.cond(
+                    _n_active_true > _max_active_dimers,
+                    lambda n: jax.debug.print(
+                        "mmml WARNING: sparse active-dimer cap saturated: "
+                        "{n_true} in-range dimer pairs > cap={cap}. "
+                        "{dropped} pairs are being silently truncated by "
+                        "jnp.nonzero's fixed-size selection (first-by-enumeration-"
+                        "order, not nearest); this can discontinuously toggle "
+                        "unrelated pairs on/off as any atom moves and inject "
+                        "spurious forces. Raise ml_max_active_dimers / "
+                        "MMML_MLPOT_MAX_ACTIVE_DIMERS well above {n_true}, or "
+                        "increase box_volume awareness in resolve_max_active_dimers.",
+                        n_true=n,
+                        cap=_max_active_dimers,
+                        dropped=n - _max_active_dimers,
+                    ),
+                    lambda n: None,
+                    _n_active_true,
+                )
             active_indices = jnp.nonzero(active_mask, size=_max_active_dimers, fill_value=n_dimers)[0]
             active_indices_safe = jnp.where(active_indices < n_dimers, active_indices, 0)
             sparse_dimer_positions = dimer_positions[active_indices_safe]
@@ -2632,7 +2698,10 @@ def setup_calculator(
             batches = prepare_batches_md(batch_data, batch_size=sparse_batch_size, num_atoms=max_atoms, cached_structure=cached)[0]
             batches["_sparse_active_indices"] = active_indices
             batches["_sparse_n_dimers"] = n_dimers
+            batches["_sparse_n_active_true"] = _n_active_true
             _effective_batch_size = sparse_batch_size
+            # Active slots are packed first; the rest pad to the static cap.
+            _n_valid_systems = n_monomers + jnp.minimum(_n_active_true, _max_active_dimers)
         else:
             batch_data["R"] = jnp.concatenate([monomer_positions, dimer_positions])
             batch_data["Z"] = jnp.concatenate([monomer_atomic, dimer_atomic])
@@ -2742,6 +2811,8 @@ def setup_calculator(
                     n_gpus=_ml_n_gpus,
                     apply_one_chunk=apply_one_chunk,
                     has_aux=_needs_ml_mm_charges,
+                    n_valid=_n_valid_systems if _skip_padding_chunks else None,
+                    n_eval_chunks=ml_eval_chunks if use_sparse else None,
                 )
                 if _needs_ml_mm_charges:
                     e_out, f_out, q_out = chunked_out
@@ -2866,6 +2937,7 @@ def setup_calculator(
         mic_pbc_cell: Optional[Array] = None,
         spatial_monomer_indices: Optional[Array] = None,
         spatial_dimer_indices: Optional[Array] = None,
+        ml_eval_chunks: Optional[int] = None,
     ) -> Dict[str, Array]:
         """Calculate ML energy and force contributions (heterogeneous-safe)."""
         # Get model predictions
@@ -2877,7 +2949,10 @@ def setup_calculator(
             mic_pbc_cell=mic_pbc_cell,
             spatial_monomer_indices=spatial_monomer_indices,
             spatial_dimer_indices=spatial_dimer_indices,
+            ml_eval_chunks=ml_eval_chunks,
         )
+        # In-range dimer count of the sparse path (-1: dense/spatial batch).
+        _n_active_out = batches.get("_sparse_n_active_true", -1)
         output = apply_model(batches["Z"], batches["R"])
 
         f = output["forces"] * ml_force_conversion_factor
@@ -3011,6 +3086,7 @@ def setup_calculator(
                     ml_internal_E=monomer_contribs["internal_E"])
             if q_ml_global is not None:
                 out["q_ml_global"] = q_ml_global
+            out["ml_n_active_dimers"] = _n_active_out
             return out
 
         # Calculate dimer contributions
@@ -3069,6 +3145,7 @@ def setup_calculator(
             out["ml_internal_E"] = monomer_contribs["internal_E"]
         if q_ml_global is not None:
             out["q_ml_global"] = q_ml_global
+        out["ml_n_active_dimers"] = _n_active_out
         return out
 
     def calculate_monomer_contributions(
@@ -3369,7 +3446,12 @@ def setup_calculator(
                     update_fn = _cached_update_mm_pairs[0]
                     if update_fn is not None:
                         if box_vec is not None:
-                            mm_pair_idx, mm_pair_mask = update_fn(R, box=box_vec)
+                            # NpT builds the pair list with fractional_coordinates=True;
+                            # ASE positions are Cartesian, so convert first.
+                            R_nl = mm_pair_update_positions(
+                                R, box_vec, _fractional_coordinates
+                            )
+                            mm_pair_idx, mm_pair_mask = update_fn(R_nl, box=box_vec)
                         else:
                             mm_pair_idx, mm_pair_mask = update_fn(R)
                         get_stats = getattr(update_fn, "get_stats", None)
@@ -3763,6 +3845,7 @@ def setup_calculator(
                 doML_dimer=doML_dimer,
                 debug=debug,
             )
+            configured_spherical_cutoff.ml_chunk_layout = _ml_chunk_layout
 
             def get_update_fn(positions, cutoff_params_arg, box=None):
                 """Ensure MM fn is built and return update_mm_pairs, or None for cell-list path."""
@@ -4031,7 +4114,11 @@ def setup_calculator(
             dimer_pos_padded = dimer_pos_padded[idx]
             dimer_energies_all = dimer_energies[idx]
             dimer_forces_all = dimer_forces_flat.reshape(n_dimers_full, max_atoms, 3)[idx].reshape(-1, 3)
-            atom_mask_all = dimer_atom_mask_jnp[idx]
+            # Unused sparse slots hold fill_value=n_dimers; JAX clamps that
+            # out-of-range gather to the last dimer, so without this mask every
+            # padded slot re-adds the last pair's switched forces.
+            in_range = (idx < n_dimers_full).astype(dimer_atom_mask_jnp.dtype)
+            atom_mask_all = dimer_atom_mask_jnp[idx] * in_range[:, None]
             force_segments = dimer_idx_arr_jnp[idx].reshape(-1)
             na_arr = dimer_n_atoms_a_jnp[idx]
             nb_arr = dimer_n_atoms_b_jnp[idx]

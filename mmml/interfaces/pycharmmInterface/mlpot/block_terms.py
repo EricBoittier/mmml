@@ -29,6 +29,10 @@ def _import_pycharmm():
     return pycharmm
 
 
+# CHARMM bonded energy terms skipped when every atom is ML (see zero_mlpot_psf_mm_terms).
+ALL_ML_SKIPE_BONDED = ("BOND", "ANGL", "UREY", "DIHE", "IMPR", "CDIH")
+
+
 def _truthy(name: str) -> bool:
     return (os.environ.get(name) or "").strip().lower() in ("1", "yes", "true")
 
@@ -52,15 +56,23 @@ def zero_mlpot_psf_mm_terms(
     verbose: bool = False,
     periodic_external: bool = False,
 ) -> str:
-    """Disable CHARMM MM on ML atoms via zeroed CGENFF params (PSF connectivity kept).
+    """Disable CHARMM MM on ML atoms (PSF connectivity kept).
 
-    - Re-reads a **bonded-only** zeroed CGENFF .prm (BOND/ANGL/DIHE/IMPR/UREY-b → 0;
-      NONBOND/NBFIX/HBOND omitted so READ PARAM APPEND does not clear exclusion lists).
+    - All-ML: re-reads a **bonded-only** zeroed CGENFF .prm (BOND/ANGL/DIHE/IMPR/
+      UREY-b -> 0; NONBOND/NBFIX/HBOND omitted so READ PARAM APPEND does not
+      clear exclusion lists) and SKIPEs the CHARMM bonded terms.
+    - Hybrid ML+MM: the zeroed file is keyed by atom type and would also zero
+      MM molecules of the same types (#225). ML atoms are moved to copies of
+      their types with zero bond/angle force constants instead
+      (:mod:`~mmml.interfaces.pycharmmInterface.mlpot.ml_type_copies`); MM
+      parameters are untouched.
     - Zeros partial charges on ML atoms (ELEC off; MLpot supplies ML electrostatics).
-    - Does **not** call ``delete_connectivity`` (no DELTIC bond/angle deletion).
+    - Deletes PSF dihedrals/impropers/CMAP that touch ML atoms
+      (:func:`delete_ml_torsion_terms`). Bonds and angles stay in the PSF (no
+      ``delete_connectivity``), so nonbond exclusions are unchanged.
 
-    Hybrid ML+MM may still need legacy BLOCK (``MMML_MLPOT_USE_BLOCK=1``) for
-    ML–MM cross VDW when not using periodic CHARMM VDW.
+    BLOCK (``MMML_MLPOT_USE_BLOCK=1``) is still needed for ML–MM cross VDW
+    when not using periodic CHARMM VDW.
     """
     if float(mm_internal_scale) > 0.0:
         raise ValueError(
@@ -93,16 +105,44 @@ def zero_mlpot_psf_mm_terms(
         n_mm = n_total - n_ml
         vdw_note = ", CHARMM VDW on MM" if periodic_external else ""
         summary = (
-            f"MLpot zeroed CGENFF: hybrid ({n_ml} ML + {n_mm} MM; "
+            f"MLpot hybrid ({n_ml} ML + {n_mm} MM; "
             f"ML bonded zeroed, PSF bonds={n_bond_before}{vdw_note})"
         )
 
-    apply_zeroed_cgenff_params(bonded_only=True, verbose=verbose)
+    # All-ML: the zeroed APPEND zeroes BOND/ANGL/UREY/IMPR but overwrites only
+    # one term of each multi-term CGenFF dihedral, so ML torsions are also
+    # deleted from the PSF below. SKIPE covers bonded types the zeroed file
+    # lacks (extra PRMs); SKIPE accumulates, so this composes with the energy
+    # policy's SKIPE VDW IMNB. Hybrid: both are keyed globally (type / term),
+    # so ML atoms get zero-bonded copies of their types instead (#225).
+    if tag == "all":
+        apply_zeroed_cgenff_params(bonded_only=True, verbose=verbose)
+        pycharmm.lingo.charmm_script("SKIPE " + " ".join(ALL_ML_SKIPE_BONDED))
+        summary += f"; SKIPE {' '.join(ALL_ML_SKIPE_BONDED)}"
+    else:
+        from mmml.interfaces.pycharmmInterface.mlpot.ml_type_copies import (
+            apply_ml_type_copies,
+        )
+
+        copied = apply_ml_type_copies(ml_indices, tag, pycharmm=pycharmm)
+        summary += (
+            f"; ML type copies ({copied['types']} types, {copied['bonds']} bond / "
+            f"{copied['angles']} angle rows zeroed)"
+        )
 
     charges = list(pycharmm.psf.get_charges())
     for idx in ml_indices:
         charges[int(idx)] = 0.0
     pycharmm.psf.set_charge(charges)
+
+    removed = delete_ml_torsion_terms(
+        ml_selection, all_ml=(tag == "all"), pycharmm=pycharmm
+    )
+    if removed is not None:
+        summary += (
+            f"; deleted ML torsions (DIHE={removed['dihedrals']}, "
+            f"IMPR={removed['impropers']}, CMAP={removed['cmaps']})"
+        )
 
     assert_psf_bonds_present(context="MLpot registration (after zeroed CGENFF)")
 
@@ -112,6 +152,86 @@ def zero_mlpot_psf_mm_terms(
     if verbose:
         print(summary, flush=True)
     return tag
+
+
+# PSF term counters (CHARMM ``psf`` module) for the ML torsion deletion check.
+# gfortran exports ``__psf_MOD_<name>``; Intel Fortran exports ``psf_mp_<name>_``.
+_PSF_TORSION_COUNTERS = {"dihedrals": "nphi", "impropers": "nimphi", "cmaps": "ncrterm"}
+
+
+def _psf_torsion_counts(pycharmm: Any) -> dict[str, int] | None:
+    """Live PSF dihedral/improper/CMAP counts, or None when not readable.
+
+    ``?NPHI`` and friends are only refreshed by ``PSFSUM`` (not by the
+    ``pycharmm.psf.delete_*`` API), so read the Fortran module variables.
+    """
+    import ctypes
+
+    try:
+        lib = pycharmm.lib.charmm
+        counts: dict[str, int] = {}
+        for kind, var in _PSF_TORSION_COUNTERS.items():
+            for symbol in (f"__psf_MOD_{var}", f"psf_mp_{var}_"):
+                try:
+                    counts[kind] = int(ctypes.c_int.in_dll(lib, symbol).value)
+                    break
+                except ValueError:
+                    continue
+            else:
+                return None
+        return counts
+    except Exception:
+        return None
+
+
+def delete_ml_torsion_terms(
+    ml_selection: Any,
+    *,
+    all_ml: bool = False,
+    pycharmm: Any = None,
+) -> dict[str, int] | None:
+    """Delete PSF dihedrals, impropers and CMAP terms that touch ML atoms.
+
+    ``READ PARAM APPEND FLEX`` of the zeroed CGenFF file overwrites only the
+    last stored dihedral with the same four atom types, whatever its
+    multiplicity, so multi-term CGenFF torsions keep their other terms
+    (one ETOH: DIHE 3.2335 -> 0.2894 kcal/mol). CMAP is not in the zeroed file
+    at all. Deleting the terms from the PSF is exact per atom and leaves MM
+    molecules' torsion terms in the PSF.
+
+    Bonds and angles stay in the PSF: CHARMM builds nonbond exclusions and
+    1-4 pairs (``MAKINB``) from the bond list only, so VDW/ELEC exclusions are
+    unchanged. The deleted terms come back only with a PSF reload;
+    ``apply_full_cgenff_params`` restores force constants, not PSF entries.
+
+    Returns the number of terms removed per kind, or None when the PSF
+    counters cannot be read. With ``all_ml=True``, raises if any
+    dihedral/improper/CMAP term is left.
+    """
+    if pycharmm is None:
+        pycharmm = _import_pycharmm()
+    before = _psf_torsion_counts(pycharmm)
+    pycharmm.psf.delete_dihedrals(ml_selection, ml_selection)
+    pycharmm.psf.delete_impropers(ml_selection, ml_selection)
+    pycharmm.psf.delete_cmaps(ml_selection, ml_selection)
+    after = _psf_torsion_counts(pycharmm)
+
+    from mmml.interfaces.pycharmmInterface.mlpot.cgenff_prm_swap import (
+        mark_ml_torsions_deleted,
+    )
+
+    mark_ml_torsions_deleted()
+    if before is None or after is None:
+        return None
+    if all_ml:
+        left = {kind: n for kind, n in after.items() if n}
+        if left:
+            raise RuntimeError(
+                "MLpot registration: all-ML PSF still has torsion terms after "
+                f"deleting them on ML atoms ({left}); CHARMM would double-count "
+                "torsions on top of the ML potential."
+            )
+    return {kind: before[kind] - after[kind] for kind in before}
 
 
 def apply_mlpot_registration_mm_off(

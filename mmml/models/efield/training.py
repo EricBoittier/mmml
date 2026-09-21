@@ -653,6 +653,24 @@ def _flat_pairwise_indices(bs_b: int, num_atoms: int):
     return dst_idx_flat, src_idx_flat, batch_segments
 
 
+def require_drop_last_batches(n_train: int, n_valid: int, batch_size: int) -> None:
+    """Refuse a batch size that would drop every train or valid frame.
+
+    ``prepare_batches(..., drop_last=True)`` keeps only full batches. A 256-frame
+    SPICE-α smoke split is 230/13; ``MODE=full`` default ``BATCH_SIZE=64`` then
+    yields zero valid batches and ``valid_batches[0]`` raises ``IndexError``.
+    """
+    if batch_size < 1:
+        raise ValueError(f"batch_size must be >= 1, got {batch_size}")
+    if n_train < batch_size or n_valid < batch_size:
+        cap = min(n_train, n_valid)
+        raise ValueError(
+            f"batch_size={batch_size} leaves no full batches "
+            f"(n_train={n_train}, n_valid={n_valid}; drop_last). "
+            f"Use BATCH_SIZE<={cap} (256-frame SPICE-α extract: BATCH_SIZE=8)."
+        )
+
+
 def prepare_batches(
     key,
     data,
@@ -1301,6 +1319,11 @@ def train_model(key, model, train_data, valid_data, num_epochs, learning_rate, b
 
     train_n = int(train_data["positions"].shape[1])
     valid_n = int(valid_data["positions"].shape[1])
+    require_drop_last_batches(
+        int(np.asarray(train_data["electric_field"]).shape[0]),
+        int(np.asarray(valid_data["electric_field"]).shape[0]),
+        int(batch_size),
+    )
     train_dst_idx_flat, train_src_idx_flat, train_batch_segments = _batch_index_tensors(train_n)
     valid_dst_idx_flat, valid_src_idx_flat, valid_batch_segments = _batch_index_tensors(valid_n)
 

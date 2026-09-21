@@ -24,6 +24,17 @@ import numpy as np
 import pycharmm
 
 
+def _fail_closed(fn):
+    """Wrap ``fn`` with mmml's fail-closed callback guard when mmml is importable."""
+    try:
+        from mmml.interfaces.pycharmmInterface.mlpot.callback_failstop import (
+            fail_closed_callback,
+        )
+    except ImportError:
+        return fn
+    return fail_closed_callback(fn)
+
+
 class MLpot():
     """
     Custom Machine Learning potential
@@ -180,7 +191,12 @@ class MLpot():
                                                 # pointer (idxvp)
             )
 
-        self.energy_func = self.func_type(self.calculator.calculate_charmm)
+        # An exception escaping a ctypes callback is printed and 0 is returned
+        # to CHARMM, which then integrates with a zero USER energy and stale
+        # forces. mmml's guard terminates the process instead (exit 86).
+        self.energy_func = self.func_type(
+            _fail_closed(self.calculator.calculate_charmm)
+        )
 
         ###################################################
         # END - Potential model dependent part

@@ -48,10 +48,18 @@ def pair_displacements(
     positions_dst = e3x.ops.gather_dst(positions, dst_idx=dst_idx)
     positions_src = e3x.ops.gather_src(positions, src_idx=src_idx)
     if use_pbc and cell is not None:
+        from mmml.interfaces.pycharmmInterface.pbc_utils_jax import cell_inverse
+
         dR = positions_src - positions_dst
-        dS = jax.scipy.linalg.solve(cell.T, dR.T, assume_a="gen").T
+        # Same map as solve(cell.T, dR.T).T; 1/L on cubic, one inv otherwise.
+        # Callers must pass the current NPT cell each evaluation.
+        cell_in = jnp.asarray(cell)
+        dtype = jnp.promote_types(dR.dtype, cell_in.dtype)
+        dR = dR.astype(dtype)
+        cell_m = cell_in.astype(dtype)
+        dS = dR @ cell_inverse(cell_m)
         dS_mic = dS - jnp.round(dS)
-        return dS_mic @ cell
+        return dS_mic @ cell_m
     return positions_src - positions_dst
 
 

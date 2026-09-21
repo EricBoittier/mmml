@@ -572,11 +572,12 @@ def test_patch_restart_global_step_preserves_fortran_restart_format(tmp_path):
     res = tmp_path / "overlap_a.res"
     res.write_text(stub.read_text(encoding="utf-8"), encoding="utf-8")
 
+    header_before = res.read_text(encoding="utf-8").splitlines()[0]
     assert patch_restart_global_step(res, 500)
 
     lines = res.read_text(encoding="utf-8").splitlines()
-    assert lines[0].startswith("REST")
-    assert lines[0][10:20] == "       500"
+    # REST header is (A4,2I6,...) = HDR, IVERS, LDYNA: never a step counter (#219).
+    assert lines[0] == header_before
     assert read_restart_last_step(res) == 500
     natom_line = lines[7]
     assert "0.314159000000000D+06" in natom_line
@@ -1168,9 +1169,6 @@ def test_rewrite_dynamics_restart_validated_patches_negative_step(tmp_path, monk
     from mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery import (
         rewrite_dynamics_restart_validated,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
-        read_restart_last_step,
-    )
 
     path = tmp_path / "baseline.res"
 
@@ -1189,8 +1187,11 @@ def test_rewrite_dynamics_restart_validated_patches_negative_step(tmp_path, monk
     )
 
     assert rewrite_dynamics_restart_validated(path) is True
-    # Verify it has been patched to 0
-    assert read_restart_last_step(path) == 0
+    # JHSTRT is patched to 0; the REST header (IVERS, LDYNA) is left for READYN (#219).
+    lines = path.read_text(encoding="utf-8").splitlines()
+    assert lines[0].startswith("REST    48    -1")
+    natom_idx = next(i for i, ln in enumerate(lines) if "!NATOM" in ln)
+    assert lines[natom_idx + 1].split()[5] == "0"
 
 
 def test_integrated_step_from_restart_negative_aborted_step(tmp_path):
@@ -1399,3 +1400,129 @@ def test_rewrite_overlap_readyn_restart_harmonizes_nsavv(tmp_path, monkeypatch):
     assert captured["nsavc"] == 49
     assert captured["nsavv"] == 50
     assert read_restart_nsavv(scratch) == 50
+
+
+def test_assert_stage_dynamics_completed_rejects_empty_dcd_after_full_integration(tmp_path):
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        assert_stage_dynamics_completed,
+    )
+
+    dcd = tmp_path / "prod.0.dcd"
+    dcd.write_bytes(b"")
+    with pytest.raises(RuntimeError, match="0 readable frame"):
+        assert_stage_dynamics_completed(
+            stage="prod",
+            expected_nstep=100000,
+            nsavc=4000,
+            dcd_path=dcd,
+            restart_path=None,
+            integrated_step=100000,
+        )
+
+
+def _charmm_rest_header_ldyna(line: str) -> int:
+    """LDYNA as CHARMM ``READYN`` parses it: ``READ(U,'(A4,2I6,...)')``; blank -> 0."""
+    field = line[10:16].strip()
+    return int(field) if field else 0
+
+
+@pytest.mark.parametrize("step", [50, 500, 123456])
+@pytest.mark.parametrize("patcher", ["global_step", "readyn_handoff"])
+def test_restart_patchers_keep_rest_header_ldyna_issue_219(tmp_path, step, patcher):
+    """Overlap chunk handoff must not rewrite LDYNA in the REST header (#219).
+
+    ``READYN`` converts Verlet->leap-frog (``X = X - XOLD``) when LDYNA differs from
+    the running integrator, turning the step-displacement array into
+    ``disp - positions`` and giving KE ~1e9 on the first post-handoff step.
+    """
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        patch_restart_global_step,
+        patch_restart_readyn_handoff,
+        read_restart_last_step,
+    )
+
+    stub = (
+        Path(__file__).resolve().parents[1]
+        / "functionality/mlpot/output/dynamics/nve_stub.res"
+    )
+    res = tmp_path / "nve.a.res"
+    res.write_text(stub.read_text(encoding="utf-8"), encoding="utf-8")
+    header_before = res.read_text(encoding="utf-8").splitlines()[0]
+    assert _charmm_rest_header_ldyna(header_before) == 1
+
+    if patcher == "global_step":
+        assert patch_restart_global_step(res, step)
+    else:
+        assert patch_restart_readyn_handoff(res, global_step=step, nsavc=8, nsavv=50)
+
+    header_after = res.read_text(encoding="utf-8").splitlines()[0]
+    assert header_after == header_before
+    assert _charmm_rest_header_ldyna(header_after) == 1
+    assert header_after[18:22] == header_before[18:22]  # XTLTPR (crystal type)
+    assert read_restart_last_step(res) == step
+
+
+def test_expected_overlap_stage_dcd_frame_count_uses_global_cadence():
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        expected_overlap_stage_dcd_frame_count,
+    )
+
+    assert expected_overlap_stage_dcd_frame_count(total_nstep=2000, nsavc=500) == 4
+    assert expected_overlap_stage_dcd_frame_count(total_nstep=100000, nsavc=4000) == 25
+    # Per-chunk expectation hides these saves when nsavc >= chunk length.
+    assert expected_overlap_chunk_dcd_frame_count(total_nstep=2000, nsavc=500, n_chunks=4) == 0
+
+
+def test_assert_stage_warns_when_chunk_frames_below_global_cadence(tmp_path, capsys):
+    dcd = tmp_path / "prod.dcd"
+    atoms = [None, None]
+    for i in range(4):
+        n = 1 if i == 3 else 0
+        save_trajectory_dcd(
+            tmp_path / f"prod.{i:04d}.dcd",
+            np.zeros((n, 2, 3)),
+            atoms,
+            boxes=[np.array([30.0, 30.0, 30.0])],
+            steps_per_frame=499,
+        )
+
+    assert_stage_dynamics_completed(
+        stage="prod",
+        expected_nstep=2000,
+        nsavc=500,
+        dcd_path=dcd,
+        integrated_step=2000,
+    )
+
+    out = capsys.readouterr().out
+    assert "fewer than the 4 global saves" in out
+    assert "PROD complete" in out
+
+
+def test_read_restart_positions_uses_xold_of_leapfrog_restart():
+    """NVE (leap-frog) restarts: positions are XOLD; X, Y, Z holds the ~1e-3 A step displacement."""
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        _restart_section_values,
+        read_restart_positions,
+    )
+
+    stub = Path(__file__).resolve().parents[1] / "functionality/mlpot/output/dynamics/nve_stub.res"
+    pos = read_restart_positions(stub)
+    xold = np.asarray(_restart_section_values(stub, "!XOLD, YOLD, ZOLD")[:60]).reshape(20, 3)
+    assert pos is not None and np.allclose(pos, xold)
+    assert np.ptp(pos) > 1.0
+    assert pos[0, 0] == pytest.approx(-2.32520167626342)
+
+
+def test_read_restart_positions_coordinate_only_restart(tmp_path):
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import read_restart_positions
+
+    pos = np.array([[1.25, -2.5, 3.75], [-7.5, 11.25, -13.5]])
+    body = "".join("".join(f"{v:22.15E}".replace("E", "D") for v in row) + "\n" for row in pos)
+    res = tmp_path / "baseline.res"
+    res.write_text(
+        "REST    37     1\n\n !NATOM,NPRIV,NSTEP,NSAVC,NSAVV,JHSTRT,NDEGF,SEED,NSAVL\n"
+        "           2           1           0           0           0           0"
+        "           6           1           0\n !X, Y, Z\n" + body
+    )
+    assert np.allclose(read_restart_positions(res), pos)

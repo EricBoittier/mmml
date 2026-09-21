@@ -63,6 +63,82 @@ def test_parse_units_attr_json_bytes_and_dict():
     assert parse_units_attr(None) == {}
 
 
+def test_read_units_map_peeks_only_first_molecule_group():
+    seen: list[str] = []
+
+    class _Group:
+        def __init__(self, attrs, *, molecule=True):
+            self.attrs = attrs
+            self._molecule = molecule
+
+        def __contains__(self, key):
+            return key == "conformations" if self._molecule else False
+
+    class _H5:
+        attrs = {"units_map": ""}
+
+        def keys(self):
+            return iter(["metadata_only", "CCO", "must_not_touch"])
+
+        def __getitem__(self, name):
+            seen.append(name)
+            if name == "must_not_touch":
+                raise AssertionError("must not scan past the first molecule group")
+            if name == "metadata_only":
+                return _Group({}, molecule=False)
+            return _Group(
+                {
+                    "units_map": json.dumps(
+                        {
+                            "conformations": "bohr",
+                            "dft_total_energy": "hartree",
+                            "dft_total_gradient": "hartree/bohr",
+                        }
+                    )
+                }
+            )
+
+    assert classify_units_map(read_units_map(_H5())) == "atomic"
+    assert seen == ["metadata_only", "CCO"]
+
+
+def test_read_units_map_nonempty_root_still_peeks_first_group_for_conflicts():
+    class _Group:
+        attrs = {"units_map": json.dumps(SPICE_ALPHA_CANONICAL_UNITS)}
+
+        def __contains__(self, key):
+            return key == "conformations"
+
+    class _H5:
+        attrs = {"units_map": json.dumps(SPICE_ALPHA_CANONICAL_UNITS)}
+
+        def keys(self):
+            return iter(["CCO"])
+
+        def __getitem__(self, name):
+            return _Group()
+
+    assert classify_units_map(read_units_map(_H5())) == "canonical"
+
+
+def test_parse_units_attr_empty_invalid_and_numpy_scalars():
+    payload = {"dft_total_energy": "eV"}
+    encoded = json.dumps(payload)
+    assert parse_units_attr("") == {}
+    assert parse_units_attr("   ") == {}
+    assert parse_units_attr("\ufeff") == {}
+    assert parse_units_attr(b"") == {}
+    with pytest.raises(ValueError, match="malformed units_map"):
+        parse_units_attr("not-json")
+    assert parse_units_attr(np.bytes_(b"")) == {}
+    assert parse_units_attr(np.str_("")) == {}
+    assert parse_units_attr(np.bytes_(encoded.encode())) == payload
+    assert parse_units_attr(np.str_(encoded)) == payload
+    assert parse_units_attr(np.array(encoded)) == payload
+    assert parse_units_attr(np.array(b"")) == {}
+    assert parse_units_attr(np.array([], dtype=object)) == {}
+
+
 def test_iter_frames_flips_gradient_and_skips_non_molecule_groups(tmp_path):
     path = _write_spice_h5(tmp_path / "spice.hdf5")
     with h5py.File(path, "r") as handle:
@@ -297,6 +373,74 @@ def test_missing_units_attr_is_unknown(tmp_path):
         assert classify_units_map(read_units_map(handle)) == "unknown"
 
 
+def test_empty_file_units_map_converts_as_unknown(tmp_path):
+    src = tmp_path / "empty_units.hdf5"
+    _write_spice_h5(src, extra_group=False)
+    with h5py.File(src, "a") as handle:
+        handle.attrs["units_map"] = ""
+    with h5py.File(src, "r") as handle:
+        raw = handle.attrs.get("units_map")
+        assert parse_units_attr(raw) == {}
+        assert classify_units_map(read_units_map(handle)) == "unknown"
+    data = convert_spice_alpha_hdf5([src], tmp_path / "out.npz", max_frames=1)
+    assert data["E"][0] == pytest.approx(-100.0)
+
+
+def test_empty_bytes_units_map_converts_as_unknown(tmp_path):
+    src = tmp_path / "bad_units.hdf5"
+    _write_spice_h5(src, extra_group=False)
+    with h5py.File(src, "a") as handle:
+        handle.attrs["units_map"] = np.bytes_(b"")
+    data = convert_spice_alpha_hdf5([src], tmp_path / "out.npz", max_frames=1)
+    assert data["E"][0] == pytest.approx(-100.0)
+
+
+def test_empty_root_preserves_group_atomic_units(tmp_path):
+    atomic = {
+        "conformations": "bohr",
+        "dft_total_energy": "hartree",
+        "dft_total_gradient": "hartree/bohr",
+    }
+    src = _write_spice_h5(
+        tmp_path / "spice.hdf5",
+        extra_group=False,
+        file_level_units=False,
+        units=atomic,
+    )
+    with h5py.File(src, "a") as handle:
+        handle.attrs["units_map"] = ""
+    with h5py.File(src, "r") as handle:
+        assert classify_units_map(read_units_map(handle)) == "atomic"
+    with pytest.raises(ValueError, match="Bohr/Hartree"):
+        convert_spice_alpha_hdf5([src], tmp_path / "out.npz")
+    data = convert_spice_alpha_hdf5(
+        [src], tmp_path / "out.npz", require_canonical_units=False, max_frames=1
+    )
+    assert data["E"][0] == pytest.approx(-100.0)
+
+
+def test_malformed_units_map_is_an_error(tmp_path):
+    src = _write_spice_h5(tmp_path / "spice.hdf5", extra_group=False)
+    with h5py.File(src, "a") as handle:
+        handle.attrs["units_map"] = "{not json"
+    with pytest.raises(ValueError, match="malformed units_map"):
+        convert_spice_alpha_hdf5([src], tmp_path / "out.npz", max_frames=1)
+
+
+def test_contradictory_root_and_group_units_are_an_error(tmp_path):
+    src = _write_spice_h5(tmp_path / "spice.hdf5", extra_group=False)
+    with h5py.File(src, "a") as handle:
+        handle["CCO"].attrs["units_map"] = json.dumps(
+            {
+                "conformations": "bohr",
+                "dft_total_energy": "hartree",
+                "dft_total_gradient": "hartree/bohr",
+            }
+        )
+    with pytest.raises(ValueError, match="contradictory units_map"):
+        convert_spice_alpha_hdf5([src], tmp_path / "out.npz", max_frames=1)
+
+
 def test_bad_conformations_rank_is_an_error(tmp_path):
     path = tmp_path / "bad.hdf5"
     with h5py.File(path, "w") as handle:
@@ -360,6 +504,46 @@ def test_max_atomic_number_empty_n_is_zero():
         "F": np.zeros((1, 2, 3)),
     }
     assert max_atomic_number(data) == 0
+
+
+def test_extract_des370k_hdf5_accepts_dot_slash_members(tmp_path):
+    import io
+    import tarfile
+
+    from mmml.data.spice_alpha import extract_des370k_hdf5
+
+    archive = tmp_path / "SPICE-alpha.tar.gz"
+    dest = tmp_path / "out"
+    with tarfile.open(archive, "w:gz") as handle:
+        for name in ("./DES370K_Monomers.hdf5", "./DES370K_Dimers.hdf5"):
+            payload = name.encode()
+            info = tarfile.TarInfo(name=name)
+            info.size = len(payload)
+            handle.addfile(info, io.BytesIO(payload))
+    written = extract_des370k_hdf5(archive, dest)
+    assert {path.name for path in written} == {
+        "DES370K_Monomers.hdf5",
+        "DES370K_Dimers.hdf5",
+    }
+    assert (dest / "DES370K_Monomers.hdf5").is_file()
+
+
+def test_extract_des370k_hdf5_accepts_bare_members(tmp_path):
+    import io
+    import tarfile
+
+    from mmml.data.spice_alpha import extract_des370k_hdf5
+
+    archive = tmp_path / "bare.tar.gz"
+    dest = tmp_path / "out"
+    with tarfile.open(archive, "w:gz") as handle:
+        for name in ("DES370K_Monomers.hdf5", "DES370K_Dimers.hdf5"):
+            payload = b"x"
+            info = tarfile.TarInfo(name=name)
+            info.size = 1
+            handle.addfile(info, io.BytesIO(payload))
+    written = extract_des370k_hdf5(archive, dest)
+    assert len(written) == 2
 
 
 def test_check_efield_train_npz_accepts_bohr3_zero_field(tmp_path):

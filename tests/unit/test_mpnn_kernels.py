@@ -242,3 +242,65 @@ def test_edge_mask_zeros_basis(water_edges):
     assert np.allclose(np.asarray(basis[2]), 0.0)
     assert np.allclose(np.asarray(basis[3]), 0.0)
     assert np.any(np.asarray(basis[0]) != 0.0)
+
+
+def test_pair_displacements_pbc_matches_linear_solve():
+    """1/L or one inv must match the previous ``solve(cell.T, dR.T).T`` MIC."""
+    rng = np.random.default_rng(2)
+    positions = jnp.asarray(rng.normal(size=(8, 3)))
+    dst = jnp.asarray([0, 0, 1, 2, 3, 4], dtype=jnp.int32)
+    src = jnp.asarray([5, 6, 7, 4, 1, 2], dtype=jnp.int32)
+    cubic = jnp.diag(jnp.array([26.0, 26.0, 26.0]))
+    sheared = jnp.array(
+        [[20.0, 0.4, 0.1], [0.2, 18.0, -0.3], [0.0, 0.5, 22.0]],
+        dtype=jnp.float64,
+    )
+    dR = positions[src] - positions[dst]
+    for cell in (cubic, sheared):
+        got = pair_displacements(positions, dst, src, cell=cell, use_pbc=True)
+        dS = jax.scipy.linalg.solve(cell.T, dR.T, assume_a="gen").T
+        ref = (dS - jnp.round(dS)) @ cell
+        np.testing.assert_allclose(np.asarray(got), np.asarray(ref), rtol=1e-10, atol=1e-10)
+        assert np.asarray(got).dtype == np.float64
+
+
+def test_pair_displacements_uses_current_cell_after_box_change():
+    positions = jnp.array([[0.0, 0.0, 0.0], [20.0, 0.0, 0.0]], dtype=jnp.float64)
+    dst = jnp.array([0], dtype=jnp.int32)
+    src = jnp.array([1], dtype=jnp.int32)
+    small = jnp.diag(jnp.array([16.0, 16.0, 16.0]))
+    large = jnp.diag(jnp.array([40.0, 40.0, 40.0]))
+    d_small = pair_displacements(positions, dst, src, cell=small, use_pbc=True)
+    d_large = pair_displacements(positions, dst, src, cell=large, use_pbc=True)
+    # 20 Å wraps under 16 Å (MIC +4) but not under 40 Å.
+    np.testing.assert_allclose(np.asarray(d_small)[0], [4.0, 0.0, 0.0], atol=1e-12)
+    np.testing.assert_allclose(np.asarray(d_large)[0], [20.0, 0.0, 0.0], atol=1e-12)
+
+
+def test_pair_displacements_pbc_energy_forces_match_solve():
+    """value_and_grad parity vs the old trsm path (cubic + sheared, away from ±L/2)."""
+    rng = np.random.default_rng(4)
+    positions = jnp.asarray(rng.uniform(2.0, 8.0, size=(6, 3)))
+    dst = jnp.asarray([0, 0, 1, 2], dtype=jnp.int32)
+    src = jnp.asarray([3, 4, 5, 1], dtype=jnp.int32)
+    cubic = jnp.diag(jnp.array([26.0, 26.0, 26.0]))
+    sheared = jnp.array(
+        [[20.0, 0.4, 0.1], [0.2, 18.0, -0.3], [0.0, 0.5, 22.0]],
+        dtype=jnp.float64,
+    )
+
+    def _energy_new(pos, cell):
+        d = pair_displacements(pos, dst, src, cell=cell, use_pbc=True)
+        return 0.5 * jnp.sum(d * d)
+
+    def _energy_solve(pos, cell):
+        dR = pos[src] - pos[dst]
+        dS = jax.scipy.linalg.solve(cell.T, dR.T, assume_a="gen").T
+        d = (dS - jnp.round(dS)) @ cell
+        return 0.5 * jnp.sum(d * d)
+
+    for cell in (cubic, sheared):
+        e_new, g_new = jax.value_and_grad(_energy_new)(positions, cell)
+        e_old, g_old = jax.value_and_grad(_energy_solve)(positions, cell)
+        np.testing.assert_allclose(float(e_new), float(e_old), rtol=1e-10, atol=1e-12)
+        np.testing.assert_allclose(np.asarray(g_new), np.asarray(g_old), rtol=1e-9, atol=1e-10)
