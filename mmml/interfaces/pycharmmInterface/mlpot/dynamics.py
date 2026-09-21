@@ -4932,15 +4932,22 @@ def run_dynamics(dynamics_kwargs: dict[str, Any]) -> Any:
     _apply_dynamics_io_setters(kw, restart_read_unit=restart_read_unit)
     _prepare_dynamics_list_frequencies(kw, nstep=nstep)
     heat_append = _dynamics_script_append_for_heat_ramp(kw)
-    if use_c_api:
-        dyn = _run_dynamics_via_c_api(
-            kw,
-            heat_append=heat_append,
-            init_velocities=init_velocities,
-        )
-    else:
-        dyn = pycharmm.DynamicsScript(**kw)
-        _execute_dynamics_script(dyn, append=heat_append)
+    from mmml.interfaces.pycharmmInterface.mlpot.strain_virial import (
+        cpt_strain_virial_scope,
+    )
+
+    # CPT with a live barostat: the MLpot callback stages the strain-virial
+    # correction each step (CHARMM's sum(x*F) misses the lattice term).
+    with cpt_strain_virial_scope(kw):
+        if use_c_api:
+            dyn = _run_dynamics_via_c_api(
+                kw,
+                heat_append=heat_append,
+                init_velocities=init_velocities,
+            )
+        else:
+            dyn = pycharmm.DynamicsScript(**kw)
+            _execute_dynamics_script(dyn, append=heat_append)
     if post_dyna_restart_target is not None:
         post_dyna_restart_write = (
             _post_dyna_restart_write_path(post_dyna_restart_target, post_dyna_io_aliases)
@@ -7310,6 +7317,7 @@ def _cpt_subchunk_restart_is_short(
     steps_done: int,
     n: int,
     restart_handoff: bool = False,
+    fresh_start: bool = False,
 ) -> bool:
     """True when a CPT sub-chunk's restart shows CHARMM stopped before ``n`` steps.
 
@@ -7321,7 +7329,9 @@ def _cpt_subchunk_restart_is_short(
     * in-memory handoff (default): CHARMM restarts its counter for each overlap
       chunk, so the restart holds a chunk-local step (e.g. 250 for global
       500-750; reading it as global stopped every overlap chunk after the first
-      after one sub-chunk). Complete iff it equals ``steps_done + n`` exactly. A
+      after one sub-chunk). Complete iff it equals ``steps_done + n``, or ``n``
+      when the sub-chunk began a fresh DYNA (``fresh_start``: ``start=True``
+      resets JHSTRT). A
       value at or past the global end is also accepted, since a chunk entered
       through a READYN restart may carry the restart's global counter; a
       0-step sub-chunk (counter still at ``steps_done``) is short either way.
@@ -7339,7 +7349,15 @@ def _cpt_subchunk_restart_is_short(
         return False
     if restart_handoff:
         return True
-    return step != chunk_end
+    if step == chunk_end:
+        return False
+    # A sub-chunk that starts a fresh DYNA (``start=True``, velocities assigned
+    # at the bath T) resets CHARMM's counter, so a complete sub-chunk reads ``n``
+    # rather than the cumulative ``steps_done + n``. Rejecting ``n`` stopped every
+    # such CPT stage after its second sub-chunk (250 of 10-20k steps run, 0-1 DCD
+    # frames, "dynamics stages did not finish"). Without a fresh start, ``n``
+    # can also be an unchanged counter (0-step sub-chunk), so it stays short.
+    return not (fresh_start and step == int(n))
 
 
 def _cpt_subchunk_trajectory_path(chunk_traj: Path, k: int) -> Path:
@@ -7773,6 +7791,7 @@ def _run_cpt_stability_subchunk_loop(
                 steps_done=steps_done,
                 n=n,
                 restart_handoff=use_restart_handoff,
+                fresh_start=bool(sub_kw.get("start")),
             ):
                 actual_in_segment = int(actual_global) - int(global_step_offset)
                 _emit_overlap_log(

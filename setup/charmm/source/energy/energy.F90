@@ -388,7 +388,7 @@ use extbond
 use triakern ! Pezzella 10.12.2019
 use fullkern ! Pezzella 11.07.2020 
 
-use api_func, only: func_call, func_is_set, mlpot_call, mlpot_is_set
+use api_func, only: func_call, func_is_set, mlpot_call, mlpot_is_set, mlpot_take_virial
 
 !
   implicit none
@@ -2460,6 +2460,8 @@ use api_func, only: func_call, func_is_set, mlpot_call, mlpot_is_set
 #if KEY_DOMDEC==1
   endif
 #endif
+  ! MLpot strain-virial correction staged by the USER callback (no-op otherwise).
+  if (mlpot_is_set()) call mlpot_take_virial(EPRESS(VIXX:VIZZ), EPROP(VIRI))
 
 #if KEY_LRVDW==1
   !   ADD in long range correction to diagonal virial elements

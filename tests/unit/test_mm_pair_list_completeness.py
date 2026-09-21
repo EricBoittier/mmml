@@ -189,7 +189,9 @@ def test_radius_reaching_half_box_raises():
         _build(R, box_L=18.0)
 
 
-def test_rebuild_raises_when_molecule_outgrows_assumed_extent():
+def test_rebuild_raises_when_molecule_outgrows_assumed_extent(monkeypatch):
+    # Pin the margin: the default grows into free L/2 headroom (resolve_mm_extent_margin_A).
+    monkeypatch.setenv("MMML_MM_EXTENT_MARGIN_A", "0.25")
     R = _box(ON + 0.3)
     extent0 = max_monomer_extent_A(R, np.arange(0, R.shape[0] + 1, APM), np.diag([L] * 3))
     assert extent0 == pytest.approx(HALF)
@@ -245,3 +247,21 @@ def test_update_mm_pairs_gpu_rebuild_identical_to_cpu(edge_com, monkeypatch):
         # Identical pair list + inputs; XLA GPU scatter-add order may flip the last ulp.
         assert eg == pytest.approx(ec, rel=1e-13, abs=1e-13)
         np.testing.assert_allclose(fg, fc, rtol=1e-12, atol=1e-13)
+
+
+def test_extent_margin_grows_into_half_box_headroom(monkeypatch):
+    """The assumed extent uses the room left below L/2 (capped), never less than requested."""
+    from mmml.interfaces.pycharmmInterface.mm_energy_forces import resolve_mm_extent_margin_A
+
+    monkeypatch.delenv("MMML_MM_EXTENT_MARGIN_A", raising=False)
+    kw = dict(mm_switch_on=6.0, mm_switch_width=5.0, skin_distance=0.25)
+    # DCM:308 in 32 A: 16 - 1e-3 - (11.25 + 2 * 1.727) = 1.295 of radius -> 0.6475 of extent
+    m = resolve_mm_extent_margin_A(0.25, measured_extent_A=1.727, cell=np.eye(3) * 32.0, **kw)
+    assert m == pytest.approx(0.6475, abs=1e-6)
+    assert 11.25 + 2 * (1.727 + m) < 16.0
+    # no headroom: the requested floor
+    assert resolve_mm_extent_margin_A(0.25, measured_extent_A=2.4, cell=np.eye(3) * 32.0, **kw) == 0.25
+    # large box: capped
+    assert resolve_mm_extent_margin_A(0.25, measured_extent_A=1.0, cell=np.eye(3) * 80.0, **kw) == 1.0
+    monkeypatch.setenv("MMML_MM_EXTENT_MARGIN_A", "0.1")
+    assert resolve_mm_extent_margin_A(0.25, measured_extent_A=1.0, cell=np.eye(3) * 80.0, **kw) == 0.1
