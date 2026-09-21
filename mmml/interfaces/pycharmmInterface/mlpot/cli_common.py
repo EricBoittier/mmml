@@ -2702,17 +2702,28 @@ def mlpot_spherical_energy_forces_ev_angstrom(
     use_pbc: bool,
     box_A: float | None,
 ) -> tuple[float, np.ndarray] | None:
-    """Hybrid energy (eV) and forces (eV/Å) from ``spherical_fn`` in one evaluation."""
+    """Hybrid energy (eV) and forces (eV/Å) from ``spherical_fn`` in one evaluation.
+
+    With a periodic box this is the CHARMM callback's Hamiltonian
+    (:meth:`DecomposedMlpotCalculator.evaluate_hybrid_ev`: molecules rewrapped whole,
+    same MM pair list, dimer candidates and chunk budget).
+    """
     from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import (
         DecomposedMlpotCalculator,
         DecomposedMlpotModel,
+        _DeferredDecomposedMlpotCalculator,
     )
 
     if not isinstance(pyCModel, DecomposedMlpotModel):
         return None
     calc = pyCModel.get_pycharmm_calculator()
+    if isinstance(calc, _DeferredDecomposedMlpotCalculator):
+        calc = calc._ensure_real()
     if not isinstance(calc, DecomposedMlpotCalculator) or calc.spherical_fn is None:
         return None
+    if use_pbc and box_A is not None and not (calc.do_mm and calc._mm_pair_source == "charmm_callback"):
+        energy_ev, forces_ev, _ = calc.evaluate_hybrid_ev(positions, float(box_A))
+        return energy_ev, forces_ev
 
     import jax
     import jax.numpy as jnp

@@ -33,6 +33,7 @@ import pandas as pd
 import jax
 import jax.numpy as jnp
 from mmml.interfaces.pycharmmInterface.pbc_utils_jax import (
+    _cell_as_matrix,
     cart_coords,
     frac_coords,
     mic_displacement,
@@ -711,6 +712,44 @@ def metatomic_zero_fragment_output(
     }
 
 
+def strain_stress_voigt(R, F, box_lengths, energy_of_cell) -> np.ndarray:
+    """ASE stress (eV/Å³, Voigt xx yy zz yz xz xy) = (1/V) dE/dε for a homogeneous strain.
+
+    ``dE/dε = -Fᵀ R + Gᵀ h`` with ``h`` the cell (rows = lattice vectors) and
+    ``G = ∂E/∂h`` at fixed Cartesian positions from ``energy_of_cell(h)``
+    (minimum-image shifts, make_monomers_whole and switching are differentiable in
+    the cell). The central-atom term ``-Fᵀ R`` alone misses the image contribution
+    under PBC. The derivative is taken with the 3x3 matrix so shear is included.
+    """
+    h = jnp.diag(jnp.asarray(box_lengths, dtype=jnp.float64))
+    G = np.asarray(jax.device_get(jax.grad(energy_of_cell)(h)), dtype=np.float64)
+    h_np = np.asarray(h, dtype=np.float64)
+    dE_deps = -(np.asarray(F, dtype=np.float64).T @ np.asarray(R, dtype=np.float64)) + G.T @ h_np
+    dE_deps = 0.5 * (dE_deps + dE_deps.T)
+    sigma = dE_deps / abs(float(np.linalg.det(h_np)))
+    return np.array(
+        [sigma[0, 0], sigma[1, 1], sigma[2, 2], sigma[1, 2], sigma[0, 2], sigma[0, 1]],
+        dtype=np.float64,
+    )
+
+
+def make_monomers_whole(positions, cell, anchor_idx):
+    """Rejoin molecules split across the cell: each atom goes to its minimum image around its molecule's first atom.
+
+    Engines that wrap atoms one at a time (jax-md ``periodic_general`` with fractional
+    coordinates, ASE ``wrap()``) hand the calculator molecules split across a face; the
+    ML monomer/dimer terms use in-molecule Cartesian geometry, so a split molecule gave
+    a different energy (+385 kcal/mol on a 308-DCM 32 Å frame). The shift is
+    ``-(n @ cell)`` with the integer image count under stop_gradient: forces are
+    unchanged and the energy stays differentiable in the cell (strain virial). Exact
+    while every molecule spans less than half the cell.
+    """
+    cell_m = _cell_as_matrix(cell)
+    d = positions - positions[anchor_idx]
+    n = jax.lax.stop_gradient(jnp.round(frac_coords(d, cell_m)))
+    return positions - cart_coords(n, cell_m)
+
+
 def _dimer_lattice_shift(com_a, com_b, cell):
     """Lattice vector that moves monomer B to its minimum image around monomer A.
 
@@ -1018,6 +1057,8 @@ def setup_calculator(
     for i, n in enumerate(atoms_per_monomer_list):
         monomer_offsets[i + 1] = monomer_offsets[i] + n
     total_atoms = int(monomer_offsets[-1])
+    # First atom of each atom's molecule (make_monomers_whole anchor).
+    _monomer_anchor_idx = np.repeat(monomer_offsets[:-1], np.asarray(atoms_per_monomer_list, dtype=int)).astype(np.int32)
 
     if mm_atomic_numbers is not None:
         _mm_atomic_numbers = np.asarray(mm_atomic_numbers, dtype=int).reshape(-1)
@@ -2291,6 +2332,8 @@ def setup_calculator(
         n_dimers = len(dimer_permutations(n_monomers))
         n_atoms = positions.shape[0]
         mic_pbc_cell = box if box is not None else pbc_cell
+        if mic_pbc_cell is not None and n_atoms == total_atoms:
+            positions = make_monomers_whole(positions, mic_pbc_cell, _monomer_anchor_idx)
         
         # Optional: reorder to model order for ML, then remap back
         ml_perm = None
@@ -3482,7 +3525,7 @@ def setup_calculator(
         class AseDimerCalculator(ase_calc.Calculator):
             """ASE calculator implementation for dimer calculations"""
 
-            implemented_properties = ["energy", "forces", "out"]
+            implemented_properties = ["energy", "forces", "stress", "out"]
 
             def __init__(
                 self,
@@ -3579,6 +3622,13 @@ def setup_calculator(
                     return dict(get_stats())
                 return {}
 
+            @staticmethod
+            def _strain_stress(R, F, box_lengths, spherical_eval):
+                return strain_stress_voigt(
+                    R, F, box_lengths,
+                    lambda cell: jnp.reshape(spherical_eval(jnp.asarray(R), cell).energy, (-1,))[0],
+                )
+
             def calculate(
                 self,
                 atoms,
@@ -3660,7 +3710,7 @@ def setup_calculator(
                     box=box_jax,
                 )
 
-                def _spherical_eval(positions_jax):
+                def _spherical_eval(positions_jax, box_arg=None):
                     kwargs = dict(
                         positions=positions_jax,
                         atomic_numbers=jnp.asarray(Z),
@@ -3673,8 +3723,9 @@ def setup_calculator(
                         mm_pair_idx=mm_pair_idx,
                         mm_pair_mask=mm_pair_mask,
                     )
-                    if box_jax is not None:
-                        kwargs["box"] = box_jax
+                    box_use = box_jax if box_arg is None else box_arg
+                    if box_use is not None:
+                        kwargs["box"] = box_use
                     return spherical_cutoff_calculator(**kwargs)
 
                 # First FIRE/MD force eval often JIT-compiles the chunked ML path
@@ -3731,6 +3782,10 @@ def setup_calculator(
                 final_energy = E
                 
                 self.results["energy"] = final_energy * self.energy_conversion_factor
+                if box_jax is not None and "stress" in properties:
+                    self.results["stress"] = self._strain_stress(
+                        R, np.asarray(jax.device_get(F), dtype=np.float64), box_jax, _spherical_eval
+                    ) * self.energy_conversion_factor
                 # Ensure forces are finite before storing
                 forces_final = F * self.force_conversion_factor
                 

@@ -65,13 +65,17 @@ def cell_inverse(cell: Array) -> Array:
     is_diag = jnp.all(jnp.abs(off) <= jnp.asarray(1.0e-12, dtype=cell.dtype) * scale)
 
     def _diag_inv() -> Array:
-        return jnp.diag(
+        d_inv = jnp.diag(
             jnp.where(
                 jnp.abs(diag) > jnp.asarray(1.0e-18, dtype=cell.dtype),
                 1.0 / diag,
                 0.0,
             )
         )
+        # First order in the (here ~0) off-diagonal part: same value, but the
+        # derivative in the off-diagonal cell entries is right, so dE/d(cell)
+        # (shear stress, anisotropic strain virial) is not silently zero.
+        return d_inv - d_inv @ off @ d_inv
 
     # lax.cond so cubic MD does not launch the general 3×3 inv/trsm per pair.
     return jax.lax.cond(is_diag, _diag_inv, lambda: jnp.linalg.inv(cell))
