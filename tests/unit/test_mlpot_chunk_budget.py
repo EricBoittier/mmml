@@ -97,13 +97,14 @@ def test_callback_reruns_when_budget_too_small():
 
     def forward(*args, ml_eval_chunks=None):
         calls.append(ml_eval_chunks)
-        return jnp.float64(ml_eval_chunks or 0), jnp.zeros((2, 3)), jnp.int32(n_active)
+        return jnp.float64(ml_eval_chunks or 0), jnp.full((2, 3), ml_eval_chunks or -1), jnp.int32(n_active)
 
     calc = _FakeCalc()
     first = forward("x")
     e, f = calc._check_ml_chunk_budget(budget, forward, ("x",), first)
     assert calls == [None, 8]  # re-ran once with the grown budget
     assert float(e) == 8.0
+    np.testing.assert_array_equal(np.asarray(f), np.full((2, 3), 8))
     assert budget.covers(n_active) and budget.current == 8
     assert calc._ml_chunk_budget_reruns == 1
 

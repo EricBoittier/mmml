@@ -46,15 +46,21 @@ def test_resolve_max_active_dimers_small_cluster():
     assert resolve_max_active_dimers(5, 10) == 10
 
 
-def test_validate_sparse_dimer_cap_random_sparse():
-    rng = np.random.default_rng(0)
-    n = 20
-    apm = 10
-    pos = rng.standard_normal((n * apm, 3)) * 5.0
-    stats = validate_sparse_dimer_cap(pos, n, apm, mm_switch_on=7.0, box_side_A=None)
-    assert stats["n_dimers_total"] == n * (n - 1) // 2
-    assert "verdict" in stats
-    assert isinstance(stats["ok"], bool)
+@pytest.mark.parametrize("box,near", [(None, 2), (10.0, 3)])
+@pytest.mark.parametrize("cap", [1, 2, 3])
+def test_validate_sparse_dimer_cap_counts_and_reports_overflow(box, near, cap):
+    # Distances: 1, 8.5, 7.5 in free space; 1, 1.5, 2.5 under MIC.
+    pos = np.array([[0., 0., 0.], [1., 0., 0.], [8.5, 0., 0.]])
+    stats = validate_sparse_dimer_cap(
+        pos, 3, 1, mm_switch_on=8.0, box_side_A=box, max_active_dimers=cap,
+    )
+    assert stats["n_dimers_total"] == 3
+    assert stats["n_near_mm_switch_on"] == near
+    assert stats["cap_margin"] == cap - near
+    assert stats["cap_saturated"] is (near > cap)
+    assert stats["ok"] is (near <= cap)
+    assert stats["physnet_systems_per_step"] == 3 + min(near, cap)
+    assert stats["verdict"].startswith("FAIL:" if near > cap else "WARN:")
 
 
 def test_count_near_dimer_pairs_free_space_cap_is_all_pairs():
@@ -164,3 +170,4 @@ def test_resolve_max_active_dimers_without_density_info_unchanged():
     n_monomers = 903
     n_dimers_total = max_dimer_pairs(n_monomers)
     assert resolve_max_active_dimers(n_monomers, n_dimers_total) == 5418
+

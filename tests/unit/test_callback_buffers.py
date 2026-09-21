@@ -21,6 +21,8 @@ def test_stack_charmm_xyz_matches_list_transpose() -> None:
     got = stack_charmm_xyz(x, y, z, n)
     ref = np.array([x[:n], y[:n], z[:n]], dtype=np.float64).T
     np.testing.assert_array_equal(got, ref)
+    got[0, 0] = -999.0
+    assert x[0] == 0.0  # callback preprocessing must not mutate CHARMM coordinates
 
 
 def test_subtract_forces_from_charmm_grad_matches_python_loop() -> None:
@@ -46,12 +48,13 @@ def test_subtract_forces_from_charmm_grad_matches_python_loop() -> None:
 def test_subtract_forces_into_charmm_pointer_args() -> None:
     """CHARMM's MLpot callback passes ``POINTER(c_double)``; write through a view."""
     n = 5
-    bufs = [(ctypes.c_double * n)(*([1.5] * n)) for _ in range(3)]
+    bufs = [(ctypes.c_double * (n + 1))(*([1.5] * n), 999.0) for _ in range(3)]
     ptrs = [ctypes.cast(b, ctypes.POINTER(ctypes.c_double)) for b in bufs]
     forces = np.arange(n * 3, dtype=np.float64).reshape(n, 3)
     subtract_forces_from_charmm_grad(*ptrs, forces, n)
     for col, buf in enumerate(bufs):
         np.testing.assert_array_equal(np.array(buf[:n]), 1.5 - forces[:, col])
+        assert buf[n] == 999.0  # do not write beyond the active atom range
 
 
 def test_subtract_forces_from_python_lists() -> None:
@@ -65,19 +68,6 @@ def test_subtract_forces_from_python_lists() -> None:
     assert dx == [9.0, 19.0, 29.0]
     assert dy == [0.0, 1.0, 2.0]
     assert dz == [-2.0, -3.0, -4.0]
-
-
-def test_subtract_forces_does_not_overwrite_existing_grad() -> None:
-    """A memmove of ``-F`` would drop CHARMM's already-resident contributions."""
-    n = 4
-    dx = (ctypes.c_double * n)(*[10.0, 20.0, 30.0, 40.0])
-    dy = (ctypes.c_double * n)(*[1.0, 2.0, 3.0, 4.0])
-    dz = (ctypes.c_double * n)(*[-1.0, -2.0, -3.0, -4.0])
-    forces = np.ones((n, 3), dtype=np.float64)
-    subtract_forces_from_charmm_grad(dx, dy, dz, forces, n)
-    np.testing.assert_allclose([dx[i] for i in range(n)], [9.0, 19.0, 29.0, 39.0])
-    np.testing.assert_allclose([dy[i] for i in range(n)], [0.0, 1.0, 2.0, 3.0])
-    np.testing.assert_allclose([dz[i] for i in range(n)], [-2.0, -3.0, -4.0, -5.0])
 
 
 def test_wrap_monomers_primary_cell_matches_per_molecule_loop() -> None:
