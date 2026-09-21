@@ -78,12 +78,39 @@ def build_parser() -> argparse.ArgumentParser:
         default=15.0,
         help="drop frames with max |F| above this (eV/Å)",
     )
+    p.add_argument(
+        "--max-bond-stretch",
+        type=float,
+        default=0.4,
+        help="a molecule is damaged when a covalent bond is this far (Å) from the "
+        "monomer's, or it bonds to another molecule; <= 0 disables the damage checks",
+    )
+    p.add_argument(
+        "--max-damaged-fraction",
+        type=float,
+        default=0.10,
+        help="reject a seed whose FIRE end state has more damaged molecules than this "
+        "(PET-MAD xs acetone: good seeds <= 7%%, a collapsed seed 12%%)",
+    )
+    p.add_argument(
+        "--min-intermolecular",
+        type=float,
+        default=0.5,
+        help="Å; reject a seed (drop a frame) with atoms of two molecules closer than this",
+    )
+    p.add_argument(
+        "--energy-outlier",
+        type=float,
+        default=0.25,
+        help="reject seeds whose FIRE-end energy per molecule is this far (eV) below "
+        "the median of the other seeds in --out-dir; <= 0 disables",
+    )
     return p
 
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    from mmml.distill.box_dataset import BoxDatasetConfig, run_seed
+    from mmml.distill.box_dataset import BoxDatasetConfig, flag_energy_outliers, run_seed
     from mmml.interfaces.calculators.metatomic import load_metatomic_calculator
     from mmml.md.metatomic_pbc import (
         default_etoh_monomer_xyz,
@@ -108,6 +135,10 @@ def main(argv: list[str] | None = None) -> int:
         md_every=int(args.md_every),
         com_jitter_frac=float(args.com_jitter_frac),
         max_force_eVA=float(args.max_force),
+        max_bond_stretch_A=float(args.max_bond_stretch) if args.max_bond_stretch > 0 else None,
+        max_damaged_fraction=float(args.max_damaged_fraction),
+        min_intermolecular_A=float(args.min_intermolecular),
+        energy_outlier_eV_per_mol=float(args.energy_outlier) if args.energy_outlier > 0 else None,
     )
     calc = load_metatomic_calculator(args.checkpoint, extra_kwargs={"non_conservative": False})
     out = Path(args.out_dir)
@@ -122,9 +153,13 @@ def main(argv: list[str] | None = None) -> int:
             f"seed {seed} ({seed_cfg.temperature_K:g} K): fire {s['fire_kept']} (+{s['fire_dropped']} dropped)  "
             f"md {s['md_kept']} (+{s['md_dropped']} dropped)  "
             f"E {s['E_start_eV']:.1f} → {s['E_fire_end_eV']:.1f} eV  "
-            f"<T>={s['T_md_mean_K']:.0f} K  {s['fire_s'] + s['md_s']:.0f} s",
+            f"<T>={s['T_md_mean_K']:.0f} K  {s['fire_s'] + s['md_s']:.0f} s"
+            + (f"  REJECTED: {s['rejected']}" if s["rejected"] else ""),
             flush=True,
         )
+    for s in flag_energy_outliers(out, cfg.energy_outlier_eV_per_mol):
+        print(f"seed {s['seed']} REJECTED: {s['rejected']}", flush=True)
+        summaries = [s if x["seed"] == s["seed"] else x for x in summaries]
     index = out / f"index_{args.seeds.replace(',', '_')}.json"
     index.write_text(json.dumps(summaries, indent=2) + "\n")
     print(f"Wrote {index}")

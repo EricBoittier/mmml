@@ -23,6 +23,10 @@ usage: mmml pet-box-dataset [-h] --checkpoint CHECKPOINT --out-dir OUT_DIR
                             [--md-steps MD_STEPS] [--md-every MD_EVERY]
                             [--com-jitter-frac COM_JITTER_FRAC]
                             [--max-force MAX_FORCE]
+                            [--max-bond-stretch MAX_BOND_STRETCH]
+                            [--max-damaged-fraction MAX_DAMAGED_FRACTION]
+                            [--min-intermolecular MIN_INTERMOLECULAR]
+                            [--energy-outlier ENERGY_OUTLIER]
 
 Many-seed periodic PET dataset: random packing, FIRE intermediates and Langevin
 NVT frames, labelled with the driving model (extxyz).
@@ -47,6 +51,10 @@ Execution:
 
 Output & artifacts:
   --out-dir OUT_DIR
+  --energy-outlier ENERGY_OUTLIER
+                        reject seeds whose FIRE-end energy per molecule is this
+                        far (eV) below the median of the other seeds in --out-
+                        dir; <= 0 disables
 
 Diagnostics & safety:
   -h, --help            show this help message and exit
@@ -64,6 +72,17 @@ Other options:
   --md-every MD_EVERY
   --com-jitter-frac COM_JITTER_FRAC
                         random COM shift, fraction of lattice spacing
+  --max-bond-stretch MAX_BOND_STRETCH
+                        a molecule is damaged when a covalent bond is this far
+                        (Å) from the monomer's, or it bonds to another molecule;
+                        <= 0 disables the damage checks
+  --max-damaged-fraction MAX_DAMAGED_FRACTION
+                        reject a seed whose FIRE end state has more damaged
+                        molecules than this (PET-MAD xs acetone: good seeds <=
+                        7%, a collapsed seed 12%)
+  --min-intermolecular MIN_INTERMOLECULAR
+                        Å; reject a seed (drop a frame) with atoms of two
+                        molecules closer than this
 ```
 
 
