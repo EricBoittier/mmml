@@ -1748,6 +1748,19 @@ def run_workflow(
         enable_mlpot_profiling()
         os.environ["MMML_MLPOT_PROFILE"] = "1"
         os.environ["MMML_JAX_COMPILE_TIMERS"] = "1"
+        out_dir = getattr(args, "output_dir", None)
+        if out_dir:
+            import atexit
+
+            from mmml.interfaces.pycharmmInterface.mlpot.ml_profile import (
+                set_mlpot_profile_summary_dir,
+                write_mlpot_profile_summary,
+            )
+
+            # The pycharmm path never wrote the summary; write it (with the
+            # steady-state per-call statistics) periodically and at exit.
+            set_mlpot_profile_summary_dir(out_dir)
+            atexit.register(write_mlpot_profile_summary, out_dir)
     setattr(args, "ensemble", ensemble)
     if phase == "minimize":
         setattr(args, "setup", getattr(args, "setup", None) or "pycharmm_minimize")

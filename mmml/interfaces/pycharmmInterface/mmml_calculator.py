@@ -792,6 +792,7 @@ def setup_calculator(
     ml_batch_size: Optional[int] = None,
     ml_gpu_count: int = 1,
     ml_max_active_dimers: Optional[int] = None,
+    ml_dimer_active_margin: Optional[float] = None,
     mm_r_min: Optional[float] = None,
     jax_md_capacity_multiplier: float = DEFAULT_JAX_MD_CAPACITY_MULTIPLIER,
     jax_md_capacity_growth_factor: float = 1.5,
@@ -881,6 +882,13 @@ def setup_calculator(
             default is ``max(1000, 6*n_monomers)``; free-space default is all
             unique dimers, ``n_monomers*(n_monomers-1)//2``. Lower explicit/env
             caps are promoted in free-space mode to avoid dropping pairs.
+        ml_dimer_active_margin: Å beyond ``mm_switch_on`` that sparse ML dimers
+            stay in the active set (default 0; env ``MMML_ML_DIMER_ACTIVE_MARGIN``).
+            ``ml_switch_scale`` is a quintic smoothstep: value, slope and
+            curvature are exactly 0 at ``mm_switch_on``, so pairs past it add
+            no energy, force or latent-charge weight. The old implicit margin
+            was ``ml_switch_width`` (e.g. 6.0-7.5 Å), roughly doubling the
+            dimer slots for zero contribution.
         mm_r_min: Optional inner cutoff (Å) for MM neighbor list. Pairs with dimer
             COM distance < mm_r_min are excluded. Defaults: complementary_handoff=False
             -> mm_switch_on * 0.9; complementary_handoff=True -> (mm_switch_on - ml_switch_width) * 0.9
@@ -1708,7 +1716,11 @@ def setup_calculator(
     # Sparse-dimer active-set capacity: density-aware when the box volume is
     # known (PBC), since a fixed per-monomer heuristic badly undersizes
     # dense periodic liquids (see mlpot_sparse_dimer_policy.resolve_max_active_dimers).
-    _dimer_active_radius = cutoff_params.mm_switch_on + cutoff_params.ml_switch_width
+    if ml_dimer_active_margin is None:
+        ml_dimer_active_margin = float(os.environ.get("MMML_ML_DIMER_ACTIVE_MARGIN") or 0.0)
+    if ml_dimer_active_margin < 0:
+        raise ValueError(f"ml_dimer_active_margin must be >= 0, got {ml_dimer_active_margin}")
+    _dimer_active_radius = cutoff_params.mm_switch_on + float(ml_dimer_active_margin)
     _box_volume = float(jnp.linalg.det(pbc_cell)) if pbc_cell is not None else None
     _max_active_dimers = (
         resolve_max_active_dimers(
@@ -2624,17 +2636,13 @@ def setup_calculator(
             batches["_spatial_n_monomers_global"] = jnp.array(n_monomers, dtype=jnp.int32)
             _effective_batch_size = sparse_batch_size
         elif use_sparse:
-            # Keep a sparse dimer slot alive past the physical ML→MM handoff.
-            # The dimer contribution is exactly switched to zero at
-            # ``mm_switch_on``, but changing a boolean active mask at that same
-            # coordinate introduces a discrete control-flow boundary into an
-            # otherwise conservative potential.  Select through one complete
-            # handoff width beyond the endpoint; any extra slot has zero
-            # switched energy/force and is removed only outside the physical
-            # switching interval.
-            active_radius = (
-                cutoff_params.mm_switch_on + cutoff_params.ml_switch_width
-            )
+            # Active set = pairs inside ``mm_switch_on`` (+ optional margin).
+            # ml_switch_scale is a quintic smoothstep whose value, slope and
+            # curvature vanish at mm_switch_on, so a pair crossing it enters or
+            # leaves with zero energy, force and latent-charge weight: the
+            # boolean mask adds no discontinuity. The selection runs in-graph
+            # every step, so there is no stale list either.
+            active_radius = _dimer_active_radius
             mic_fn = mic_displacement_smooth if use_smooth_mic else mic_displacement
 
             def _dimer_com_dist(pos_di, na, nb):

@@ -674,6 +674,18 @@ class DecomposedMlpotCalculator:
         msg = budget.note_saturation(n_active)
         if msg:
             print(msg, flush=True)
+        from mmml.interfaces.pycharmmInterface.mlpot.ml_profile import (
+            get_mlpot_profile_stats,
+            mlpot_profiling_enabled,
+        )
+
+        if mlpot_profiling_enabled():
+            get_mlpot_profile_stats().record_active_dimers(
+                n_active,
+                chunk_budget=budget.current,
+                chunk_size=budget.layout.chunk_size,
+                max_active_dimers=budget.layout.max_active_dimers,
+            )
         if not budget.covers(n_active):
             # Rare (the budget keeps spare slots): grow and redo the step exactly.
             budget.update(n_active)
