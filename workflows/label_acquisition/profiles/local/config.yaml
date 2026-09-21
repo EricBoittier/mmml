@@ -1,0 +1,11 @@
+# Local / interactive (no Slurm).
+jobs: 2
+latency-wait: 5
+printshellcmds: true
+envvars:
+  - MMML_WORKFLOW_CONFIG
+  - JAX_ENABLE_X64
+default-resources:
+  - mem_mb=4000
+  - runtime=30
+  - gpu=0

@@ -1,0 +1,18 @@
+# Snakemake >=8.6 + snakemake-executor-plugin-slurm.
+executor: slurm
+jobs: 8
+latency-wait: 60
+retries: 1
+envvars:
+  - MMML_WORKFLOW_CONFIG
+  - JAX_ENABLE_X64
+  - JAX_PLATFORMS
+  - CHARMM_LIB_DIR
+default-resources:
+  - gpu=0
+  - runtime=120
+  - nodes=1
+  - tasks=1
+  - mem_mb_per_cpu=4000
+  - cpus_per_task=4
+  - slurm_partition=cpu

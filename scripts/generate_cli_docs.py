@@ -115,6 +115,7 @@ CLI_NAV_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
             "kernnn-train",
             "kernnn-evaluate",
             "active-learning",
+            "label-acquire",
             "pes-design",
             "kernel-fit",
             "sample-diverse-xyz",

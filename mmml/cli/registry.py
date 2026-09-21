@@ -137,6 +137,11 @@ COMMAND_REGISTRY: tuple[CommandSpec, ...] = (
     ),
     CommandSpec("physnet-train", "mmml.cli.make.make_training", "Train PhysNet message-passing model (E/F)"),
     CommandSpec(
+        "label-acquire",
+        "mmml.cli.misc.label_acquire",
+        "Select structures for expensive labels (activation / Jacobian / teacher-gradient)",
+    ),
+    CommandSpec(
         "pet-box-dataset",
         "mmml.cli.misc.pet_box_dataset",
         "Many-seed PET box dataset: random packing, FIRE intermediates, NVT (extxyz)",

@@ -79,6 +79,10 @@ COMMAND_GROUPS: tuple[tuple[str, tuple[CommandInfo, ...]], ...] = (
             CommandInfo("kernnn-train", "Train KerNN kernel Softplus MLP"),
             CommandInfo("kernnn-evaluate", "Evaluate KerNN checkpoint"),
             CommandInfo("active-learning", "Sample structures for re-labeling"),
+            CommandInfo(
+                "label-acquire",
+                "Compare structure-selection methods before expensive labeling",
+            ),
         ),
     ),
     (
@@ -140,6 +144,7 @@ EXAMPLE_BLOCKS: tuple[tuple[str, tuple[str, ...]], ...] = (
             "--valid-esp splits/grids_esp_test.npz --pdb pdb/initial.pdb "
             "--n-samples 50 --out-dir charmm_ml_comparison",
             "mmml physnet-train --config train.yaml",
+            "mmml label-acquire --config workflows/label_acquisition/config.smoke.yaml all",
             "mmml efield-train --train-npz splits/energies_forces_dipoles_train.npz "
             "--valid-npz splits/energies_forces_dipoles_valid.npz "
             "--polar_weight 1 --polar-at-zero-field",
