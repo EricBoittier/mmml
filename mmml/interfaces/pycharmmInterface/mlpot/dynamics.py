@@ -7318,6 +7318,7 @@ def _cpt_subchunk_restart_is_short(
     n: int,
     restart_handoff: bool = False,
     fresh_start: bool = False,
+    restart_rewritten: bool = False,
 ) -> bool:
     """True when a CPT sub-chunk's restart shows CHARMM stopped before ``n`` steps.
 
@@ -7351,13 +7352,15 @@ def _cpt_subchunk_restart_is_short(
         return True
     if step == chunk_end:
         return False
-    # A sub-chunk that starts a fresh DYNA (``start=True``, velocities assigned
-    # at the bath T) resets CHARMM's counter, so a complete sub-chunk reads ``n``
-    # rather than the cumulative ``steps_done + n``. Rejecting ``n`` stopped every
-    # such CPT stage after its second sub-chunk (250 of 10-20k steps run, 0-1 DCD
-    # frames, "dynamics stages did not finish"). Without a fresh start, ``n``
-    # can also be an unchanged counter (0-step sub-chunk), so it stays short.
-    return not (fresh_start and step == int(n))
+    # A sub-chunk that runs its own DYNA call reads a chunk-local counter ``n``
+    # rather than the cumulative ``steps_done + n``: after a fresh start
+    # (``start=True`` resets JHSTRT) and also for the default in-memory
+    # continuation (``start=False``, no restart read), where CHARMM counts each
+    # call from 0. Rejecting ``n`` stopped every such CPT stage after its second
+    # sub-chunk (250 of 200k steps run, 0 DCD frames). An unchanged counter from
+    # a 0-step sub-chunk can also read ``n``; that sub-chunk writes no restart,
+    # so ``n`` counts as complete only if this sub-chunk rewrote the restart.
+    return not (step == int(n) and (fresh_start or restart_rewritten))
 
 
 def _cpt_subchunk_trajectory_path(chunk_traj: Path, k: int) -> Path:
@@ -7739,6 +7742,14 @@ def _run_cpt_stability_subchunk_loop(
         global_end = int(global_step_offset) + steps_done + n
         if "_numbered_restart_stage_path" in sub_kw:
             sub_kw["_numbered_restart_global_step"] = global_end
+        _pre_restart = (
+            write_path
+            if write_path is not None
+            else (Path(io.restart_write) if io is not None and io.restart_write is not None else None)
+        )
+        _pre_restart_mtime = (
+            _pre_restart.stat().st_mtime_ns if _pre_restart is not None and _pre_restart.is_file() else None
+        )
         last_dyn = _run_dynamics_chunk(
             sub_kw,
             sub_io,
@@ -7792,6 +7803,10 @@ def _run_cpt_stability_subchunk_loop(
                 n=n,
                 restart_handoff=use_restart_handoff,
                 fresh_start=bool(sub_kw.get("start")),
+                restart_rewritten=(
+                    Path(restart_path).is_file()
+                    and Path(restart_path).stat().st_mtime_ns != _pre_restart_mtime
+                ),
             ):
                 actual_in_segment = int(actual_global) - int(global_step_offset)
                 _emit_overlap_log(

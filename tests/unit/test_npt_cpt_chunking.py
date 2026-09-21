@@ -841,18 +841,23 @@ def test_cpt_subchunk_restart_is_short_by_mode(step, offset, steps_done, n, hand
 
 
 @pytest.mark.parametrize(
-    ("step", "steps_done", "fresh_start", "short"),
+    ("step", "steps_done", "fresh_start", "rewritten", "short"),
     [
         # fresh DYNA per sub-chunk resets JHSTRT: a complete second sub-chunk reads n
-        (250, 250, True, False),
-        (250, 750, True, False),
-        (100, 250, True, True),  # stopped early
-        (250, 250, False, True),  # no fresh start: unchanged counter = 0-step sub-chunk
-        (500, 250, True, False),  # cumulative counter still accepted
+        (250, 250, True, True, False),
+        (250, 750, True, True, False),
+        (100, 250, True, True, True),  # stopped early
+        # default in-memory continuation (start=False, no restart read): CHARMM counts
+        # each DYNA call from 0, so a complete sub-chunk also reads n (1 ns NpT stopped at 500 steps)
+        (250, 250, False, True, False),
+        (250, 199750, False, True, False),
+        # 0-step sub-chunk: counter unchanged at n and no restart written
+        (250, 250, False, False, True),
+        (500, 250, True, True, False),  # cumulative counter still accepted
     ],
 )
-def test_cpt_subchunk_fresh_dyna_counter_resets(step, steps_done, fresh_start, short):
-    """In-memory CPT sub-chunks started with start=True (EQUI, 20 ps) stopped after 500 steps."""
+def test_cpt_subchunk_chunk_local_counter(step, steps_done, fresh_start, rewritten, short):
+    """In-memory CPT sub-chunks read a chunk-local JHSTRT; complete iff this sub-chunk rewrote the restart."""
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import _cpt_subchunk_restart_is_short
 
     assert (
@@ -863,6 +868,7 @@ def test_cpt_subchunk_fresh_dyna_counter_resets(step, steps_done, fresh_start, s
             n=250,
             restart_handoff=False,
             fresh_start=fresh_start,
+            restart_rewritten=rewritten,
         )
         is short
     )
