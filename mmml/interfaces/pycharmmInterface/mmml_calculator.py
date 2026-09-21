@@ -709,7 +709,10 @@ def metatomic_zero_fragment_output(
     }
 
 
-def _resolve_ml_chunk_layout(ml_sparse_dimers, _max_active_dimers, n_dimers_total, ml_batch_size, n_monomers, _jax_mm_spoof_mode, _kernnn_mode, _metatomic_mode, ml_gpu_count):
+def _resolve_ml_chunk_layout(ml_sparse_dimers, _max_active_dimers, n_dimers_total, ml_batch_size, n_monomers, _jax_mm_spoof_mode, _kernnn_mode, _metatomic_mode, ml_gpu_count, monomers_own_pad=False):
+    """Chunk layout of the sparse-dimer batch. With ``monomers_own_pad`` the
+    monomers run in a separate PhysNet call, so the chunked batch (and the
+    budget's slot count) holds the dimer slots only."""
     _ml_chunk_layout = None
     if (
         ml_sparse_dimers
@@ -721,10 +724,11 @@ def _resolve_ml_chunk_layout(ml_sparse_dimers, _max_active_dimers, n_dimers_tota
         from mmml.interfaces.pycharmmInterface.mlpot.ml_chunk_budget import MlChunkLayout
         from mmml.interfaces.pycharmmInterface.mlpot_gpu import effective_ml_gpu_count
 
-        _layout_n_chunks = -(-(n_monomers + _max_active_dimers) // int(ml_batch_size))
+        _chunked_monomers = 0 if monomers_own_pad else int(n_monomers)
+        _layout_n_chunks = -(-(_chunked_monomers + _max_active_dimers) // int(ml_batch_size))
         if effective_ml_gpu_count(ml_gpu_count, n_chunks=_layout_n_chunks) <= 1:
             _ml_chunk_layout = MlChunkLayout(
-                n_monomers=int(n_monomers),
+                n_monomers=_chunked_monomers,
                 max_active_dimers=int(_max_active_dimers),
                 chunk_size=int(ml_batch_size),
                 n_chunks=int(_layout_n_chunks),
@@ -1752,9 +1756,22 @@ def setup_calculator(
     _skip_padding_chunks = (
         os.environ.get("MMML_MLPOT_SKIP_PADDING_CHUNKS") or "1"
     ).strip().lower() not in ("0", "false", "no", "off")
+    # Monomers padded to max_atoms (= dimer size) carry ~4x the all-pairs edge
+    # work they need; evaluate them in one call padded to the largest monomer
+    # instead (sparse chunked path, plain PhysNet). MMML_ML_MONOMER_OWN_PAD=0
+    # restores the shared padded batch (A/B parity checks).
+    _monomers_own_pad = (
+        (os.environ.get("MMML_ML_MONOMER_OWN_PAD") or "1").strip().lower() not in ("0", "false", "no", "off")
+        and bool(ml_sparse_dimers)
+        and _max_active_dimers < n_dimers_total
+        and bool(ml_batch_size)
+        and max_monomer_atoms < max_atoms
+        and not (_jax_mm_spoof_mode or _kernnn_mode or _metatomic_mode or is_spooky_model or _needs_ml_mm_charges)
+    )
     _ml_chunk_layout = _resolve_ml_chunk_layout(
         ml_sparse_dimers, _max_active_dimers, n_dimers_total, ml_batch_size,
         n_monomers, _jax_mm_spoof_mode, _kernnn_mode, _metatomic_mode, ml_gpu_count,
+        monomers_own_pad=_monomers_own_pad,
     )
 
     _jax_md_skin_distance = float(jax_md_skin_distance)
@@ -2730,6 +2747,66 @@ def setup_calculator(
 
         _ml_n_gpus = effective_ml_gpu_count(ml_gpu_count, n_chunks=_n_chunks)
 
+        def _physnet_apply(R, Z, N, n_sys: int, n_atoms: int):
+            b = prepare_batches_md({"R": R, "Z": Z, "N": N}, batch_size=n_sys, num_atoms=n_atoms)[0]
+            out = MODEL.apply(
+                params,
+                atomic_numbers=b["Z"],
+                positions=b["R"],
+                dst_idx=b["dst_idx"],
+                src_idx=b["src_idx"],
+                batch_segments=b["batch_segments"],
+                batch_size=n_sys,
+                batch_mask=b["batch_mask"],
+                atom_mask=b["atom_mask"],
+                cell=pbc_cell,
+            )
+            return jnp.reshape(out["energy"], -1), jnp.reshape(out["forces"], (-1, 3))
+
+        def _apply_monomers_own_pad(atomic_numbers: Array, positions: Array) -> Dict[str, Array]:
+            """Monomers in one call padded to ``max_monomer_atoms``; dimer slots chunked.
+
+            Same per-system inputs as the shared batch minus trailing ghost
+            atoms (masked out of every edge, energy and force), so the used
+            outputs agree to float precision. Output layout matches the shared
+            batch: energies (batch,), forces (batch * max_atoms, 3).
+            """
+            R_full = positions.reshape(_effective_batch_size, max_atoms, 3)
+            Z_full = atomic_numbers.reshape(_effective_batch_size, max_atoms)
+            N_full = batches["N"]
+            e_m, f_m = _physnet_apply(
+                R_full[:n_monomers, :max_monomer_atoms],
+                Z_full[:n_monomers, :max_monomer_atoms],
+                N_full[:n_monomers],
+                n_monomers,
+                max_monomer_atoms,
+            )
+            f_m = jnp.pad(
+                f_m.reshape(n_monomers, max_monomer_atoms, 3),
+                ((0, 0), (0, max_atoms - max_monomer_atoms), (0, 0)),
+            ).reshape(-1, 3)
+            n_d = _effective_batch_size - n_monomers
+            n_chunks_d = max(1, -(-n_d // _chunk_size))
+            pad_to = n_chunks_d * _chunk_size
+            R_d = jnp.concatenate([R_full[n_monomers:], ml_zeros((pad_to - n_d, max_atoms, 3), dtype=ml_jnp_dtype)])
+            Z_d = jnp.concatenate([Z_full[n_monomers:], jnp.zeros((pad_to - n_d, max_atoms), dtype=jnp.int32)])
+            N_d = jnp.concatenate([N_full[n_monomers:], jnp.ones(pad_to - n_d, dtype=jnp.int32)])
+            e_d, f_d = run_chunked_model_apply(
+                R_chunks=R_d.reshape(n_chunks_d, _chunk_size, max_atoms, 3),
+                Z_chunks=Z_d.reshape(n_chunks_d, _chunk_size, max_atoms),
+                N_chunks=N_d.reshape(n_chunks_d, _chunk_size),
+                n_chunks=n_chunks_d,
+                effective_batch_size=n_d,
+                chunk_size=_chunk_size,
+                max_atoms=max_atoms,
+                n_gpus=_ml_n_gpus,
+                apply_one_chunk=lambda R_c, Z_c, N_c: _physnet_apply(R_c, Z_c, N_c, _chunk_size, max_atoms),
+                has_aux=False,
+                n_valid=(_n_valid_systems - n_monomers) if (_skip_padding_chunks and _n_valid_systems is not None) else None,
+                n_eval_chunks=ml_eval_chunks,
+            )
+            return {"energy": jnp.concatenate([e_m, e_d]), "forces": jnp.concatenate([f_m, f_d])}
+
         def apply_model(
             atomic_numbers: Array,  # Shape: (batch_size * num_atoms,)
             positions: Array,  # Shape: (batch_size * num_atoms, 3)
@@ -2753,6 +2830,8 @@ def setup_calculator(
                 return metatomic_zero_fragment_output(
                     positions, dtype=ml_jnp_dtype
                 )
+            if _do_chunked and use_sparse and _monomers_own_pad:
+                return _apply_monomers_own_pad(atomic_numbers, positions)
             if _do_chunked:
                 R_full = positions.reshape(_effective_batch_size, max_atoms, 3)
                 Z_full = atomic_numbers.reshape(_effective_batch_size, max_atoms)

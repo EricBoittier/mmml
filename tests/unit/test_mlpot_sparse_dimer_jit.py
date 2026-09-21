@@ -338,3 +338,89 @@ def test_dimer_active_margin_does_not_change_energy_or_forces() -> None:
     np.testing.assert_allclose(float(new.energy), float(old.energy), rtol=1e-6)
     np.testing.assert_allclose(np.asarray(new.forces), np.asarray(old.forces), atol=1e-5 * f_scale)
 
+
+def test_monomer_own_pad_matches_shared_padded_batch(monkeypatch) -> None:
+    """Monomers evaluated at their own size give the same energy/forces as padded to dimer size.
+
+    Needs a real PhysNet (the jax_mm_clone stand-in bypasses the PhysNet apply);
+    uses the repo's DESdimers checkpoint.
+    """
+    from pathlib import Path
+    from mmml.interfaces.pycharmmInterface.mmml_calculator import setup_calculator
+
+    n_mono, box = 5, 40.0
+    rng = np.random.default_rng(2)
+    base = rng.normal(scale=0.7, size=(n_mono, 3))
+    xs = np.cumsum([2.0, 4.0, 5.2, 5.8, 3.9, 7.1, 5.5, 4.6])
+    centers = [[x, 2.0, 2.0] for x in xs] + [[20.0, 20.0, 20.0], [20.0, 24.5, 20.0]]
+    n_monomers = len(centers)
+    n_atoms = n_mono * n_monomers
+    z = jnp.asarray(rng.choice([1, 6, 8], size=n_atoms), dtype=jnp.int32)
+    r0 = jnp.asarray(
+        np.concatenate([np.asarray(c, float) + base + rng.normal(scale=0.05, size=base.shape) for c in centers])
+    )
+    fake_mm_fn = lambda *a, **k: (jnp.array(0.0), jnp.zeros((n_atoms, 3)))
+    fake_update_fn = lambda *a, **k: (jnp.zeros((1, 2), dtype=jnp.int32), jnp.ones((1,), dtype=bool))
+
+    def fake_build_mm(*args, **kwargs):
+        if kwargs.get("use_jax_md_neighbor_list", True):
+            return fake_mm_fn, fake_update_fn
+        return fake_mm_fn
+
+    cp = CutoffParameters(mm_switch_on=6.0, ml_switch_width=1.5)
+    ckpt = Path(__file__).resolve().parents[2] / "examples" / "ckpts_json" / "DESdimers_params.json"
+    if not ckpt.is_file():
+        pytest.skip(f"missing {ckpt}")
+
+    def evaluate(own_pad: str):
+        monkeypatch.setenv("MMML_ML_MONOMER_OWN_PAD", own_pad)
+        with patch(
+            "mmml.interfaces.pycharmmInterface.mmml_calculator.build_mm_energy_forces_fn",
+            side_effect=fake_build_mm,
+        ):
+            factory = setup_calculator(
+                ATOMS_PER_MONOMER=n_mono,
+                N_MONOMERS=n_monomers,
+                model_restart_path=str(ckpt),
+                ml_potential_mode="physnet",
+                doML=True,
+                doMM=False,
+                doML_dimer=True,
+                MAX_ATOMS_PER_SYSTEM=10,
+                cell=box,
+                defer_xla_gpu_warmup=True,
+                verbose=False,
+                ml_sparse_dimers=True,
+                ml_max_active_dimers=16,  # < 45 pairs: sparse path
+                ml_batch_size=4,  # chunked: 10 monomers + 16 slots > 4
+            )
+            _, spherical_fn, _ = factory(
+                atomic_numbers=z,
+                atomic_positions=r0,
+                n_monomers=n_monomers,
+                cutoff_params=cp,
+                doML=True,
+                doMM=False,
+                doML_dimer=True,
+                backprop=False,
+                create_ase_calculator=False,
+            )
+            layout = getattr(spherical_fn, "ml_chunk_layout", None)
+            assert layout is not None  # chunked sparse path with a host chunk budget
+            assert layout.n_monomers == (0 if own_pad == "1" else n_monomers)
+            return spherical_fn(
+                atomic_numbers=z,
+                positions=r0,
+                n_monomers=n_monomers,
+                cutoff_params=cp,
+                doML=True,
+                doMM=False,
+                doML_dimer=True,
+                box=jnp.eye(3) * box,
+            )
+
+    shared, own = evaluate("0"), evaluate("1")
+    f_scale = float(jnp.max(jnp.abs(shared.forces)))
+    assert f_scale > 1e-3
+    np.testing.assert_allclose(float(own.energy), float(shared.energy), rtol=1e-6)
+    np.testing.assert_allclose(np.asarray(own.forces), np.asarray(shared.forces), atol=1e-5 * f_scale)
