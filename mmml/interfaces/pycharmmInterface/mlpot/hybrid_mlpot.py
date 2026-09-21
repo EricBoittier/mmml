@@ -428,6 +428,7 @@ class DecomposedMlpotCalculator:
                 spatial_dimer_indices: jnp.ndarray,
                 use_spatial: bool,
                 ml_eval_chunks: int | None = None,
+                ml_dimer_candidates: jnp.ndarray | None = None,
             ) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]:
                 kwargs: dict[str, Any] = dict(
                     positions=positions,
@@ -447,6 +448,8 @@ class DecomposedMlpotCalculator:
                     kwargs["spatial_dimer_indices"] = spatial_dimer_indices
                 if ml_eval_chunks is not None:
                     kwargs["ml_eval_chunks"] = ml_eval_chunks
+                if ml_dimer_candidates is not None:
+                    kwargs["ml_dimer_candidates"] = ml_dimer_candidates
                 out = spherical_fn(**kwargs)
                 return (
                     jnp.reshape(out.energy, (-1,))[0],
@@ -467,6 +470,7 @@ class DecomposedMlpotCalculator:
                 spatial_dimer_indices,
                 use_spatial,
                 ml_eval_chunks=_BUDGET_DEFAULT,
+                ml_dimer_candidates=None,
             ):
                 current_box = getattr(self, "_current_box", None)
                 if current_box is None:
@@ -481,6 +485,7 @@ class DecomposedMlpotCalculator:
                     spatial_dimer_indices,
                     use_spatial,
                     ml_eval_chunks=_budget_chunks(ml_eval_chunks),
+                    ml_dimer_candidates=ml_dimer_candidates,
                 )
 
             owner._spherical_forward_fn = wrapper
@@ -495,6 +500,7 @@ class DecomposedMlpotCalculator:
                 spatial_dimer_indices: jnp.ndarray,
                 use_spatial: bool,
                 ml_eval_chunks: int | None = None,
+                ml_dimer_candidates: jnp.ndarray | None = None,
             ) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]:
                 kwargs: dict[str, Any] = dict(
                     positions=positions,
@@ -513,6 +519,8 @@ class DecomposedMlpotCalculator:
                     kwargs["spatial_dimer_indices"] = spatial_dimer_indices
                 if ml_eval_chunks is not None:
                     kwargs["ml_eval_chunks"] = ml_eval_chunks
+                if ml_dimer_candidates is not None:
+                    kwargs["ml_dimer_candidates"] = ml_dimer_candidates
                 out = spherical_fn(**kwargs)
                 return (
                     jnp.reshape(out.energy, (-1,))[0],
@@ -524,8 +532,12 @@ class DecomposedMlpotCalculator:
                 forward_fn, static_argnums=(3, 6), static_argnames=("ml_eval_chunks",)
             )
 
-            def wrapper_nobox(*args, ml_eval_chunks=_BUDGET_DEFAULT):
-                return fn_nobox(*args, ml_eval_chunks=_budget_chunks(ml_eval_chunks))
+            def wrapper_nobox(*args, ml_eval_chunks=_BUDGET_DEFAULT, ml_dimer_candidates=None):
+                return fn_nobox(
+                    *args,
+                    ml_eval_chunks=_budget_chunks(ml_eval_chunks),
+                    ml_dimer_candidates=ml_dimer_candidates,
+                )
 
             owner._spherical_forward_fn = wrapper_nobox
 
@@ -545,6 +557,40 @@ class DecomposedMlpotCalculator:
             atomic_numbers_jax=atomic_numbers_jax,
             box_jax=box_jax,
         )
+
+    def _resolve_ml_dimer_candidates(
+        self,
+        pos: np.ndarray,
+        box: jnp.ndarray | None,
+        *,
+        use_spatial: bool = False,
+    ) -> dict[str, Any]:
+        """Forward kwargs for the centroid Verlet list of sparse ML dimers.
+
+        Empty (all-pairs selection in-graph) unless the factory attached a
+        :class:`CentroidDimerNeighborList` (``setup_calculator(ml_dimer_centroid_nl=...)``,
+        env ``MMML_ML_DIMER_CENTROID_NL``) and this step uses the sparse batch.
+        """
+        from mmml.interfaces.pycharmmInterface.mlpot.dimer_centroid_nl import (
+            CentroidDimerNeighborList,
+        )
+
+        if use_spatial or not (self.do_ml and self.do_ml_dimer):
+            return {}
+        nl = getattr(self.spherical_fn, "dimer_centroid_nl", None)
+        if not isinstance(nl, CentroidDimerNeighborList):
+            return {}
+        cand = nl.update(pos, box=_box_numpy_for_update(box))
+        from mmml.interfaces.pycharmmInterface.mlpot.ml_profile import (
+            get_mlpot_profile_stats,
+            mlpot_profiling_enabled,
+        )
+
+        if mlpot_profiling_enabled():
+            recorder = getattr(get_mlpot_profile_stats(), "record_dimer_centroid_nl", None)
+            if recorder is not None:
+                recorder(nl.stats())
+        return {"ml_dimer_candidates": cand}
 
     def _resolve_mm_pairs(
         self,
@@ -661,7 +707,7 @@ class DecomposedMlpotCalculator:
         self._note_mm_pair_capacity(pair_idx)
         return jnp.asarray(pair_idx), jnp.asarray(pair_mask), True
 
-    def _check_ml_chunk_budget(self, budget, forward_fn, fwd_args, fwd_out):
+    def _check_ml_chunk_budget(self, budget, forward_fn, fwd_args, fwd_out, fwd_kwargs=None):
         """Validate this step's static chunk budget; re-run once if it was too small.
 
         The active-dimer count comes back with the forces (the host waits for
@@ -695,7 +741,9 @@ class DecomposedMlpotCalculator:
                 f"with {budget.current} (re-run #{self._ml_chunk_budget_reruns})",
                 flush=True,
             )
-            fwd_out = forward_fn(*fwd_args, ml_eval_chunks=budget.current)
+            fwd_out = forward_fn(
+                *fwd_args, ml_eval_chunks=budget.current, **(fwd_kwargs or {})
+            )
             e_raw, forces_ev = fwd_out[0], fwd_out[1]
         budget.update(n_active)
         return e_raw, forces_ev
@@ -932,13 +980,16 @@ class DecomposedMlpotCalculator:
                     dimer_jax,
                     use_spatial,
                 )
+                fwd_kwargs = self._resolve_ml_dimer_candidates(
+                    pos, box, use_spatial=use_spatial
+                )
                 t_fwd = time.perf_counter()
-                fwd_out = forward_fn(*fwd_args)
+                fwd_out = forward_fn(*fwd_args, **fwd_kwargs)
                 e_raw, forces_ev = fwd_out[0], fwd_out[1]
                 budget = getattr(self._grad_cache_owner(), "_ml_chunk_budget", None)
                 if budget is not None and len(fwd_out) > 2:
                     e_raw, forces_ev = self._check_ml_chunk_budget(
-                        budget, forward_fn, fwd_args, fwd_out
+                        budget, forward_fn, fwd_args, fwd_out, fwd_kwargs
                     )
                 if mlpot_profiling_enabled():
                     e_raw = jax.block_until_ready(e_raw)
@@ -2162,6 +2213,10 @@ def _warmup_mlpot_callback_forward(
             box_jax=box,
         )
 
+        # Same candidate-list kwarg as calculate_charmm, so warmup compiles the
+        # graph the callback will run (also seeds the list capacity).
+        fwd_kwargs = calc._resolve_ml_dimer_candidates(pos, box)
+
         def _run_forward():
             return forward_fn(
                 positions_jax,
@@ -2171,6 +2226,7 @@ def _warmup_mlpot_callback_forward(
                 jnp.zeros((0,), dtype=jnp.int32),
                 jnp.zeros((0,), dtype=jnp.int32),
                 False,
+                **fwd_kwargs,
             )
 
         run_jax_warmup_passes(
