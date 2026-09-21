@@ -1,0 +1,104 @@
+# End-to-end smoke with the mock Morse reference backend.
+# Results written here are NOT scientific results.
+#
+#   MMML_WORKFLOW_CONFIG=config.smoke.yaml bash scripts/snakemake_local.sh 2 -n
+#   MMML_WORKFLOW_CONFIG=config.smoke.yaml bash scripts/snakemake_local.sh 2
+
+tag: smoke_mock
+output_root: artifacts/label_acquisition/smoke_mock
+round: 0
+
+unresolved:
+  - Smoke uses mock_morse labels and a linear student; do not interpret as production science.
+
+candidate:
+  source: synthetic_smoke
+  n_traj_per_stratum: 2
+  n_frames: 5
+  n_seed_groups: 2
+  seed: 0
+
+student:
+  kind: linear_smoke
+  max_z: 8
+  k_dist: 4
+  seed: 0
+  scale: 0.05
+
+teacher:
+  kind: linear_smoke
+  seed: 1
+  scale: 0.08
+
+reference:
+  backend: mock_morse
+  de: 4.0
+  a: 1.4
+  re: 1.1
+
+splits:
+  valid_fraction: 0.2
+  test_fraction: 0.2
+  seed: 0
+
+pca:
+  n_components: 4
+  row_normalize: false
+  jacobian_components: 4
+
+loss:
+  energy_weight: 1.0
+  forces_weight: 52.91
+
+selection:
+  methods:
+    - stratified_random
+    - activation_fps
+    - activation_largest_norm
+    - output_grad_fps
+    - output_grad_largest_norm
+    - force_doptimal
+    - loss_grad_fps
+    - loss_grad_largest_norm
+    - unmodified_student
+  budgets: [4]
+  seeds: [0]
+  doptimal_lambda: 1.0e-3
+
+training:
+  modes: [readout, full]
+  learning_rate: 0.05
+  n_steps: 15
+  batch_size: 4
+  seed: 0
+
+evaluation:
+  splits: [test]
+  max_structures: 8
+
+md:
+  n_structures: 2
+  dt: 0.5
+  n_steps: 20
+  temperature: 300.0
+  seed: 0
+
+resources:
+  prepare_mem_mb: 2000
+  prepare_runtime_min: 10
+  extract_mem_mb: 4000
+  extract_runtime_min: 20
+  extract_gpu: 0
+  pca_mem_mb: 2000
+  pca_runtime_min: 10
+  select_mem_mb: 2000
+  select_runtime_min: 10
+  label_mem_mb: 2000
+  label_runtime_min: 20
+  label_gpu: 0
+  train_mem_mb: 4000
+  train_runtime_min: 20
+  train_gpu: 0
+
+slurm_partition: cpu
+slurm_max_concurrent: 2

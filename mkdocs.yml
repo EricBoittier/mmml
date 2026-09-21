@@ -202,6 +202,7 @@ nav:
           - kernnn-train: cli/commands/kernnn-train.md
           - kernnn-evaluate: cli/commands/kernnn-evaluate.md
           - active-learning: cli/commands/active-learning.md
+          - label-acquire: cli/commands/label-acquire.md
           - pes-design: cli/commands/pes-design.md
           - kernel-fit: cli/commands/kernel-fit.md
           - sample-diverse-xyz: cli/commands/sample-diverse-xyz.md

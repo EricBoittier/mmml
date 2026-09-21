@@ -323,6 +323,10 @@ def main():
         sys.argv = ["mmml physnet-train"] + args.args
         return make_training.main()
 
+    elif command == "label-acquire":
+        from .misc import label_acquire
+        return label_acquire.main(args.args)
+
     elif command == "pet-box-dataset":
         from .misc import pet_box_dataset
         return pet_box_dataset.main(args.args)
