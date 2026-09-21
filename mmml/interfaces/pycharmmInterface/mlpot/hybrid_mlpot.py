@@ -479,6 +479,13 @@ class DecomposedMlpotCalculator:
                 forward_vir_fn, static_argnums=(4, 7), static_argnames=("ml_eval_chunks",)
             )
 
+            def _live_box():
+                # Owner-level box first: this wrapper outlives the calculator that built it.
+                current = getattr(owner, "_live_callback_box", None)
+                if current is None:
+                    current = getattr(self, "_current_box", None)
+                return box_jax if current is None else current
+
             def wrapper(
                 positions,
                 mm_pair_idx,
@@ -490,9 +497,7 @@ class DecomposedMlpotCalculator:
                 ml_eval_chunks=_BUDGET_DEFAULT,
                 ml_dimer_candidates=None,
             ):
-                current_box = getattr(self, "_current_box", None)
-                if current_box is None:
-                    current_box = box_jax
+                current_box = _live_box()
                 return fn(
                     positions,
                     current_box,
@@ -517,9 +522,7 @@ class DecomposedMlpotCalculator:
                 ml_eval_chunks=_BUDGET_DEFAULT,
                 ml_dimer_candidates=None,
             ):
-                current_box = getattr(self, "_current_box", None)
-                if current_box is None:
-                    current_box = box_jax
+                current_box = _live_box()
                 return fn_vir(
                     positions,
                     current_box,
@@ -810,7 +813,7 @@ class DecomposedMlpotCalculator:
         ETOH: 21.4 Å raw extent, then the pair-list guard raises).
         """
         if not (self._cell or self._requires_callback_pbc_box()):
-            self._current_box = None
+            self._set_live_callback_box(None)
             return None
         from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
             cubic_box_matrix_from_side,
@@ -824,8 +827,18 @@ class DecomposedMlpotCalculator:
         )
         self._cell = side
         box = jnp.asarray(cubic_box_matrix_from_side(side))
-        self._current_box = box
+        self._set_live_callback_box(box)
         return box
+
+    def _set_live_callback_box(self, box) -> None:
+        """Record the box for this ENER on this calculator and on the forward-cache owner.
+
+        The jitted forward is cached on the owner and shared by every calculator the
+        model registers; it reads the box from the owner, so a re-registered calculator
+        (``refresh_mlpot_energy_and_grms``, CPT sub-chunks) cannot leave it on an old cell.
+        """
+        self._current_box = box
+        self._grad_cache_owner()._live_callback_box = box
 
     def _maybe_rewrap_primary_cell_in_callback(
         self,
