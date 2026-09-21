@@ -226,10 +226,8 @@ def collect_live_cpt_ml_virial_report(
     from mmml.interfaces.pycharmmInterface.mlpot.pressure_tensor import (
         read_instantaneous_scalar_pressure_atm,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
-        get_charmm_forces_array,
-        get_charmm_positions_array,
-    )
+    from mmml.interfaces.pycharmmInterface.charmm_forces import charmm_forces_array
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import get_charmm_positions_array
 
     refresh_mlpot_energy_and_grms(
         mlpot_ctx,
@@ -237,7 +235,7 @@ def collect_live_cpt_ml_virial_report(
         silent_charmm=False,
     )
     pos = np.asarray(get_charmm_positions_array(), dtype=np.float64)
-    forces_kcal = np.asarray(get_charmm_forces_array(), dtype=np.float64).reshape(-1, 3)
+    forces_kcal = np.asarray(charmm_forces_array(), dtype=np.float64).reshape(-1, 3)
     forces_ev = forces_kcal * KCAL_MOL_A_TO_EV_A
     volume = float(box_side) ** 3
     p_atomic = virial_pressure_atm(forces_ev, pos, volume, kinetic_ev=0.0)
@@ -392,7 +390,7 @@ def run_live_cpt_ml_virial(
     if z_live.size == int(np.asarray(r).shape[0]):
         z = z_live
     pos = get_charmm_positions_array()
-    ctx = _register_mlpot_context(
+    ctx, _py_c_model = _register_mlpot_context(
         np.asarray(z, dtype=int),
         np.asarray(pos, dtype=float),
         Path(checkpoint).expanduser().resolve(),
