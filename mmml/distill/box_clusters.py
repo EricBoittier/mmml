@@ -49,8 +49,9 @@ class BoxClusterConfig:
     max_dimers_per_frame: int = 24
     seed: int = 0
     # Drop molecules whose covalent bonds (graph from the reference monomer)
-    # stretch past this: reactive frames (e.g. an H hopped to a neighbour) keep
-    # atom indices but no longer hold intact molecules. None disables.
+    # stretch past this, or that form a covalent contact with another molecule:
+    # reactive frames (e.g. an H hopped to a neighbour, a C-O bond between two
+    # carbonyls) keep atom indices but no longer hold intact molecules. None disables.
     max_bond_stretch_A: float | None = 0.4
 
 
@@ -95,6 +96,41 @@ def intact_molecules(mols: np.ndarray, bonds: np.ndarray, ref_lengths: np.ndarra
         return np.ones(mols.shape[0], dtype=bool)
     d = np.linalg.norm(mols[:, bonds[:, 0]] - mols[:, bonds[:, 1]], axis=-1)
     return np.all(np.abs(d - ref_lengths[None, :]) <= float(tol_A), axis=1)
+
+
+def fused_molecules(atoms: Atoms, atoms_per_monomer: int, scale: float = 1.2) -> tuple[np.ndarray, float]:
+    """Bool per molecule: covalently bonded to another molecule; plus the closest intermolecular distance.
+
+    A contact is an atom pair from different molecules closer than ``scale`` ×
+    covalent radius sum (same rule as :func:`bond_graph`). Minimum image when
+    the frame is periodic. The distance is ``inf`` when no pair lies within 2.5 Å.
+    """
+    from ase.neighborlist import neighbor_list
+
+    apm = int(atoms_per_monomer)
+    z = np.asarray(atoms.get_atomic_numbers(), dtype=int)
+    n_mol = len(z) // apm
+    fused = np.zeros(n_mol, dtype=bool)
+    i, j, d = neighbor_list("ijd", atoms, 2.5)
+    inter = (i // apm) != (j // apm)
+    if not inter.any():
+        return fused, float("inf")
+    i, j, d = i[inter], j[inter], d[inter]
+    rad = np.array([_COVALENT_R_A.get(int(a), 0.8) for a in z])
+    bonded = d < scale * (rad[i] + rad[j])
+    fused[i[bonded] // apm] = True
+    return fused, float(d.min())
+
+
+def damaged_molecules(
+    atoms: Atoms, atoms_per_monomer: int, bonds: np.ndarray, ref_lengths: np.ndarray, tol_A: float
+) -> tuple[np.ndarray, float]:
+    """Bool per molecule: a reference bond stretched past ``tol_A`` or a covalent contact
+    with another molecule (a reaction that keeps every intramolecular bond). Also returns
+    the closest intermolecular distance (Å)."""
+    ok = intact_molecules(whole_molecules(atoms, atoms_per_monomer), bonds, ref_lengths, tol_A)
+    fused, d_min = fused_molecules(atoms, atoms_per_monomer)
+    return ~ok | fused, d_min
 
 
 def _stratified_pick(
@@ -181,7 +217,7 @@ def box_cluster_pool(
         periodic = bool(np.any(frame.get_pbc())) and abs(np.linalg.det(cell)) > 1e-9
         n_mol = mols.shape[0]
         if bonds is not None:
-            ok = intact_molecules(mols, bonds, ref_lengths, float(cfg.max_bond_stretch_A))
+            ok = ~damaged_molecules(frame, apm, bonds, ref_lengths, float(cfg.max_bond_stretch_A))[0]
         else:
             ok = np.ones(n_mol, dtype=bool)
         n_broken += int((~ok).sum())
