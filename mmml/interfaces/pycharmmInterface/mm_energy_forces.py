@@ -1294,6 +1294,62 @@ def unswitched_pair_vdw_elec(
     return vdw, elec, distances
 
 
+def pair_vdw_elec_with_lj_override(pair_kw: dict) -> Callable[..., Tuple[Array, Array, Array]]:
+    """``unswitched_pair_vdw_elec`` with optional per-atom Rmin/2 and epsilon overrides.
+
+    Fitting (``energy_with_lj``) passes ``lj_rmins`` / ``lj_epsilons``; the MD
+    pair path leaves them ``None`` and uses the PSF/CGenFF tables in ``pair_kw``.
+    """
+
+    def pair_vdw_elec(
+        positions,
+        pair_idx,
+        pair_mask,
+        cell_for_mic=None,
+        charges=None,
+        lj_rmins=None,
+        lj_epsilons=None,
+    ):
+        kw = pair_kw
+        if lj_rmins is not None or lj_epsilons is not None:
+            kw = dict(pair_kw)
+            if lj_rmins is not None:
+                kw["rmins_per_system"] = lj_rmins
+            if lj_epsilons is not None:
+                kw["epsilons_per_system"] = lj_epsilons
+        return unswitched_pair_vdw_elec(
+            positions, pair_idx, pair_mask, cell_for_mic, charges, **kw
+        )
+
+    return pair_vdw_elec
+
+
+def attach_dynamic_mm_update_attrs(
+    update_mm_pairs,
+    *,
+    energy_scalar,
+    rmins_per_system,
+    epsilons_per_system,
+    at_codes,
+    atc_names,
+    fractional_coordinates: bool,
+    mm_eterm_split,
+) -> None:
+    """MD routing attrs plus the DiffTRe ``energy_with_lj`` hook."""
+    update_mm_pairs.fractional_coordinates = bool(fractional_coordinates)
+    # jax-pme moves Coulomb/dispersion off the pair list, so the pair split would
+    # not be the MM the hybrid evaluates; routing keeps its numpy fallback there.
+    update_mm_pairs.mm_eterm_split = mm_eterm_split
+    # Parameter-differentiable switched MM energy for fitting: per-atom CHARMM
+    # Rmin/2 and epsilon (<= 0) override the PSF/CGenFF values; ``None`` keeps
+    # them. Units kcal/mol.
+    update_mm_pairs.energy_with_lj = jax.jit(energy_scalar)
+    update_mm_pairs.lj_rmins = rmins_per_system
+    update_mm_pairs.lj_epsilons = epsilons_per_system
+    update_mm_pairs.at_codes = np.asarray(at_codes)
+    update_mm_pairs.atc_names = [str(name) for name in atc_names]
+
+
 def switched_mm_eterm_split(
     positions: Array,
     pair_idx: Array,
@@ -2202,25 +2258,7 @@ def build_mm_energy_forces_fn(
             coulomb_fn=coulomb, use_jax_pme_coulomb=_use_jax_pme_coulomb,
         )
 
-        def _dynamic_pair_vdw_elec(
-            positions,
-            pair_idx,
-            pair_mask,
-            cell_for_mic=None,
-            charges=None,
-            lj_rmins=None,
-            lj_epsilons=None,
-        ):
-            kw = _pair_kw
-            if lj_rmins is not None or lj_epsilons is not None:
-                kw = dict(_pair_kw)
-                if lj_rmins is not None:
-                    kw["rmins_per_system"] = lj_rmins
-                if lj_epsilons is not None:
-                    kw["epsilons_per_system"] = lj_epsilons
-            return unswitched_pair_vdw_elec(
-                positions, pair_idx, pair_mask, cell_for_mic, charges, **kw
-            )
+        _dynamic_pair_vdw_elec = pair_vdw_elec_with_lj_override(_pair_kw)
 
         def calculate_mm_pair_energies_dynamic(
             positions: Array,
@@ -2968,18 +3006,16 @@ def build_mm_energy_forces_fn(
             return dict(_pair_stats)
 
         update_mm_pairs.get_stats = _get_pair_update_stats
-        update_mm_pairs.fractional_coordinates = bool(fractional_coordinates)
-        # jax-pme moves Coulomb/dispersion off the pair list, so the pair split would
-        # not be the MM the hybrid evaluates; routing keeps its numpy fallback there.
-        update_mm_pairs.mm_eterm_split = None if _use_jax_pme_coulomb else mm_eterm_split_dynamic
-        # Parameter-differentiable switched MM energy for fitting (DiffTRe-style
-        # reweighting): per-atom CHARMM Rmin/2 and epsilon (<= 0) override the
-        # PSF/CGenFF values; ``None`` keeps them. Units kcal/mol.
-        update_mm_pairs.energy_with_lj = jax.jit(_mm_dynamic_energy_scalar)
-        update_mm_pairs.lj_rmins = rmins_per_system
-        update_mm_pairs.lj_epsilons = epsilons_per_system
-        update_mm_pairs.at_codes = np.asarray(at_codes)
-        update_mm_pairs.atc_names = [str(name) for name in atc]
+        attach_dynamic_mm_update_attrs(
+            update_mm_pairs,
+            energy_scalar=_mm_dynamic_energy_scalar,
+            rmins_per_system=rmins_per_system,
+            epsilons_per_system=epsilons_per_system,
+            at_codes=at_codes,
+            atc_names=atc,
+            fractional_coordinates=fractional_coordinates,
+            mm_eterm_split=None if _use_jax_pme_coulomb else mm_eterm_split_dynamic,
+        )
 
         mm_fn = calculate_mm_energy_and_forces_dynamic
         if _use_jax_pme_coulomb:

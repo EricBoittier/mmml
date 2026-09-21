@@ -40,6 +40,8 @@ mmml compare-charmm-ml --checkpoint ~/ckpts/eg_joint --valid-efd splits/energies
 mmml physnet-train --config train.yaml
 mmml efield-train --train-npz splits/energies_forces_dipoles_train.npz --valid-npz splits/energies_forces_dipoles_valid.npz --polar_weight 1 --polar-at-zero-field
 mmml pet-physnet-distill --checkpoint pet-mad.pt --out-dir ./acetone_pet_distill --preset smoke
+mmml tune-mm-nonbonded fit --labels tune/ --out-json tune/lj_elec_tune.json
+mmml fit-liquid dry-run --frames run_npt.h5 --atoms-per-molecule 10 --molecule ACO --toy
 mmml pet-interaction-pes --checkpoint "$PET_MAD_CKPT"
 mmml mode-check --composition TIP3:1 --checkpoint "$MMML_CKPT" --output-dir ./mode_tip3_1
 mmml mode-check --composition TIP3:2 --checkpoint "$MMML_CKPT" --output-dir ./mode_tip3_2 --checks minimize,fd,bond-scan,vibrations,kick

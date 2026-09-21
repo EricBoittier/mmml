@@ -69,6 +69,7 @@ COMMAND_GROUPS: tuple[tuple[str, tuple[CommandInfo, ...]], ...] = (
             CommandInfo("pet-box-dataset", "Many-seed PET box frames (FIRE + NVT extxyz)"),
             CommandInfo("pet-physnet-distill", "PET-MAD teacher → PhysNet NPZ (acetone)"),
             CommandInfo("tune-mm-nonbonded", "Fit ML/MM tail LJ/charge scales to teacher liquid frames"),
+            CommandInfo("fit-liquid", "Fit ML/MM LJ scales and dimer λ to experimental ρ(T) / ΔHvap"),
             CommandInfo("physnet-evaluate", "Evaluate PhysNet checkpoint"),
             CommandInfo("physnet-md", "PhysNet MD sampling"),
             CommandInfo("neb", "NEB reaction-path sampling with PhysNet"),
@@ -144,6 +145,8 @@ EXAMPLE_BLOCKS: tuple[tuple[str, tuple[str, ...]], ...] = (
             "--valid-npz splits/energies_forces_dipoles_valid.npz "
             "--polar_weight 1 --polar-at-zero-field",
             "mmml pet-physnet-distill --checkpoint pet-mad.pt --out-dir ./acetone_pet_distill --preset smoke",
+            "mmml tune-mm-nonbonded fit --labels tune/ --out-json tune/lj_elec_tune.json",
+            "mmml fit-liquid dry-run --frames run_npt.h5 --atoms-per-molecule 10 --molecule ACO --toy",
             "mmml pet-interaction-pes --checkpoint \"$PET_MAD_CKPT\"",
             "mmml mode-check --composition TIP3:1 --checkpoint \"$MMML_CKPT\" --output-dir ./mode_tip3_1",
             "mmml mode-check --composition TIP3:2 --checkpoint \"$MMML_CKPT\" --output-dir ./mode_tip3_2 --checks minimize,fd,bond-scan,vibrations,kick",

@@ -20,6 +20,7 @@ and 1 atm is at best metastable).
 
 from __future__ import annotations
 
+import copy
 import json
 import os
 import re
@@ -34,6 +35,49 @@ REFERENCE_JSON_ENV = "MMML_EXP_REFERENCE_JSON"
 DEFAULT_REFERENCE_JSON = Path(
     "/mmhome/boittier/home/mmml-pet-run/scratch/pet_200K/artifacts/experimental_reference_aco_dcm.json"
 )
+
+# Cited subset used when the machine-local JSON is absent (acetone DIPPR-105
+# from DDB; NIST WebBook dHvap for acetone and DCM). Enough for CLI dry-runs.
+BUNDLED_REFERENCE: dict[str, Any] = {
+    "ACO": {
+        "T_boil_K": {"value": 329.3, "source": "NIST"},
+        "dHvap_kJ_mol": [
+            {"T_K": 298.15, "value": 31.27, "source": "Majer and Svoboda, 1985"},
+            {
+                "T_K": 228.0,
+                "value": 32.9,
+                "source": "Stephenson and Malanowski, 1987; from 178-243 K vapor pressure",
+            },
+            {
+                "T_K": 293.0,
+                "value": 32.1,
+                "source": "Felsing and Durban, 1926 (via NIST WebBook)",
+            },
+            {"T_K": 329.3, "value": 29.1, "source": "Majer and Svoboda, 1985"},
+        ],
+        "density_DIPPR105": {
+            "A": 57.6214,
+            "B": 0.233955,
+            "C": 507.803,
+            "D": 0.254167,
+            "range_K": [183, 507],
+            "source": "DDBST DIPPR105",
+            "check_kg_m3": {
+                "195.96": 888.763,
+                "202.44": 882.713,
+                "293.16": 791.24,
+                "299.64": 784.105,
+            },
+        },
+    },
+    "DCM": {
+        "dHvap_kJ_mol": [
+            {"T_K": 298.15, "value": 29.03, "unc": 0.08, "source": "Manion, 2002"},
+            {"T_K": 313.0, "value": 28.06, "source": "Majer and Svoboda, 1985"},
+            {"T_K": [186, 312], "value": 29.4, "source": "Perry, 1926"},
+        ],
+    },
+}
 
 DEFAULT_REL_SIGMA_DENSITY = 0.005  # 0.5 % of rho
 DEFAULT_SIGMA_DHVAP_KJ_MOL = 0.5
@@ -77,10 +121,24 @@ class StatePointTarget:
 
 
 def load_reference(path: str | os.PathLike | None = None) -> dict[str, Any]:
-    """Load the reference JSON (``path`` > ``$MMML_EXP_REFERENCE_JSON`` > default)."""
-    p = Path(path or os.environ.get(REFERENCE_JSON_ENV) or DEFAULT_REFERENCE_JSON)
-    with open(p) as fh:
-        return json.load(fh)
+    """Load the reference JSON (``path`` > ``$MMML_EXP_REFERENCE_JSON`` > default).
+
+    Falls back to :data:`BUNDLED_REFERENCE` when the machine-local file is
+    missing, so ``mmml fit-liquid`` works without the original scratch path.
+    """
+    explicit = path if path is not None else os.environ.get(REFERENCE_JSON_ENV)
+    candidates = []
+    if explicit:
+        candidates.append(Path(explicit))
+    else:
+        candidates.append(DEFAULT_REFERENCE_JSON)
+    for p in candidates:
+        if p.is_file():
+            with open(p) as fh:
+                return json.load(fh)
+    if explicit:
+        raise FileNotFoundError(f"experimental reference JSON not found: {explicit}")
+    return copy.deepcopy(BUNDLED_REFERENCE)
 
 
 def dippr105_density_kg_m3(T_K: float | np.ndarray, A: float, B: float, C: float, D: float) -> np.ndarray:

@@ -105,6 +105,7 @@ CLI_NAV_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
             "pet-box-dataset",
             "pet-physnet-distill",
             "tune-mm-nonbonded",
+            "fit-liquid",
             "physnet-evaluate",
             "physnet-md",
             "neb",
@@ -235,6 +236,9 @@ RELATED_DOCS: dict[str, list[tuple[str, str]]] = {
         ("Plotting style guide", "../../plotting-style-guide.md"),
     ],
     "tune-mm-nonbonded": [
+        ("Trainable hybrid MM LJ scales", "../../hybrid-mm-lj-scales.md"),
+    ],
+    "fit-liquid": [
         ("Trainable hybrid MM LJ scales", "../../hybrid-mm-lj-scales.md"),
     ],
     "umbrella-sample": [

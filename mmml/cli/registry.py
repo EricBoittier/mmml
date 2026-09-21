@@ -151,6 +151,11 @@ COMMAND_REGISTRY: tuple[CommandSpec, ...] = (
         "mmml.cli.misc.tune_mm_nonbonded",
         "Fit CGenFF LJ/charge scales of the ML/MM tail to teacher liquid frames",
     ),
+    CommandSpec(
+        "fit-liquid",
+        "mmml.cli.misc.fit_liquid",
+        "Fit ML/MM LJ scales and dimer λ to experimental ρ(T) / ΔHvap(T)",
+    ),
     CommandSpec("physnet-md", "mmml.cli.misc.physnet_md", "PhysNet MD sampling"),
     CommandSpec("physnet-evaluate", "mmml.cli.misc.physnet_evaluate", "Evaluate PhysNet checkpoint"),
     CommandSpec("compare-npz", "mmml.cli.misc.compare_npz", "Reference vs model NPZ plots"),
