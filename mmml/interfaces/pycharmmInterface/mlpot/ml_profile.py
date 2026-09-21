@@ -44,16 +44,64 @@ class MlpotProfileStats:
     mm_pair_rebuilds: int = 0
     mm_pair_gpu_rebuilds: int = 0
     _last_callback_end: Optional[float] = field(default=None, repr=False)
+    # Per-call samples for steady-state statistics (first ``warmup_calls`` skipped).
+    warmup_calls: int = 100
+    ml_ms_samples: list = field(default_factory=list, repr=False)
+    gap_ms_samples: list = field(default_factory=list, repr=False)
+    n_active_samples: list = field(default_factory=list, repr=False)
+    chunk_budget_samples: list = field(default_factory=list, repr=False)
+    max_active_dimers: int = 0
+    chunk_size: int = 0
 
     def record_ml(self, elapsed_s: float) -> None:
         self.ml_calls += 1
         self.ml_seconds += elapsed_s
+        self.ml_ms_samples.append(1000.0 * float(elapsed_s))
+        if _SUMMARY_DIR is not None and self.ml_calls % 500 == 0:
+            # CHARMM can end the process without running atexit hooks.
+            write_mlpot_profile_summary(_SUMMARY_DIR)
         self._last_callback_end = time.perf_counter()
 
     def record_charmm_gap(self) -> None:
         if self._last_callback_end is None:
             return
-        self.charmm_gap_seconds += time.perf_counter() - self._last_callback_end
+        gap = time.perf_counter() - self._last_callback_end
+        self.charmm_gap_seconds += gap
+        self.gap_ms_samples.append(1000.0 * gap)
+
+    def record_active_dimers(
+        self, n_active: int, *, chunk_budget: int, chunk_size: int, max_active_dimers: int
+    ) -> None:
+        """Sparse ML dimers in range this step and the PhysNet chunks the step ran."""
+        self.n_active_samples.append(int(n_active))
+        self.chunk_budget_samples.append(int(chunk_budget))
+        self.chunk_size = int(chunk_size)
+        self.max_active_dimers = int(max_active_dimers)
+
+    def steady_state(self) -> dict[str, Any]:
+        """Median / mean / p90 per call after the first ``warmup_calls`` (JIT, budget settling)."""
+        import numpy as np
+
+        def _stats(xs: list) -> Optional[dict[str, float]]:
+            a = np.asarray(xs[self.warmup_calls :], dtype=float)
+            if a.size == 0:
+                return None
+            return {"n": int(a.size), "median": float(np.median(a)), "mean": float(a.mean()),
+                    "p90": float(np.percentile(a, 90)), "min": float(a.min()), "max": float(a.max())}
+
+        ml, gap = _stats(self.ml_ms_samples), _stats(self.gap_ms_samples)
+        n = min(len(self.ml_ms_samples), len(self.gap_ms_samples) + 1)
+        step = _stats([m + g for m, g in zip(self.ml_ms_samples[1:n], self.gap_ms_samples[: n - 1])])
+        return {
+            "warmup_calls": self.warmup_calls,
+            "ml_callback_ms": ml,
+            "charmm_gap_ms": gap,
+            "step_ms": step,
+            "n_active_dimers": _stats(self.n_active_samples),
+            "chunk_budget": _stats(self.chunk_budget_samples),
+            "chunk_size": self.chunk_size,
+            "max_active_dimers": self.max_active_dimers,
+        }
 
     def record_calculate(self, elapsed_s: float) -> None:
         """Wall time for one ASE ``Calculator.calculate`` (includes GPU sync)."""
@@ -148,11 +196,19 @@ class MlpotProfileStats:
             "mm_pair_calls": self.mm_pair_calls,
             "mm_pair_rebuilds": self.mm_pair_rebuilds,
             "mm_pair_gpu_rebuilds": self.mm_pair_gpu_rebuilds,
+            "steady_state": self.steady_state(),
             "summary": self.summary_line(),
         }
 
 
 _GLOBAL_STATS = MlpotProfileStats()
+_SUMMARY_DIR: Optional[str] = None
+
+
+def set_mlpot_profile_summary_dir(output_dir: str | os.PathLike[str] | None) -> None:
+    """Rewrite ``mlpot_profile.json`` in ``output_dir`` every 500 ML callbacks."""
+    global _SUMMARY_DIR
+    _SUMMARY_DIR = None if output_dir is None else str(output_dir)
 
 
 def get_mlpot_profile_stats() -> MlpotProfileStats:
