@@ -461,6 +461,24 @@ class DecomposedMlpotCalculator:
                 forward_fn, static_argnums=(4, 7), static_argnames=("ml_eval_chunks",)
             )
 
+            def forward_vir_fn(positions, box, *rest, ml_eval_chunks=None, ml_dimer_candidates=None):
+                """Forward plus dE/d(box) at fixed positions (CPT strain virial, strain_virial.py)."""
+
+                def energy_aux(box_arg):
+                    e, f, n_act = forward_fn(
+                        positions, box_arg, *rest,
+                        ml_eval_chunks=ml_eval_chunks,
+                        ml_dimer_candidates=ml_dimer_candidates,
+                    )
+                    return e, (f, n_act)
+
+                (e, (f, n_act)), dE_dbox = jax.value_and_grad(energy_aux, has_aux=True)(box)
+                return e, f, n_act, dE_dbox
+
+            fn_vir = jax.jit(
+                forward_vir_fn, static_argnums=(4, 7), static_argnames=("ml_eval_chunks",)
+            )
+
             def wrapper(
                 positions,
                 mm_pair_idx,
@@ -488,6 +506,34 @@ class DecomposedMlpotCalculator:
                     ml_dimer_candidates=ml_dimer_candidates,
                 )
 
+            def wrapper_vir(
+                positions,
+                mm_pair_idx,
+                mm_pair_mask,
+                use_mm_pairs,
+                spatial_monomer_indices,
+                spatial_dimer_indices,
+                use_spatial,
+                ml_eval_chunks=_BUDGET_DEFAULT,
+                ml_dimer_candidates=None,
+            ):
+                current_box = getattr(self, "_current_box", None)
+                if current_box is None:
+                    current_box = box_jax
+                return fn_vir(
+                    positions,
+                    current_box,
+                    mm_pair_idx,
+                    mm_pair_mask,
+                    use_mm_pairs,
+                    spatial_monomer_indices,
+                    spatial_dimer_indices,
+                    use_spatial,
+                    ml_eval_chunks=_budget_chunks(ml_eval_chunks),
+                    ml_dimer_candidates=ml_dimer_candidates,
+                )
+
+            owner._spherical_forward_vir_fn = wrapper_vir
             owner._spherical_forward_fn = wrapper
         else:
 
@@ -746,6 +792,7 @@ class DecomposedMlpotCalculator:
             )
             e_raw, forces_ev = fwd_out[0], fwd_out[1]
         budget.update(n_active)
+        self._last_fwd_out = fwd_out
         return e_raw, forces_ev
 
     def _mlpot_eval_device_context(self):
@@ -852,6 +899,7 @@ class DecomposedMlpotCalculator:
         )
 
         pos_full = stack_charmm_xyz(x, y, z, n)
+        pos_charmm_full = np.array(pos_full, dtype=np.float64, copy=True)
         box = self._sync_callback_pbc_box()
         live_side = float(self._cell) if self._cell else None
         pos_full = self._maybe_rewrap_primary_cell_in_callback(
@@ -983,9 +1031,28 @@ class DecomposedMlpotCalculator:
                 fwd_kwargs = self._resolve_ml_dimer_candidates(
                     pos, box, use_spatial=use_spatial
                 )
+                from mmml.interfaces.pycharmmInterface.mlpot.strain_virial import (
+                    strain_virial_enabled,
+                )
+
+                want_virial = strain_virial_enabled()
+                if want_virial:
+                    vir_fn = getattr(self._grad_cache_owner(), "_spherical_forward_vir_fn", None)
+                    if vir_fn is None or box is None or use_spatial:
+                        raise RuntimeError(
+                            "CPT strain virial needs a periodic box and the non-spatial MLpot "
+                            "forward; refusing to run NpT with CHARMM's central-atom virial"
+                        )
+                    if getattr(self, "_periodic_mm_config", None) is not None:
+                        raise RuntimeError(
+                            "CPT strain virial does not cover the periodic Coulomb add-on yet; "
+                            "refusing NpT with an incomplete virial"
+                        )
+                    forward_fn = vir_fn
                 t_fwd = time.perf_counter()
                 fwd_out = forward_fn(*fwd_args, **fwd_kwargs)
                 e_raw, forces_ev = fwd_out[0], fwd_out[1]
+                self._last_fwd_out = fwd_out
                 budget = getattr(self._grad_cache_owner(), "_ml_chunk_budget", None)
                 if budget is not None and len(fwd_out) > 2:
                     e_raw, forces_ev = self._check_ml_chunk_budget(
@@ -1003,6 +1070,36 @@ class DecomposedMlpotCalculator:
                 )
 
                 require_host_finite(e_host, forces_host, name="ML USER")
+                if want_virial:
+                    from mmml.interfaces.pycharmmInterface.mlpot.strain_virial import (
+                        push_virial_to_charmm,
+                        virial_correction_kcal,
+                    )
+
+                    dE_dbox = np.asarray(jax.device_get(self._last_fwd_out[3]), dtype=np.float64)
+                    current_box = getattr(self, "_current_box", None)
+                    cell_np = np.asarray(current_box if current_box is not None else box, dtype=np.float64)
+                    correction = virial_correction_kcal(
+                        dE_dcell_eV=dE_dbox,
+                        cell=cell_np,
+                        forces_eV_A=forces_host,
+                        positions_eval=pos,
+                        positions_charmm=pos_charmm_full[ml_idx],
+                        ev_to_kcal=self.ev2kcal,
+                    )
+                    require_host_finite(0.0, correction, name="ML USER strain virial")
+                    push_virial_to_charmm(correction)
+                    self._last_strain_virial_kcal = correction
+                    self._strain_virial_calls = getattr(self, "_strain_virial_calls", 0) + 1
+                    if self._strain_virial_calls == 1 or self._strain_virial_calls % 1000 == 0:
+                        vol = abs(float(np.linalg.det(cell_np)))
+                        tr = float(np.trace(correction))
+                        print(
+                            f"MLpot strain virial (call {self._strain_virial_calls}): "
+                            f"correction trace {tr:+.2f} kcal/mol -> dP {tr / (3.0 * vol) * 68568.4:+.1f} atm "
+                            f"(V {vol:.0f} A^3)",
+                            flush=True,
+                        )
                 e_kcal = float(e_host) * self.ev2kcal
                 forces_ml = np.asarray(forces_host, dtype=np.float64) * self.ev2kcal
                 if mlpot_profiling_enabled():

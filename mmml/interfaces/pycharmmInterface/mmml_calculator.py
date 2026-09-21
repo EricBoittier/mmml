@@ -33,6 +33,8 @@ import pandas as pd
 import jax
 import jax.numpy as jnp
 from mmml.interfaces.pycharmmInterface.pbc_utils_jax import (
+    cart_coords,
+    frac_coords,
     mic_displacement,
     mic_displacement_smooth,
 )
@@ -707,6 +709,19 @@ def metatomic_zero_fragment_output(
         "energy": ml_zeros((1,), dtype=dtype),
         "forces": ml_zeros((npos, 3), dtype=dtype),
     }
+
+
+def _dimer_lattice_shift(com_a, com_b, cell):
+    """Lattice vector that moves monomer B to its minimum image around monomer A.
+
+    ``-(n @ cell)`` with the integer image count ``n`` held under stop_gradient:
+    the same value as ``com_a + mic(com_b - com_a) - com_b`` and still zero
+    position gradient (``n`` is piecewise constant), but differentiable in the
+    cell, so ``dE/d(cell)`` -- the part of the strain virial that the central-
+    atom ``sum(x * F)`` misses -- is available for CHARMM CPT pressure.
+    """
+    n = jax.lax.stop_gradient(jnp.round(frac_coords(com_b - com_a, cell)))
+    return -cart_coords(n, cell)
 
 
 def _resolve_ml_chunk_layout(ml_sparse_dimers, _max_active_dimers, n_dimers_total, ml_batch_size, n_monomers, _jax_mm_spoof_mode, _kernnn_mode, _metatomic_mode, ml_gpu_count, monomers_own_pad=False):
@@ -2653,10 +2668,7 @@ def setup_calculator(
                 n_b = jnp.maximum(jnp.sum(mask_b), 1e-10)
                 com_a = jnp.sum(pos_di * mask_a[:, None], axis=0) / n_a
                 com_b = jnp.sum(pos_di * mask_b[:, None], axis=0) / n_b
-                d = mic_fn(com_a, com_b, cell_for_mic)
-                # Exact MIC lattice shift is piecewise-constant → detach it.
-                # Differentiable/smooth shifts create large forces near ±L/2.
-                shift_b = jax.lax.stop_gradient(com_a + d - com_b)
+                shift_b = _dimer_lattice_shift(com_a, com_b, cell_for_mic)
                 return pos_di + shift_b * mask_b[:, None]
 
         def _dimer_arrays(sel=None):
@@ -4344,8 +4356,7 @@ def setup_calculator(
                 n_b = jnp.maximum(jnp.sum(mask_b), 1e-10)
                 com_a = jnp.sum(pos_di * mask_a[:, None], axis=0) / n_a
                 com_b = jnp.sum(pos_di * mask_b[:, None], axis=0) / n_b
-                d = mic_fn(com_a, com_b, cell_for_mic)
-                shift_b = jax.lax.stop_gradient(com_a + d - com_b)
+                shift_b = _dimer_lattice_shift(com_a, com_b, cell_for_mic)
                 return pos_di + shift_b * mask_b[:, None]
 
             dimer_pos_padded = jax.vmap(_wrap_dimer_coords, in_axes=(0, 0, 0))(

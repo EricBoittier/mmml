@@ -171,6 +171,42 @@ def _cell_matrix_np(cell: np.ndarray) -> np.ndarray:
     return c
 
 
+MM_EXTENT_MARGIN_ENV = "MMML_MM_EXTENT_MARGIN_A"
+MAX_AUTO_MM_EXTENT_MARGIN_A = 1.0
+
+
+def resolve_mm_extent_margin_A(
+    requested_A: float,
+    *,
+    measured_extent_A: float,
+    mm_switch_on: float,
+    mm_switch_width: float,
+    skin_distance: float,
+    cell: Any,
+) -> float:
+    """Extent margin for the MM pair list: the requested floor, grown into free L/2 headroom.
+
+    The list assumes ``measured extent + margin`` per molecule and the rebuild
+    raises once a molecule grows past it. The extent is measured on the start
+    structure (often freshly minimised, i.e. compact), so a fixed 0.25 A was
+    overshot by a DCM C-Cl stretch within a few hundred steps at 300 K and
+    aborted NVT/NpT runs. Use the room left below ``L/2`` instead (capped at
+    ``MAX_AUTO_MM_EXTENT_MARGIN_A``), never less than ``requested_A``.
+    ``MMML_MM_EXTENT_MARGIN_A`` overrides both.
+    """
+    env = (os.environ.get(MM_EXTENT_MARGIN_ENV) or "").strip()
+    if env:
+        return max(0.0, float(env))
+    floor = max(0.0, float(requested_A))
+    try:
+        L = float(np.min(np.linalg.norm(np.asarray(cell, dtype=np.float64).reshape(3, 3), axis=1)))
+    except Exception:
+        return floor
+    base = float(mm_switch_on) + float(mm_switch_width) + float(skin_distance) + 2.0 * float(measured_extent_A)
+    headroom = 0.5 * (0.5 * L - 1e-3 - base)
+    return max(floor, min(MAX_AUTO_MM_EXTENT_MARGIN_A, headroom))
+
+
 def max_monomer_extent_A(
     positions: np.ndarray,
     monomer_offsets: np.ndarray,
@@ -1578,6 +1614,14 @@ def build_mm_energy_forces_fn(
             # Flexible molecules: the list assumes extent + margin; the rebuild
             # path raises if a molecule later grows past it.
             _mm_measured_extent = max_monomer_extent_A(R, monomer_offsets, pbc_cell)
+            mm_extent_margin_A = resolve_mm_extent_margin_A(
+                mm_extent_margin_A,
+                measured_extent_A=_mm_measured_extent,
+                mm_switch_on=mm_switch_on,
+                mm_switch_width=mm_switch_width,
+                skin_distance=jax_md_skin_distance,
+                cell=pbc_cell,
+            )
             _mm_assumed_extent = _mm_measured_extent + float(max(0.0, mm_extent_margin_A))
         _mm_radius_info = mm_pair_list_radius_breakdown(
             mm_switch_on=mm_switch_on,
