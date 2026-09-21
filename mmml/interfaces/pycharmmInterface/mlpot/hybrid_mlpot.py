@@ -671,9 +671,8 @@ class DecomposedMlpotCalculator:
         e_raw, forces_ev = fwd_out[0], fwd_out[1]
         if n_active < 0:  # dense or spatial batch this step: nothing was skipped
             return e_raw, forces_ev
-        msg = budget.note_saturation(n_active)
-        if msg:
-            print(msg, flush=True)
+        # Cap overflow drops interacting dimers; chunk growth cannot recover them.
+        budget.raise_if_saturated(n_active)
         from mmml.interfaces.pycharmmInterface.mlpot.ml_profile import (
             get_mlpot_profile_stats,
             mlpot_profiling_enabled,
@@ -844,6 +843,7 @@ class DecomposedMlpotCalculator:
         )
         if run_ml:
             with self._mlpot_eval_device_context():
+                t_pairs = time.perf_counter()
                 try:
                     if self._mm_pair_source == "charmm_callback":
                         mm_pair_idx, mm_pair_mask, use_mm_pairs = (
@@ -922,6 +922,7 @@ class DecomposedMlpotCalculator:
                     )
                     mono_jax = jnp.asarray(batch_idx.owned_monomers, dtype=jnp.int32)
                     dimer_jax = jnp.asarray(batch_idx.active_dimer_indices, dtype=jnp.int32)
+                pair_ms = (time.perf_counter() - t_pairs) * 1000.0
                 fwd_args = (
                     positions_jax,
                     mm_pair_idx,
@@ -931,6 +932,7 @@ class DecomposedMlpotCalculator:
                     dimer_jax,
                     use_spatial,
                 )
+                t_fwd = time.perf_counter()
                 fwd_out = forward_fn(*fwd_args)
                 e_raw, forces_ev = fwd_out[0], fwd_out[1]
                 budget = getattr(self._grad_cache_owner(), "_ml_chunk_budget", None)
@@ -938,12 +940,29 @@ class DecomposedMlpotCalculator:
                     e_raw, forces_ev = self._check_ml_chunk_budget(
                         budget, forward_fn, fwd_args, fwd_out
                     )
-                e_raw = jnp.where(jnp.isfinite(e_raw), e_raw, 0.0)
-                forces_ev = jnp.where(jnp.isfinite(forces_ev), forces_ev, 0.0)
-                e_kcal = float(jax.device_get(e_raw)) * self.ev2kcal
-                forces_ml = (
-                    np.asarray(jax.device_get(forces_ev), dtype=np.float64) * self.ev2kcal
+                if mlpot_profiling_enabled():
+                    e_raw = jax.block_until_ready(e_raw)
+                    forces_ev = jax.block_until_ready(forces_ev)
+                fwd_ms = (time.perf_counter() - t_fwd) * 1000.0
+                t_host = time.perf_counter()
+                e_host = jax.device_get(e_raw)
+                forces_host = jax.device_get(forces_ev)
+                from mmml.interfaces.pycharmmInterface.mlpot.finite_guards import (
+                    require_host_finite,
                 )
+
+                require_host_finite(e_host, forces_host, name="ML USER")
+                e_kcal = float(e_host) * self.ev2kcal
+                forces_ml = np.asarray(forces_host, dtype=np.float64) * self.ev2kcal
+                if mlpot_profiling_enabled():
+                    get_mlpot_profile_stats().record_callback_stages(
+                        {
+                            "mm_pairs": pair_ms,
+                            "spherical_forward": fwd_ms,
+                            "host_writeback": (time.perf_counter() - t_host) * 1000.0,
+                            "callback_total": (time.perf_counter() - t0) * 1000.0,
+                        }
+                    )
                 forces = np.zeros((n, 3), dtype=np.float64)
                 forces[ml_idx] = forces_ml
                 self.last_ml_forces = np.asarray(forces, dtype=np.float64, copy=True)
@@ -1599,8 +1618,23 @@ def _build_jax_decomposed_mlpot_model(
             side = float(cell)
             if side > 0.0:
                 _box_volume = side**3
-                _active_radius = float(cutoff_params.mm_switch_on) + float(
-                    cutoff_params.ml_switch_width
+                from mmml.interfaces.pycharmmInterface.mlpot.mlpot_sparse_dimer_policy import (
+                    sparse_dimer_active_radius,
+                )
+
+                margin = 0.0
+                if args is not None:
+                    raw_margin = getattr(args, "ml_dimer_active_margin", None)
+                    if raw_margin is not None:
+                        margin = float(raw_margin)
+                    else:
+                        margin = float(os.environ.get("MMML_ML_DIMER_ACTIVE_MARGIN") or 0.0)
+                else:
+                    margin = float(os.environ.get("MMML_ML_DIMER_ACTIVE_MARGIN") or 0.0)
+                _active_radius = sparse_dimer_active_radius(
+                    float(cutoff_params.mm_switch_on),
+                    float(cutoff_params.ml_switch_width),
+                    margin=margin,
                 )
         except (TypeError, ValueError):
             pass

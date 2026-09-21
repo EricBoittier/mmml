@@ -8,6 +8,7 @@ os.environ.setdefault("JAX_PLATFORMS", "cpu")
 
 import jax.numpy as jnp
 import numpy as np
+import pytest
 
 from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import DecomposedMlpotCalculator
 from mmml.interfaces.pycharmmInterface.mlpot.ml_chunk_budget import MlChunkBudget, MlChunkLayout
@@ -51,12 +52,36 @@ def test_overflow_is_detected():
     assert not b.covers(8 * 256 - 181 + 1)
 
 
-def test_saturation_warning_is_rate_limited():
+def test_saturation_raises_instead_of_warning():
+    from mmml.interfaces.pycharmmInterface.mlpot.mlpot_sparse_dimer_policy import (
+        SparseDimerCapOverflow,
+    )
+
     b = MlChunkBudget(LAYOUT)
-    assert b.note_saturation(4005) is None
-    msgs = [b.note_saturation(4100) for _ in range(12)]
-    assert msgs[0] and "cap saturated" in msgs[0]
-    assert sum(m is not None for m in msgs) == 2  # steps 1 and 10
+    b.update(1700)
+    with pytest.raises(SparseDimerCapOverflow) as exc:
+        b.raise_if_saturated(4100)
+    assert exc.value.n_active == 4100
+    assert exc.value.cap == 4005
+    assert exc.value.dropped == 95
+    # Chunk `covers` is about PhysNet chunks, not the dimer cap. Overflow is a
+    # separate fail-closed check; growing chunks cannot recover dropped pairs.
+    with pytest.raises(SparseDimerCapOverflow):
+        b.note_saturation(4100)
+
+
+def test_callback_raises_on_cap_overflow():
+    from mmml.interfaces.pycharmmInterface.mlpot.mlpot_sparse_dimer_policy import (
+        SparseDimerCapOverflow,
+    )
+
+    budget = MlChunkBudget(LAYOUT)
+
+    def forward(*args, ml_eval_chunks=None):
+        return jnp.float64(1.0), jnp.ones((2, 3)), jnp.int32(4100)
+
+    with pytest.raises(SparseDimerCapOverflow):
+        _FakeCalc()._check_ml_chunk_budget(budget, forward, (), forward())
 
 
 class _FakeCalc:

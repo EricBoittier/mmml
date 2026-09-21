@@ -1660,7 +1660,9 @@ def setup_calculator(
         pass
 
     from mmml.interfaces.pycharmmInterface.mlpot.mlpot_sparse_dimer_policy import (
+        SparseDimerCapOverflow,
         resolve_max_active_dimers,
+        sparse_dimer_active_radius,
     )
 
     # Sparse dimers: max active for JIT (cap for memory). Box volume/active
@@ -1720,7 +1722,11 @@ def setup_calculator(
         ml_dimer_active_margin = float(os.environ.get("MMML_ML_DIMER_ACTIVE_MARGIN") or 0.0)
     if ml_dimer_active_margin < 0:
         raise ValueError(f"ml_dimer_active_margin must be >= 0, got {ml_dimer_active_margin}")
-    _dimer_active_radius = cutoff_params.mm_switch_on + float(ml_dimer_active_margin)
+    _dimer_active_radius = sparse_dimer_active_radius(
+        cutoff_params.mm_switch_on,
+        cutoff_params.ml_switch_width,
+        margin=ml_dimer_active_margin,
+    )
     _box_volume = float(jnp.linalg.det(pbc_cell)) if pbc_cell is not None else None
     _max_active_dimers = (
         resolve_max_active_dimers(
@@ -2268,11 +2274,12 @@ def setup_calculator(
             ml_internal_F_raw = _remap(ml_internal_F_raw)
             ml_2b_F_raw = _remap(ml_2b_F_raw)
             
-            # IMMEDIATELY check for NaN/Inf and replace with zeros
-            # This is critical - NaN values will corrupt all subsequent calculations
-            ml_forces = jnp.where(jnp.isfinite(ml_forces_raw), ml_forces_raw, 0.0)
-            ml_internal_F = jnp.where(jnp.isfinite(ml_internal_F_raw), ml_internal_F_raw, 0.0)
-            ml_2b_F = jnp.where(jnp.isfinite(ml_2b_F_raw), ml_2b_F_raw, 0.0)
+            # Keep physical (unmasked) values, including nonfinite. Padding is
+            # zeroed by atom masks in the scatter; host-side require_host_finite
+            # aborts if a live contribution is NaN/Inf.
+            ml_forces = ml_forces_raw
+            ml_internal_F = ml_internal_F_raw
+            ml_2b_F = ml_2b_F_raw
             
             # Debug: Check for NaN in raw forces (jax.debug.print handles conditional execution)
             jnp.sum(~jnp.isfinite(ml_forces_raw))
@@ -2437,16 +2444,14 @@ def setup_calculator(
             outputs["out_F"] = outputs.get("out_F", 0) + mbd_F
         outputs["mbd_E"] = mbd_E
 
-        # Final validation: check for NaN/Inf in final forces
+        # Live contributions must stay nonfinite if they are; host require_host_finite
+        # aborts. Do not zero the assembled USER term here.
         final_forces = outputs["out_F"]
-        
-        final_forces = jnp.where(jnp.isfinite(final_forces), final_forces, 0.0)
 
         # Total energy: combined ML (monomer+dimer switched) + MM
         final_energy = outputs["out_E"]
         if isinstance(final_energy, (int, float)):
             final_energy = jnp.array(final_energy)
-        final_energy = jnp.where(jnp.isfinite(final_energy), final_energy, 0.0)
 
         # Flat bottom: system COM or sum over per-monomer COMs (same R, k).
         hybrid_energy = final_energy
@@ -2668,27 +2673,22 @@ def setup_calculator(
                 dimer_positions, dimer_n_a, dimer_n_b)
             active_mask = com_dists < active_radius
             _n_active_true = jnp.sum(active_mask)
-            # With a host-chosen chunk budget the host reads this count back
-            # with the forces and warns there; the in-graph warning is a
-            # lax.cond whose predicate XLA:GPU copies to the host every step.
+            # jnp.nonzero(..., size=cap) still truncates (static shape). Fail
+            # closed instead of returning those forces: the CHARMM host path
+            # raises in _check_ml_chunk_budget; spherical_fn-only evals raise here.
             if ml_eval_chunks is None:
+                def _raise_sparse_cap(n):
+                    n_int = int(np.asarray(n).reshape(()))
+                    raise SparseDimerCapOverflow(n_int, _max_active_dimers)
+
+                def _maybe_raise(n):
+                    jax.debug.callback(_raise_sparse_cap, n)
+                    return n
+
                 jax.lax.cond(
                     _n_active_true > _max_active_dimers,
-                    lambda n: jax.debug.print(
-                        "mmml WARNING: sparse active-dimer cap saturated: "
-                        "{n_true} in-range dimer pairs > cap={cap}. "
-                        "{dropped} pairs are being silently truncated by "
-                        "jnp.nonzero's fixed-size selection (first-by-enumeration-"
-                        "order, not nearest); this can discontinuously toggle "
-                        "unrelated pairs on/off as any atom moves and inject "
-                        "spurious forces. Raise ml_max_active_dimers / "
-                        "MMML_MLPOT_MAX_ACTIVE_DIMERS well above {n_true}, or "
-                        "increase box_volume awareness in resolve_max_active_dimers.",
-                        n_true=n,
-                        cap=_max_active_dimers,
-                        dropped=n - _max_active_dimers,
-                    ),
-                    lambda n: None,
+                    _maybe_raise,
+                    lambda n: n,
                     _n_active_true,
                 )
             active_indices = jnp.nonzero(active_mask, size=_max_active_dimers, fill_value=n_dimers)[0]
@@ -3026,7 +3026,6 @@ def setup_calculator(
         # Scatter sparse dimer output back to full format when applicable
         if sparse_active is not None:
             active_indices = batches["_sparse_active_indices"]
-            n_dimers_full = batches["_sparse_n_dimers"]
             if "_spatial_monomer_indices" in batches:
                 mono_idx = batches["_spatial_monomer_indices"]
                 n_mono_global = int(batches["_spatial_n_monomers_global"])
@@ -3049,12 +3048,14 @@ def setup_calculator(
             else:
                 full_mono_e = e_mono_local
                 full_mono_f = f_mono_local.reshape(n_mono_local, max_atoms, 3)
-            full_dimer_e = jnp.zeros(n_dimers_full + 1).at[active_indices].set(e_sparse_dimer)[:-1]
-            full_dimer_f = jnp.zeros((n_dimers_full + 1, max_atoms, 3)).at[active_indices].set(
-                f_sparse_dimer_2d
-            )[:-1]
-            e = jnp.concatenate([full_mono_e, full_dimer_e])
-            f = jnp.concatenate([full_mono_f.reshape(-1, 3), full_dimer_f.reshape(-1, 3)])
+            # Keep dimer ML outputs at the static cap. Scattering to n_dimers
+            # and gathering back is full-size bookkeeping for a cap-sized set.
+            # Quadratic pair *discovery* (COM distances over all pairs) is
+            # unchanged; that needs a neighbor search.
+            e = jnp.concatenate([full_mono_e, e_sparse_dimer])
+            f = jnp.concatenate(
+                [full_mono_f.reshape(-1, 3), f_sparse_dimer_2d.reshape(-1, 3)]
+            )
 
         monomer_contribs = calculate_monomer_contributions(
             e,
@@ -3112,8 +3113,8 @@ def setup_calculator(
         debug_print(debug, f"DEBUG dimer_contribs: {dimer_contribs}")
         
         # Combine contributions
-        monomer_forces_safe = jnp.where(jnp.isfinite(monomer_contribs["out_F"]), monomer_contribs["out_F"], 0.0)
-        dimer_forces_safe = jnp.where(jnp.isfinite(dimer_contribs["out_F"]), dimer_contribs["out_F"], 0.0)
+        monomer_forces_safe = monomer_contribs["out_F"]
+        dimer_forces_safe = dimer_contribs["out_F"]
         
         # Ensure shapes match -- both should be (total_atoms, 3)
         expected_force_size = total_atoms
@@ -3138,7 +3139,6 @@ def setup_calculator(
         internal_F_out = _bonded_F_global if _bi else monomer_contribs["internal_F"]
 
         combined_forces = monomer_F_for_total + dimer_forces_safe
-        combined_forces = jnp.where(jnp.isfinite(combined_forces), combined_forces, 0.0)
 
         out = {
             "out_E": monomer_E_for_total + dimer_contribs["out_E"],
@@ -3525,9 +3525,11 @@ def setup_calculator(
                         E = out.energy
                         F = out.forces
 
-                # Ensure forces are finite
-                E = jnp.where(jnp.isfinite(E), E, 0.0)
-                F = jnp.where(jnp.isfinite(F), F, 0.0)
+                from mmml.interfaces.pycharmmInterface.mlpot.finite_guards import (
+                    require_host_finite,
+                )
+
+                require_host_finite(E, F, name="ASE spherical_fn")
 
                 if out is not None:
                     if self.verbose:
@@ -3551,9 +3553,7 @@ def setup_calculator(
                 self.results["units"] = dict(_calculator_unit_metadata)
                 self.results["energy_unit"] = "eV"
                 self.results["forces_unit"] = "eV/Angstrom"
-                
-                # Check for NaN/Inf using JAX operations first (works with JAX arrays)
-                forces_final = jnp.where(jnp.isfinite(forces_final), forces_final, 0.0)
+
                 if self.debug:
 
                     # Hard check: ml_2b outputs must be finite (avoid silent zeroing).
@@ -3918,9 +3918,6 @@ def setup_calculator(
             indices_are_sorted=True,
         )
 
-        # Ensure all forces are finite
-        processed_forces = jnp.where(jnp.isfinite(processed_forces), processed_forces, 0.0)
-
         if debug:
             force_mags = jnp.linalg.norm(processed_forces, axis=1)
             zero_mask = force_mags < 1e-12
@@ -3956,59 +3953,87 @@ def setup_calculator(
 
         ``damping`` is the optional bonded-intra guard, ``(s, ds/dE, F_bonded)``
         per monomer; see ``apply_bonded_intra_damping``.
+
+        When ``active_dimer_indices`` is set, ``e[n_monomers:]`` and the matching
+        force block are already cap-sized (not ``n_dimers``). Downstream
+        bookkeeping stays at that cap.
         """
-        # Get dimer energies and forces
+        n_dimers_full = int(len(all_dimer_idxs))
         ml_dimer_energy = jnp.array(e[n_monomers:]).flatten()
         monomer_batch_atoms = n_monomers * max_atoms
         ml_dimer_forces = f[monomer_batch_atoms:]
 
-        # Calculate interaction energies (E_dimer - E_mono_a - E_mono_b)
-        monomer_contrib = calculate_monomer_contribution_to_dimers(
-            monomer_energies, dimer_pair_arr_jnp
-        )
-        dimer_int_energies = ml_dimer_energy - monomer_contrib
-
-        # Apply lambda scaling: dimer interaction scaled by lambda_i * lambda_j
-        dimer_lambda = (
-            lambda_monomer[dimer_pair_arr_jnp[:, 0]]
-            * lambda_monomer[dimer_pair_arr_jnp[:, 1]]
-        )
-        dimer_int_energies = dimer_int_energies * dimer_lambda
-
-        # Convert model dimer forces into interaction forces matching
-        # E_int = E_dimer - E_monomer_a - E_monomer_b before switching.
-        # Wrap shift is stop_gradient'd (piecewise-constant lattice vector), so
-        # F on wrapped coords maps to unwrapped atoms with identity Jacobian.
-        ml_dimer_forces_2d = ml_dimer_forces.reshape(n_dimers, max_atoms, 3)
-        monomer_pair_forces = monomer_forces[dimer_idx_arr_jnp]
-        dimer_interaction_forces_2d = (
-            (ml_dimer_forces_2d - monomer_pair_forces)
-            * dimer_lambda[:, None, None]
-            * dimer_atom_mask_jnp[:, :, None]
-        )
-        # Damp before the distance switching, so apply_dimer_switching's own
-        # product rule closes over the already-damped E and F -- that composes
-        # into the correct derivative of the triple product S(r) * s_A * s_B * E_int.
-        # Also before the active mask, so inactive dimers still end up at zero.
-        if damping is not None:
-            _s_mono, _dsde_mono, _f_bonded_mono = damping
-            dimer_int_energies, dimer_interaction_forces_2d = apply_bonded_intra_damping(
-                dimer_int_energies,
-                dimer_interaction_forces_2d,
-                dimer_pair_arr_jnp,
-                _s_mono,
-                _dsde_mono,
-                _f_bonded_mono,
-                dimer_atom_mask_jnp,
-            )
         if active_dimer_indices is not None:
             idx = jnp.asarray(active_dimer_indices, dtype=jnp.int32)
-            active_mask = jnp.zeros(n_dimers, dtype=jnp.bool_).at[idx].set(True)
-            dimer_int_energies = jnp.where(active_mask, dimer_int_energies, 0.0)
-            dimer_interaction_forces_2d = jnp.where(
-                active_mask[:, None, None], dimer_interaction_forces_2d, 0.0
+            n_slots = idx.shape[0]
+            in_range = idx < n_dimers_full
+            safe = jnp.where(in_range, idx, 0)
+            pairs = dimer_pair_arr_jnp[safe]
+            dimer_idx_local = dimer_idx_arr_jnp[safe]
+            atom_mask_local = dimer_atom_mask_jnp[safe] * in_range[:, None].astype(
+                dimer_atom_mask_jnp.dtype
             )
-        dimer_interaction_forces_flat = dimer_interaction_forces_2d.reshape(-1, 3)
+            monomer_contrib = calculate_monomer_contribution_to_dimers(
+                monomer_energies, pairs
+            )
+            monomer_contrib = jnp.where(in_range, monomer_contrib, 0.0)
+            dimer_lambda = (
+                lambda_monomer[pairs[:, 0]] * lambda_monomer[pairs[:, 1]]
+            )
+            dimer_lambda = jnp.where(in_range, dimer_lambda, 0.0)
+            dimer_int_energies = jnp.where(
+                in_range,
+                (ml_dimer_energy - monomer_contrib) * dimer_lambda,
+                0.0,
+            )
+            ml_dimer_forces_2d = ml_dimer_forces.reshape(n_slots, max_atoms, 3)
+            monomer_pair_forces = monomer_forces[dimer_idx_local]
+            dimer_interaction_forces_2d = jnp.where(
+                atom_mask_local[:, :, None] > 0,
+                (ml_dimer_forces_2d - monomer_pair_forces)
+                * dimer_lambda[:, None, None],
+                0.0,
+            )
+            if damping is not None:
+                _s_mono, _dsde_mono, _f_bonded_mono = damping
+                dimer_int_energies, dimer_interaction_forces_2d = apply_bonded_intra_damping(
+                    dimer_int_energies,
+                    dimer_interaction_forces_2d,
+                    pairs,
+                    _s_mono,
+                    _dsde_mono,
+                    _f_bonded_mono,
+                    atom_mask_local,
+                )
+            dimer_interaction_forces_flat = dimer_interaction_forces_2d.reshape(-1, 3)
+        else:
+            monomer_contrib = calculate_monomer_contribution_to_dimers(
+                monomer_energies, dimer_pair_arr_jnp
+            )
+            dimer_lambda = (
+                lambda_monomer[dimer_pair_arr_jnp[:, 0]]
+                * lambda_monomer[dimer_pair_arr_jnp[:, 1]]
+            )
+            dimer_int_energies = (ml_dimer_energy - monomer_contrib) * dimer_lambda
+            ml_dimer_forces_2d = ml_dimer_forces.reshape(n_dimers, max_atoms, 3)
+            monomer_pair_forces = monomer_forces[dimer_idx_arr_jnp]
+            dimer_interaction_forces_2d = (
+                (ml_dimer_forces_2d - monomer_pair_forces)
+                * dimer_lambda[:, None, None]
+                * dimer_atom_mask_jnp[:, :, None]
+            )
+            if damping is not None:
+                _s_mono, _dsde_mono, _f_bonded_mono = damping
+                dimer_int_energies, dimer_interaction_forces_2d = apply_bonded_intra_damping(
+                    dimer_int_energies,
+                    dimer_interaction_forces_2d,
+                    dimer_pair_arr_jnp,
+                    _s_mono,
+                    _dsde_mono,
+                    _f_bonded_mono,
+                    dimer_atom_mask_jnp,
+                )
+            dimer_interaction_forces_flat = dimer_interaction_forces_2d.reshape(-1, 3)
 
         debug_print(debug, "Dimer int energies:",
             dimer_int_energies=dimer_int_energies,
@@ -4016,7 +4041,6 @@ def setup_calculator(
             monomer_contrib=monomer_contrib,
         )
 
-        # Apply switching functions
         switched_results = apply_dimer_switching(
             positions,
             dimer_int_energies,
@@ -4083,8 +4107,6 @@ def setup_calculator(
             seg_ids,
             num_segments=total_atoms
         )
-
-        processed_forces = jnp.where(jnp.isfinite(processed_forces), processed_forces, 0.0)
         return processed_forces
 
 
@@ -4103,33 +4125,31 @@ def setup_calculator(
         Forces are computed using the product rule:
         ``F = -d/dR [E * s(R)] = -[dE/dR * s(R) + E * ds/dR]``
 
-        When ``active_dimer_indices`` is set (sparse ML dimers), switching runs only
-        on that subset instead of all ``n_dimers`` slots.
+        When ``active_dimer_indices`` is set (sparse ML dimers), ``dimer_energies``
+        and ``dimer_forces_flat`` are already cap-sized. Switching gathers only
+        geometry metadata; it does not scatter back to ``n_dimers``.
         """
         cell_for_mic = mic_pbc_cell if mic_pbc_cell is not None else pbc_cell
         n_dimers_full = len(all_dimer_idxs)
         force_segments_full = calculate_dimer_force_segments(n_dimers_full)
 
-        # Gather dimer positions: (n_dimers, max_atoms, 3)
         dimer_pos_padded = positions[padded_dimer_idx_arr_jnp]
         dimer_energies_all = dimer_energies
         dimer_forces_all = dimer_forces_flat
         atom_mask_all = dimer_atom_mask_jnp
         force_segments = force_segments_full
+        in_range = None
 
         if active_dimer_indices is not None:
             idx = jnp.asarray(active_dimer_indices, dtype=jnp.int32)
-            dimer_pos_padded = dimer_pos_padded[idx]
-            dimer_energies_all = dimer_energies[idx]
-            dimer_forces_all = dimer_forces_flat.reshape(n_dimers_full, max_atoms, 3)[idx].reshape(-1, 3)
-            # Unused sparse slots hold fill_value=n_dimers; JAX clamps that
-            # out-of-range gather to the last dimer, so without this mask every
-            # padded slot re-adds the last pair's switched forces.
             in_range = (idx < n_dimers_full).astype(dimer_atom_mask_jnp.dtype)
-            atom_mask_all = dimer_atom_mask_jnp[idx] * in_range[:, None]
-            force_segments = dimer_idx_arr_jnp[idx].reshape(-1)
-            na_arr = dimer_n_atoms_a_jnp[idx]
-            nb_arr = dimer_n_atoms_b_jnp[idx]
+            safe = jnp.where(idx < n_dimers_full, idx, 0)
+            dimer_pos_padded = dimer_pos_padded[safe]
+            # Energies/forces already cap-sized; do not gather from n_dimers_full.
+            atom_mask_all = dimer_atom_mask_jnp[safe] * in_range[:, None]
+            force_segments = dimer_idx_arr_jnp[safe].reshape(-1)
+            na_arr = dimer_n_atoms_a_jnp[safe]
+            nb_arr = dimer_n_atoms_b_jnp[safe]
         else:
             na_arr = dimer_n_atoms_a_jnp
             nb_arr = dimer_n_atoms_b_jnp
@@ -4188,10 +4208,18 @@ def setup_calculator(
             ml_switch_width=cutoff_params.ml_switch_width,
         )
         switched_energy = dimer_energies_all * switching_scales
+        e_for_switch_grad = dimer_energies_all
+        if in_range is not None:
+            # Padded slots gathered dummy dimers. Zero with where, not multiply:
+            # NaN * 0 is still NaN. This is padding sanitization, not a physical
+            # contribution (those stay nonfinite and fail closed on the host).
+            live = in_range > 0
+            switched_energy = jnp.where(live, switched_energy, 0.0)
+            e_for_switch_grad = jnp.where(live, dimer_energies_all, 0.0)
         switched_grad = jax.vmap(
             lambda x, e, na, nb: _ml_switch_scale_grad(x, na, nb) * e,
             in_axes=(0, 0, 0, 0),
-        )(dimer_pos_padded, dimer_energies_all, na_arr, nb_arr)
+        )(dimer_pos_padded, e_for_switch_grad, na_arr, nb_arr)
 
         dimer_switching_grads_flat = (
             switched_grad * atom_mask_all[:, :, None]
@@ -4211,7 +4239,10 @@ def setup_calculator(
             switching_scales[:, None] * atom_mask_all
         ).reshape(-1)
 
-        dimer_forces_safe = jnp.where(jnp.isfinite(dimer_forces_all), dimer_forces_all, 0.0)
+        # Zero padded slots via the atom mask. Dummy-slot nonfinite values are
+        # cleared here; live-atom nonfinite values stay and fail closed on host.
+        pad = atom_mask_all.reshape(-1) <= 0
+        dimer_forces_safe = jnp.where(pad[:, None], 0.0, dimer_forces_all)
         scaled_dimer_forces_flat = dimer_forces_safe * switching_scales_per_atom[:, None]
         scaled_dimer_forces = jax.ops.segment_sum(
             scaled_dimer_forces_flat,
@@ -4219,14 +4250,9 @@ def setup_calculator(
             num_segments=total_atoms,
         )
 
-        energy_weighted_grad_safe = jnp.where(jnp.isfinite(energy_weighted_grad), energy_weighted_grad, 0.0)
-        switched_forces = scaled_dimer_forces - energy_weighted_grad_safe
-        switched_forces = jnp.where(jnp.isfinite(switched_forces), switched_forces, 0.0)
+        switched_forces = scaled_dimer_forces - energy_weighted_grad
 
-        if active_dimer_indices is not None:
-            switched_energy = jnp.zeros(n_dimers_full, dtype=switched_energy.dtype).at[
-                active_dimer_indices
-            ].set(switched_energy)
+        # Cap-sized energies already masked; do not scatter back to n_dimers.
 
         return {
             "energies": switched_energy,

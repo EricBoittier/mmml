@@ -62,7 +62,12 @@ class MlChunkBudget:
         self.current = int(self.layout.n_chunks)
 
     def n_valid(self, n_active: int) -> int:
-        """Used batch slots: monomers plus in-range dimers (capped)."""
+        """Used batch slots: monomers plus in-range dimers (capped at the static cap).
+
+        Chunk sizing still uses the cap (the compiled batch cannot grow). Cap
+        overflow itself is not "covered" by extra chunks — see
+        :meth:`raise_if_saturated`.
+        """
         lay = self.layout
         return lay.n_monomers + min(max(int(n_active), 0), lay.max_active_dimers)
 
@@ -82,19 +87,22 @@ class MlChunkBudget:
             self.current = target
         return self.current
 
-    def note_saturation(self, n_active: int) -> Optional[str]:
-        """Host-side replacement for the in-graph cap-saturation warning."""
-        cap = self.layout.max_active_dimers
-        if int(n_active) <= cap:
-            return None
-        self.saturated_steps += 1
-        if self.saturated_steps not in (1, 10, 100, 1000):
-            return None
-        return (
-            f"mmml WARNING: sparse active-dimer cap saturated: {int(n_active)} in-range "
-            f"dimer pairs > cap={cap} ({self.saturated_steps} step(s) so far). "
-            f"{int(n_active) - cap} pairs are silently truncated by jnp.nonzero's "
-            "fixed-size selection (first-by-enumeration-order, not nearest); this can "
-            "discontinuously toggle pairs on/off and inject spurious forces. Raise "
-            "ml_max_active_dimers / MMML_MLPOT_MAX_ACTIVE_DIMERS well above the count."
+    def raise_if_saturated(self, n_active: int) -> None:
+        """Fail closed when in-range dimers exceed the static cap.
+
+        ``jnp.nonzero(..., size=cap)`` would otherwise drop interacting pairs
+        and change the forces. Chunk-budget growth cannot recover those pairs.
+        """
+        from mmml.interfaces.pycharmmInterface.mlpot.mlpot_sparse_dimer_policy import (
+            raise_if_sparse_cap_saturated,
         )
+
+        cap = self.layout.max_active_dimers
+        if int(n_active) > cap:
+            self.saturated_steps += 1
+        raise_if_sparse_cap_saturated(n_active, cap)
+
+    def note_saturation(self, n_active: int) -> Optional[str]:
+        """Deprecated alias: overflow now raises :class:`SparseDimerCapOverflow`."""
+        self.raise_if_saturated(n_active)
+        return None
