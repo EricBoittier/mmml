@@ -64,7 +64,7 @@ help:
 	@echo "  make bench-publish     - Regenerate benchmarks/html from existing results"
 	@echo "  make bench-preview     - Serve the report on localhost"
 	@echo "  make bench-gpu         - sbatch GPU job (correctness + asv + HTML)"
-	@echo "  make bench-gpu-local   - Interactive GPU: probes, then asv + HTML  [BENCH=<regex>]"
+	@echo "  make bench-gpu-local   - Interactive GPU: probes, then asv + HTML  [GROUP=md] [BENCH=<regex>]"
 	@echo ""
 	@echo "Training (PhysNetJAX):"
 	@echo "  make physnet-train         TRAIN=train.npz [VALID=valid.npz] [NATOMS=60] [BATCH=32] [EPOCHS=100] [LR=0.001] [NAME=run] [CHARGES=false]"
@@ -367,8 +367,10 @@ docs-serve:
 #
 #   make bench                     # everything, then publish the HTML report
 #   make bench BENCH=MDSystemSize  # one class (any asv --bench regex)
+#   make bench-gpu-local GROUP=md  # GPU: named subset (see gpu_bench.py --list-groups)
 
 BENCH ?=
+GROUP ?=
 
 bench:
 	bash benchmarks/run_bench.sh $(BENCH)
@@ -389,8 +391,9 @@ bench-gpu:
 
 # Already on a GPU node (or a laptop with CUDA). Correctness probes run
 # before asv; open benchmarks/html/gpu-report.html when it finishes.
+# GROUP=md|physnet|ml|mm|neighbors|constraints|calculator|data|throughput
 bench-gpu-local:
-	uv run python benchmarks/gpu_bench.py $(if $(BENCH),--bench $(BENCH),)
+	uv run python benchmarks/gpu_bench.py $(if $(GROUP),--group $(GROUP),) $(if $(BENCH),--bench $(BENCH),)
 
 # ==============================================================================
 # Cleanup

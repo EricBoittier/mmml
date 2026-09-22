@@ -41,17 +41,33 @@ bash benchmarks/run_bench.sh MDSystemSize
 bash benchmarks/run_bench.sh 'MMNonbonded.time_forces'
 ```
 
+Named **groups** (related modules) avoid memorising asv regexes. `--group` can
+be repeated or comma-separated; combine with `--bench` to add a class:
+
+```bash
+uv run python benchmarks/gpu_bench.py --list-groups
+uv run python benchmarks/gpu_bench.py --group md              # JaxmdDriver ns/day
+uv run python benchmarks/gpu_bench.py --group throughput      # md + neighbors + SHAKE
+uv run python benchmarks/gpu_bench.py --group ml              # PhysNet + calculator
+uv run python benchmarks/gpu_bench.py --group md,neighbors
+make bench-gpu-local GROUP=md
+sbatch --export=ALL,BENCH_GROUP=md benchmarks/slurm_bench_gpu.sh
+```
+
 On a cluster (or an interactive GPU node):
 
 ```bash
 # interactive: correctness probes, then asv, then HTML
 uv run python benchmarks/gpu_bench.py
+uv run python benchmarks/gpu_bench.py --group md
 uv run python benchmarks/gpu_bench.py --bench bench_ml_physnet   # PhysNet probe + that asv module
 uv run python benchmarks/gpu_bench.py --check neighbors --checks-only
+uv run python benchmarks/gpu_bench.py --list-groups
 uv run python benchmarks/gpu_bench.py --list-checks
 uv run python benchmarks/gpu_bench.py --checks-only   # all probes, no timings
 
 sbatch benchmarks/slurm_bench_gpu.sh
+sbatch --export=ALL,BENCH_GROUP=md benchmarks/slurm_bench_gpu.sh
 sbatch --export=ALL,BENCH_PATTERN=bench_ml_physnet benchmarks/slurm_bench_gpu.sh
 ```
 
@@ -126,7 +142,9 @@ classes start at 512 waters because the 12 Å production cutoff needs
 `L >= 2 × cutoff`. Below that, `_build_pair_indices` drops off Vesin onto
 chunked NumPy and the pair list degenerates to nearly all pairs — a regime no
 real run is in, which would make the small end of every scaling curve
-meaningless.
+meaningless. The headline `MDSystemSize` curve is 512 / 1000 / 1728 waters
+(`L ≈ 24.9 Å` at 512, the smallest honest MIC box); `_DriverBase._build`
+skips any size with `L < 2 × cutoff` so 216 cannot sneak back in.
 
 **A missing dependency skips, it does not fail.** Heavy imports live inside
 `setup()` and raise `_common.skip(...)`, which asv treats as a skip. One

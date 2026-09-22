@@ -4,8 +4,11 @@
 Examples::
 
     uv run python benchmarks/gpu_bench.py
+    uv run python benchmarks/gpu_bench.py --group md
+    uv run python benchmarks/gpu_bench.py --group throughput
     uv run python benchmarks/gpu_bench.py --bench bench_ml_physnet
     uv run python benchmarks/gpu_bench.py --check neighbors --checks-only
+    uv run python benchmarks/gpu_bench.py --list-groups
     uv run python benchmarks/gpu_bench.py --list-checks
     uv run python benchmarks/gpu_bench.py --checks-only
     sbatch benchmarks/slurm_bench_gpu.sh
@@ -27,7 +30,9 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from benchmarks.gpu_bench_lib import (  # noqa: E402
+    BENCH_GROUPS,
     correctness_check_catalog,
+    resolve_bench_regex,
     run_gpu_benchmark,
 )
 
@@ -40,6 +45,19 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--bench",
         default=None,
         help="asv --bench regex; also selects matching correctness probes",
+    )
+    parser.add_argument(
+        "--group",
+        dest="groups",
+        action="append",
+        default=None,
+        metavar="NAME",
+        help="Named module subset (repeatable or comma-separated). See --list-groups.",
+    )
+    parser.add_argument(
+        "--list-groups",
+        action="store_true",
+        help="Print named bench groups and their asv regexes, then exit",
     )
     parser.add_argument(
         "--check",
@@ -102,12 +120,25 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
+    if getattr(args, "list_groups", False):
+        width = max(len(name) for name in BENCH_GROUPS)
+        for name, regex in BENCH_GROUPS.items():
+            print(f"{name:<{width}}  {regex}")
+        return 0
     if getattr(args, "list_checks", False):
         print("jax_gpu  (always, unless --check omits it)")
         for spec in correctness_check_catalog():
             tags = ", ".join(sorted(spec.tags))
             print(f"{spec.name}  [{tags}]")
         return 0
+    try:
+        args.bench = resolve_bench_regex(
+            groups=getattr(args, "groups", None),
+            bench=getattr(args, "bench", None),
+        )
+    except ValueError as exc:
+        print(exc, file=sys.stderr)
+        return 2
     return run_gpu_benchmark(args)
 
 
