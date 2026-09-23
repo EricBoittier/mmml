@@ -45,7 +45,7 @@ uv run python scripts/plot_argon_npt_backend_comparison.py
 ```
 
 Runs under `artifacts/npt_argon_water/runs/ar1_90k_n500_{jaxmd,pycharmm_pure}_200ps/`.
-See also [NpT jax-md ↔ PyCHARMM CPT](../npt-jaxmd-charmm-comparison.md).
+See also [NpT jax-md ↔ PyCHARMM CPT](../../npt-jaxmd-charmm-comparison.md).
 
 ## Smaller-box smoke (AR1:108, 200 ps)
 

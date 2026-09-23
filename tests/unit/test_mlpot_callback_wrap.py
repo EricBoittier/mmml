@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from types import SimpleNamespace
+from types import MethodType, SimpleNamespace
 
 import numpy as np
 
@@ -11,8 +11,14 @@ from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import DecomposedMlpot
 
 def test_callback_wrap_is_lattice_only_and_leaves_charmm_arrays():
     L, apm = 20.0, 3
-    rng = np.random.default_rng(0)
-    pos = rng.uniform(-9, 9, (12, 3))
+    # Compact monomers (CHARMM-like). Spread-out random atoms would trip the
+    # atom-wise rejoin that repairs jax-md/ASE wraps before the COM shift.
+    pos = np.zeros((12, 3), dtype=np.float64)
+    for m in range(4):
+        base = np.array([m * 4.0 - 6.0, 0.0, 0.0])
+        pos[m * apm : (m + 1) * apm] = base + np.array(
+            [[0.0, 0.0, 0.0], [0.1, 0.0, 0.0], [0.0, 0.1, 0.0]]
+        )
     pos[:apm] += np.array([L * 0.55, 0.0, 0.0])  # molecule 0 COM outside [-L/2, L/2]
     x, y, z = pos[:, 0].copy(), pos[:, 1].copy(), pos[:, 2].copy()
     fake = SimpleNamespace(_cell=L, _atoms_per_monomer=[apm] * 4)
@@ -61,6 +67,10 @@ def test_sync_callback_pbc_box_refreshes_cell_before_wrap(monkeypatch):
         _periodic_mm_config=None,
         _requires_callback_pbc_box=lambda: False,
         _callback_box_resolution_inputs=lambda: (20.0, None),
+    )
+    fake._grad_cache_owner = MethodType(DecomposedMlpotCalculator._grad_cache_owner, fake)
+    fake._set_live_callback_box = MethodType(
+        DecomposedMlpotCalculator._set_live_callback_box, fake
     )
     monkeypatch.setattr(
         pbc_env,

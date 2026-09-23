@@ -194,6 +194,9 @@ def test_run_dynamics_passes_cpt_keywords_to_dynamics_script():
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._dynamics_c_api_available",
         return_value=False,
     ), mock.patch(
+        # Unit test has no libcharmm; CPT fail-closes on mlpot_set_virial without this.
+        "mmml.interfaces.pycharmmInterface.mlpot.strain_virial.require_charmm_virial_hook",
+    ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.dynamics._execute_dynamics_script",
     ) as exec_dyn, mock.patch.dict(
         __import__("sys").modules,
