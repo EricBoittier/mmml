@@ -70,9 +70,37 @@ def psf_bond_count() -> int:
     return int(value) if value is not None else 0
 
 
-def assert_psf_bonds_present(*, min_bonds: int = 1, context: str = "CGENFF MM") -> int:
-    """Raise if PSF bond count is below *min_bonds* (connectivity must stay intact)."""
+def psf_is_all_monoatomic() -> bool:
+    """True when every residue is a single atom (noble gases, bare ions).
+
+    Those PSFs correctly have zero bonds; :func:`assert_psf_bonds_present` must
+    not treat that as a deleted topology.
+    """
+    import pycharmm.psf as psf
+
+    n_atom = int(psf.get_natom())
+    get_nres = getattr(psf, "get_nres", None)
+    if get_nres is not None:
+        n_res = int(get_nres())
+    else:
+        import pycharmm
+        import pycharmm.lingo as lingo
+
+        lingo.charmm_script("SET __mmml_nres ?NRES")
+        value = pycharmm.get_charmm_variable("__MMML_NRES")
+        n_res = int(value) if value is not None else -1
+    return n_atom > 0 and n_atom == n_res
+
+
+def assert_psf_bonds_present(*, min_bonds: int | None = None, context: str = "CGENFF MM") -> int:
+    """Raise if PSF bond count is below *min_bonds* (connectivity must stay intact).
+
+    Default *min_bonds* is 1 for polyatomic systems. All-monoatomic PSFs
+    (AR1/KR1/XE1, bare ions) correctly have zero bonds and are accepted.
+    """
     n_bond = psf_bond_count()
+    if min_bonds is None:
+        min_bonds = 0 if (n_bond == 0 and psf_is_all_monoatomic()) else 1
     if n_bond < int(min_bonds):
         raise RuntimeError(
             f"{context}: PSF has {n_bond} bonds (expected >= {min_bonds}). "

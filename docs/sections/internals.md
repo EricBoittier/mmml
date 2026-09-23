@@ -31,8 +31,9 @@ uv run python scripts/audit_charmm_fortran_api.py
 ```
 
 **Reports** — the simulation robustness report, MD sweep plotting notes,
-md-embedding smoke results, NpT / outside-loss density notes, and Q⁰ / Spooky
-distillation campaign records, each tied to a particular run.
+md-embedding smoke results, NpT / outside-loss density notes, the
+[jax-md ↔ PyCHARMM CPT pressure comparison](../npt-jaxmd-charmm-comparison.md),
+and Q⁰ / Spooky distillation campaign records, each tied to a particular run.
 
 **Manuscript** — outline, Methods and Results drafts, and the Snakemake workflow
 map for the condensed-phase hybrid ML/MM paper. The LaTeX sources stay in-tree

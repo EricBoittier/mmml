@@ -8,6 +8,7 @@ Related:
 
 - [PyCHARMM MPI](pycharmm-mpi.md) — launcher, MPI-linked builds
 - [md-system YAML configs](md-system-configs.md) — `box_size`, NPT, liquid prep
+- [NpT jax-md ↔ PyCHARMM CPT (apples to apples)](npt-jaxmd-charmm-comparison.md) — shared pressure / strain virial
 - Rebuild script: [`scripts/rebuild_charmm_mlpot.sh`](https://github.com/EricBoittier/mmml/blob/main/scripts/rebuild_charmm_mlpot.sh)
 
 ---
@@ -171,6 +172,10 @@ Use `--skip-npt-pressure-report` to skip the one-off instantaneous report before
 | Box side | `crystal` C API + CPT dynamics | `space` box / NPT barostat (scalar volume) |
 | Target pressure | `npt_pressure` / `PR**` via `dynamics_run_kw` | `pressure:` in YAML (atm → internal units) |
 | Anisotropic tensor | `npt_pressure_tensor` | **Not supported** — scalar barostat only |
+
+For the shared strain-virial / \(P=(2K-\partial U/\partial\varepsilon)/3V\) identity
+(and the #249 / #263 fixes), see
+[NpT jax-md ↔ PyCHARMM CPT (apples to apples)](npt-jaxmd-charmm-comparison.md).
 
 ---
 

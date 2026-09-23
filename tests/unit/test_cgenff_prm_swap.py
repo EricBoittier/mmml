@@ -126,5 +126,12 @@ def test_read_cgenff_prm_replace_skips_pbc_suspend():
 
 def test_assert_psf_bonds_present_raises():
     with mock.patch.object(cgenff_prm_swap, "psf_bond_count", return_value=0):
-        with pytest.raises(RuntimeError, match="PSF has 0 bonds"):
-            cgenff_prm_swap.assert_psf_bonds_present(min_bonds=1)
+        with mock.patch.object(cgenff_prm_swap, "psf_is_all_monoatomic", return_value=False):
+            with pytest.raises(RuntimeError, match="PSF has 0 bonds"):
+                cgenff_prm_swap.assert_psf_bonds_present(min_bonds=1)
+
+
+def test_assert_psf_bonds_present_allows_all_monoatomic_zero_bonds():
+    with mock.patch.object(cgenff_prm_swap, "psf_bond_count", return_value=0):
+        with mock.patch.object(cgenff_prm_swap, "psf_is_all_monoatomic", return_value=True):
+            assert cgenff_prm_swap.assert_psf_bonds_present() == 0

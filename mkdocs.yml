@@ -220,6 +220,7 @@ nav:
       - FFTW for CHARMM: fftw-build.md
       - Periodic boundaries (IMAGE super system): pbc-super-system.md
       - PyCHARMM C API (box and pressure): pycharmm-c-api-pbc-box-pressure.md
+      - NpT jax-md ↔ PyCHARMM CPT (apples to apples): npt-jaxmd-charmm-comparison.md
       - Scale & performance:
           - Calculator profiling: calculator-profiling.md
           - Medium PBC (500–2000 monomers): mlpot-medium-pbc.md
@@ -276,6 +277,7 @@ nav:
           - md-embedding smoke results: examples/md-embedding-results.md
           - NpT density, ΔH_vap, ΔG (outside-loss): npt-density-dh-dg.md
           - NpT density campaign status (2026-08-02): npt-campaign-status-2026-08-02.md
+          - NpT jax-md ↔ PyCHARMM CPT (apples to apples): npt-jaxmd-charmm-comparison.md
           - Q⁰ charge-aware water validation: q0-charge-aware-water-validation-report.md
           - Q⁰ distillation findings: q0-distillation-findings.md
           - Spooky teacher distillation: spooky-teacher-distillation.md

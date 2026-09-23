@@ -568,6 +568,9 @@ if [[ "$needs_configure" == 1 ]]; then
     -B "$BUILD_DIR"
     -DCMAKE_INSTALL_PREFIX="$CHARMM_HOME"
     -DCMAKE_BUILD_TYPE="$CHARMM_BUILD_TYPE"
+    # CMake ≥4 removed compat with cmake_minimum_required(<3.5); CHARMM still
+    # declares 2.8. Same flag as scripts/rebuild_packmol.sh.
+    -DCMAKE_POLICY_VERSION_MINIMUM=3.5
     -Das_library="${_as_library}"
     -Din_place_install=ON
     -Dopenmm=OFF
