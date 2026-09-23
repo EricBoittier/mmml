@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterator, Literal, Mapping, Sequence
@@ -79,14 +80,40 @@ def classify_units_map(units_map: Mapping[str, Any] | None) -> UnitsKind:
     return "unknown"
 
 
+def _unwrap_h5_attr(raw: Any) -> Any:
+    """Unwrap numpy / 0-d HDF5 attribute scalars to a Python value."""
+    if raw is None:
+        return None
+    if isinstance(raw, np.ndarray):
+        if raw.size == 0:
+            return None
+        if raw.shape == () or raw.size == 1:
+            raw = raw.reshape(-1)[0]
+    if isinstance(raw, np.generic):
+        raw = raw.item()
+    return raw
+
+
 def parse_units_attr(raw: Any) -> dict[str, str]:
-    """Decode an HDF5 ``units_map`` attribute (JSON string or mapping)."""
+    """Decode an HDF5 ``units_map`` attribute (JSON string or mapping).
+
+    Real SPICE-α files can store an empty string, ``numpy.bytes_``, or other
+    non-JSON scalars. Those are treated as missing (``{}`` / unknown units)
+    instead of raising ``JSONDecodeError``.
+    """
+    raw = _unwrap_h5_attr(raw)
     if raw is None:
         return {}
     if isinstance(raw, bytes):
         raw = raw.decode("utf-8", errors="replace")
     if isinstance(raw, str):
-        loaded = json.loads(raw)
+        text = raw.strip().lstrip("\ufeff")
+        if not text:
+            return {}
+        try:
+            loaded = json.loads(text)
+        except json.JSONDecodeError:
+            return {}
         if isinstance(loaded, dict):
             return {str(k): str(v) for k, v in loaded.items()}
         return {}
@@ -96,13 +123,21 @@ def parse_units_attr(raw: Any) -> dict[str, str]:
 
 
 def read_units_map(h5: Any) -> dict[str, str]:
-    """File-level ``units_map``, else the first group's."""
-    parsed = parse_units_attr(h5.attrs.get("units_map"))
-    if parsed:
-        return parsed
+    """File-level ``units_map`` if present, else the first non-empty group's.
+
+    A present but empty file-level attribute (published DES370K HDF5) must
+    not trigger a scan of every molecule group — that is minutes of random
+    HDF5 reads on a shared login filesystem.
+    """
+    attrs = getattr(h5, "attrs", None)
+    if attrs is not None and "units_map" in attrs:
+        return parse_units_attr(attrs.get("units_map"))
     for name in h5.keys():
         group = h5[name]
-        parsed = parse_units_attr(getattr(group, "attrs", {}).get("units_map"))
+        group_attrs = getattr(group, "attrs", None)
+        if group_attrs is None or "units_map" not in group_attrs:
+            continue
+        parsed = parse_units_attr(group_attrs.get("units_map"))
         if parsed:
             return parsed
     return {}
@@ -299,6 +334,49 @@ def max_atomic_number(data: Mapping[str, Any]) -> int:
     return found
 
 
+DES370K_HDF5 = ("DES370K_Monomers.hdf5", "DES370K_Dimers.hdf5")
+
+
+def extract_des370k_hdf5(tar_path: Path | str, dest: Path | str) -> list[Path]:
+    """Extract DES370K monomer/dimer HDF5 from the Zenodo tarball.
+
+    Members are stored as ``./DES370K_*.hdf5``. GNU ``tar ... DES370K_*.hdf5``
+    (no ``./``) fails with ``Not found in archive``.
+    """
+    import tarfile
+
+    archive = Path(tar_path)
+    out_dir = Path(dest)
+    if not archive.is_file():
+        raise FileNotFoundError(f"missing tarball: {archive}")
+    out_dir.mkdir(parents=True, exist_ok=True)
+    written: list[Path] = []
+    with tarfile.open(archive, "r:*") as handle:
+        for member in DES370K_HDF5:
+            dest_file = out_dir / member
+            if dest_file.is_file():
+                written.append(dest_file)
+                continue
+            extracted = False
+            for key in (f"./{member}", member):
+                try:
+                    handle.extract(key, path=out_dir, filter="data")
+                except KeyError:
+                    continue
+                extracted = True
+                break
+            if not dest_file.is_file():
+                alt = out_dir / Path(member).name
+                if alt.is_file() and alt != dest_file:
+                    alt.rename(dest_file)
+            if not extracted or not dest_file.is_file():
+                raise FileNotFoundError(
+                    f"{archive}: missing {member} (tried './{member}' and {member!r})"
+                )
+            written.append(dest_file)
+    return written
+
+
 def check_efield_train_npz(path: Path | str) -> list[str]:
     """Return problems that would break ``efield-train --polar_weight``; empty = ok."""
     dest = Path(path)
@@ -368,8 +446,14 @@ def convert_spice_alpha_hdf5(
 
     frames: list[SpiceAlphaFrame] = []
     for path in paths:
+        print(
+            f"convert: opening {path} (max_frames={max_frames or 'all'})",
+            file=sys.stderr,
+            flush=True,
+        )
         with h5py.File(path, "r") as handle:
             kind = classify_units_map(read_units_map(handle))
+            print(f"convert: units={kind}", file=sys.stderr, flush=True)
             if require_canonical_units and kind == "atomic":
                 raise ValueError(
                     f"{path}: units_map looks like original SPICE (Bohr/Hartree). "

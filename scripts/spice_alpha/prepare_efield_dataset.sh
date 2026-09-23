@@ -6,6 +6,7 @@
 #   scripts/spice_alpha/prepare_efield_dataset.sh ~/data/spicealpha [out_dir] [max_frames]
 #
 # max_frames=0 means all frames. Use 256 for a smoke extract.
+# Smoke: SKIP_DIMERS=1 (default when max_frames != 0). Full dimers: INCLUDE_DIMERS=1.
 
 set -euo pipefail
 
@@ -23,9 +24,9 @@ if [[ ! -f "$H5_DIR/DES370K_Monomers.hdf5" ]]; then
     echo "missing $TAR — unzip SPICE-alpha.zip first" >&2
     exit 1
   fi
-  echo "extracting DES370K monomers/dimers from tarball (this can take a while)"
-  tar -xzf "$TAR" --transform='s|^\./||' -C "$H5_DIR" \
-    DES370K_Monomers.hdf5 DES370K_Dimers.hdf5
+  echo "extracting DES370K monomers/dimers from tarball (members are ./DES370K_*.hdf5)"
+  EXTRACT_TAR="$TAR" EXTRACT_DIR="$H5_DIR" python -c \
+    'import os; from mmml.data.spice_alpha import extract_des370k_hdf5; extract_des370k_hdf5(os.environ["EXTRACT_TAR"], os.environ["EXTRACT_DIR"])'
 fi
 
 MAX_ARGS=()
@@ -42,7 +43,17 @@ python -m mmml.data.spice_alpha \
   --train-frac 0.9 --valid-frac 0.05 --test-frac 0.05 \
   "${MAX_ARGS[@]}"
 
+# 1.3 GB dimers: skip on smoke (max_frames != 0) unless INCLUDE_DIMERS=1.
+# Set SKIP_DIMERS=1 to skip even a full convert.
+want_dimers=0
 if [[ -f "$H5_DIR/DES370K_Dimers.hdf5" ]]; then
+  if [[ "${INCLUDE_DIMERS:-0}" == "1" ]]; then
+    want_dimers=1
+  elif [[ "${SKIP_DIMERS:-0}" != "1" && "$MAX_FRAMES" == "0" ]]; then
+    want_dimers=1
+  fi
+fi
+if [[ "$want_dimers" == "1" ]]; then
   echo "converting dimers (optional; pad from data)"
   python -m mmml.data.spice_alpha \
     "$H5_DIR/DES370K_Dimers.hdf5" \
@@ -51,6 +62,8 @@ if [[ -f "$H5_DIR/DES370K_Dimers.hdf5" ]]; then
     --split-dir "$OUT/splits_des_dimers" \
     --train-frac 0.9 --valid-frac 0.05 --test-frac 0.05 \
     "${MAX_ARGS[@]}"
+else
+  echo "skipping dimers (INCLUDE_DIMERS=1 to convert DES370K_Dimers.hdf5)"
 fi
 
 echo "wrote $OUT"
