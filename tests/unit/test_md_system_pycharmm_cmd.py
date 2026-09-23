@@ -307,6 +307,23 @@ def test_build_pycharmm_command_forwards_dyn_freq_cadence():
     assert parsed.dyn_freq_cadence == 50
 
 
+def test_build_pycharmm_command_forwards_dcd_cadence():
+    from mmml.cli.run.md_pbc_suite import pycharmm_mlpot
+
+    cmd = build_pycharmm_command(_pycharmm_args(dcd_nsavc=4, dcd_max_frames=0, dcd_interval_ps=0.002))
+    assert cmd[cmd.index("--dcd-max-frames") + 1] == "0"
+    assert cmd[cmd.index("--dcd-interval-ps") + 1] == "0.002"
+    parsed = pycharmm_mlpot.parse_args(cmd)
+    assert parsed.dcd_max_frames == 0
+    assert parsed.dcd_interval_ps == pytest.approx(0.002)
+
+
+def test_build_pycharmm_command_omits_unset_dcd_cadence():
+    cmd = build_pycharmm_command(_pycharmm_args())
+    assert "--dcd-max-frames" not in cmd
+    assert "--dcd-interval-ps" not in cmd
+
+
 def test_build_pycharmm_command_forwards_electrostatics_damping_sigma():
     from mmml.cli.run.md_pbc_suite import pycharmm_mlpot
 

@@ -3196,6 +3196,9 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
     _append_optional(
         cmd, "--heat-comp-force-scale", getattr(args, "heat_comp_force_scale", None)
     )
+    # Without these the staged run falls back to its 25-frame DCD cap.
+    _append_optional(cmd, "--dcd-interval-ps", getattr(args, "dcd_interval_ps", None))
+    _append_optional(cmd, "--dcd-max-frames", getattr(args, "dcd_max_frames", None))
     cmd.extend(
         [
         "--dcd-nsavc",
