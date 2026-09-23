@@ -13,6 +13,8 @@ from mmml.cli.run.jaxmd_runner import (
     JAXMD_FIRE_DT_HIGH_F_PS,
     JAXMD_FIRE_DT_VERY_HIGH_F_PS,
     JAXMD_FIRE_HARD_START_MAX_STEPS_PER_STAGE,
+    _box_nl_debug_label,
+    _diag_box_nl,
     _nl_update_positions,
     fire_stage_blew_up,
     jaxmd_fire_dt_backoff_schedule,
@@ -77,6 +79,44 @@ def test_resolve_mm_pair_list_capacity_prefers_get_stats():
     update_fn = SimpleNamespace(get_stats=lambda: {"pair_capacity": 12345})
     pair_idx = np.zeros((20000, 2), dtype=np.int32)
     assert resolve_mm_pair_list_capacity(update_fn=update_fn, pair_idx=pair_idx) == 12345
+
+
+def test_diag_box_nl_keeps_orthorhombic_diagonal():
+    """A 3×3 cell must not collapse Lx, Ly, Lz to their mean (fake cube)."""
+    cell = np.diag([20.0, 30.0, 40.0])
+    out = _diag_box_nl(cell)
+    np.testing.assert_allclose(out, cell)
+    assert out.shape == (3, 3)
+    assert not np.allclose(np.diagonal(out), np.mean(np.diagonal(cell)))
+
+
+def test_diag_box_nl_keeps_triclinic_tilt():
+    """NPT neighbor updates must see off-diagonal lattice tilt."""
+    cell = np.array(
+        [
+            [22.0, 3.0, 1.5],
+            [0.0, 18.0, 2.0],
+            [0.0, 0.0, 25.0],
+        ],
+        dtype=np.float64,
+    )
+    out = _diag_box_nl(cell)
+    np.testing.assert_allclose(out, cell)
+    # The old mean-of-diagonal cube would be ~21.67 on each axis.
+    assert not np.allclose(out, np.eye(3) * np.mean(np.diagonal(cell)))
+
+
+def test_diag_box_nl_scalar_and_vector_boxes():
+    np.testing.assert_allclose(_diag_box_nl(12.0), [12.0, 12.0, 12.0])
+    np.testing.assert_allclose(_diag_box_nl(np.array([12.0])), [12.0, 12.0, 12.0])
+    np.testing.assert_allclose(_diag_box_nl([20.0, 30.0, 40.0]), [20.0, 30.0, 40.0])
+
+
+def test_box_nl_debug_label_handles_matrix():
+    assert "21.6670" not in _box_nl_debug_label(np.diag([20.0, 30.0, 40.0]))
+    assert "20.0000" in _box_nl_debug_label(np.diag([20.0, 30.0, 40.0]))
+    assert _box_nl_debug_label(np.array([12.0, 12.0, 12.0])) == "L=12.0000"
+    assert "30.0000" in _box_nl_debug_label(np.array([20.0, 30.0, 40.0]))
 
 
 def test_pre_md_fire_start_keeps_box_frame_under_pbc():

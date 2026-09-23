@@ -9,6 +9,7 @@ import pytest
 from mmml.interfaces.pycharmmInterface.nl_gpu import (
     cuda_path_looks_broken,
     ensure_cupy_cuda_path,
+    is_device_array,
 )
 
 
@@ -62,6 +63,16 @@ def test_ensure_cupy_cuda_path_overrides_broken_system_path(tmp_path: Path, monk
     assert out == str(wheel)
     assert Path(out).name == "wheel_runtime"
     assert not cuda_path_looks_broken(out)
+
+
+def test_is_device_array_rejects_numpy_host():
+    """NumPy ≥1.23 exposes ``__dlpack_device__``; that must not count as on-device."""
+    import numpy as np
+
+    host = np.zeros((4, 3), dtype=np.float64)
+    assert hasattr(host, "__dlpack_device__")
+    assert not is_device_array(host)
+    assert not is_device_array(None)
 
 
 def test_vesin_gpu_version_gate(monkeypatch):

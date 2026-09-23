@@ -34,10 +34,76 @@ SPARSE_DIMER_CAP_SAFETY_MARGIN = 1.4
 # it silently and badly undersizes the cap for dense periodic liquids (see
 # the investigation that established this constant: a 903-monomer TIP3
 # liquid box at ~1 g/cm^3 has ~29 in-range neighbors per monomer within a
-# 7.5 A active radius, ~5x this heuristic's assumption of 6 -- do not raise
-# this value to "fix" liquids; pass box_volume/active_radius instead so the
-# density-aware branch below is used).
+# 7.5 A *legacy* radius (mm_switch_on + ml_switch_width), ~5x this heuristic's
+# assumption of 6 -- do not raise this value to "fix" liquids; pass
+# box_volume/active_radius instead so the density-aware branch below is used).
+# Production filtering uses :func:`sparse_dimer_active_radius` (``mm_switch_on``).
 _FALLBACK_NEIGHBORS_PER_MONOMER = 6
+
+# PR #252 (``3e8c9478c``): padded sparse slots re-added the last pair's switched
+# forces. PBC MLpot runs with ``ml_sparse_dimers=True`` *before* that commit
+# (including the ETOH student NVE jobs that logged the flag) can have inflated
+# forces on the two highest-index molecules whenever that pair sat inside
+# ``mm_switch_on``. Revalidate those trajectories. Do not treat #252 as the
+# cause of every NVE instability — the NaN-guard, MIC wrap, and cap-overflow
+# paths are separate.
+SPARSE_DIMER_PADDING_FORCE_BUG_FIXED_IN = "3e8c9478c"
+
+
+class SparseDimerCapOverflow(RuntimeError):
+    """In-range ML dimers exceeded the static sparse cap.
+
+    ``jnp.nonzero(..., size=cap)`` keeps the first ``cap`` pairs in enumeration
+    order and drops the rest. Dropped pairs still interact, so the forces are
+    wrong. Fail closed rather than returning a truncated USER term. Raise
+    ``--ml-max-active-dimers`` / ``MMML_MLPOT_MAX_ACTIVE_DIMERS`` and restart;
+    growing the cap in-step would rebuild the jitted batch shape.
+    """
+
+    def __init__(self, n_active: int, cap: int, *, dropped: int | None = None):
+        self.n_active = int(n_active)
+        self.cap = int(cap)
+        self.dropped = int(
+            dropped if dropped is not None else max(0, self.n_active - self.cap)
+        )
+        super().__init__(
+            f"sparse active-dimer cap saturated: {self.n_active} in-range "
+            f"dimer pairs > cap={self.cap} ({self.dropped} interacting dimers "
+            f"would be dropped). Forces would change. Raise "
+            f"--ml-max-active-dimers / MMML_MLPOT_MAX_ACTIVE_DIMERS above "
+            f"{self.n_active} and restart this run."
+        )
+
+
+def sparse_dimer_active_radius(
+    mm_switch_on: float,
+    ml_switch_width: float | None = None,
+    *,
+    margin: float = 0.0,
+) -> float:
+    """COM radius of dimers that can still contribute ML energy or force.
+
+    ``ml_switch_scale`` is identically 0 with vanishing ``ds/dr`` for
+    ``r >= mm_switch_on`` (smoothstep endpoints). ``ml_switch_width`` is the
+    *inner* handoff width, not extra support past the outer endpoint.
+    ``margin`` is #255's optional Å past ``mm_switch_on`` (default 0; 1.5
+    reproduces the pre-#255 set).
+    """
+    del ml_switch_width
+    if float(margin) < 0.0:
+        raise ValueError(f"sparse dimer active margin must be >= 0, got {margin}")
+    return float(mm_switch_on) + float(margin)
+
+
+def raise_if_sparse_cap_saturated(n_active: int, cap: int) -> None:
+    """Abort if the sparse path would silently drop in-range dimers.
+
+    ``n_active < 0`` means the batch is dense or spatial (no cap).
+    """
+    if int(n_active) < 0:
+        return
+    if int(n_active) > int(cap):
+        raise SparseDimerCapOverflow(n_active, cap)
 
 
 def resolve_max_active_dimers(

@@ -232,8 +232,12 @@ class PyCharmm_Calculator:
 
         # Unit conversion
         self.results = {}
-        if results["energy"] == np.inf:
-            return 0
+        if not np.all(np.isfinite(np.asarray(results["energy"], dtype=np.float64))):
+            # Returning 0 here let CHARMM integrate with no ML energy or forces.
+            # Raise into the fail-closed ctypes guard instead (process exits 86).
+            raise FloatingPointError(
+                f"PhysNet MLpot: non-finite energy {results['energy']!r}"
+            )
         for prop in self.implemented_properties:
             self.results[prop] = results[prop]
         # Add forces to CHARMM derivative arrays (one accumulation per ML atom).

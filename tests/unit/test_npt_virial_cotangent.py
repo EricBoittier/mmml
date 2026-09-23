@@ -1,10 +1,10 @@
 """The NpT energy's custom VJP must return the virial for `perturbation`.
 
 jax-md gets the internal pressure by differentiating the energy with respect to
-an isotropic volume perturbation::
+an isotropic LINEAR strain (every length scales by ``1 + eps``)::
 
     U(eps) = energy_fn(..., perturbation=1 + eps)
-    dU_dV  ~ grad(U)(0.0)
+    P      = (2 K - grad(U)(0.0)) / (3 V)
 
 ``jaxmd_runner.set_up_nhc_sim_routine`` wraps the hybrid energy in a
 ``jax.custom_vjp`` because plain ``jax.grad`` through the calculator gives NaN.
@@ -19,9 +19,13 @@ P_meas = 4059.58 atm against a 1 atm target; the kinetic-only value for that
 state is 4059.63 atm, agreeing to 0.001%. The barostat then drove the cell on a
 4000x pressure error and the run blew up to 8e7 eV.
 
-These tests pin the analytic virial
+These tests pin the analytic virial for that linear strain (r = p r0)
 
-    dE/dp = -(1 / 3p) * sum_i F_i . r_i
+    dE/dp = -(1 / p) * sum_i F_i . r_i
+
+(An earlier version of this file pinned ``-(1/3p) sum F.r`` for r = p^(1/3) r0,
+i.e. ``perturbation`` read as a volume factor. That is not jax-md's convention
+and made the barostat see P_vir / 3; see ``test_npt_virial_strain.py``.)
 
 against finite differences of the energy, on potentials whose virial is known
 independently. They deliberately avoid importing the runner (which needs CHARMM
@@ -50,8 +54,8 @@ def _make_pair_energy():
 
 
 def _scaled_energy(energy_of_positions, r0, p):
-    """Energy after isotropic scaling r = p^(1/3) r0 -- the perturbation path."""
-    return energy_of_positions(jnp.cbrt(p) * r0)
+    """Energy after isotropic linear strain r = p r0 -- jax-md's perturbation."""
+    return energy_of_positions(p * r0)
 
 
 @pytest.mark.parametrize("seed", [0, 1, 2])
@@ -61,10 +65,10 @@ def test_analytic_virial_matches_finite_difference(seed):
     r0 = jax.random.uniform(key, (8, 3), minval=0.5, maxval=3.0, dtype=jnp.float64)
 
     p = 1.0
-    r = jnp.cbrt(p) * r0
+    r = p * r0
     # F = -dE/dr, exactly what the runner's force fn supplies.
     F = -jax.grad(energy_of_positions)(r)
-    analytic = -jnp.sum(F * r) / (3.0 * p)
+    analytic = -jnp.sum(F * r) / p
 
     fd = jax.grad(lambda pp: _scaled_energy(energy_of_positions, r0, pp))(p)
 
@@ -78,7 +82,7 @@ def test_virial_is_nonzero_for_a_real_configuration():
     key = jax.random.PRNGKey(3)
     r = jax.random.uniform(key, (10, 3), minval=0.6, maxval=2.5, dtype=jnp.float64)
     F = -jax.grad(energy_of_positions)(r)
-    virial_term = -jnp.sum(F * r) / 3.0
+    virial_term = -jnp.sum(F * r)
     assert abs(float(virial_term)) > 1e-6
 
 
@@ -97,10 +101,10 @@ def test_custom_vjp_contract_propagates_the_perturbation_cotangent():
 
     def bwd(res, g):
         frac, perturbation = res
-        r = jnp.cbrt(perturbation) * frac
+        r = perturbation * frac
         F = -jax.grad(energy_of_positions)(r)
-        grad_frac = -F * g
-        grad_pert = -jnp.sum(F * r) / (3.0 * perturbation) * g
+        grad_frac = -F * perturbation * g
+        grad_pert = -jnp.sum(F * r) / perturbation * g
         return (grad_frac, grad_pert)
 
     energy.defvjp(fwd, bwd)
@@ -126,7 +130,7 @@ def test_a_none_cotangent_would_have_been_caught():
 
     def bwd(res, g):
         frac, perturbation = res
-        r = jnp.cbrt(perturbation) * frac
+        r = perturbation * frac
         F = -jax.grad(energy_of_positions)(r)
         return (-F * g, jnp.zeros_like(perturbation))  # the old None -> zero
 
@@ -153,7 +157,7 @@ def test_virial_of_an_inverse_power_law_matches_euler_theorem():
     U is homogeneous of degree -n in the coordinates, so sum_i r_i . dU/dr_i =
     -n U exactly. Hence sum_i F_i . r_i = +n U and
 
-        dE/dp at p=1  =  -(1/3) sum F.r  =  -(n/3) U
+        dE/dp at p=1  =  -sum F.r  =  -n U     (linear strain r = p r0)
 
     This is a property of the potential, not of our differentiation.
     """
@@ -169,8 +173,11 @@ def test_virial_of_an_inverse_power_law_matches_euler_theorem():
             return 0.5 * jnp.sum(r2 ** (-n / 2))
 
         F = -jax.grad(U)(r)
-        analytic = -jnp.sum(F * r) / 3.0
-        euler = -(n / 3.0) * U(r)
+        analytic = -jnp.sum(F * r)
+        euler = -n * U(r)
+        # And it is what differentiating the linearly strained energy gives.
+        fd = jax.grad(lambda p, n=n: U(p * r, n))(1.0)
+        assert float(fd) == pytest.approx(float(euler), rel=1e-8)
         assert float(analytic) == pytest.approx(float(euler), rel=1e-8)
 
 
@@ -188,7 +195,7 @@ def test_virial_vanishes_at_a_potential_minimum_pair():
     r = jnp.array([[0.0, 0.0, 0.0], [rmin, 0.0, 0.0]], dtype=jnp.float64)
     F = -jax.grad(U)(r)
     assert float(jnp.abs(F).max()) == pytest.approx(0.0, abs=1e-9)
-    assert float(-jnp.sum(F * r) / 3.0) == pytest.approx(0.0, abs=1e-9)
+    assert float(-jnp.sum(F * r)) == pytest.approx(0.0, abs=1e-9)
 
 
 def test_ideal_gas_pressure_identity_reproduces_the_observed_blowup_number():
@@ -224,6 +231,6 @@ def test_virial_scales_linearly_with_a_uniform_energy_scale():
         r2 = jnp.where(jnp.eye(m, dtype=bool), jnp.inf, r2)
         return c * 0.5 * jnp.sum(r2 ** -6)
 
-    v1 = -jnp.sum(-jax.grad(lambda x: U(x, 1.0))(r) * r) / 3.0
-    v2 = -jnp.sum(-jax.grad(lambda x: U(x, 2.0))(r) * r) / 3.0
+    v1 = -jnp.sum(-jax.grad(lambda x: U(x, 1.0))(r) * r)
+    v2 = -jnp.sum(-jax.grad(lambda x: U(x, 2.0))(r) * r)
     assert float(v2) == pytest.approx(2.0 * float(v1), rel=1e-9)

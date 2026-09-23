@@ -29,6 +29,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.staged_workflow import (
     _heat_in_place_restart,
     _heat_restart_path,
     _is_dynamics_stage_restart_path,
+    _is_geometry_baseline_snapshot,
     _prior_restart_for_stage,
     _restart_coord_read_candidates,
     _should_seed_heat_prior_restart,
@@ -349,6 +350,49 @@ def test_memory_seeding_is_refused_when_nothing_is_on_disk(tmp_path):
     assert not _can_seed_stage_from_memory(
         missing, prev_restart=missing, prev_restart_is_current_state=True
     )
+
+
+# --- heat from a geometry baseline snapshot ---------------------------------
+
+
+def test_heat_prior_from_crd_is_the_baseline_snapshot(tmp_path):
+    """``--from-crd --md-stages heat``: the only prior artifact is baseline.res.
+
+    It is an MMML coordinate snapshot, not a CHARMM dynamics restart, so heat
+    must start from in-memory coords instead of READYN (Fortran read abort).
+    """
+    paths = _paths(tmp_path)
+    _touch(paths["geometry_baseline_res"], "REST ... * MMML snapshot")
+    rread = _prior_restart_for_stage("heat", paths, restart_from=None)
+    assert rread == paths["geometry_baseline_res"]
+    assert _is_geometry_baseline_snapshot(rread, paths)
+
+
+def test_baseline_snapshot_matches_through_dot_segments(tmp_path):
+    paths = _paths(tmp_path)
+    _touch(paths["geometry_baseline_res"])
+    assert _is_geometry_baseline_snapshot(tmp_path / "." / "baseline.res", paths)
+
+
+@pytest.mark.parametrize("name", ["heat.res", "heat.0.res", "nve.res", "equi.2.res"])
+def test_dynamics_restarts_are_not_baseline_snapshots(tmp_path, name):
+    paths = _paths(tmp_path)
+    _touch(paths["geometry_baseline_res"])
+    assert not _is_geometry_baseline_snapshot(_touch(tmp_path / name), paths)
+
+
+def test_explicit_user_restart_is_not_a_baseline_snapshot(tmp_path):
+    """An arbitrary ``--restart-from`` file keeps READYN semantics."""
+    paths = _paths(tmp_path)
+    explicit = _touch(tmp_path / "elsewhere" / "my_run.res")
+    assert not _is_geometry_baseline_snapshot(explicit, paths)
+
+
+def test_no_baseline_snapshot_without_a_path(tmp_path):
+    paths = _paths(tmp_path)
+    assert not _is_geometry_baseline_snapshot(None, paths)
+    paths.pop("geometry_baseline_res")
+    assert not _is_geometry_baseline_snapshot(tmp_path / "baseline.res", paths)
 
 
 # --- restart coordinate read candidates -------------------------------------

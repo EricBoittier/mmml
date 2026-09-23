@@ -20,7 +20,13 @@ from mmml.interfaces.pycharmmInterface.cutoffs import (
 )
 from mmml.interfaces.pycharmmInterface.ml_dtypes import as_ml_array, resolve_ml_compute_dtype
 from mmml.interfaces.pycharmmInterface.mmml_calculator import ev2kcalmol, setup_calculator
-from mmml.interfaces.pycharmmInterface.mlpot.mlpot_batch_policy import resolve_ml_batch_size
+from mmml.interfaces.pycharmmInterface.mlpot.mlpot_batch_policy import (
+    resolve_ml_batch_size,
+    resolve_mlpot_mm_skin_A,
+)
+from mmml.interfaces.pycharmmInterface.mlpot.callback_failstop import (
+    failstop_calculate_charmm,
+)
 from mmml.interfaces.pycharmmInterface.mlpot.setup import physnet_ml_atomic_numbers
 from mmml.interfaces.pycharmmInterface.mlpot.mlpot_gpu_policy import resolve_ml_gpu_count
 from mmml.interfaces.pycharmmInterface.jax_device_policy import (
@@ -49,10 +55,29 @@ _DUMMY_MM_PAIR_MASK = jnp.zeros((1,), dtype=jnp.bool_)
 
 MmPairSource = Literal["jax", "charmm_callback"]
 _DEFAULT_MM_PAIR_SOURCE: MmPairSource = "charmm_callback"
+# forward_fn(..., ml_eval_chunks=<this>) means "use the owner's chunk budget".
+_BUDGET_DEFAULT = object()
 
 
 class _CallbackPairListUnavailable(RuntimeError):
-    """Raised internally when CHARMM callback pair lists are unusable."""
+    """Raised when CHARMM callback pair lists are unusable.
+
+    During setup (guard disarmed) ``calculate_charmm`` still returns 0.0 so
+    ``assert_mlpot_user_active`` can rebind and rebuild. Once that check arms
+    the guard, this exception propagates into
+    ``callback_failstop.fail_closed_callback`` and the process exits 86.
+    """
+
+
+ALLOW_MISSING_CALLBACK_PAIRS_ENV = "MMML_MLPOT_ALLOW_MISSING_CALLBACK_PAIRS"
+"""Test-only: ``1`` restores the old zero-energy return on missing pair lists."""
+
+ALLOW_PERIODIC_COULOMB_FAILURE_ENV = "MMML_MLPOT_ALLOW_PERIODIC_COULOMB_FAILURE"
+"""Test-only: ``1`` continues with an ML-only USER term if periodic Coulomb fails."""
+
+
+def _callback_opt_out(env_name: str) -> bool:
+    return os.environ.get(env_name, "").strip().lower() in {"1", "true", "yes", "on"}
 
 
 def resolve_mm_pair_source(
@@ -345,6 +370,11 @@ class DecomposedMlpotCalculator:
 
         Matches the ASE calculator path (``backprop=False``). ``jax.value_and_grad`` on the
         energy scalar can disagree with ``out.forces`` when sparse MM pair lists are used.
+
+        Returns ``(energy, forces, n_active_dimers)``. The keyword ``ml_eval_chunks``
+        (static) defaults to the owner's :class:`MlChunkBudget` when the factory
+        exposes a sparse chunk layout, so the chunk loop has a compile-time trip
+        count; ``calculate_charmm`` checks the returned count against it.
         """
         dtype = resolve_ml_compute_dtype(self._ml_compute_dtype)
         box_present = box_jax is not None
@@ -368,6 +398,23 @@ class DecomposedMlpotCalculator:
         do_mm = self.do_mm
         do_ml = self.do_ml
         do_ml_dimer = self.do_ml_dimer
+        from mmml.interfaces.pycharmmInterface.mlpot.ml_chunk_budget import (
+            MlChunkBudget,
+            ml_chunk_budget_enabled,
+        )
+
+        layout = getattr(spherical_fn, "ml_chunk_layout", None)
+        budget = (
+            MlChunkBudget(layout)
+            if layout is not None and do_ml and do_ml_dimer and ml_chunk_budget_enabled()
+            else None
+        )
+        owner._ml_chunk_budget = budget
+
+        def _budget_chunks(ml_eval_chunks):
+            if ml_eval_chunks is _BUDGET_DEFAULT:
+                return budget.current if budget is not None else None
+            return ml_eval_chunks
 
         if box_present:
 
@@ -380,7 +427,9 @@ class DecomposedMlpotCalculator:
                 spatial_monomer_indices: jnp.ndarray,
                 spatial_dimer_indices: jnp.ndarray,
                 use_spatial: bool,
-            ) -> tuple[jnp.ndarray, jnp.ndarray]:
+                ml_eval_chunks: int | None = None,
+                ml_dimer_candidates: jnp.ndarray | None = None,
+            ) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]:
                 kwargs: dict[str, Any] = dict(
                     positions=positions,
                     atomic_numbers=atomic_numbers_jax,
@@ -397,10 +446,45 @@ class DecomposedMlpotCalculator:
                 if use_spatial:
                     kwargs["spatial_monomer_indices"] = spatial_monomer_indices
                     kwargs["spatial_dimer_indices"] = spatial_dimer_indices
+                if ml_eval_chunks is not None:
+                    kwargs["ml_eval_chunks"] = ml_eval_chunks
+                if ml_dimer_candidates is not None:
+                    kwargs["ml_dimer_candidates"] = ml_dimer_candidates
                 out = spherical_fn(**kwargs)
-                return jnp.reshape(out.energy, (-1,))[0], out.forces
+                return (
+                    jnp.reshape(out.energy, (-1,))[0],
+                    out.forces,
+                    jnp.asarray(getattr(out, "ml_n_active_dimers", -1), dtype=jnp.int32),
+                )
 
-            fn = jax.jit(forward_fn, static_argnums=(4, 7))
+            fn = jax.jit(
+                forward_fn, static_argnums=(4, 7), static_argnames=("ml_eval_chunks",)
+            )
+
+            def forward_vir_fn(positions, box, *rest, ml_eval_chunks=None, ml_dimer_candidates=None):
+                """Forward plus dE/d(box) at fixed positions (CPT strain virial, strain_virial.py)."""
+
+                def energy_aux(box_arg):
+                    e, f, n_act = forward_fn(
+                        positions, box_arg, *rest,
+                        ml_eval_chunks=ml_eval_chunks,
+                        ml_dimer_candidates=ml_dimer_candidates,
+                    )
+                    return e, (f, n_act)
+
+                (e, (f, n_act)), dE_dbox = jax.value_and_grad(energy_aux, has_aux=True)(box)
+                return e, f, n_act, dE_dbox
+
+            fn_vir = jax.jit(
+                forward_vir_fn, static_argnums=(4, 7), static_argnames=("ml_eval_chunks",)
+            )
+
+            def _live_box():
+                # Owner-level box first: this wrapper outlives the calculator that built it.
+                current = getattr(owner, "_live_callback_box", None)
+                if current is None:
+                    current = getattr(self, "_current_box", None)
+                return box_jax if current is None else current
 
             def wrapper(
                 positions,
@@ -410,10 +494,10 @@ class DecomposedMlpotCalculator:
                 spatial_monomer_indices,
                 spatial_dimer_indices,
                 use_spatial,
+                ml_eval_chunks=_BUDGET_DEFAULT,
+                ml_dimer_candidates=None,
             ):
-                current_box = getattr(self, "_current_box", None)
-                if current_box is None:
-                    current_box = box_jax
+                current_box = _live_box()
                 return fn(
                     positions,
                     current_box,
@@ -423,8 +507,36 @@ class DecomposedMlpotCalculator:
                     spatial_monomer_indices,
                     spatial_dimer_indices,
                     use_spatial,
+                    ml_eval_chunks=_budget_chunks(ml_eval_chunks),
+                    ml_dimer_candidates=ml_dimer_candidates,
                 )
 
+            def wrapper_vir(
+                positions,
+                mm_pair_idx,
+                mm_pair_mask,
+                use_mm_pairs,
+                spatial_monomer_indices,
+                spatial_dimer_indices,
+                use_spatial,
+                ml_eval_chunks=_BUDGET_DEFAULT,
+                ml_dimer_candidates=None,
+            ):
+                current_box = _live_box()
+                return fn_vir(
+                    positions,
+                    current_box,
+                    mm_pair_idx,
+                    mm_pair_mask,
+                    use_mm_pairs,
+                    spatial_monomer_indices,
+                    spatial_dimer_indices,
+                    use_spatial,
+                    ml_eval_chunks=_budget_chunks(ml_eval_chunks),
+                    ml_dimer_candidates=ml_dimer_candidates,
+                )
+
+            owner._spherical_forward_vir_fn = wrapper_vir
             owner._spherical_forward_fn = wrapper
         else:
 
@@ -436,7 +548,9 @@ class DecomposedMlpotCalculator:
                 spatial_monomer_indices: jnp.ndarray,
                 spatial_dimer_indices: jnp.ndarray,
                 use_spatial: bool,
-            ) -> tuple[jnp.ndarray, jnp.ndarray]:
+                ml_eval_chunks: int | None = None,
+                ml_dimer_candidates: jnp.ndarray | None = None,
+            ) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]:
                 kwargs: dict[str, Any] = dict(
                     positions=positions,
                     atomic_numbers=atomic_numbers_jax,
@@ -452,10 +566,29 @@ class DecomposedMlpotCalculator:
                 if use_spatial:
                     kwargs["spatial_monomer_indices"] = spatial_monomer_indices
                     kwargs["spatial_dimer_indices"] = spatial_dimer_indices
+                if ml_eval_chunks is not None:
+                    kwargs["ml_eval_chunks"] = ml_eval_chunks
+                if ml_dimer_candidates is not None:
+                    kwargs["ml_dimer_candidates"] = ml_dimer_candidates
                 out = spherical_fn(**kwargs)
-                return jnp.reshape(out.energy, (-1,))[0], out.forces
+                return (
+                    jnp.reshape(out.energy, (-1,))[0],
+                    out.forces,
+                    jnp.asarray(getattr(out, "ml_n_active_dimers", -1), dtype=jnp.int32),
+                )
 
-            owner._spherical_forward_fn = jax.jit(forward_fn, static_argnums=(3, 6))
+            fn_nobox = jax.jit(
+                forward_fn, static_argnums=(3, 6), static_argnames=("ml_eval_chunks",)
+            )
+
+            def wrapper_nobox(*args, ml_eval_chunks=_BUDGET_DEFAULT, ml_dimer_candidates=None):
+                return fn_nobox(
+                    *args,
+                    ml_eval_chunks=_budget_chunks(ml_eval_chunks),
+                    ml_dimer_candidates=ml_dimer_candidates,
+                )
+
+            owner._spherical_forward_fn = wrapper_nobox
 
         owner._forward_cache_key = cache_key
         return owner._spherical_forward_fn
@@ -473,6 +606,40 @@ class DecomposedMlpotCalculator:
             atomic_numbers_jax=atomic_numbers_jax,
             box_jax=box_jax,
         )
+
+    def _resolve_ml_dimer_candidates(
+        self,
+        pos: np.ndarray,
+        box: jnp.ndarray | None,
+        *,
+        use_spatial: bool = False,
+    ) -> dict[str, Any]:
+        """Forward kwargs for the centroid Verlet list of sparse ML dimers.
+
+        Empty (all-pairs selection in-graph) unless the factory attached a
+        :class:`CentroidDimerNeighborList` (``setup_calculator(ml_dimer_centroid_nl=...)``,
+        env ``MMML_ML_DIMER_CENTROID_NL``) and this step uses the sparse batch.
+        """
+        from mmml.interfaces.pycharmmInterface.mlpot.dimer_centroid_nl import (
+            CentroidDimerNeighborList,
+        )
+
+        if use_spatial or not (self.do_ml and self.do_ml_dimer):
+            return {}
+        nl = getattr(self.spherical_fn, "dimer_centroid_nl", None)
+        if not isinstance(nl, CentroidDimerNeighborList):
+            return {}
+        cand = nl.update(pos, box=_box_numpy_for_update(box))
+        from mmml.interfaces.pycharmmInterface.mlpot.ml_profile import (
+            get_mlpot_profile_stats,
+            mlpot_profiling_enabled,
+        )
+
+        if mlpot_profiling_enabled():
+            recorder = getattr(get_mlpot_profile_stats(), "record_dimer_centroid_nl", None)
+            if recorder is not None:
+                recorder(nl.stats())
+        return {"ml_dimer_candidates": cand}
 
     def _resolve_mm_pairs(
         self,
@@ -500,6 +667,15 @@ class DecomposedMlpotCalculator:
                 )
             return _DUMMY_MM_PAIR_IDX, _DUMMY_MM_PAIR_MASK, False
         self._note_mm_pair_capacity(mm_pair_idx)
+        get_stats = getattr(update_fn, "get_stats", None)
+        if get_stats is not None:
+            from mmml.interfaces.pycharmmInterface.mlpot.ml_profile import (
+                get_mlpot_profile_stats,
+                mlpot_profiling_enabled,
+            )
+
+            if mlpot_profiling_enabled():
+                get_mlpot_profile_stats().record_mm_pair_stats(get_stats())
         return jnp.asarray(mm_pair_idx), jnp.asarray(mm_pair_mask), True
 
     def _resolve_mm_pairs_from_callback(
@@ -580,12 +756,89 @@ class DecomposedMlpotCalculator:
         self._note_mm_pair_capacity(pair_idx)
         return jnp.asarray(pair_idx), jnp.asarray(pair_mask), True
 
+    def _check_ml_chunk_budget(self, budget, forward_fn, fwd_args, fwd_out, fwd_kwargs=None):
+        """Validate this step's static chunk budget; re-run once if it was too small.
+
+        The active-dimer count comes back with the forces (the host waits for
+        those anyway), so this adds no device round trip inside the forward.
+        """
+        n_active = int(jax.device_get(fwd_out[2]))
+        e_raw, forces_ev = fwd_out[0], fwd_out[1]
+        if n_active < 0:  # dense or spatial batch this step: nothing was skipped
+            return e_raw, forces_ev
+        # Cap overflow drops interacting dimers; chunk growth cannot recover them.
+        budget.raise_if_saturated(n_active)
+        from mmml.interfaces.pycharmmInterface.mlpot.ml_profile import (
+            get_mlpot_profile_stats,
+            mlpot_profiling_enabled,
+        )
+
+        if mlpot_profiling_enabled():
+            get_mlpot_profile_stats().record_active_dimers(
+                n_active,
+                chunk_budget=budget.current,
+                chunk_size=budget.layout.chunk_size,
+                max_active_dimers=budget.layout.max_active_dimers,
+            )
+        if not budget.covers(n_active):
+            # Rare (the budget keeps spare slots): grow and redo the step exactly.
+            budget.update(n_active)
+            self._ml_chunk_budget_reruns = getattr(self, "_ml_chunk_budget_reruns", 0) + 1
+            print(
+                f"MLpot chunk budget: {n_active} active dimers need "
+                f"{budget.needed(n_active)} PhysNet chunks; re-evaluating the step "
+                f"with {budget.current} (re-run #{self._ml_chunk_budget_reruns})",
+                flush=True,
+            )
+            fwd_out = forward_fn(
+                *fwd_args, ml_eval_chunks=budget.current, **(fwd_kwargs or {})
+            )
+            e_raw, forces_ev = fwd_out[0], fwd_out[1]
+        budget.update(n_active)
+        self._last_fwd_out = fwd_out
+        return e_raw, forces_ev
+
     def _mlpot_eval_device_context(self):
         """CPU while MPI defer keeps the JAX factory off-GPU; else configured device."""
         parent = getattr(self, "_parent_model", None)
         if parent is not None and not getattr(parent, "_jax_on_gpu", True):
             return jax_cpu_until_mlpot_registered()
         return mlpot_jax_device_context()
+
+    def _sync_callback_pbc_box(self):
+        """Refresh ``self._cell`` from live CHARMM pbound before wrap / MIC.
+
+        Under CPT the box changes every step. Wrapping with the previous
+        ``_cell`` leaves a molecule split across the new primary cell (NPT
+        ETOH: 21.4 Å raw extent, then the pair-list guard raises).
+        """
+        if not (self._cell or self._requires_callback_pbc_box()):
+            self._set_live_callback_box(None)
+            return None
+        from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
+            cubic_box_matrix_from_side,
+            resolve_mlpot_mic_box_side_A,
+        )
+
+        fallback_side_A, restart_path = self._callback_box_resolution_inputs()
+        side, _ = resolve_mlpot_mic_box_side_A(
+            fallback_side_A=fallback_side_A,
+            restart_path=restart_path,
+        )
+        self._cell = side
+        box = jnp.asarray(cubic_box_matrix_from_side(side))
+        self._set_live_callback_box(box)
+        return box
+
+    def _set_live_callback_box(self, box) -> None:
+        """Record the box for this ENER on this calculator and on the forward-cache owner.
+
+        The jitted forward is cached on the owner and shared by every calculator the
+        model registers; it reads the box from the owner, so a re-registered calculator
+        (``refresh_mlpot_energy_and_grms``, CPT sub-chunks) cannot leave it on an old cell.
+        """
+        self._current_box = box
+        self._grad_cache_owner()._live_callback_box = box
 
     def _maybe_rewrap_primary_cell_in_callback(
         self,
@@ -594,29 +847,112 @@ class DecomposedMlpotCalculator:
         x,
         y,
         z,
+        *,
+        box_side_A: float | None = None,
     ) -> np.ndarray:
-        """Re-center molecules in the CHARMM primary cell before MIC evaluation."""
-        if not self._cell or not self._atoms_per_monomer:
-            return pos
-        from mmml.cli.run.md_handoff import rewrap_charmm_pbc_molecules
+        """Periodic copy of ``pos`` with each molecule's COM in the primary cell.
 
-        side = float(self._cell)
-        wrapped = rewrap_charmm_pbc_molecules(
-            np.asarray(pos[:n], dtype=np.float64),
-            list(self._atoms_per_monomer),
-            side,
-        )
-        delta = np.abs(wrapped - pos[:n])
-        if float(delta.max()) <= 1e-4:
+        Pure integer-lattice shifts per molecule, applied to a copy only. MIC
+        energies/forces are unchanged by such shifts, so the evaluation sees
+        tidy coordinates without touching CHARMM's state. This used to call
+        ``rewrap_charmm_pbc_molecules`` and write the result into ``x/y/z``:
+        its inward ``margin_A`` nudge is a real displacement, and editing the
+        integrator's coordinates mid-step broke NVE (+289 kcal/mol in 0.25 ps
+        on ETOH:181; conserved once removed). ``x``, ``y``, ``z`` are left
+        untouched; post-SD recentering lives in ``dynamics._rewrap_mlpot_pbc_after_sd``.
+
+        ``box_side_A`` is the live CHARMM cell (pbound). If omitted, ``self._cell``
+        is used — callers that run under NPT must refresh that first.
+        """
+        del x, y, z
+        L = float(box_side_A) if box_side_A is not None else (float(self._cell) if self._cell else 0.0)
+        if L <= 0.0 or not self._atoms_per_monomer:
             return pos
-        for i in range(n):
-            x[i] = float(wrapped[i, 0])
-            y[i] = float(wrapped[i, 1])
-            z[i] = float(wrapped[i, 2])
+        from mmml.interfaces.pycharmmInterface.mlpot.mc_density import monomer_offsets_from_atoms_per
+        from mmml.utils.geometry_checks import wrap_monomers_primary_cell
+
+        offsets = monomer_offsets_from_atoms_per(list(self._atoms_per_monomer))
+        whole = np.asarray(pos[:n], dtype=np.float64)
+        n_mol_atoms = int(offsets[-1])
+        if n_mol_atoms <= n:
+            # Rejoin molecules an engine wrapped atom by atom (jax-md, ASE wrap()) before
+            # anything uses molecule COMs (this wrap, MM pair list, dimer candidates).
+            # CHARMM hands over whole molecules, so this is a no-op in the callback.
+            sizes = np.diff(offsets).astype(int)
+            anchor = np.repeat(offsets[:-1], sizes)
+            d = whole[:n_mol_atoms] - whole[anchor]
+            whole = whole.copy()
+            whole[:n_mol_atoms] -= np.round(d / L) * L
+        # CHARMM frame is [-L/2, L/2]; wrap in [0, L) and shift back.
+        wrapped = (
+            wrap_monomers_primary_cell(whole + 0.5 * L, offsets, np.diag([L, L, L]))
+            - 0.5 * L
+        )
         out = np.array(pos, dtype=np.float64, copy=True)
         out[:n] = wrapped
         return out
 
+    def evaluate_hybrid_ev(
+        self,
+        positions: np.ndarray,
+        box_side_A: float,
+        *,
+        with_box_grad: bool = False,
+    ) -> tuple[float, np.ndarray, np.ndarray | None]:
+        """Hybrid energy (eV), forces (eV/Å) and optionally dE/d(box) exactly as the CHARMM callback computes them.
+
+        Same steps as :meth:`calculate_charmm` without CHARMM: record the live box,
+        rewrap each molecule's COM into the primary cell (a copy), resolve the MM pair
+        list and the centroid dimer candidates, run the cached forward and honour the
+        sparse chunk budget. For engines that need the callback's Hamiltonian off
+        CHARMM (JAX-MD, ASE, strain finite differences). Cubic cells only.
+        """
+        from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import cubic_box_matrix_from_side
+
+        if self.do_mm and self._mm_pair_source == "charmm_callback":
+            raise RuntimeError("evaluate_hybrid_ev needs mm_pair_source='jax' (CHARMM pair lists exist only inside ENER)")
+        side = float(box_side_A)
+        pos_full = np.asarray(positions, dtype=np.float64).reshape(-1, 3)
+        n = int(pos_full.shape[0])
+        self._cell = side
+        box = jnp.asarray(cubic_box_matrix_from_side(side))
+        self._set_live_callback_box(box)
+        pos_full = self._maybe_rewrap_primary_cell_in_callback(pos_full, n, None, None, None, box_side_A=side)
+        ml_idx = self._resolve_ml_callback_slice(n)
+        pos = pos_full[ml_idx]
+        n_ml = int(ml_idx.size)
+        with self._mlpot_eval_device_context():
+            mm_pair_idx, mm_pair_mask, use_mm_pairs = self._resolve_mm_pairs(pos, box)
+            positions_jax = as_ml_array(
+                pos, dtype=resolve_ml_compute_dtype(getattr(self, "_ml_compute_dtype", None))
+            )
+            forward_fn = self._get_spherical_forward_fn(
+                n_atoms=n_ml,
+                atomic_numbers_jax=jnp.asarray(self.atomic_numbers[:n_ml]),
+                box_jax=box,
+            )
+            if with_box_grad:
+                forward_fn = getattr(self._grad_cache_owner(), "_spherical_forward_vir_fn", None)
+                if forward_fn is None:
+                    raise RuntimeError("box-gradient forward unavailable (no periodic box)")
+            empty = jnp.zeros((0,), dtype=jnp.int32)
+            fwd_args = (positions_jax, mm_pair_idx, mm_pair_mask, use_mm_pairs, empty, empty, False)
+            fwd_kwargs = self._resolve_ml_dimer_candidates(pos, box, use_spatial=False)
+            fwd_out = forward_fn(*fwd_args, **fwd_kwargs)
+            self._last_fwd_out = fwd_out
+            e_raw, forces_ev = fwd_out[0], fwd_out[1]
+            budget = getattr(self._grad_cache_owner(), "_ml_chunk_budget", None)
+            if budget is not None and len(fwd_out) > 2:
+                e_raw, forces_ev = self._check_ml_chunk_budget(budget, forward_fn, fwd_args, fwd_out, fwd_kwargs)
+            dE_dbox = (
+                np.asarray(jax.device_get(self._last_fwd_out[3]), dtype=np.float64) if with_box_grad else None
+            )
+            e_ev = float(jax.device_get(e_raw))
+            forces = np.zeros((n, 3), dtype=np.float64)
+            forces[ml_idx] = np.asarray(jax.device_get(forces_ev), dtype=np.float64)
+        return e_ev, forces, dE_dbox
+
+    @failstop_calculate_charmm
     def calculate_charmm(
         self,
         Natom: int,
@@ -640,26 +976,20 @@ class DecomposedMlpotCalculator:
         idxvp,
     ) -> float:
         n = int(Natom)
-        pos_full = np.array([x[:n], y[:n], z[:n]], dtype=np.float64).T
-        pos_full = self._maybe_rewrap_primary_cell_in_callback(pos_full, n, x, y, z)
+        from mmml.interfaces.pycharmmInterface.mlpot.callback_buffers import (
+            stack_charmm_xyz,
+        )
+
+        pos_full = stack_charmm_xyz(x, y, z, n)
+        pos_charmm_full = np.array(pos_full, dtype=np.float64, copy=True)
+        box = self._sync_callback_pbc_box()
+        live_side = float(self._cell) if self._cell else None
+        pos_full = self._maybe_rewrap_primary_cell_in_callback(
+            pos_full, n, x, y, z, box_side_A=live_side
+        )
         ml_idx = self._resolve_ml_callback_slice(n)
         n_ml = int(ml_idx.size)
         pos = pos_full[ml_idx]
-        box = None
-        if self._cell or self._requires_callback_pbc_box():
-            from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
-                cubic_box_matrix_from_side,
-                resolve_mlpot_mic_box_side_A,
-            )
-
-            fallback_side_A, restart_path = self._callback_box_resolution_inputs()
-            side, _ = resolve_mlpot_mic_box_side_A(
-                fallback_side_A=fallback_side_A,
-                restart_path=restart_path,
-            )
-            self._cell = side
-            box = jnp.asarray(cubic_box_matrix_from_side(side))
-        self._current_box = box
         from mmml.interfaces.pycharmmInterface.mlpot.ml_profile import (
             get_mlpot_profile_stats,
             mlpot_profiling_enabled,
@@ -691,6 +1021,7 @@ class DecomposedMlpotCalculator:
         )
         if run_ml:
             with self._mlpot_eval_device_context():
+                t_pairs = time.perf_counter()
                 try:
                     if self._mm_pair_source == "charmm_callback":
                         mm_pair_idx, mm_pair_mask, use_mm_pairs = (
@@ -719,8 +1050,21 @@ class DecomposedMlpotCalculator:
                     if parent is not None:
                         parent._last_callback_error = msg
                         parent._last_ml_forces = self.last_ml_forces
+                    from mmml.interfaces.pycharmmInterface.mlpot.callback_failstop import (
+                        mlpot_dynamics_armed,
+                    )
+
+                    if mlpot_dynamics_armed() and not _callback_opt_out(
+                        ALLOW_MISSING_CALLBACK_PAIRS_ENV
+                    ):
+                        # Dynamics: fail closed. The guarded entry point exits 86.
+                        raise
                     if not self._callback_pair_warned:
-                        print(f"WARN: {msg}", flush=True)
+                        print(
+                            f"WARN: {msg} ({ALLOW_MISSING_CALLBACK_PAIRS_ENV}=1: "
+                            "returning zero USER energy and forces)",
+                            flush=True,
+                        )
                         self._callback_pair_warned = True
                     return 0.0
                 positions_jax = as_ml_array(
@@ -756,7 +1100,8 @@ class DecomposedMlpotCalculator:
                     )
                     mono_jax = jnp.asarray(batch_idx.owned_monomers, dtype=jnp.int32)
                     dimer_jax = jnp.asarray(batch_idx.active_dimer_indices, dtype=jnp.int32)
-                e_raw, forces_ev = forward_fn(
+                pair_ms = (time.perf_counter() - t_pairs) * 1000.0
+                fwd_args = (
                     positions_jax,
                     mm_pair_idx,
                     mm_pair_mask,
@@ -765,12 +1110,89 @@ class DecomposedMlpotCalculator:
                     dimer_jax,
                     use_spatial,
                 )
-                e_raw = jnp.where(jnp.isfinite(e_raw), e_raw, 0.0)
-                forces_ev = jnp.where(jnp.isfinite(forces_ev), forces_ev, 0.0)
-                e_kcal = float(jax.device_get(e_raw)) * self.ev2kcal
-                forces_ml = (
-                    np.asarray(jax.device_get(forces_ev), dtype=np.float64) * self.ev2kcal
+                fwd_kwargs = self._resolve_ml_dimer_candidates(
+                    pos, box, use_spatial=use_spatial
                 )
+                from mmml.interfaces.pycharmmInterface.mlpot.strain_virial import (
+                    strain_virial_enabled,
+                )
+
+                want_virial = strain_virial_enabled()
+                if want_virial:
+                    vir_fn = getattr(self._grad_cache_owner(), "_spherical_forward_vir_fn", None)
+                    if vir_fn is None or box is None or use_spatial:
+                        raise RuntimeError(
+                            "CPT strain virial needs a periodic box and the non-spatial MLpot "
+                            "forward; refusing to run NpT with CHARMM's central-atom virial"
+                        )
+                    if getattr(self, "_periodic_mm_config", None) is not None:
+                        raise RuntimeError(
+                            "CPT strain virial does not cover the periodic Coulomb add-on yet; "
+                            "refusing NpT with an incomplete virial"
+                        )
+                    forward_fn = vir_fn
+                t_fwd = time.perf_counter()
+                fwd_out = forward_fn(*fwd_args, **fwd_kwargs)
+                e_raw, forces_ev = fwd_out[0], fwd_out[1]
+                self._last_fwd_out = fwd_out
+                budget = getattr(self._grad_cache_owner(), "_ml_chunk_budget", None)
+                if budget is not None and len(fwd_out) > 2:
+                    e_raw, forces_ev = self._check_ml_chunk_budget(
+                        budget, forward_fn, fwd_args, fwd_out, fwd_kwargs
+                    )
+                if mlpot_profiling_enabled():
+                    e_raw = jax.block_until_ready(e_raw)
+                    forces_ev = jax.block_until_ready(forces_ev)
+                fwd_ms = (time.perf_counter() - t_fwd) * 1000.0
+                t_host = time.perf_counter()
+                e_host = jax.device_get(e_raw)
+                forces_host = jax.device_get(forces_ev)
+                from mmml.interfaces.pycharmmInterface.mlpot.finite_guards import (
+                    require_host_finite,
+                )
+
+                require_host_finite(e_host, forces_host, name="ML USER")
+                if want_virial:
+                    from mmml.interfaces.pycharmmInterface.mlpot.strain_virial import (
+                        push_virial_to_charmm,
+                        virial_correction_kcal,
+                    )
+
+                    dE_dbox = np.asarray(jax.device_get(self._last_fwd_out[3]), dtype=np.float64)
+                    current_box = getattr(self, "_current_box", None)
+                    cell_np = np.asarray(current_box if current_box is not None else box, dtype=np.float64)
+                    correction = virial_correction_kcal(
+                        dE_dcell_eV=dE_dbox,
+                        cell=cell_np,
+                        forces_eV_A=forces_host,
+                        positions_eval=pos,
+                        positions_charmm=pos_charmm_full[ml_idx],
+                        ev_to_kcal=self.ev2kcal,
+                    )
+                    require_host_finite(0.0, correction, name="ML USER strain virial")
+                    push_virial_to_charmm(correction)
+                    self._last_strain_virial_kcal = correction
+                    self._strain_virial_calls = getattr(self, "_strain_virial_calls", 0) + 1
+                    if self._strain_virial_calls == 1 or self._strain_virial_calls % 1000 == 0:
+                        vol = abs(float(np.linalg.det(cell_np)))
+                        tr = float(np.trace(correction))
+                        print(
+                            f"MLpot strain virial (call {self._strain_virial_calls}): "
+                            f"correction trace {tr:+.2f} kcal/mol -> dP {tr / (3.0 * vol) * 68568.4:+.1f} atm "
+                            f"(V {vol:.0f} A^3)",
+                            flush=True,
+                        )
+                e_kcal = float(e_host) * self.ev2kcal
+                forces_ml = np.asarray(forces_host, dtype=np.float64) * self.ev2kcal
+                if mlpot_profiling_enabled():
+                    get_mlpot_profile_stats().record_callback_stages(
+                        {
+                            "mm_pairs": pair_ms,
+                            "spherical_forward": fwd_ms,
+                            "host_writeback": (time.perf_counter() - t_host) * 1000.0,
+                            "callback_total": (time.perf_counter() - t0) * 1000.0,
+                        }
+                    )
                 forces = np.zeros((n, 3), dtype=np.float64)
                 forces[ml_idx] = forces_ml
                 self.last_ml_forces = np.asarray(forces, dtype=np.float64, copy=True)
@@ -786,6 +1208,10 @@ class DecomposedMlpotCalculator:
                     if charmm_lib_links_mpi():
                         recover_mpi_for_charmm_after_jax(phase="after MLpot gete")
                 except Exception:
+                    # Deliberately non-fatal: energy and forces are already on the
+                    # host; this only re-syncs MPI/OpenMP state for CHARMM. A real
+                    # MPI breakage surfaces in the next collective, not as a wrong
+                    # energy.
                     pass
             parent = getattr(self, "_parent_model", None)
             if parent is not None:
@@ -825,20 +1251,24 @@ class DecomposedMlpotCalculator:
                 forces = np.asarray(forces, dtype=np.float64, copy=True)
                 forces[ml_idx] = np.asarray(forces_ml_cb, dtype=np.float64)
             except Exception as exc:
-                # ScaFaCoS/MPI failures inside the CHARMM callback must not zero the
-                # whole USER term (ML energy was already computed above).
+                # Continuing without the periodic Coulomb term switches the
+                # Hamiltonian mid-run (wrong energy and forces), so fail closed.
+                if not _callback_opt_out(ALLOW_PERIODIC_COULOMB_FAILURE_ENV):
+                    raise
                 import sys
 
                 print(
                     f"WARN: periodic Coulomb callback failed ({exc}); "
-                    "continuing with ML-only USER energy",
+                    f"continuing with ML-only USER energy "
+                    f"({ALLOW_PERIODIC_COULOMB_FAILURE_ENV}=1)",
                     file=sys.stderr,
                     flush=True,
                 )
-        for i in range(n):
-            dx[i] -= forces[i, 0]
-            dy[i] -= forces[i, 1]
-            dz[i] -= forces[i, 2]
+        from mmml.interfaces.pycharmmInterface.mlpot.callback_buffers import (
+            subtract_forces_from_charmm_grad,
+        )
+
+        subtract_forces_from_charmm_grad(dx, dy, dz, forces, n)
         if run_ml and use_mm_pairs:
             hybrid_before_route = float(e_kcal)
             from mmml.interfaces.pycharmmInterface.mlpot.charmm_eterm_routing import (
@@ -904,6 +1334,7 @@ class _DeferredDecomposedMlpotCalculator:
         )
         return self._real
 
+    @failstop_calculate_charmm
     def calculate_charmm(self, *args, **kwargs) -> float:
         return self._ensure_real().calculate_charmm(*args, **kwargs)
 
@@ -1184,6 +1615,8 @@ class DecomposedMlpotModel:
             if charmm_lib_links_mpi():
                 recover_mpi_for_charmm_after_jax(phase="after MLpot JAX GPU promote")
         except Exception:
+            # Non-fatal by design: MPI/GPU re-sync only; the promoted JAX factory
+            # is already installed and evaluates the same energy.
             pass
 
     def _build_registered_calculator(
@@ -1305,6 +1738,49 @@ def build_decomposed_mlpot_model(
     )
 
 
+def _load_hybrid_mm_scales(scales_file, checkpoint, verbose):
+    """Load optional LJ and charge scales with explicit-file errors preserved."""
+    ep_scale = sig_scale = None
+    mm_charge_scale = 1.0
+    from mmml.models.mm_lj_scales import resolve_md_lj_scales
+
+    try:
+        ep_scale, sig_scale = resolve_md_lj_scales(
+            scales_file=scales_file,
+            checkpoint=checkpoint,
+        )
+    except Exception as exc:
+        if scales_file is not None:
+            raise
+        if verbose:
+            print(f"WARNING: could not load MM LJ scales: {exc}", flush=True)
+    if verbose and ep_scale is not None:
+        print(
+            f"Loaded MM LJ scales ({len(ep_scale)} ATC types) "
+            f"from hybrid_mm.json / --mm-lj-scales-file",
+            flush=True,
+        )
+    from mmml.models.mm_lj_scales import resolve_md_charge_scale
+
+    try:
+        mm_charge_scale = resolve_md_charge_scale(
+            scales_file=scales_file,
+            checkpoint=checkpoint,
+        )
+    except Exception as exc:
+        if scales_file is not None:
+            raise
+        if verbose:
+            print(f"WARNING: could not load MM charge scale: {exc}", flush=True)
+    if verbose and mm_charge_scale != 1.0:
+        print(
+            f"Loaded MM charge scale {mm_charge_scale:.4f} "
+            f"(Coulomb x{mm_charge_scale ** 2:.4f}) from hybrid_mm.json / --mm-lj-scales-file",
+            flush=True,
+        )
+    return ep_scale, sig_scale, mm_charge_scale
+
+
 def _build_jax_decomposed_mlpot_model(
     checkpoint: Path | str,
     atomic_numbers: np.ndarray,
@@ -1372,8 +1848,23 @@ def _build_jax_decomposed_mlpot_model(
             side = float(cell)
             if side > 0.0:
                 _box_volume = side**3
-                _active_radius = float(cutoff_params.mm_switch_on) + float(
-                    cutoff_params.ml_switch_width
+                from mmml.interfaces.pycharmmInterface.mlpot.mlpot_sparse_dimer_policy import (
+                    sparse_dimer_active_radius,
+                )
+
+                margin = 0.0
+                if args is not None:
+                    raw_margin = getattr(args, "ml_dimer_active_margin", None)
+                    if raw_margin is not None:
+                        margin = float(raw_margin)
+                    else:
+                        margin = float(os.environ.get("MMML_ML_DIMER_ACTIVE_MARGIN") or 0.0)
+                else:
+                    margin = float(os.environ.get("MMML_ML_DIMER_ACTIVE_MARGIN") or 0.0)
+                _active_radius = sparse_dimer_active_radius(
+                    float(cutoff_params.mm_switch_on),
+                    float(cutoff_params.ml_switch_width),
+                    margin=margin,
                 )
         except (TypeError, ValueError):
             pass
@@ -1476,6 +1967,16 @@ def _build_jax_decomposed_mlpot_model(
             )
 
             deploy_scaled_lj_into_charmm(periodic_external_scales, verbose=verbose)
+            from mmml.models.mm_lj_scales import load_md_charge_scale
+
+            if load_md_charge_scale(periodic_external_scales) != 1.0:
+                print(
+                    f"mmml WARNING: {periodic_external_scales} sets mm_charge_scale, but "
+                    "periodic_external takes ELEC from CHARMM with PSF charges -- the "
+                    "charge scale is NOT applied (use mm_nonbond_mode=jax_mic).",
+                    file=sys.stderr,
+                    flush=True,
+                )
     do_ml_dimer = True if args is None else bool(getattr(args, "do_ml_dimer", True))
     if args is not None and bool(getattr(args, "skip_ml_dimers", False)):
         do_ml_dimer = False
@@ -1586,26 +2087,12 @@ def _build_jax_decomposed_mlpot_model(
     _cpu_load = defer_jax_until_after_sd or mlpot_jax_device_name() == "cpu"
     ep_scale = None
     sig_scale = None
+    mm_charge_scale = 1.0
     scales_file = getattr(args, "mm_lj_scales_file", None) if args is not None else None
     if args is not None and do_mm:
-        from mmml.models.mm_lj_scales import resolve_md_lj_scales
-
-        try:
-            ep_scale, sig_scale = resolve_md_lj_scales(
-                scales_file=scales_file,
-                checkpoint=None if _spoof else ckpt,
-            )
-        except Exception as exc:
-            if scales_file is not None:
-                raise
-            if verbose:
-                print(f"WARNING: could not load MM LJ scales: {exc}", flush=True)
-        if verbose and ep_scale is not None:
-            print(
-                f"Loaded MM LJ scales ({len(ep_scale)} ATC types) "
-                f"from hybrid_mm.json / --mm-lj-scales-file",
-                flush=True,
-            )
+        ep_scale, sig_scale, mm_charge_scale = _load_hybrid_mm_scales(
+            scales_file, None if _spoof else ckpt, verbose
+        )
     elif args is not None and periodic_external_scales is None:
         # doMM off without a successful CHARMM deployment: ep_scale/sig_scale
         # feed the JAX switched-MM pair loop only. Applying nothing while the
@@ -1672,12 +2159,14 @@ def _build_jax_decomposed_mlpot_model(
         verbose=verbose,
         ep_scale=ep_scale,
         sig_scale=sig_scale,
+        mm_charge_scale=mm_charge_scale,
         MAX_ATOMS_PER_SYSTEM=max_atoms,
         ml_batch_size=batch_size,
         ml_gpu_count=gpu_count,
         ml_max_active_dimers=ml_max_active_dimers,
         cell=cell,
         max_pairs=max_pairs,
+        jax_md_skin_distance=resolve_mlpot_mm_skin_A(args),
         ml_compute_dtype=ml_compute_dtype,
         defer_xla_gpu_warmup=_cpu_load and defer_jax_until_mlpot_registered,
         ml_switch_width=cutoff_params.ml_switch_width,
@@ -1903,6 +2392,10 @@ def _warmup_mlpot_callback_forward(
             box_jax=box,
         )
 
+        # Same candidate-list kwarg as calculate_charmm, so warmup compiles the
+        # graph the callback will run (also seeds the list capacity).
+        fwd_kwargs = calc._resolve_ml_dimer_candidates(pos, box)
+
         def _run_forward():
             return forward_fn(
                 positions_jax,
@@ -1912,6 +2405,7 @@ def _warmup_mlpot_callback_forward(
                 jnp.zeros((0,), dtype=jnp.int32),
                 jnp.zeros((0,), dtype=jnp.int32),
                 False,
+                **fwd_kwargs,
             )
 
         run_jax_warmup_passes(

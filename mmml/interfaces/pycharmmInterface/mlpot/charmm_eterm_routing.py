@@ -1,4 +1,15 @@
-"""Route MLpot MM nonbond components into CHARMM VDW/ELEC/IMNB/IMEL eterm slots."""
+"""Route MLpot MM nonbond components into CHARMM VDW/ELEC/IMNB/IMEL eterm slots.
+
+``MMML_MLPOT_ETERM_SPLIT_SOURCE`` selects the split (reporting only; forces and the
+total energy are unaffected):
+
+* ``charmm`` (default): CHARMM's live q/ε with the CHARMM LJ form. In all-ML runs
+  those are zeroed, so the pair pass is skipped (#226) and VDW/ELEC report 0 with
+  all MM energy in USER. Costs nothing per step there.
+* ``hybrid`` (opt-in): the hybrid JAX MM's own split (``update_mm_pairs.mm_eterm_split``),
+  so VDW/ELEC/IMNB/IMEL show the true MM contribution, at the cost of one extra
+  MM forward (no grad) per force call.
+"""
 
 from __future__ import annotations
 
@@ -40,13 +51,44 @@ def push_mlpot_nb_components_to_charmm(
     )
 
 
+#: MM bucket -> CHARMM energy term it is routed into (``mlpot_call`` in api_func.F90).
+_NB_BUCKET_TERMS: dict[str, str] = {
+    "vdw_primary": "VDW",
+    "vdw_image": "IMNB",
+    "elec_primary": "ELEC",
+    "elec_image": "IMEL",
+}
+
+
+def _skipped_nb_buckets() -> list[str]:
+    from mmml.interfaces.pycharmmInterface.mlpot.charmm_energy_policy import (
+        charmm_skipped_terms,
+    )
+
+    skipped = charmm_skipped_terms()
+    return [k for k, term in _NB_BUCKET_TERMS.items() if term in skipped]
+
+
 def route_mlpot_callback_energy_kcalmol(
     energy_kcal: float,
     components: dict[str, float],
     *,
     route: bool = True,
 ) -> float:
-    """Push MM buckets to CHARMM eterm slots; return USER energy (ML + LR not routed)."""
+    """Push MM buckets to CHARMM eterm slots; return USER energy (ML + LR not routed).
+
+    Buckets whose CHARMM term was removed with ``SKIPE`` stay in USER: CHARMM
+    adds a routed bucket only when its term is active, so routing it would drop
+    that energy from ENER.
+    """
+    skipped = _skipped_nb_buckets()
+    if skipped:
+        components = dict(components)
+        for key in skipped:
+            components[key] = 0.0
+        components["mm_total"] = float(
+            sum(float(components.get(k, 0.0)) for k in _NB_BUCKET_TERMS)
+        )
     mm_total = float(components.get("mm_total", 0.0))
     energy_kcal = float(energy_kcal)
     do_route = bool(route and mlpot_route_mm_to_charmm_eterms_enabled())
@@ -70,6 +112,63 @@ def route_mlpot_callback_energy_kcalmol(
             route=True,
         )
     return float(user_kcal)
+
+
+def _zero_nb_components() -> dict[str, float]:
+    return {
+        "vdw_primary": 0.0,
+        "vdw_image": 0.0,
+        "elec_primary": 0.0,
+        "elec_image": 0.0,
+        "mm_total": 0.0,
+    }
+
+
+def _label_split(components: dict, *, source: str, charmm_suppressed: bool) -> dict:
+    """Tag a split with where it came from, so zeros are not misread as "no MM".
+
+    ``charmm_vdw_elec_suppressed`` is True only when the split was taken from CHARMM's
+    live parameters and those are zeroed (all-ML policy): the CHARMM VDW/ELEC slots
+    are then 0 while the JAX MM energy stays in USER. The opt-in ``hybrid`` split
+    reports the JAX MM terms themselves and is never labelled suppressed.
+    """
+    components["split_source"] = source
+    components["charmm_vdw_elec_suppressed"] = bool(charmm_suppressed)
+    return components
+
+
+def _hybrid_mm_eterm_split(
+    calculator: Any, positions_A: Any, mm_pair_idx: Any, mm_pair_mask: Any, box: Any | None
+) -> dict[str, float] | None:
+    """Split from the hybrid's own JAX MM (its q/ε/Rmin, λ, COM switch), or None.
+
+    CHARMM's live charges/ε are zeroed for ML atoms in all-ML runs, so a split
+    built from them always reports VDW = ELEC = 0 and leaves the MM in USER.
+    Opt-in (``MMML_MLPOT_ETERM_SPLIT_SOURCE=hybrid``): one MM forward per callback.
+    """
+    if (os.environ.get("MMML_MLPOT_ETERM_SPLIT_SOURCE") or "charmm").strip().lower() != "hybrid":
+        return None
+    update_fn = getattr(calculator, "_cached_update_fn", None)
+    get_update_fn = getattr(calculator, "_get_update_fn", None)
+    if update_fn is None and get_update_fn is not None:
+        update_fn = get_update_fn(positions_A, calculator.cutoff_params, box=box)
+        calculator._cached_update_fn = update_fn
+    split_fn = getattr(update_fn, "mm_eterm_split", None)
+    if split_fn is None:
+        return None
+    import jax
+    import jax.numpy as jnp
+    import numpy as np
+
+    v = np.asarray(
+        jax.device_get(split_fn(jnp.asarray(positions_A), mm_pair_idx, mm_pair_mask, box)),
+        dtype=np.float64,
+    )
+    v = np.where(np.isfinite(v), v, 0.0)
+    keys = ("vdw_primary", "vdw_image", "elec_primary", "elec_image")
+    out = {k: float(x) for k, x in zip(keys, v)}
+    out["mm_total"] = float(v.sum())
+    return out
 
 
 def decompose_and_route_mlpot_mm_from_callback(
@@ -96,13 +195,24 @@ def decompose_and_route_mlpot_mm_from_callback(
     except ImportError:
         return float(energy_kcal)
 
-    pos = np.asarray(positions_A, dtype=np.float64)
-    n = int(pos.shape[0])
-    pair_idx = np.asarray(mm_pair_idx, dtype=np.int32)
-    pair_mask = np.asarray(mm_pair_mask, dtype=bool)
+    n = int(np.shape(positions_A)[0])
     cp = getattr(calculator, "cutoff_params", None)
     if cp is None:
         return float(energy_kcal)
+
+    try:
+        split = _hybrid_mm_eterm_split(calculator, positions_A, mm_pair_idx, mm_pair_mask, box)
+    except Exception as exc:
+        # Non-fatal by design: the split only labels how the hybrid energy is
+        # reported (USER vs VDW/ELEC); the total and the forces are unchanged.
+        import sys
+
+        print(f"WARN: hybrid MM eterm split failed ({exc}); using CHARMM params", file=sys.stderr)
+        split = None
+    if split is not None:
+        split = _label_split(split, source="hybrid", charmm_suppressed=False)
+        calculator._last_mm_nb_components_kcalmol = split
+        return route_mlpot_callback_energy_kcalmol(float(energy_kcal), split)
 
     from mmml.interfaces.pycharmmInterface.mm_system_energy import (
         _live_charmm_nonbonded_arrays,
@@ -140,6 +250,20 @@ def decompose_and_route_mlpot_mm_from_callback(
         )
         charges = np.asarray(_get_actual_psf_charges(n), dtype=np.float64)[:n]
 
+    if not (np.any(charges) or np.any(eps)):
+        # Every per-pair term carries q_i*q_j or sqrt(eps_i*eps_j), so the split is
+        # exactly zero. This is the all-ML case: the energy policy zeroes CHARMM's
+        # live charges/eps (the JAX MM term keeps its own copy), and the full pair
+        # pass (~6.6e5 pairs, ETOH:181) plus the device->host pair-list copy cost
+        # ~1/3 of every MD step for nothing.
+        components = _label_split(_zero_nb_components(), source="charmm", charmm_suppressed=True)
+        calculator._last_mm_nb_components_kcalmol = components
+        return route_mlpot_callback_energy_kcalmol(float(energy_kcal), components)
+
+    pos = np.asarray(positions_A, dtype=np.float64)
+    pair_idx = np.asarray(mm_pair_idx, dtype=np.int32)
+    pair_mask = np.asarray(mm_pair_mask, dtype=bool)
+
     offsets = np.zeros(len(calculator._atoms_per_monomer) + 1, dtype=np.int32)
     offsets[1:] = np.cumsum(np.asarray(calculator._atoms_per_monomer, dtype=np.int32))
     monomer_id = np.zeros(n, dtype=np.int32)
@@ -166,6 +290,8 @@ def decompose_and_route_mlpot_mm_from_callback(
             complementary_handoff=bool(cp.complementary_handoff),
         )
     except Exception as exc:
+        # Non-fatal by design: returning the full hybrid energy as USER keeps
+        # the total and the forces; only the VDW/ELEC reporting split is lost.
         import sys
 
         print(
@@ -175,5 +301,6 @@ def decompose_and_route_mlpot_mm_from_callback(
             flush=True,
         )
         return float(energy_kcal)
+    components = _label_split(components, source="charmm", charmm_suppressed=False)
     calculator._last_mm_nb_components_kcalmol = components
     return route_mlpot_callback_energy_kcalmol(float(energy_kcal), components)

@@ -185,3 +185,22 @@ def test_apply_npt_cpt_kwargs_with_tensor():
     )
     assert kw["cpt"] is True
     assert kw["PRXX"] == 1.5
+
+
+def test_pbc_ensemble_nvt_pins_zero_piston_mass():
+    from mmml.interfaces.pycharmmInterface.mlpot.pressure_tensor import (
+        npt_cpt_builder_options,
+    )
+
+    base = dict(npt_thermostat="hoover", npt_pressure=1.0, npt_pgamma=5.0)
+    assert "pmass" not in npt_cpt_builder_options(argparse.Namespace(**base))
+    nvt = npt_cpt_builder_options(argparse.Namespace(pbc_ensemble="nvt", **base))
+    assert nvt["pmass"] == 0
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.compute_cpt_piston_masses",
+        return_value=(500, 5000),
+    ):
+        kw = build_cpt_equilibration_dynamics(**nvt)
+    assert kw["pmass"] == 0
+    assert kw["tmass"] == 5000
+    assert kw["hoover reft"] == pytest.approx(300.0)

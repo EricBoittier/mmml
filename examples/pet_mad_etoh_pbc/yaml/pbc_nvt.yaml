@@ -38,7 +38,7 @@ defaults:
   mlpot_pbc: true
   temperature: 300.0
   dt_fs: 0.5
-  density_prep_mode: off
+  density_prep_mode: "off"
   mc_density_equalize: false
 
 campaign_output: scratch/pet_mad_etoh_pbc

@@ -3,10 +3,14 @@
 from __future__ import annotations
 
 import numpy as np
+import pytest
 
 from mmml.interfaces.pycharmmInterface.mlpot.mlpot_sparse_dimer_policy import (
+    SparseDimerCapOverflow,
     max_dimer_pairs,
+    raise_if_sparse_cap_saturated,
     resolve_max_active_dimers,
+    sparse_dimer_active_radius,
     validate_sparse_dimer_cap,
 )
 
@@ -42,15 +46,21 @@ def test_resolve_max_active_dimers_small_cluster():
     assert resolve_max_active_dimers(5, 10) == 10
 
 
-def test_validate_sparse_dimer_cap_random_sparse():
-    rng = np.random.default_rng(0)
-    n = 20
-    apm = 10
-    pos = rng.standard_normal((n * apm, 3)) * 5.0
-    stats = validate_sparse_dimer_cap(pos, n, apm, mm_switch_on=7.0, box_side_A=None)
-    assert stats["n_dimers_total"] == n * (n - 1) // 2
-    assert "verdict" in stats
-    assert isinstance(stats["ok"], bool)
+@pytest.mark.parametrize("box,near", [(None, 2), (10.0, 3)])
+@pytest.mark.parametrize("cap", [1, 2, 3])
+def test_validate_sparse_dimer_cap_counts_and_reports_overflow(box, near, cap):
+    # Distances: 1, 8.5, 7.5 in free space; 1, 1.5, 2.5 under MIC.
+    pos = np.array([[0., 0., 0.], [1., 0., 0.], [8.5, 0., 0.]])
+    stats = validate_sparse_dimer_cap(
+        pos, 3, 1, mm_switch_on=8.0, box_side_A=box, max_active_dimers=cap,
+    )
+    assert stats["n_dimers_total"] == 3
+    assert stats["n_near_mm_switch_on"] == near
+    assert stats["cap_margin"] == cap - near
+    assert stats["cap_saturated"] is (near > cap)
+    assert stats["ok"] is (near <= cap)
+    assert stats["physnet_systems_per_step"] == 3 + min(near, cap)
+    assert stats["verdict"].startswith("FAIL:" if near > cap else "WARN:")
 
 
 def test_count_near_dimer_pairs_free_space_cap_is_all_pairs():
@@ -137,9 +147,27 @@ def test_resolve_max_active_dimers_density_aware_never_below_flat_fallback():
     assert cap >= max(4005, 6 * n_monomers)
 
 
+def test_sparse_dimer_active_radius_is_mm_switch_on():
+    """Outer switch support ends at mm_switch_on; extra width is not extra radius."""
+    assert sparse_dimer_active_radius(6.0, 1.5) == 6.0
+    assert sparse_dimer_active_radius(8.0, 1.5) == 8.0
+    assert sparse_dimer_active_radius(6.0, 1.5, margin=1.5) == 7.5
+    with pytest.raises(ValueError, match="margin"):
+        sparse_dimer_active_radius(6.0, margin=-0.1)
+
+
+def test_raise_if_sparse_cap_saturated():
+    raise_if_sparse_cap_saturated(-1, 10)
+    raise_if_sparse_cap_saturated(10, 10)
+    with pytest.raises(SparseDimerCapOverflow) as exc:
+        raise_if_sparse_cap_saturated(11, 10)
+    assert "would be dropped" in str(exc.value)
+
+
 def test_resolve_max_active_dimers_without_density_info_unchanged():
     """Backward compatibility: omitting box_volume/active_radius must give
     the exact pre-fix result (existing callers that don't pass them yet)."""
     n_monomers = 903
     n_dimers_total = max_dimer_pairs(n_monomers)
     assert resolve_max_active_dimers(n_monomers, n_dimers_total) == 5418
+

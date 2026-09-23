@@ -352,6 +352,10 @@ class ModelOutput(NamedTuple):
     # Mode A = PSF CGenFF; q0/latent*/fixed_plus_latent = neutralized ML charges.
     # Zeros when MM Coulomb is inactive / unavailable.
     mm_charges: Array = 0.0
+    # Sparse-dimer path: dimers within the active radius this step (before the
+    # max_active_dimers cap); -1 when the ML batch is dense or spatial. The
+    # host checks it against the static chunk budget (mlpot.ml_chunk_budget).
+    ml_n_active_dimers: Array = -1
 
 
 FLAT_BOTTOM_MODES = ("system", "monomer")

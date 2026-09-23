@@ -35,3 +35,35 @@ def test_print_neighbor_list_summary_shows_sparse_dimer_fill_bar() -> None:
     assert "Sparse ML dimers" in text
     assert "11482" in text.replace(",", "")
     assert "149878" in text.replace(",", "")
+
+
+def test_print_neighbor_list_summary_shows_radius_arithmetic() -> None:
+    buf = StringIO()
+    console = Console(file=buf, force_terminal=True, width=100, color_system=None)
+    print_neighbor_list_summary(
+        n_atoms=900,
+        n_monomers=100,
+        cell_L_A=26.0,
+        mm_cutoff_A=7.5,
+        skin_distance_A=0.4,
+        extra={
+            "mm_radius_breakdown": {
+                "list_radius_A": 13.15,
+                "interaction_radius_A": 12.75,
+                "skin_A": 0.4,
+                "com_switch_end_A": 7.5,
+                "twice_assumed_extent_A": 5.25,
+                "box_half_min_A": 13.0,
+                "headroom_A": -0.15,
+                "max_legal_skin_A": 0.25,
+                "skin_legal": False,
+            }
+        },
+        console=console,
+    )
+    text = buf.getvalue()
+    assert "List radius" in text
+    assert "12.7500 + 0.4000" in text
+    assert "L/2" in text
+    assert "max legal skin" in text
+    assert "ILLEGAL" in text

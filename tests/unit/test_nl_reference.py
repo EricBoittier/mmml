@@ -169,3 +169,60 @@ def test_pbc_nbond_cutoffs_density_sized_tip3_90_box() -> None:
     assert cuts.ctonnb < cuts.ctofnb <= cuts.cutnb
     resolved = resolve_pbc_nbond_cutoffs(L)
     assert pbc_nbond_cutoffs_invariant_ok(resolved)
+
+
+def test_cell_matrix_3x3_normalizes_and_rejects_bad_shapes() -> None:
+    from mmml.interfaces.pycharmmInterface.nl_reference import cell_matrix_3x3
+
+    assert np.allclose(cell_matrix_3x3(12.0), np.eye(3) * 12.0)
+    assert np.allclose(cell_matrix_3x3(np.array([10.0, 11.0, 12.0])), np.diag([10.0, 11.0, 12.0]))
+    src = np.eye(3) * 8.0
+    got = cell_matrix_3x3(src)
+    assert np.allclose(got, src)
+    assert got is not src
+    with pytest.raises(ValueError, match="cell must be"):
+        cell_matrix_3x3(np.ones((2, 2)))
+
+
+def test_apply_mm_pair_filters_empty_and_compare_summary() -> None:
+    from mmml.interfaces.pycharmmInterface.nl_reference import (
+        apply_mm_pair_filters,
+        compare_pair_sets,
+    )
+
+    mid = np.array([0, 0, 1], dtype=np.int32)
+    pos = np.zeros((3, 3), dtype=np.float64)
+    assert apply_mm_pair_filters([], monomer_id=mid, positions=pos) == set()
+    cmp = compare_pair_sets({(0, 1)}, {(0, 2)})
+    text = cmp.summary(label_a="left", label_b="right")
+    assert "left: 1 pairs" in text
+    assert "only-left" in text
+    assert "only-right" in text
+
+
+def test_classify_inter_monomer_diff_tags_com_handoff() -> None:
+    from mmml.interfaces.pycharmmInterface.nl_reference import classify_inter_monomer_diff
+
+    pos = np.array(
+        [
+            [0.0, 0.0, 0.0],
+            [0.2, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [1.2, 0.0, 0.0],
+        ],
+        dtype=np.float64,
+    )
+    mid = np.array([0, 0, 1, 1], dtype=np.int32)
+    tags = classify_inter_monomer_diff(
+        only_left={(0, 2)},
+        only_right=set(),
+        positions=pos,
+        cell=30.0 * np.eye(3),
+        monomer_id=mid,
+        left_cutoff_A=12.0,
+        right_cutoff_A=12.0,
+        mm_r_min=5.0,
+        monomer_offsets=[0, 2, 4],
+    )
+    assert len(tags["handoff_only_left"]) == 1
+    assert tags["true_mismatch_left"] == []

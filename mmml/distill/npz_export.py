@@ -1,4 +1,16 @@
-"""Write PhysNet-train NPZ (eV / eV/Å) from labeled acetone geometries."""
+"""Write PhysNet-train NPZ (eV / eV/Å) from labeled acetone geometries.
+
+Provenance keys (``-1`` / ``""`` when unknown, e.g. the synthetic acetone
+pool or the ``pdb_eq`` reference): ``group_seed`` (trajectory seed),
+``group_file`` (input-file index), ``group_frame`` (frame index in the box
+pool), ``group_step`` (MD step), ``group_phase`` (``fire``/``md``).
+
+Splits: ``sample`` permutes individual samples (acetone pool default);
+``seed`` draws whole trajectories (by ``group_seed``, else ``group_file``)
+into valid, so every sample of a trajectory, including each dimer's AB/A/B
+fragments, lands on one side. Ungrouped samples (the reference monomer)
+stay in train.
+"""
 
 from __future__ import annotations
 
@@ -14,6 +26,10 @@ from mmml.distill.teacher_label import LabeledSample
 
 KIND_MONOMER = 0
 KIND_DIMER = 1
+
+SPLIT_SAMPLE = "sample"
+SPLIT_SEED = "seed"
+SPLIT_MODES = (SPLIT_SAMPLE, SPLIT_SEED)
 
 
 def pad_sample(
@@ -58,13 +74,50 @@ def split_train_valid(
     return is_train
 
 
+def split_group_key(geo) -> str | None:
+    """Split group of a geometry: ``seed:<k>``, else ``file:<k>``, else None."""
+    if getattr(geo, "group_seed", None) is not None:
+        return f"seed:{int(geo.group_seed)}"
+    if getattr(geo, "group_file", None) is not None:
+        return f"file:{int(geo.group_file)}"
+    return None
+
+
+def split_train_valid_grouped(
+    groups: list[str | None],
+    *,
+    valid_fraction: float,
+    seed: int,
+) -> tuple[np.ndarray, list[str]]:
+    """Train mask plus the sorted valid group keys; the fraction applies to groups.
+
+    Every sample of a group lands on the same side. ``None`` groups always
+    train. Needs at least two groups (one valid, one train).
+    """
+    uniq = sorted({g for g in groups if g is not None})
+    if len(uniq) < 2:
+        raise ValueError(
+            f"grouped split needs >= 2 trajectory groups, found {len(uniq)} ({uniq}); "
+            "use split='sample' or add trajectories"
+        )
+    rng = np.random.default_rng(int(seed))
+    order = rng.permutation(len(uniq))
+    n_valid = min(max(int(round(float(valid_fraction) * len(uniq))), 1), len(uniq) - 1)
+    valid = sorted(uniq[i] for i in order[:n_valid])
+    valid_set = set(valid)
+    is_train = np.array([g not in valid_set for g in groups], dtype=bool)
+    return is_train, valid
+
+
 def samples_to_arrays(
     samples: list[LabeledSample],
     *,
     pad_atoms: int = DIMER_ATOMS,
     valid_fraction: float = 0.15,
     seed: int = 0,
+    split: str = SPLIT_SAMPLE,
 ) -> dict[str, Any]:
+    """Padded arrays + ``is_train``. ``_valid_groups`` lists valid groups (seed split)."""
     n = len(samples)
     if n == 0:
         raise ValueError("no labeled samples")
@@ -79,7 +132,25 @@ def samples_to_arrays(
     r_com = np.full((n,), np.nan, dtype=np.float64)
     kind = np.zeros((n,), dtype=np.int32)
     source = np.empty((n,), dtype=object)
-    is_train = split_train_valid(n, valid_fraction=valid_fraction, seed=seed)
+    g_seed = np.full((n,), -1, dtype=np.int64)
+    g_file = np.full((n,), -1, dtype=np.int64)
+    g_frame = np.full((n,), -1, dtype=np.int64)
+    g_step = np.full((n,), -1, dtype=np.int64)
+    g_phase = np.array(
+        [str(getattr(s.geometry, "group_phase", None) or "") for s in samples], dtype=str
+    )
+    mode = str(split).strip().lower()
+    valid_groups: list[str] | None = None
+    if mode == SPLIT_SAMPLE:
+        is_train = split_train_valid(n, valid_fraction=valid_fraction, seed=seed)
+    elif mode == SPLIT_SEED:
+        is_train, valid_groups = split_train_valid_grouped(
+            [split_group_key(s.geometry) for s in samples],
+            valid_fraction=valid_fraction,
+            seed=seed,
+        )
+    else:
+        raise ValueError(f"split must be one of {SPLIT_MODES}, got {split!r}")
     for i, sample in enumerate(samples):
         geo = sample.geometry
         z, r, f, n_real = pad_sample(
@@ -94,6 +165,15 @@ def samples_to_arrays(
             r_com[i] = float(geo.r_com_A)
         kind[i] = KIND_DIMER if geo.kind == "dimer" else KIND_MONOMER
         source[i] = str(geo.source)
+        for arr, attr in (
+            (g_seed, "group_seed"),
+            (g_file, "group_file"),
+            (g_frame, "group_frame"),
+            (g_step, "group_step"),
+        ):
+            value = getattr(geo, attr, None)
+            if value is not None:
+                arr[i] = int(value)
     units = {
         "R": "angstrom",
         "E": "ev",
@@ -114,8 +194,15 @@ def samples_to_arrays(
         "r_com": r_com,
         "kind": kind,
         "source": source,
+        "group_seed": g_seed,
+        "group_file": g_file,
+        "group_frame": g_frame,
+        "group_step": g_step,
+        "group_phase": g_phase,
         "is_train": is_train.astype(np.int8),
         "_mmml_units": np.array(json.dumps(units)),
+        "_split": mode,
+        "_valid_groups": valid_groups,
     }
 
 
@@ -126,14 +213,22 @@ def write_distill_npz(
     pad_atoms: int = DIMER_ATOMS,
     valid_fraction: float = 0.15,
     seed: int = 0,
+    split: str = SPLIT_SAMPLE,
     metadata: dict[str, Any] | None = None,
 ) -> dict[str, Path]:
-    """Write train/valid NPZ plus a JSON report. Returns output paths."""
+    """Write train/valid NPZ plus a JSON report. Returns output paths.
+
+    ``split``: ``sample`` (per-sample permutation) or ``seed`` (whole
+    trajectories; ``valid_fraction`` applies to trajectories). ``report.json``
+    records ``split``, ``valid_groups`` and ``valid_seeds``.
+    """
     dest = Path(out_dir)
     dest.mkdir(parents=True, exist_ok=True)
     payload = samples_to_arrays(
-        samples, pad_atoms=pad_atoms, valid_fraction=valid_fraction, seed=seed
+        samples, pad_atoms=pad_atoms, valid_fraction=valid_fraction, seed=seed, split=split
     )
+    split_mode = payload.pop("_split")
+    valid_groups = payload.pop("_valid_groups")
     is_train = payload["is_train"].astype(bool)
     train_path = dest / "train.npz"
     valid_path = dest / "valid.npz"
@@ -163,7 +258,18 @@ def write_distill_npz(
         "force_max_abs_eV_A": float(np.max(np.abs(payload["F"]))),
         "train_npz": str(train_path.resolve()),
         "valid_npz": str(valid_path.resolve()),
+        "split": split_mode,
+        "split_seed": int(seed),
+        "valid_fraction": float(valid_fraction),
     }
+    if valid_groups is not None:
+        report["valid_groups"] = valid_groups
+        report["valid_seeds"] = [
+            int(g.split(":", 1)[1]) for g in valid_groups if g.startswith("seed:")
+        ]
+        all_groups = {split_group_key(s.geometry) for s in samples} - {None}
+        report["n_groups"] = len(all_groups)
+        report["n_valid_groups"] = len(valid_groups)
     if metadata:
         report["metadata"] = metadata
     report_path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n")

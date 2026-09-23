@@ -34,9 +34,12 @@ NUM_ITERATIONS="${NUM_ITERATIONS:-2}"
 NUM_BASIS_FUNCTIONS="${NUM_BASIS_FUNCTIONS:-10}"
 CUTOFF="${CUTOFF:-10.0}"
 ENERGY_WEIGHT="${ENERGY_WEIGHT:-1.0}"
+<<<<<<< HEAD
 FORCES_WEIGHT="${FORCES_WEIGHT:-100.0}"
 DIPOLE_WEIGHT="${DIPOLE_WEIGHT:-0.1}"
 CHARGE_WEIGHT="${CHARGE_WEIGHT:-1000.0}"
+=======
+>>>>>>> b1d23f655134539f528f5f8257bb30adca59eef9
 POLAR_WEIGHT="${POLAR_WEIGHT:-1.0}"
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -65,9 +68,14 @@ mmml efield-train \
   --valid-npz "$SPLITS/energies_forces_dipoles_valid.npz" \
   --output-dir "$CKPT" \
   --energy_weight "$ENERGY_WEIGHT" \
+<<<<<<< HEAD
   --forces_weight "$FORCES_WEIGHT" \
   --dipole_weight "$DIPOLE_WEIGHT" \
   --charge_weight "$CHARGE_WEIGHT" \
+=======
+  --forces_weight 100.0 \
+  --dipole_weight 0.1 \
+>>>>>>> b1d23f655134539f528f5f8257bb30adca59eef9
   --polar_weight "$POLAR_WEIGHT" \
   --polar-at-zero-field \
   --field_scale 0.001 \

@@ -69,12 +69,19 @@ module api_func
   double precision, save :: mlpot_e_imvdw = 0.d0
   double precision, save :: mlpot_e_imel = 0.d0
   logical, save :: mlpot_route_nb_eterms = .false.
+  ! Virial correction for the MLpot USER term (kcal/mol, VIRAL order xx,xy,..,zz).
+  ! VIRAL sums x*F over the callback's central-atom forces, which were computed
+  ! with minimum-image distances; that is not -dE/d(strain) for pairs across the
+  ! cell boundary. The callback stages W_strain - sum(x*F) here and ENERGY adds it
+  ! after VIRAL (mlpot_take_virial). Cleared at every mlpot_call.
+  double precision, save :: mlpot_virial(9) = 0.d0
+  logical, save :: mlpot_virial_pending = .false.
 
   public :: func_set, func_call, func_is_set, func_unset,       &
             mlpot_set_func, mlpot_set_properties,               &
             mlpot_update, mlpot_call, mlpot_is_set, mlpot_unset, &
             mlpot_get_pair_counts, mlpot_export_mlmm_pairs, mlpot_export_mlml_pairs, &
-            mlpot_set_nb_components
+            mlpot_set_nb_components, mlpot_set_virial, mlpot_take_virial
 
 contains
 
@@ -396,6 +403,9 @@ contains
          dx, dy, dz
     integer(c_int), dimension(*) :: jnb, inblo, imattr, imjnb, imblo
 
+    ! A virial staged by the previous callback must not leak into this step.
+    mlpot_virial_pending = .false.
+
     ! Update ML-ML and MM-MM atom pair lists
     if(.not. mlpot_is_init) then
         call mlpot_update(                  &
@@ -436,6 +446,25 @@ contains
     mlpot_is_set = associated(user_mlpot)
   end function mlpot_is_set
 
+
+  subroutine mlpot_set_virial(vir) bind(c)
+    ! Stage the MLpot virial correction (kcal/mol, 9 components in VIRAL order).
+    use, intrinsic :: iso_c_binding, only: c_double
+    implicit none
+    real(c_double), dimension(9), intent(in) :: vir
+    mlpot_virial(1:9) = dble(vir(1:9))
+    mlpot_virial_pending = .true.
+  end subroutine mlpot_set_virial
+
+  subroutine mlpot_take_virial(vpress, vprop)
+    ! Add the staged correction to EPRESS(VIXX:VIZZ) / EPROP(VIRI) and clear it.
+    implicit none
+    double precision, intent(inout) :: vpress(9), vprop
+    if (.not. mlpot_virial_pending) return
+    vpress(1:9) = vpress(1:9) + mlpot_virial(1:9)
+    vprop = vprop + (mlpot_virial(1) + mlpot_virial(5) + mlpot_virial(9)) / 3.d0
+    mlpot_virial_pending = .false.
+  end subroutine mlpot_take_virial
 
   subroutine mlpot_set_nb_components(e_vdw, e_elec, e_imvdw, e_imel, route_eterms) bind(c)
     use, intrinsic :: iso_c_binding, only: c_double, c_int

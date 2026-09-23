@@ -40,17 +40,74 @@ class MlpotProfileStats:
     last_chunk_size: int = 0
     last_effective_batch_size: int = 0
     max_n_gpus: int = 0
+    mm_pair_calls: int = 0
+    mm_pair_rebuilds: int = 0
+    mm_pair_gpu_rebuilds: int = 0
+    last_rebuild_backend: Optional[str] = None
+    last_callback_stages_ms: dict[str, float] = field(default_factory=dict)
+    dimer_nl_calls: int = 0
+    dimer_nl_builds: int = 0
+    dimer_nl_capacity: int = 0
+    dimer_nl_candidates: int = 0
     _last_callback_end: Optional[float] = field(default=None, repr=False)
+    # Per-call samples for steady-state statistics (first ``warmup_calls`` skipped).
+    warmup_calls: int = 100
+    ml_ms_samples: list = field(default_factory=list, repr=False)
+    gap_ms_samples: list = field(default_factory=list, repr=False)
+    n_active_samples: list = field(default_factory=list, repr=False)
+    chunk_budget_samples: list = field(default_factory=list, repr=False)
+    max_active_dimers: int = 0
+    chunk_size: int = 0
 
     def record_ml(self, elapsed_s: float) -> None:
         self.ml_calls += 1
         self.ml_seconds += elapsed_s
+        self.ml_ms_samples.append(1000.0 * float(elapsed_s))
+        if _SUMMARY_DIR is not None and self.ml_calls % 500 == 0:
+            # CHARMM can end the process without running atexit hooks.
+            write_mlpot_profile_summary(_SUMMARY_DIR)
         self._last_callback_end = time.perf_counter()
 
     def record_charmm_gap(self) -> None:
         if self._last_callback_end is None:
             return
-        self.charmm_gap_seconds += time.perf_counter() - self._last_callback_end
+        gap = time.perf_counter() - self._last_callback_end
+        self.charmm_gap_seconds += gap
+        self.gap_ms_samples.append(1000.0 * gap)
+
+    def record_active_dimers(
+        self, n_active: int, *, chunk_budget: int, chunk_size: int, max_active_dimers: int
+    ) -> None:
+        """Sparse ML dimers in range this step and the PhysNet chunks the step ran."""
+        self.n_active_samples.append(int(n_active))
+        self.chunk_budget_samples.append(int(chunk_budget))
+        self.chunk_size = int(chunk_size)
+        self.max_active_dimers = int(max_active_dimers)
+
+    def steady_state(self) -> dict[str, Any]:
+        """Median / mean / p90 per call after the first ``warmup_calls`` (JIT, budget settling)."""
+        import numpy as np
+
+        def _stats(xs: list) -> Optional[dict[str, float]]:
+            a = np.asarray(xs[self.warmup_calls :], dtype=float)
+            if a.size == 0:
+                return None
+            return {"n": int(a.size), "median": float(np.median(a)), "mean": float(a.mean()),
+                    "p90": float(np.percentile(a, 90)), "min": float(a.min()), "max": float(a.max())}
+
+        ml, gap = _stats(self.ml_ms_samples), _stats(self.gap_ms_samples)
+        n = min(len(self.ml_ms_samples), len(self.gap_ms_samples) + 1)
+        step = _stats([m + g for m, g in zip(self.ml_ms_samples[1:n], self.gap_ms_samples[: n - 1])])
+        return {
+            "warmup_calls": self.warmup_calls,
+            "ml_callback_ms": ml,
+            "charmm_gap_ms": gap,
+            "step_ms": step,
+            "n_active_dimers": _stats(self.n_active_samples),
+            "chunk_budget": _stats(self.chunk_budget_samples),
+            "chunk_size": self.chunk_size,
+            "max_active_dimers": self.max_active_dimers,
+        }
 
     def record_calculate(self, elapsed_s: float) -> None:
         """Wall time for one ASE ``Calculator.calculate`` (includes GPU sync)."""
@@ -74,6 +131,30 @@ class MlpotProfileStats:
         self.last_chunk_size = int(chunk_size)
         self.last_effective_batch_size = int(effective_batch_size)
         self.max_n_gpus = max(self.max_n_gpus, int(n_gpus))
+
+    def record_mm_pair_stats(self, stats: dict[str, Any]) -> None:
+        """Latest cumulative MM pair-list counters (``update_mm_pairs.get_stats()``)."""
+        self.mm_pair_calls = int(stats.get("calls", 0))
+        self.mm_pair_rebuilds = int(stats.get("updates", 0))
+        self.mm_pair_gpu_rebuilds = int(stats.get("gpu_rebuilds", 0))
+        backend = stats.get("last_rebuild_backend")
+        self.last_rebuild_backend = str(backend) if backend else None
+
+    def record_callback_stages(self, stages_ms: dict[str, float]) -> None:
+        """Nested wall times of one live CHARMM callback, not independent benches.
+
+        Keys are stage names; values are milliseconds. These must not be
+        subtracted from each other (or from ``ml_seconds``) to invent a
+        leftover. Use a profiler dump for time inside the jitted forward.
+        """
+        self.last_callback_stages_ms = {str(k): float(v) for k, v in stages_ms.items()}
+
+    def record_dimer_centroid_nl(self, stats: dict[str, Any]) -> None:
+        """Latest cumulative centroid dimer-list counters (``CentroidDimerNeighborList.stats()``)."""
+        self.dimer_nl_calls = int(stats.get("calls", 0))
+        self.dimer_nl_builds = int(stats.get("builds", 0))
+        self.dimer_nl_capacity = int(stats.get("capacity") or 0)
+        self.dimer_nl_candidates = int(stats.get("candidates", 0))
 
     def summary_line(self) -> str:
         parts: list[str] = []
@@ -100,6 +181,24 @@ class MlpotProfileStats:
                 f"(mean={mean_ms:.2f} ms, last n_gpus={self.last_n_gpus}, "
                 f"n_chunks={self.last_n_chunks}, chunk={self.last_chunk_size}, "
                 f"batch={self.last_effective_batch_size})"
+            )
+        if self.mm_pair_calls > 0:
+            backend = self.last_rebuild_backend or "unrecorded"
+            parts.append(
+                f"MM pair list: {self.mm_pair_rebuilds} rebuilds "
+                f"({self.mm_pair_gpu_rebuilds} on GPU, last_backend={backend}) "
+                f"/ {self.mm_pair_calls} calls"
+            )
+        if self.last_callback_stages_ms:
+            stage_bits = ", ".join(
+                f"{k}={v:.2f}ms" for k, v in self.last_callback_stages_ms.items()
+            )
+            parts.append(f"callback stages (nested, not additive): {stage_bits}")
+        if self.dimer_nl_calls > 0:
+            parts.append(
+                f"ML dimer centroid list: {self.dimer_nl_builds} rebuilds / "
+                f"{self.dimer_nl_calls} calls, {self.dimer_nl_candidates} candidates "
+                f"(capacity {self.dimer_nl_capacity})"
             )
         if not parts:
             return "MLpot profile: no samples"
@@ -131,11 +230,28 @@ class MlpotProfileStats:
             "last_chunk_size": self.last_chunk_size,
             "last_effective_batch_size": self.last_effective_batch_size,
             "max_n_gpus": self.max_n_gpus,
+            "mm_pair_calls": self.mm_pair_calls,
+            "mm_pair_rebuilds": self.mm_pair_rebuilds,
+            "mm_pair_gpu_rebuilds": self.mm_pair_gpu_rebuilds,
+            "last_rebuild_backend": self.last_rebuild_backend,
+            "last_callback_stages_ms": dict(self.last_callback_stages_ms),
+            "dimer_nl_calls": self.dimer_nl_calls,
+            "dimer_nl_builds": self.dimer_nl_builds,
+            "dimer_nl_capacity": self.dimer_nl_capacity,
+            "dimer_nl_candidates": self.dimer_nl_candidates,
+            "steady_state": self.steady_state(),
             "summary": self.summary_line(),
         }
 
 
 _GLOBAL_STATS = MlpotProfileStats()
+_SUMMARY_DIR: Optional[str] = None
+
+
+def set_mlpot_profile_summary_dir(output_dir: str | os.PathLike[str] | None) -> None:
+    """Rewrite ``mlpot_profile.json`` in ``output_dir`` every 500 ML callbacks."""
+    global _SUMMARY_DIR
+    _SUMMARY_DIR = None if output_dir is None else str(output_dir)
 
 
 def get_mlpot_profile_stats() -> MlpotProfileStats:

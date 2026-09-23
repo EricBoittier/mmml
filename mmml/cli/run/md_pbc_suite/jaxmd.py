@@ -29,6 +29,7 @@ from mmml.interfaces.pycharmmInterface.cutoffs import (
 from mmml.interfaces.pycharmmInterface.mm_energy_forces import (
     DEFAULT_JAX_MD_SKIN_DISTANCE_A,
     format_mm_pair_update_stats_summary,
+    refresh_mm_pairs,
 )
 from mmml.interfaces.pycharmmInterface.mmml_calculator import CutoffParameters, setup_calculator
 from mmml.paths import default_meoh_template_pdb
@@ -735,11 +736,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument(
         "--mm-nl-device",
-        choices=["cpu", "gpu"],
+        choices=["auto", "cpu", "gpu"],
         default=None,
         help=(
-            "MM Vesin rebuild device (default: MMML_MM_NL_DEVICE or cpu). "
-            "gpu needs working CuPy JIT + vesin; falls back to cpu on failure."
+            "MM Vesin rebuild device (default: MMML_MM_NL_DEVICE or auto). "
+            "auto/gpu use CuPy + vesin>=0.6.1 when JAX runs on a GPU; else cpu."
         ),
     )
     p.add_argument(
@@ -949,7 +950,7 @@ def main(argv: list[str] | None = None) -> int:
         os.environ["MMML_MM_NL_BACKEND"] = str(args.mm_nl_backend)
     if getattr(args, "mm_nl_device", None):
         os.environ["MMML_MM_NL_DEVICE"] = str(args.mm_nl_device)
-    if (os.environ.get("MMML_MM_NL_DEVICE") or "").strip().lower() == "gpu":
+    if (os.environ.get("MMML_MM_NL_DEVICE") or "auto").strip().lower() in ("auto", "gpu"):
         # Repair stale /usr/local/cuda→cuda-9.0 before the first CuPy JIT.
         try:
             from mmml.interfaces.pycharmmInterface.nl_gpu import ensure_cupy_cuda_path
@@ -1276,6 +1277,7 @@ def main(argv: list[str] | None = None) -> int:
         model_restart_path=base_ckpt_dir,
         MAX_ATOMS_PER_SYSTEM=max(atoms_per_list) * 2,
         cell=False if free_space else float(L),
+        ensemble=getattr(args, "ensemble", "nve"),
         verbose=False,
         max_pairs=args.max_pairs,
         jax_md_capacity_multiplier=args.jax_md_capacity_multiplier,
@@ -1346,7 +1348,9 @@ def main(argv: list[str] | None = None) -> int:
             pos_np = np.asarray(atoms.get_positions(), dtype=np.float64)
             update_fn = get_update_fn(pos_np, cutoff, box=box_nl)
             if update_fn is not None:
-                mm_pair_idx, mm_pair_mask = update_fn(pos_np, box=box_nl)
+                mm_pair_idx, mm_pair_mask = refresh_mm_pairs(
+                    update_fn, pos_np, box_nl, positions_are_cartesian=True
+                )
         else:
             _ = float(atoms.get_potential_energy())
         box_warm = (

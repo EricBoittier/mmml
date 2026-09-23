@@ -7,6 +7,9 @@ from typing import Literal
 
 _CgenffPrmMode = Literal["full", "zeroed", "zeroed_bonded"]
 _active_mode: _CgenffPrmMode | None = None
+# Set when MLpot registration deleted dihedral/improper/CMAP terms on ML atoms
+# from the live PSF; a .prm re-read cannot bring those terms back.
+_ml_torsions_deleted: bool = False
 
 
 def _cgenff_data_dir() -> Path:
@@ -115,6 +118,15 @@ def apply_full_cgenff_params(*, verbose: bool = False, force: bool = False) -> N
     ``_finalize_pbc_mlpot_exclusions_after_param_read`` /
     :func:`~mmml.interfaces.pycharmmInterface.mlpot.topology_recovery.prepare_rescue_lists_safe`).
 
+    Hybrid registration's ML atom type copies
+    (:mod:`~mmml.interfaces.pycharmmInterface.mlpot.ml_type_copies`) are
+    undone first, so ML bonds and angles get their CGenFF parameters back.
+
+    Dihedral/improper/CMAP terms that MLpot registration deleted from the PSF
+    on ML atoms (:func:`~mmml.interfaces.pycharmmInterface.mlpot.block_terms.delete_ml_torsion_terms`)
+    are **not** restored: bonded-MM recovery then runs on ML atoms without
+    torsions (a one-time warning says so). Only a PSF reload restores them.
+
     When ``force=False`` (default) and bonded params were already restored
     (``active_cgenff_prm_mode() == "full"``), this is a no-op.  That avoids
     redundant ``READ PARAM APPEND`` on every ``setup_bonded_only_charmm`` call,
@@ -122,6 +134,14 @@ def apply_full_cgenff_params(*, verbose: bool = False, force: bool = False) -> N
     solvated boxes while CHARMM rebuilds parameter/NBOND state.
     """
     global _active_mode
+    _warn_if_ml_torsions_deleted()
+    from mmml.interfaces.pycharmmInterface.mlpot.ml_type_copies import (
+        restore_ml_atom_types,
+    )
+
+    # Hybrid registration moved ML atoms to zero-bonded type copies; move them
+    # back so their bonds/angles use the full parameters again.
+    restore_ml_atom_types()
     if not force and _active_mode == "full":
         if verbose:
             print("CGENFF params: bonded restore skipped (already full)", flush=True)
@@ -152,3 +172,33 @@ def mark_cgenff_params_full() -> None:
     """
     global _active_mode
     _active_mode = "full"
+
+
+def mark_ml_torsions_deleted() -> None:
+    """Record that ML dihedral/improper/CMAP terms were deleted from the live PSF."""
+    global _ml_torsions_deleted
+    _ml_torsions_deleted = True
+
+
+def clear_ml_torsions_deleted() -> None:
+    """Record that the PSF was reloaded (deleted ML torsion terms are back)."""
+    global _ml_torsions_deleted
+    _ml_torsions_deleted = False
+
+
+def ml_torsions_deleted() -> bool:
+    return _ml_torsions_deleted
+
+
+def _warn_if_ml_torsions_deleted() -> None:
+    if not _ml_torsions_deleted:
+        return
+    import warnings
+
+    warnings.warn(
+        "CGENFF bonded restore: MLpot registration deleted the dihedral/improper/"
+        "CMAP terms of ML atoms from the PSF; restoring force constants does not "
+        "bring them back, so CHARMM bonded-MM work runs without ML torsions "
+        "(reload the pre-MLpot PSF to restore them).",
+        stacklevel=3,
+    )

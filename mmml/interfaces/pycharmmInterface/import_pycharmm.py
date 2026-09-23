@@ -66,6 +66,10 @@ def _ensure_vendored_pycharmm_on_path() -> None:
 
 
 _ensure_vendored_pycharmm_on_path()
+
+# Import before any CHARMM output is silenced: the MLpot callback guard keeps
+# copies of the original stdout/stderr fds for its failure report.
+import mmml.interfaces.pycharmmInterface.mlpot.callback_failstop  # noqa: E402,F401
 if CHARMM_HOME:
     chmhp = Path(CHARMM_HOME) / "tool" / "pycharmm"
     if str(chmhp) not in sys.path:

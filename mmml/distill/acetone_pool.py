@@ -83,6 +83,16 @@ class Geometry:
     source: str
     r_com_A: float | None
     atoms_per_monomer: tuple[int, ...]
+    # Provenance for structures cut from MD (``box_cluster_pool``); None for
+    # the synthetic acetone pool. ``group_seed`` is the trajectory seed
+    # (independent trajectory), ``group_file`` the input-file index (fallback
+    # group when frames carry no seed), ``group_frame`` the frame index in
+    # the pool's frame list, ``group_step``/``group_phase`` from frame info.
+    group_seed: int | None = None
+    group_file: int | None = None
+    group_frame: int | None = None
+    group_step: int | None = None
+    group_phase: str | None = None
 
 
 def pool_config_for_preset(preset: str, *, seed: int = 0) -> AcetonePoolConfig:

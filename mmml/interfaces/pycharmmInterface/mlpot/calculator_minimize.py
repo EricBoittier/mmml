@@ -700,6 +700,36 @@ def _commit_hybrid_calculator_mini_result(
     return float(grms1)
 
 
+def calculator_mini_supported(mlpot_ctx: Any) -> bool:
+    """ASE calculator mini needs the JAX ``spherical_fn`` (not a torch metatomic USER)."""
+    from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import DecomposedMlpotModel
+
+    return isinstance(getattr(mlpot_ctx, "pyCModel", None), DecomposedMlpotModel)
+
+
+def _skip_unsupported_calculator_mini(
+    mlpot_ctx: Any,
+    *,
+    context_prefix: str,
+    verbose: bool,
+) -> HybridMinimizeResult | None:
+    """Skip result for models without ``spherical_fn``; CHARMM SD minimizes instead."""
+    if calculator_mini_supported(mlpot_ctx):
+        return None
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+        charmm_grms_after_ener_force,
+    )
+
+    kind = type(getattr(mlpot_ctx, "pyCModel", None)).__name__
+    if verbose:
+        print(
+            f"{context_prefix}: skip calculator mini ({kind} has no JAX "
+            "spherical_fn); CHARMM SD minimizes on USER forces",
+            flush=True,
+        )
+    return HybridMinimizeResult(grms=float(charmm_grms_after_ener_force()), ran=False)
+
+
 def _hybrid_mlpot_ase_calculator_class():
     import ase.calculators.calculator as ase_calc
 
@@ -1173,6 +1203,11 @@ def minimize_hybrid_calculator_before_sd(
     z = getattr(mlpot_ctx, "ml_Z", None)
     if z is None:
         raise RuntimeError("mlpot_ctx.ml_Z required for hybrid calculator minimize")
+    skipped = _skip_unsupported_calculator_mini(
+        mlpot_ctx, context_prefix=context_prefix, verbose=config.verbose
+    )
+    if skipped is not None:
+        return skipped
 
     _promote_mlpot_jax_for_calculator_mini(mlpot_ctx, verbose=config.verbose)
     pos0 = get_charmm_positions_array()
@@ -1301,6 +1336,11 @@ def minimize_hybrid_calculator_fire_before_sd(
     z = getattr(mlpot_ctx, "ml_Z", None)
     if z is None:
         raise RuntimeError("mlpot_ctx.ml_Z required for hybrid calculator FIRE")
+    skipped = _skip_unsupported_calculator_mini(
+        mlpot_ctx, context_prefix=context_prefix, verbose=config.verbose
+    )
+    if skipped is not None:
+        return skipped
 
     _promote_mlpot_jax_for_calculator_mini(mlpot_ctx, verbose=config.verbose)
     pos0 = get_charmm_positions_array()
@@ -1437,6 +1477,13 @@ def repair_stressed_monomers_with_calculator(
     z = getattr(mlpot_ctx, "ml_Z", None)
     if z is None:
         raise RuntimeError("mlpot_ctx.ml_Z required for per-monomer repair")
+    if not calculator_mini_supported(mlpot_ctx):
+        return MonomerRepairResult(
+            repaired_monomers=[],
+            fmax_before_ev_a=float("nan"),
+            fmax_after_ev_a=float("nan"),
+            ran=False,
+        )
 
     _promote_mlpot_jax_for_calculator_mini(mlpot_ctx, verbose=verbose)
     pos0 = get_charmm_positions_array()

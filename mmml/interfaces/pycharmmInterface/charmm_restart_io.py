@@ -94,7 +94,9 @@ def write_charmm_restart_from_memory(
             step = int(prior)
 
     lines: list[str] = [
-        f"REST{1:6d}{step:6d}      ",
+        # (A4,2I6): HDR, IVERS, LDYNA.  LDYNA=1 is leap-frog, not a step
+        # counter (a step here trips READYN's Verlet->leap-frog conversion, #219).
+        f"REST{1:6d}{1:6d}      ",
         " !NATOM,NPRIV,NSTEP,NSAVC,NSAVV,JHSTRT,NDEGF,SEED,NSAVL",
         _restart_natom_counter_line(
             natom=natom,

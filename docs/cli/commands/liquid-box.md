@@ -255,9 +255,10 @@ PBC box sizing:
                         overlap-min-distance). Structures must be ML-safe before
                         USER is enabled.
   --charmm-image-mlpot-min-distance ANG
-                        CHARMM <MKIMAT2> / MIC registration floor (Å) before
-                        MLpot USER (default: 1.0; atom-pair prep gates remain
-                        stricter).
+                        Floor (Å) on the CHARMM <MKIMAT2> Min-Distance column
+                        before MLpot USER (default: 0 = off). That column is a
+                        group bounding-box gap, not an atom distance; the MIC
+                        prep gate checks atom overlaps.
   --pre-mlpot-h-heavy-min-distance ANG
                         Pre-MLpot H–heavy element-pair MIC floor (Å); default
                         2.3.

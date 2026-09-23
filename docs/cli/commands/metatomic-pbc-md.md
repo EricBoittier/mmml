@@ -26,6 +26,7 @@ mmml metatomic-pbc-md --help
 ```text
 usage: mmml metatomic-pbc-md [-h] [--checkpoint CHECKPOINT] [--residue RESIDUE]
                              [--monomer-xyz MONOMER_XYZ] [--box-size BOX_SIZE]
+                             [--initial-structure INITIAL_STRUCTURE]
                              [--target-density-g-cm3 TARGET_DENSITY_G_CM3]
                              [--n-molecules N_MOLECULES]
                              [--temperature TEMPERATURE] [--dt-fs DT_FS]
@@ -33,8 +34,8 @@ usage: mmml metatomic-pbc-md [-h] [--checkpoint CHECKPOINT] [--residue RESIDUE]
                              [--ensemble {nve,nvt}] [--friction FRICTION]
                              [--minimize-steps MINIMIZE_STEPS]
                              [--minimize-fmax MINIMIZE_FMAX]
-                             [--log-every LOG_EVERY] [--output-dir OUTPUT_DIR]
-                             [--json-out JSON_OUT]
+                             [--log-every LOG_EVERY] [--traj-every TRAJ_EVERY]
+                             [--output-dir OUTPUT_DIR] [--json-out JSON_OUT]
 
 CHARMM-free metatomic ASE MD in a cubic liquid box. Default: 32 Å ethanol at
 experimental density, 300 K, 0.5 fs.
@@ -45,6 +46,10 @@ Input & configuration:
                         $PET_MAD_CKPT.
   --residue RESIDUE     CGenFF residue name for bulk-density count (default:
                         ETOH).
+  --initial-structure INITIAL_STRUCTURE
+                        Start from this structure (e.g. liquid-box model.pdb)
+                        instead of a tiled box; cubic --box-size cell, pbc on.
+                        Keeps the PSF atom order.
 
 Scientific model:
   --target-density-g-cm3 TARGET_DENSITY_G_CM3
@@ -64,6 +69,11 @@ Output & artifacts:
   --log-every LOG_EVERY
                         Record PE/KE/Etot every N MD steps (always includes step
                         0).
+  --traj-every TRAJ_EVERY
+                        Write a labelled periodic frame (E, F, cell) to <output-
+                        dir>/traj.extxyz every N MD steps (0 = off). Training
+                        data for metatrain / pet-physnet-distill --from-box-
+                        extxyz.
   --output-dir OUTPUT_DIR
                         Output directory (default:
                         scratch/pet_mad_etoh_pbc/ase_smoke).

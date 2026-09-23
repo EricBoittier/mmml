@@ -23,7 +23,7 @@ from mmml.interfaces.pycharmmInterface.nl_reference import (
     cell_matrix_3x3,
     have_vesin,
     monomer_id_from_offsets,
-    vesin_mic_pairs,
+    vesin_mic_pair_arrays,
 )
 
 MmNlBackendName = Literal["auto", "vesin", "cell_list", "jax_md"]
@@ -109,16 +109,26 @@ def _pad_pairs(
     *,
     max_pairs: int,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, int]:
-    n_valid = len(pair_set)
+    arr = np.asarray(sorted(pair_set), dtype=np.int64).reshape(-1, 2)
+    return _pad_pair_arrays(arr[:, 0], arr[:, 1], max_pairs=max_pairs)
+
+
+def _pad_pair_arrays(
+    pi: np.ndarray,
+    pj: np.ndarray,
+    *,
+    max_pairs: int,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, int]:
+    """Pad sorted ``(i, j)`` arrays to ``max_pairs`` with a validity mask."""
+    n_valid = int(len(pi))
     if n_valid > max_pairs:
         raise PairListTruncationError(n_valid, max_pairs)
     pair_i = np.zeros(max_pairs, dtype=np.int32)
     pair_j = np.zeros(max_pairs, dtype=np.int32)
     mask = np.zeros(max_pairs, dtype=bool)
-    for k, (ai, aj) in enumerate(sorted(pair_set)):
-        pair_i[k] = ai
-        pair_j[k] = aj
-        mask[k] = True
+    pair_i[:n_valid] = pi
+    pair_j[:n_valid] = pj
+    mask[:n_valid] = True
     return pair_i, pair_j, mask, n_valid
 
 
@@ -174,7 +184,7 @@ class VesinBackend:
         offsets = np.asarray(monomer_offsets, dtype=np.int32)
         monomer_id = monomer_id_from_offsets(offsets, n_atoms)
         cell_mat = cell_matrix_3x3(box)
-        pair_set = vesin_mic_pairs(
+        pi, pj = vesin_mic_pair_arrays(
             R,
             cell_mat,
             cutoff,
@@ -190,7 +200,7 @@ class VesinBackend:
             cell_list_safety_factor=cell_list_safety_factor,
             cell_list_density_estimate=cell_list_density_estimate,
         )
-        pair_i, pair_j, mask, n_valid = _pad_pairs(pair_set, max_pairs=capacity)
+        pair_i, pair_j, mask, n_valid = _pad_pair_arrays(pi, pj, max_pairs=capacity)
         if debug:
             print(f"[nl_backend:vesin] n_valid={n_valid} capacity={capacity}")
         return pair_i, pair_j, mask, n_valid, capacity

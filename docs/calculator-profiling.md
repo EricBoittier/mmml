@@ -239,6 +239,8 @@ On full `md-system` runs, logs time between MLpot Python callback entry and CHAR
 | `MMML_JAX_PME_INTRA_MODE` | `cross` (default) or `full_minus_intra` |
 | `MMML_JAX_PME_CROSS_KERNEL` | `auto`, `structure_factor`, `masked` |
 | `JAX_PLATFORMS=cpu` | CPU-only benchmarks (CI friendly) |
+| `MMML_MLPOT_ETERM_SPLIT_SOURCE` | Source of the MM split routed into CHARMM VDW/ELEC/IMNB/IMEL. `charmm` (default): CHARMM's live q/ε; free in all-ML runs (live params are zeroed, so VDW/ELEC report 0 and all MM stays in USER). `hybrid`: the hybrid JAX MM's own split, giving true VDW/ELEC/IMNB/IMEL at the cost of one extra MM forward (no grad) per force call |
+| `MMML_MLPOT_ROUTE_MM_ETERMS=0` | Disable the split entirely (all hybrid energy in USER) |
 
 `MMML_MLPOT_PROFILE=1` also enables JAX compile timers.
 

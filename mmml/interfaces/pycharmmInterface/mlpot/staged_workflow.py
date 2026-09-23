@@ -135,6 +135,7 @@ from mmml.interfaces.pycharmmInterface.mlpot.staged_restart_policy import (  # n
     _heat_in_place_restart,
     _heat_restart_path,
     _is_dynamics_stage_restart_path,
+    _is_geometry_baseline_snapshot,
     _prior_restart_for_stage,
     _restart_coord_read_candidates,
     _should_seed_heat_prior_restart,
@@ -1113,11 +1114,12 @@ def _configure_equi_dynamics_start(
     restart_path = Path(io.restart_read) if io.restart_read is not None else None
     if restart_path is not None and not coords_in_memory:
         from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
-            read_restart_coordinates,
+            read_restart_positions,
         )
         from mmml.interfaces.pycharmmInterface.mlpot.setup import sync_charmm_positions
 
-        pos = read_restart_coordinates(restart_path)
+        # positions, not the leap-frog step displacement (X, Y, Z) of an NVE restart
+        pos = read_restart_positions(restart_path)
         if pos is None:
             raise RuntimeError(
                 f"EQUI CPT start: no finite coordinates in restart {restart_path}"
@@ -2752,11 +2754,11 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                     else:
                         if (
                             seg_i == 0
-                            and _can_seed_stage_from_memory(
+                            and (_can_seed_stage_from_memory(
                                 Path(rread) if rread is not None else None,
                                 prev_restart=prev_restart,
                                 prev_restart_is_current_state=prev_restart_is_current_state,
-                            )
+                            ) or _is_geometry_baseline_snapshot(rread, paths))  # --from-crd snapshot, not READYN
                         ):
                             use_memory = True
                             restart = False
@@ -3434,7 +3436,7 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                     Path(rread) if rread is not None else None,
                     prev_restart=prev_restart,
                     prev_restart_is_current_state=prev_restart_is_current_state,
-                ):
+                ) or (stage == "heat" and _is_geometry_baseline_snapshot(rread, paths)):  # --from-crd snapshot
                     use_memory = True
                     restart = False
                     rread = None

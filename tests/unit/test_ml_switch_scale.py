@@ -62,11 +62,13 @@ def test_is_differentiable_and_vmappable():
     assert out.shape == (8,)
 
 
-def test_calculator_uses_the_shared_function():
-    """mmml_calculator must not re-implement the taper (single source of truth)."""
-    from pathlib import Path
+def test_switch_gradient_matches_finite_difference():
+    """The taper derivative contributes to forces in the handoff region."""
+    import jax
+    import jax.numpy as jnp
 
-    src = Path("mmml/interfaces/pycharmmInterface/mmml_calculator.py").read_text(encoding="utf-8")
-    assert "ml_switch_scale" in src
-    # no leftover inline '1.0 - _sharpstep(' ML tapers
-    assert "1.0 - _sharpstep(" not in src
+    f = lambda r: _fn()(r, mm_switch_on=ON, ml_switch_width=WIDTH)
+    for r in (6.7, 7.0, 7.25, 7.8):
+        h = 1e-3
+        numerical = (float(f(r + h)) - float(f(r - h))) / (2 * h)
+        assert float(jax.grad(f)(jnp.asarray(r))) == pytest.approx(numerical, rel=2e-3, abs=1e-4)

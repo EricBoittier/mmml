@@ -31,7 +31,7 @@ export MMML_CKPT="${MMML_CKPT:-${REPO_ROOT}/examples/ckpts_json/DESdimers_params
 
 ASV=(.venv/bin/asv)
 if [[ ! -x "${ASV[0]}" ]]; then
-  ASV=(uv run asv)
+  ASV=(uv run --extra dev asv)
 fi
 
 if [[ ! -f "$HOME/.asv-machine.json" ]]; then

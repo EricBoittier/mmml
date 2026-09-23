@@ -82,6 +82,15 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--box-size", type=float, default=DEFAULT_BOX_A)
     parser.add_argument(
+        "--initial-structure",
+        type=Path,
+        default=None,
+        help=(
+            "Start from this structure (e.g. liquid-box model.pdb) instead of a "
+            "tiled box; cubic --box-size cell, pbc on. Keeps the PSF atom order."
+        ),
+    )
+    parser.add_argument(
         "--target-density-g-cm3",
         type=float,
         default=None,
@@ -128,6 +137,16 @@ def build_parser() -> argparse.ArgumentParser:
         help="Record PE/KE/Etot every N MD steps (always includes step 0).",
     )
     parser.add_argument(
+        "--traj-every",
+        type=int,
+        default=0,
+        help=(
+            "Write a labelled periodic frame (E, F, cell) to <output-dir>/traj.extxyz "
+            "every N MD steps (0 = off). Training data for metatrain / "
+            "pet-physnet-distill --from-box-extxyz."
+        ),
+    )
+    parser.add_argument(
         "--output-dir",
         type=Path,
         default=DEFAULT_OUTPUT_DIR,
@@ -168,6 +187,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     from mmml.interfaces.pycharmmInterface.mlpot.box_sizing import SOLVENT_BULK_PROPS
     from mmml.md.metatomic_pbc import (
+        append_training_frame,
         build_tiled_cubic_liquid,
         default_etoh_monomer_xyz,
         energy_snapshot,
@@ -252,12 +272,27 @@ def main(argv: list[str] | None = None) -> int:
     report["checkpoint_sha256"] = _sha256(ckpt)
 
     t_pack = time.perf_counter()
-    atoms = build_tiled_cubic_liquid(
-        monomer_xyz=monomer_xyz,
-        box_side_A=float(args.box_size),
-        n_molecules=n_mol,
-        seed=int(args.seed),
-    )
+    if args.initial_structure is not None:
+        from ase.io import read as ase_read
+
+        atoms = ase_read(str(args.initial_structure))
+        atoms.set_cell([float(args.box_size)] * 3)
+        atoms.set_pbc(True)
+        atoms.wrap()
+        if len(atoms) % n_mol:
+            print(
+                f"FAIL: {len(atoms)} atoms is not a multiple of n_molecules={n_mol}",
+                file=sys.stderr,
+            )
+            _write()
+            return 2
+    else:
+        atoms = build_tiled_cubic_liquid(
+            monomer_xyz=monomer_xyz,
+            box_side_A=float(args.box_size),
+            n_molecules=n_mol,
+            seed=int(args.seed),
+        )
     atoms_per_monomer = int(len(atoms) // n_mol)
     report["pack_s"] = time.perf_counter() - t_pack
     report["n_atoms"] = int(len(atoms))
@@ -348,6 +383,24 @@ def main(argv: list[str] | None = None) -> int:
         f"MD start: Etot={rows[0]['Etot_eV']:.6f} eV  "
         f"T={rows[0]['T_K']:.1f} K  |F|_max={rows[0]['Fmax_eVA']:.4f} eV/Å"
     )
+
+    traj_every = max(int(args.traj_every), 0)
+    traj_path = out / "traj.extxyz"
+    if traj_every:
+        traj_path.unlink(missing_ok=True)
+        report["traj_extxyz"] = str(traj_path)
+        report["traj_every"] = traj_every
+
+    def _write_traj() -> None:
+        append_training_frame(
+            traj_path,
+            atoms,
+            step=int(dyn.get_number_of_steps()),
+            dt_fs=float(args.dt_fs),
+        )
+
+    if traj_every:
+        dyn.attach(_write_traj, interval=traj_every)
 
     def _log() -> None:
         step = int(dyn.get_number_of_steps())

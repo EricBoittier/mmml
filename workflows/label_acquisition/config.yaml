@@ -1,0 +1,108 @@
+# Production template — scientific settings are INTENTIONALLY UNRESOLVED.
+#
+# Do not launch costly QC or MD from this file.  Fill the UNRESOLVED fields
+# after choosing a reference backend, compute budget, candidate pool, student
+# and teacher checkpoints, and deployment MD conditions.
+#
+# Smoke (mock backend, synthetic pool):
+#   MMML_WORKFLOW_CONFIG=config.smoke.yaml bash scripts/snakemake_local.sh 2 -n
+
+tag: UNRESOLVED
+output_root: artifacts/label_acquisition/UNRESOLVED
+round: 0  # one-shot; increment and re-extract after fine-tuning for later rounds
+
+unresolved:
+  - Production reference backend (PySCF / ORCA / Molpro / …) is unset.
+  - Compute budget (QC walltime, GPU hours, unique-label cap) is unset.
+  - Deployment MD conditions (ensemble, box, thermostat, length) are unset.
+  - Student and teacher checkpoint paths are unset.
+  - Candidate pool source (trajectories, thermodynamic states) is unset.
+
+candidate:
+  source: UNRESOLVED   # npz | synthetic_smoke
+  # path: /path/to/unlabeled_pool.npz
+  # seed_groups: []   # default: existing student-training trajectories
+
+student:
+  kind: UNRESOLVED     # linear_smoke (tests) | physnet (requires checkpoint)
+  # checkpoint: /path/to/frozen_student.json
+  # readout_param_paths: []   # final energy-head leaves; record, do not guess silently
+
+teacher:
+  kind: UNRESOLVED     # linear_smoke | metatomic | physnet
+  # checkpoint: /path/to/foundation.pt
+  # role: cheap surrogate, not ground truth
+
+reference:
+  backend: UNRESOLVED  # pyscf | orca | molpro | xtb | mock_morse (tests only)
+  # method settings (basis, functional, charge, multiplicity) go here once chosen
+
+splits:
+  valid_fraction: 0.15
+  test_fraction: 0.15
+  seed: 0
+
+pca:
+  # Use exactly one of n_components or variance_threshold.
+  n_components: 16
+  # variance_threshold: 0.95
+  row_normalize: false
+  jacobian_components: 16
+
+loss:
+  energy_weight: 1.0
+  forces_weight: 52.91   # PhysNet-train default; D-optimal α_F / N matches this reduction
+
+selection:
+  methods:
+    - stratified_random
+    - activation_fps
+    - activation_largest_norm
+    - output_grad_fps
+    - output_grad_largest_norm
+    - force_doptimal
+    - loss_grad_fps
+    - loss_grad_largest_norm
+    - unmodified_student
+  budgets: [16, 32, 64]
+  seeds: [0, 1, 2]
+  doptimal_lambda: 1.0e-3
+
+training:
+  modes: [readout, full]
+  learning_rate: 0.001
+  n_steps: UNRESOLVED
+  batch_size: 32
+  seed: 0
+
+evaluation:
+  splits: [test]
+  max_structures: UNRESOLVED
+
+md:
+  # Matched initial conditions across methods.  Production MD is unresolved.
+  n_structures: UNRESOLVED
+  dt: UNRESOLVED
+  n_steps: UNRESOLVED
+  temperature: UNRESOLVED
+  seed: 0
+
+resources:
+  prepare_mem_mb: 4000
+  prepare_runtime_min: 30
+  extract_mem_mb: 32000
+  extract_runtime_min: 720
+  extract_gpu: 1
+  pca_mem_mb: 16000
+  pca_runtime_min: 120
+  select_mem_mb: 16000
+  select_runtime_min: 240
+  label_mem_mb: 8000
+  label_runtime_min: 1440
+  label_gpu: 0
+  train_mem_mb: 32000
+  train_runtime_min: 1440
+  train_gpu: 1
+
+slurm_partition: gpu
+slurm_max_concurrent: 8

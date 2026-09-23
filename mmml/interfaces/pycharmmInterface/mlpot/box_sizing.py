@@ -900,12 +900,13 @@ def add_box_sizing_args(parser: argparse.ArgumentParser) -> None:
     group.add_argument(
         "--charmm-image-mlpot-min-distance",
         type=float,
-        default=1.0,
+        default=0.0,
         dest="charmm_image_mlpot_min_distance",
         metavar="ANG",
         help=(
-            "CHARMM <MKIMAT2> / MIC registration floor (Å) before MLpot USER "
-            "(default: 1.0; atom-pair prep gates remain stricter)."
+            "Floor (Å) on the CHARMM <MKIMAT2> Min-Distance column before MLpot "
+            "USER (default: 0 = off). That column is a group bounding-box gap, "
+            "not an atom distance; the MIC prep gate checks atom overlaps."
         ),
     )
     group.add_argument(

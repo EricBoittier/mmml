@@ -192,6 +192,7 @@ def test_decompose_and_route_uses_per_atom_nb_arrays_not_type_table(monkeypatch)
     pos = np.zeros((n, 3), dtype=np.float64)
     calc = MagicMock()
     calc._do_mm = True
+    calc._cached_update_fn = calc._get_update_fn = None  # CHARMM-param fallback path
     calc._atoms_per_monomer = [13] * 20
     calc.cutoff_params = MagicMock(
         mm_switch_on=9.0,

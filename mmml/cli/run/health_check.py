@@ -409,6 +409,11 @@ def check_live_mlpot(*, checkpoint: Path | None, residue: str, n_molecules: int)
             ml_charge=0,
             ml_fq=True,
         )
+        from mmml.interfaces.pycharmmInterface.mlpot.callback_failstop import (
+            install_fail_closed_energy_func,
+        )
+
+        install_fail_closed_energy_func(mlpot)
         if not mlpot.is_set:
             check.ok = False
             check.errors.append("MLpot.is_set is False after registration")

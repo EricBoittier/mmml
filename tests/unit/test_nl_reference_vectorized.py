@@ -45,13 +45,14 @@ def test_vectorized_vesin_filter_matches_oracle_with_mm_r_min() -> None:
     cutoff = 6.0
     mm_r_min = 2.0
 
-    ref = vesin_mic_pairs(
+    ref, _ = reference_mic_pairs(
         positions,
         cell,
         cutoff,
         monomer_id,
         mm_r_min=mm_r_min,
         monomer_offsets=offsets,
+        prefer_vesin=False,
     )
     i_raw, j_raw, dist_raw = vesin_raw_half_list(positions, cell, cutoff)
     i_vec, j_vec = filter_vesin_half_list_vectorized(
@@ -68,6 +69,10 @@ def test_vectorized_vesin_filter_matches_oracle_with_mm_r_min() -> None:
 
     got = {(int(i), int(j)) for i, j in zip(i_vec, j_vec, strict=False)}
     assert compare_pair_sets(ref, got).match
+    # The public set wrapper must also agree with the independent oracle.
+    assert vesin_mic_pairs(
+        positions, cell, cutoff, monomer_id, mm_r_min=mm_r_min, monomer_offsets=offsets
+    ) == ref
 
 
 @pytest.mark.unit
@@ -131,6 +136,8 @@ def test_dense_liquid_vectorized_filter_matches_oracle() -> None:
         monomer_offsets=offsets,
     )
     got = {(int(i), int(j)) for i, j in zip(i_vec, j_vec, strict=False)}
-    ref = vesin_mic_pairs(positions, cell, cutoff, monomer_id, monomer_offsets=offsets)
+    ref, _ = reference_mic_pairs(
+        positions, cell, cutoff, monomer_id, monomer_offsets=offsets, prefer_vesin=False
+    )
 
     assert compare_pair_sets(ref, got).match

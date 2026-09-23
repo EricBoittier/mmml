@@ -1,0 +1,202 @@
+# Structure-selection acquisition for expensive reference labels (Snakemake)
+#
+# Teacher / foundation potentials are cheap surrogates, not ground truth.
+# Expensive E/F stay hidden from acquisition until selection manifests exist.
+#
+# Launch:
+#   MMML_WORKFLOW_CONFIG=config.smoke.yaml bash scripts/snakemake_local.sh 2 -n
+#   MMML_WORKFLOW_CONFIG=config.smoke.yaml bash scripts/snakemake_local.sh 2
+
+configfile: "config.yaml"
+
+import os
+import sys
+from pathlib import Path
+
+_SCRIPTS = Path(workflow.basedir) / "scripts"
+if str(_SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(_SCRIPTS))
+
+from campaign_lib import (  # noqa: E402
+    budgets,
+    load_config,
+    methods,
+    output_root,
+    seeds,
+)
+
+_CFG_PATH = os.environ.get("MMML_WORKFLOW_CONFIG") or str(Path(workflow.basedir) / "config.yaml")
+CFG = load_config(_CFG_PATH)
+_OUT = output_root(CFG, workflow.basedir)
+_METHODS = methods(CFG)
+_BUDGETS = budgets(CFG)
+_SEEDS = seeds(CFG)
+
+
+rule all:
+    input:
+        f"{_OUT}/report/report.md",
+        f"{_OUT}/report/summary.json",
+
+
+rule prepare_pool:
+    output:
+        manifest=f"{_OUT}/pool/manifest.json",
+        structures=f"{_OUT}/pool/structures.npz",
+    params:
+        cfg=_CFG_PATH,
+        out=_OUT,
+    resources:
+        mem_mb=int(CFG.get("resources", {}).get("prepare_mem_mb", 4000)),
+        runtime=int(CFG.get("resources", {}).get("prepare_runtime_min", 30)),
+    shell:
+        """
+        mmml label-acquire --config {params.cfg} --output {params.out} prepare-pool
+        test -s {output.manifest}
+        """
+
+
+rule fingerprint_models:
+    input:
+        manifest=f"{_OUT}/pool/manifest.json",
+    output:
+        student=f"{_OUT}/models/student.json",
+        teacher=f"{_OUT}/models/teacher.json",
+    params:
+        cfg=_CFG_PATH,
+        out=_OUT,
+    resources:
+        mem_mb=int(CFG.get("resources", {}).get("extract_mem_mb", 8000)),
+        runtime=int(CFG.get("resources", {}).get("extract_runtime_min", 60)),
+    shell:
+        """
+        mmml label-acquire --config {params.cfg} --output {params.out} fingerprint-models
+        test -s {output.student}
+        """
+
+
+rule extract:
+    input:
+        student=f"{_OUT}/models/student.json",
+        manifest=f"{_OUT}/pool/manifest.json",
+    output:
+        stats=f"{_OUT}/representations/stats.json",
+        activations=f"{_OUT}/representations/activations.npz",
+        energy_jac=f"{_OUT}/representations/energy_jacobian.npz",
+        loss_grad=f"{_OUT}/representations/loss_gradient.npz",
+        force_blocks=f"{_OUT}/representations/force_blocks.npz",
+    params:
+        cfg=_CFG_PATH,
+        out=_OUT,
+    resources:
+        mem_mb=int(CFG.get("resources", {}).get("extract_mem_mb", 16000)),
+        runtime=int(CFG.get("resources", {}).get("extract_runtime_min", 240)),
+        gpu=int(CFG.get("resources", {}).get("extract_gpu", 0)),
+    shell:
+        """
+        mmml label-acquire --config {params.cfg} --output {params.out} extract
+        test -s {output.stats}
+        """
+
+
+rule fit_pca:
+    input:
+        stats=f"{_OUT}/representations/stats.json",
+    output:
+        summary=f"{_OUT}/pca/summary.json",
+    params:
+        cfg=_CFG_PATH,
+        out=_OUT,
+    resources:
+        mem_mb=int(CFG.get("resources", {}).get("pca_mem_mb", 8000)),
+        runtime=int(CFG.get("resources", {}).get("pca_runtime_min", 60)),
+    shell:
+        """
+        mmml label-acquire --config {params.cfg} --output {params.out} fit-pca
+        test -s {output.summary}
+        """
+
+
+rule select:
+    input:
+        pca=f"{_OUT}/pca/summary.json",
+    output:
+        finalized=f"{_OUT}/selections_finalized.json",
+        manifests=expand(
+            f"{_OUT}/selections/{{method}}/budget{{budget}}/seed{{seed}}/manifest.json",
+            method=_METHODS,
+            budget=_BUDGETS,
+            seed=_SEEDS,
+        ),
+    params:
+        cfg=_CFG_PATH,
+        out=_OUT,
+    resources:
+        mem_mb=int(CFG.get("resources", {}).get("select_mem_mb", 8000)),
+        runtime=int(CFG.get("resources", {}).get("select_runtime_min", 120)),
+    shell:
+        """
+        mmml label-acquire --config {params.cfg} --output {params.out} select
+        test -s {output.finalized}
+        """
+
+
+rule label:
+    input:
+        finalized=f"{_OUT}/selections_finalized.json",
+    output:
+        cache=f"{_OUT}/labels/cache_summary.json",
+        eval_labels=f"{_OUT}/labels/eval/labeled.npz",
+    params:
+        cfg=_CFG_PATH,
+        out=_OUT,
+    resources:
+        mem_mb=int(CFG.get("resources", {}).get("label_mem_mb", 8000)),
+        runtime=int(CFG.get("resources", {}).get("label_runtime_min", 720)),
+        gpu=int(CFG.get("resources", {}).get("label_gpu", 0)),
+    shell:
+        """
+        mmml label-acquire --config {params.cfg} --output {params.out} label
+        test -s {output.cache}
+        """
+
+
+rule train_eval:
+    input:
+        cache=f"{_OUT}/labels/cache_summary.json",
+        eval_labels=f"{_OUT}/labels/eval/labeled.npz",
+    output:
+        rows=f"{_OUT}/eval/rows.json",
+    params:
+        cfg=_CFG_PATH,
+        out=_OUT,
+    resources:
+        mem_mb=int(CFG.get("resources", {}).get("train_mem_mb", 16000)),
+        runtime=int(CFG.get("resources", {}).get("train_runtime_min", 720)),
+        gpu=int(CFG.get("resources", {}).get("train_gpu", 0)),
+    shell:
+        """
+        mmml label-acquire --config {params.cfg} --output {params.out} train-eval
+        test -s {output.rows}
+        """
+
+
+rule report:
+    input:
+        rows=f"{_OUT}/eval/rows.json",
+        cache=f"{_OUT}/labels/cache_summary.json",
+        pca=f"{_OUT}/pca/summary.json",
+    output:
+        md=f"{_OUT}/report/report.md",
+        json=f"{_OUT}/report/summary.json",
+    params:
+        cfg=_CFG_PATH,
+        out=_OUT,
+    resources:
+        mem_mb=4000,
+        runtime=30,
+    shell:
+        """
+        mmml label-acquire --config {params.cfg} --output {params.out} report
+        test -s {output.md}
+        """

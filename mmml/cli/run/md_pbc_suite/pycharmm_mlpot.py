@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from pathlib import Path
 
@@ -320,6 +321,10 @@ def main(argv: list[str] | None = None) -> int:
         )
     except (ValueError, FileNotFoundError, RuntimeError) as exc:
         print(f"pycharmm_mlpot: error: {exc}", file=sys.stderr)
+        if (os.environ.get("MMML_TRACEBACK") or "").strip().lower() in ("1", "true", "yes", "on"):
+            import traceback
+
+            traceback.print_exc(file=sys.stderr)
         return 2
     except Exception as exc:
         # Surface unexpected failures (e.g. import / CHARMM abort wrappers) with

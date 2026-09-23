@@ -301,6 +301,141 @@ def evaluate_fragment_hybrid(
     )
 
 
+BatchEvaluator = Callable[
+    [Sequence[tuple[np.ndarray, np.ndarray]]], Sequence[tuple[float, np.ndarray]]
+]
+
+
+@dataclass(frozen=True)
+class DimerPairs:
+    """Monomer pairs inside the ML handoff, with the MIC shift applied to B."""
+
+    i: np.ndarray
+    j: np.ndarray
+    shift_j: np.ndarray  # (n_pairs, 3) lattice shift added to monomer j
+    delta: np.ndarray  # (n_pairs, 3) COM_j (shifted) - COM_i
+    r_com: np.ndarray
+
+
+def select_dimer_pairs(
+    positions: np.ndarray,
+    offsets: np.ndarray,
+    *,
+    cell: np.ndarray | float | None,
+    mm_switch_on: float,
+) -> DimerPairs:
+    """All pairs with MIC COM distance below ``mm_switch_on`` (vectorised).
+
+    Same COM wrap as :func:`wrap_dimer_monomer_b_numpy`; the switch is zero at
+    and beyond ``mm_switch_on``, so farther pairs contribute nothing.
+    """
+    pos = np.asarray(positions, dtype=np.float64)
+    counts = np.diff(offsets).astype(np.float64)
+    coms = np.add.reduceat(pos, offsets[:-1], axis=0) / counts[:, None]
+    i, j = np.triu_indices(len(counts), k=1)
+    raw = coms[j] - coms[i]
+    cell_m = _cell_as_matrix(cell)
+    if cell_m is None:
+        delta = raw
+    else:
+        frac = np.linalg.solve(cell_m.T, raw.T).T
+        delta = (frac - np.round(frac)) @ cell_m
+    r_com = np.linalg.norm(delta, axis=1)
+    keep = r_com < float(mm_switch_on)
+    return DimerPairs(
+        i=i[keep],
+        j=j[keep],
+        shift_j=(delta - raw)[keep],
+        delta=delta[keep],
+        r_com=r_com[keep],
+    )
+
+
+def evaluate_fragment_hybrid_batched(
+    batch_eval: BatchEvaluator,
+    atomic_numbers: np.ndarray,
+    positions: np.ndarray,
+    atoms_per_monomer: Sequence[int],
+    *,
+    do_ml: bool = True,
+    do_ml_dimer: bool = True,
+    cell: np.ndarray | float | None = None,
+    mm_switch_on: float = DEFAULT_MM_SWITCH_ON,
+    ml_switch_width: float = DEFAULT_ML_SWITCH_WIDTH,
+) -> FragmentHybridResult:
+    """:func:`evaluate_fragment_hybrid` with every monomer and dimer in one request.
+
+    ``batch_eval`` takes ``[(numbers, positions), ...]`` (gas phase) and returns
+    ``[(E eV, F eV/Å), ...]`` in order, e.g. ``BatchedMetatomicTeacher.evaluate``.
+    Monomer energies are translation invariant, so the MIC-shifted E(B) reuses
+    the isolated monomer result.
+    """
+    numbers = np.asarray(atomic_numbers, dtype=int)
+    pos = np.asarray(positions, dtype=np.float64)
+    per = [int(n) for n in atoms_per_monomer]
+    offsets = monomer_offsets_from_counts(per)
+    n_atoms = int(offsets[-1])
+    if numbers.shape[0] != n_atoms or pos.shape[0] != n_atoms:
+        raise ValueError(
+            f"atom count {pos.shape[0]} != sum(atoms_per_monomer)={n_atoms}"
+        )
+    n_mon = len(per)
+    pairs = (
+        select_dimer_pairs(pos, offsets, cell=cell, mm_switch_on=mm_switch_on)
+        if do_ml_dimer and n_mon > 1
+        else None
+    )
+    n_pairs = 0 if pairs is None else int(pairs.i.shape[0])
+    need_monomers = do_ml or n_pairs > 0
+    sl = [slice(int(offsets[k]), int(offsets[k + 1])) for k in range(n_mon)]
+
+    structures: list[tuple[np.ndarray, np.ndarray]] = []
+    if need_monomers:
+        structures.extend((numbers[s], pos[s]) for s in sl)
+    for k in range(n_pairs):
+        a, b = sl[int(pairs.i[k])], sl[int(pairs.j[k])]
+        structures.append(
+            (
+                np.concatenate([numbers[a], numbers[b]]),
+                np.concatenate([pos[a], pos[b] + pairs.shift_j[k]], axis=0),
+            )
+        )
+    results = list(batch_eval(structures)) if structures else []
+
+    forces = np.zeros((n_atoms, 3), dtype=np.float64)
+    energy = 0.0
+    mon = results[:n_mon] if need_monomers else []
+    if do_ml:
+        for k, (e_k, f_k) in enumerate(mon):
+            energy += float(e_k)
+            forces[sl[k]] += f_k
+    for k in range(n_pairs):
+        a, b = int(pairs.i[k]), int(pairs.j[k])
+        e_ab, f_ab = results[n_mon + k]
+        e_int = float(e_ab) - float(mon[a][0]) - float(mon[b][0])
+        r_com = float(pairs.r_com[k])
+        scale, dscale_dr = numpy_ml_switch_scale_and_deriv(
+            r_com, mm_switch_on=mm_switch_on, ml_switch_width=ml_switch_width
+        )
+        n_a = per[a]
+        energy += scale * e_int
+        forces[sl[a]] += scale * (f_ab[:n_a] - mon[a][1])
+        forces[sl[b]] += scale * (f_ab[n_a:] - mon[b][1])
+        if dscale_dr != 0.0 and r_com > _SWITCH_DEN_FLOOR:
+            rhat = pairs.delta[k] / r_com
+            coeff = -e_int * dscale_dr
+            forces[sl[a]] += coeff * (-rhat) / float(n_a)
+            forces[sl[b]] += coeff * rhat / float(per[b])
+
+    return FragmentHybridResult(
+        energy_ev=float(energy),
+        forces_ev_per_angstrom=forces,
+        n_monomers_evaluated=n_mon if need_monomers else 0,
+        n_dimers_evaluated=n_pairs,
+        eval_mode="fragments",
+    )
+
+
 class AseFragmentHybridCalculator(Calculator):
     """ASE calculator: fragment ML hybrid, optional intermolecular MM calculator."""
 
