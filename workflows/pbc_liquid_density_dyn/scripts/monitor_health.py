@@ -605,8 +605,6 @@ def run_monitor(*, react: bool, dry_run: bool) -> dict[str, Any]:
         for cell in iter_matrix_cells(cfg):
             health = _inspect_cell(cfg, cell, campaign=str(spec["name"]))
             all_cells.append(health)
-            if health.status != "done":
-                incomplete += 1
             if react:
                 health.actions = _mediate_cell(
                     health,
@@ -616,6 +614,12 @@ def run_monitor(*, react: bool, dry_run: bool) -> dict[str, Any]:
                     driver_running=driver_running,
                     dry_run=dry_run,
                 )
+            # Cells whose retry budget is exhausted need a human, not another driver launch.
+            exhausted = health.status == "failed" and any(
+                "retry budget exhausted" in a for a in health.actions
+            )
+            if health.status != "done" and not exhausted:
+                incomplete += 1
             camp_report["cells"].append(asdict(health))
         camp_report["driver_running"] = driver_running
         if react:
