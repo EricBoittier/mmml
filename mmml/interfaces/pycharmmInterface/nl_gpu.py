@@ -485,6 +485,10 @@ def vesin_mic_pair_keys_cupy(
     keep = (dist < cutoff) & (lo != hi) & (mid[lo] != mid[hi])
     if mm_r_min is not None and n_mono > 1:
         R = pos_cp[: int(offsets[-1])]
+        # Whole molecules before centroids (see nl_reference.mm_pair_filter_mask).
+        anchor = cp.asarray(np.repeat(np.asarray(offsets[:-1], dtype=np.int64), np.asarray(counts, dtype=np.int64)))
+        frac_a = (R - R[anchor]) @ cp.asarray(np.linalg.inv(cell_mat).T)
+        R = R[anchor] + (frac_a - cp.round(frac_a)) @ cp.asarray(cell_mat)
         if int(counts.min()) == int(counts.max()):
             coms = R.reshape(n_mono, int(counts[0]), 3).sum(axis=1) / float(counts[0])
         else:

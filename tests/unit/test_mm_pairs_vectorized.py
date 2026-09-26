@@ -35,7 +35,10 @@ def _charmm_lj(r, rmin, eps):
 
 def test_filter_mask_matches_bruteforce():
     _, R, mid, offs, i, j = _system()
-    com = R.reshape(-1, APM, 3).mean(1)
+    # Centroids of whole molecules (each atom at its minimum image from the molecule's first
+    # atom), the same r the MM switch uses; a raw centroid of a split molecule is not.
+    m = R.reshape(-1, APM, 3)
+    com = (m[:, :1] + _mic(m - m[:, :1])).mean(1)
     ref = [(a, b) for a, b in zip(i, j) if mid[a] != mid[b] and np.linalg.norm(_mic(com[mid[b]] - com[mid[a]])) >= 4.0]
     mask = mm_pair_filter_mask(i, j, monomer_id=mid, positions=R, cell=np.eye(3) * L, mm_r_min=4.0, monomer_offsets=offs)
     assert set(zip(i[mask].tolist(), j[mask].tolist())) == set(ref)

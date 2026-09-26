@@ -340,14 +340,7 @@ def _filter_pairs_by_com_min(
     R = np.asarray(positions, dtype=np.float64)
     n_monomers = len(monomer_offsets) - 1
     
-    # Vectorized COM calculation
     monomer_ids = monomer_id.astype(np.int64)
-    counts = np.bincount(monomer_ids, minlength=n_monomers)
-    counts = np.where(counts > 0, counts, 1.0)
-    coms = np.zeros((n_monomers, 3), dtype=np.float64)
-    for d in range(3):
-        coms[:, d] = np.bincount(monomer_ids, weights=R[:, d], minlength=n_monomers) / counts
-
     if pbc_cell is not None:
         cell = np.asarray(pbc_cell, dtype=np.float64)
         if cell.ndim == 0:
@@ -355,8 +348,22 @@ def _filter_pairs_by_com_min(
         elif cell.ndim == 1 and cell.shape[0] == 3:
             cell = np.diag(cell)
         inv_cell = np.linalg.inv(cell)
+        # Centroids of whole molecules: an engine that wraps atoms one at a time (jax-md, ASE wrap())
+        # hands over molecules split across a face, whose raw centroid is off by a fraction of L and
+        # could drop a switched-on dimer from the list.
+        anchor = np.asarray(monomer_offsets, dtype=np.int64)[monomer_ids]
+        d_anchor = R - R[anchor]
+        frac = d_anchor @ inv_cell.T
+        R = R[anchor] + (frac - np.round(frac)) @ cell
     else:
         cell = inv_cell = None
+
+    # Vectorized COM calculation
+    counts = np.bincount(monomer_ids, minlength=n_monomers)
+    counts = np.where(counts > 0, counts, 1.0)
+    coms = np.zeros((n_monomers, 3), dtype=np.float64)
+    for d in range(3):
+        coms[:, d] = np.bincount(monomer_ids, weights=R[:, d], minlength=n_monomers) / counts
 
     # pair_i/pair_j are atom indices (NL contract); index COMs by monomer id.
     ai = np.asarray(pair_i, dtype=np.int64)
@@ -397,17 +404,25 @@ def _filter_pairs_by_com_min_jax(
     ``n_monomers`` is a static JIT arg (``monomer_coms_segment`` needs a
     concrete ``num_segments``).
     """
-    coms = monomer_coms_segment(positions, monomer_id_jnp, n_monomers)
-    mi = monomer_id_jnp[pair_i]
-    mj = monomer_id_jnp[pair_j]
-    dr = coms[mj] - coms[mi]
-
     if pbc_cell is not None:
         if pbc_cell.ndim == 1:
             cell_3x3 = jnp.diag(pbc_cell)
         else:
             cell_3x3 = pbc_cell
         inv_cell = cell_inverse(cell_3x3)
+        # Whole molecules first (see _filter_pairs_by_com_min): first atom of each monomer as anchor.
+        atom_idx = jnp.arange(positions.shape[0])
+        first = jax.ops.segment_min(atom_idx, monomer_id_jnp, num_segments=n_monomers)
+        anchor = first[monomer_id_jnp]
+        d_anchor = positions - positions[anchor]
+        frac_a = d_anchor @ inv_cell.T
+        positions = positions[anchor] + (frac_a - jnp.round(frac_a)) @ cell_3x3
+    coms = monomer_coms_segment(positions, monomer_id_jnp, n_monomers)
+    mi = monomer_id_jnp[pair_i]
+    mj = monomer_id_jnp[pair_j]
+    dr = coms[mj] - coms[mi]
+
+    if pbc_cell is not None:
         frac_dr = dr @ inv_cell.T
         frac_dr = frac_dr - jnp.round(frac_dr)
         dr = frac_dr @ cell_3x3

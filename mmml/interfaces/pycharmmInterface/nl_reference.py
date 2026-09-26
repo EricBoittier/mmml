@@ -151,11 +151,18 @@ def mm_pair_filter_mask(
     R = np.asarray(positions, dtype=np.float64)
     offsets = np.asarray(monomer_offsets, dtype=np.int64)
     counts = np.diff(offsets)
-    coms = np.add.reduceat(R[: offsets[-1]], offsets[:-1], axis=0) / counts[:, None]
+    cell_mat = cell_matrix_3x3(cell) if cell is not None else None
+    R = R[: offsets[-1]]
+    if cell_mat is not None:
+        # Centroids of whole molecules: engines that wrap atoms one at a time (jax-md, ASE wrap())
+        # pass molecules split across a face, whose raw centroid would drop switched-on dimers.
+        anchor = np.repeat(offsets[:-1], counts)
+        frac_a = (R - R[anchor]) @ np.linalg.inv(cell_mat).T
+        R = R[anchor] + (frac_a - np.round(frac_a)) @ cell_mat
+    coms = np.add.reduceat(R, offsets[:-1], axis=0) / counts[:, None]
     # One COM–COM table (n_mol²) then index by pair monomers — not a MIC
     # per atom pair (n_pairs). ETOH:181 is 181² vs ~6.6e5 pairs.
     dcom = coms[None, :, :] - coms[:, None, :]
-    cell_mat = cell_matrix_3x3(cell) if cell is not None else None
     if cell_mat is not None:
         frac = dcom @ np.linalg.inv(cell_mat).T
         dcom = (frac - np.round(frac)) @ cell_mat

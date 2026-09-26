@@ -115,3 +115,39 @@ def test_jax_filter_fractional_positions_need_cartesian_conversion():
         pbc_cell=jnp.asarray(box),
     )
     assert bool(np.asarray(naive)[0]) is False
+
+
+def test_filters_use_whole_molecule_centroids_for_split_molecules():
+    # Monomer 0 straddles the x face and was wrapped atom by atom (engines like jax-md or
+    # ASE wrap() do this): atoms at 9.6 and 10.4 -> 9.6 and -9.6, true centroid at the face
+    # (x = 10), raw centroid at x = 0. Monomer 1 sits at x = 0.6, 9.4 A from the true
+    # centroid, so a 4 A filter must keep the pair; the raw centroid would drop it.
+    box = np.diag([20.0, 20.0, 20.0])
+    r_split = np.array(
+        [
+            [9.6, 0.0, 0.0],
+            [-9.6, 0.0, 0.0],
+            [0.4, 0.0, 0.0],
+            [0.8, 0.0, 0.0],
+        ],
+        dtype=np.float64,
+    )
+    monomer_id = np.array([0, 0, 1, 1], dtype=np.int32)
+    offsets = np.array([0, 2, 4], dtype=np.int32)
+    pair_i = np.array([0, 1], dtype=np.int32)
+    pair_j = np.array([2, 3], dtype=np.int32)
+    mask = np.array([True, True])
+
+    keep = _filter_pairs_by_com_min(r_split, pair_i, pair_j, mask, offsets, monomer_id, 4.0, pbc_cell=box)
+    assert keep.tolist() == [True, True]
+    got = _filter_pairs_by_com_min_jax(
+        jnp.asarray(r_split),
+        jnp.asarray(pair_i),
+        jnp.asarray(pair_j),
+        jnp.asarray(mask),
+        jnp.asarray(monomer_id),
+        4.0,
+        2,
+        pbc_cell=jnp.asarray(box),
+    )
+    assert np.asarray(got).tolist() == [True, True]
