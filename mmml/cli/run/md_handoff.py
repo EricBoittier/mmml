@@ -1429,11 +1429,10 @@ def align_handoff_positions_for_charmm_pbc(
         np.asarray(monomer_offsets, dtype=int),
         cell,
     )
-    # Shift boundary-straddling monomers inward so no atom sits at the [0, L] face.
-    # COM-only wrapping leaves atoms that extend past the face (COM at z=0.1 Å, atom
-    # at z=-1.9 Å); the atom's JAX MIC image coincides with atoms at z≈L-1.9 on the
-    # opposite face, giving a spurious 0 Å contact that stalls MLpot SD at GRMS≈937.
-    pos = ensure_monomers_inside_cell(pos, np.asarray(monomer_offsets, dtype=int), cell)
+    # No inward nudge here: this aligns a dynamics hand-off, and shifting boundary-straddling monomers by a
+    # non-lattice vector would change the physical configuration (and its energy) that is being continued.
+    # The COM lattice wrap above is exact under PBC. Minimisers that need the nudge apply it themselves
+    # (rewrap_charmm_pbc_molecules with a margin, before SD).
     aligned = pos - 0.5 * L
     if not quiet:
         print(
@@ -1449,9 +1448,15 @@ def rewrap_charmm_pbc_molecules(
     atoms_per_monomer: list[int],
     box_side_A: float,
     *,
-    margin_A: float = 0.05,
+    margin_A: float | None = 0.05,
 ) -> np.ndarray:
     """Re-wrap CHARMM primary-cell coords after MLpot SD drift.
+
+    ``margin_A=None`` keeps only the COM lattice wrap (step 2), which moves each monomer by an integer
+    number of box lengths and therefore leaves every periodic distance, energy and force unchanged. Use it
+    for anything that feeds dynamics: step 3 translates boundary-straddling monomers by a NON-lattice
+    vector, which is a physical displacement (on a 308-molecule DCM liquid it moved 71 molecules by up to
+    1.44 A and raised the energy by 552 kcal/mol).  Step 3 is only acceptable before/within minimisation.
 
     During MLpot SD, monomers can drift so their atoms exceed ``|z| > L/2`` in
     CHARMM's ``[-L/2, L/2]`` frame.  JAX MIC: ``dr_mic = dr - L·round(dr/L)``
@@ -1474,7 +1479,8 @@ def rewrap_charmm_pbc_molecules(
     offsets = monomer_offsets_from_atoms_per(list(atoms_per_monomer))
     cell = _np.diag([L, L, L])
     pos_jax = wrap_monomers_primary_cell(pos_jax, offsets, cell)
-    pos_jax = ensure_monomers_inside_cell(pos_jax, offsets, cell, margin_A=margin_A)
+    if margin_A is not None:
+        pos_jax = ensure_monomers_inside_cell(pos_jax, offsets, cell, margin_A=margin_A)
     return pos_jax - 0.5 * L
 
 

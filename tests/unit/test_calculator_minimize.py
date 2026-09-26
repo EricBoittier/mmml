@@ -104,6 +104,33 @@ def test_hybrid_minimize_atoms_rewraps_charmm_pbc_molecules():
     np.testing.assert_allclose(wrapped[3] - wrapped[2], [0.5, 0.0, 0.0])
 
 
+def test_hybrid_minimize_atoms_moves_straddling_molecules_by_lattice_vectors_only():
+    # The repaired frame is synced back to CHARMM for dynamics, so a molecule straddling the
+    # face must keep its periodic contacts: a lattice shift only, no inward nudge.
+    from types import SimpleNamespace
+
+    from mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize import (
+        _hybrid_minimize_atoms,
+    )
+
+    box_side_A = 10.0
+    ctx = SimpleNamespace(use_pbc=True, cubic_box_side_A=box_side_A, atoms_per_monomer=[2, 2])
+    positions = np.array(
+        [
+            [4.8, 0.0, 0.0],
+            [5.3, 0.0, 0.0],
+            [0.0, 4.9, 1.0],
+            [0.0, 5.2, 1.0],
+        ]
+    )
+
+    wrapped = _hybrid_minimize_atoms(ctx, [1, 1, 1, 1], positions).get_positions()
+
+    shift = wrapped - positions
+    np.testing.assert_allclose(shift / box_side_A, np.round(shift / box_side_A), atol=1e-12)
+    np.testing.assert_allclose(wrapped[0], [-5.2, 0.0, 0.0])
+
+
 def test_hybrid_minimize_atoms_leaves_open_boundary_coordinates_unchanged():
     from types import SimpleNamespace
 

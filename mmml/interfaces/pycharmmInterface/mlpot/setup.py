@@ -2394,8 +2394,12 @@ def rewrap_charmm_coords_for_mlpot_pbc(
     cubic_box_side_A: float,
     workflow_args: argparse.Namespace | None = None,
     verbose: bool = False,
+    inward_margin_A: float | None = 0.05,
 ) -> int:
-    """Re-wrap monomers into the CHARMM primary cell before MLpot PBC ``upinb``."""
+    """Re-wrap monomers into the CHARMM primary cell before MLpot PBC ``upinb``.
+
+    ``inward_margin_A=None``: exact COM lattice wrap only (use when the coordinates are a state to be
+    continued, not a structure about to be minimised)."""
     atoms_per = _resolve_atoms_per_for_mlpot_rewrap(workflow_args)
     if not atoms_per:
         return 0
@@ -2406,6 +2410,7 @@ def rewrap_charmm_coords_for_mlpot_pbc(
         pos,
         list(atoms_per),
         float(cubic_box_side_A),
+        margin_A=inward_margin_A,
     )
     delta = np.abs(pos - pos_wrapped)
     n_shifted = int(np.any(delta > 1.0e-4, axis=1).sum())
@@ -2462,6 +2467,7 @@ def _finalize_pbc_mlpot_exclusions_after_param_read(
         cubic_box_side_A=side,
         workflow_args=workflow_args,
         verbose=verbose,
+        inward_margin_A=None,  # exact lattice wrap: MLpot setup must not displace the configuration
     )
     prepare_charmm_pbc(
         side,
@@ -2527,6 +2533,7 @@ def _finalize_pbc_mlpot_exclusions_after_param_read(
         cubic_box_side_A=side,
         workflow_args=workflow_args,
         verbose=verbose,
+        inward_margin_A=None,  # exact lattice wrap: MLpot setup must not displace the configuration
     )
     with charmm_relaxed_bomlev():
         reassert_pbc_nbond_cutoffs(

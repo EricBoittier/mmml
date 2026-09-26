@@ -1224,8 +1224,12 @@ def _rewrap_mlpot_pbc_after_sd(
     *,
     verbose: bool = False,
     context: str = "Post-SD",
+    inward_margin_A: float | None = 0.05,
 ) -> None:
     """Re-wrap CHARMM primary-cell coords before or after an MLpot SD pass.
+
+    ``inward_margin_A=None`` (dynamics block boundaries) does the exact COM lattice wrap only; a margin also
+    nudges boundary-straddling monomers inward, which moves atoms and is only acceptable around minimisation.
 
     During ``inbfrq=0`` SD (and during MM pre-minimize), monomers drift freely and may
     exit the CHARMM primary cell (``|z| > L/2``).  JAX's MIC formula collapses
@@ -1262,7 +1266,7 @@ def _rewrap_mlpot_pbc_after_sd(
     )
 
     pos = get_charmm_positions_array()
-    pos_wrapped = rewrap_charmm_pbc_molecules(pos, atoms_per_monomer, float(box_side))
+    pos_wrapped = rewrap_charmm_pbc_molecules(pos, atoms_per_monomer, float(box_side), margin_A=inward_margin_A)
     delta = _np.abs(pos - pos_wrapped)
     n_shifted = int(_np.any(delta > 1e-4, axis=1).sum())
     if n_shifted == 0:
@@ -1297,7 +1301,8 @@ def maybe_rewrap_mlpot_pbc_from_mlpot_ctx(
     cfg = _RewrapConfig()
     cfg.mlpot_ctx = mlpot_ctx
     cfg.verbose = verbose
-    _rewrap_mlpot_pbc_after_sd(cfg, verbose=verbose, context=context)
+    # Between dynamics blocks: lattice wrap only, never the inward nudge (it would displace molecules mid-run).
+    _rewrap_mlpot_pbc_after_sd(cfg, verbose=verbose, context=context, inward_margin_A=None)
 
 
 def invalidate_mlpot_calculator_caches(mlpot_ctx: Any | None) -> None:

@@ -1758,6 +1758,7 @@ def run_pre_mlpot_geometry_gate(
             cubic_box_side_A=float(side),
             workflow_args=args,
             verbose=not quiet,
+            inward_margin_A=None,
         )
         pos = get_charmm_positions_array()
 

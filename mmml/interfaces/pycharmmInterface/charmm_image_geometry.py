@@ -512,6 +512,7 @@ def run_mlpot_pbc_image_registration_gate(
         cubic_box_side_A=side,
         workflow_args=workflow_args,
         verbose=verbose,
+        inward_margin_A=None,  # exact lattice wrap: an inward nudge creates clashes in restarted liquids
     )
     with charmm_relaxed_bomlev():
         pycharmm.image.update_bimag()

@@ -802,10 +802,14 @@ def _hybrid_minimize_atoms(mlpot_ctx: Any, z: Any, positions: np.ndarray) -> Any
     if use_pbc and box_side_A is not None and atoms_per is not None:
         from mmml.cli.run.md_handoff import rewrap_charmm_pbc_molecules
 
+        # Exact COM lattice wrap only (margin_A=None): the inward nudge would translate face-straddling
+        # molecules by a non-lattice vector, and constrained repairs (FIRE with the other molecules frozen)
+        # sync this frame back to CHARMM for dynamics without ever relaxing the contacts it creates.
         pos = rewrap_charmm_pbc_molecules(
             pos,
             [int(count) for count in atoms_per],
             float(box_side_A),
+            margin_A=None,
         )
     atoms = ase.Atoms(numbers=np.asarray(z, dtype=int), positions=pos)
     if use_pbc and box_side_A is not None:
