@@ -1418,7 +1418,7 @@ def align_handoff_positions_for_charmm_pbc(
     if handoff is not None and not handoff_needs_charmm_pbc_alignment(handoff):
         return np.asarray(positions, dtype=np.float64)
 
-    from mmml.utils.geometry_checks import ensure_monomers_inside_cell, wrap_monomers_primary_cell
+    from mmml.utils.geometry_checks import wrap_monomers_primary_cell
 
     L = float(box_side_A)
     if L <= 0.0:
