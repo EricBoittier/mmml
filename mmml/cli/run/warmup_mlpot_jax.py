@@ -58,8 +58,9 @@ Clear stale launcher env if needed: unset OMPI_COMM_WORLD_SIZE PMI_SIZE PMIX_SIZ
         default=None,
         metavar="N",
         help=(
-            "Sparse ML dimer slot cap per step (PBC default all unique dimers when n≤4005; "
-            "same as md-system --ml-max-active-dimers)."
+            "Sparse ML dimer slot cap per step (PBC warmup default uses the "
+            "fallback floor: all unique dimers when n<=4005). Pass the same "
+            "value as md-system --ml-max-active-dimers to match production."
         ),
     )
     from mmml.interfaces.pycharmmInterface.cutoffs import add_handoff_cutoff_args

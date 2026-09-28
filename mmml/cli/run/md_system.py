@@ -883,8 +883,9 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         metavar="N",
         help=(
-            "pycharmm: sparse ML dimer slot cap per step (PBC default max(1000, 6*n_monomers); "
-            "free-space default all unique dimers). Run scripts/validate_mlpot_sparse_dimers.py to check."
+            "pycharmm: sparse ML dimer slot cap per step (PBC default is density-aware "
+            "with floor max(4005, 6*n_monomers); free-space default all unique dimers). "
+            "Run scripts/validate_mlpot_sparse_dimers.py to check."
         ),
     )
     parser.add_argument(

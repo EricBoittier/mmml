@@ -285,8 +285,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=None,
         metavar="N",
         help=(
-            "Sparse ML dimer slot cap (PBC default max(1000, 6*n_monomers); "
-            "free-space default all unique dimers)."
+            "Sparse ML dimer slot cap (PBC default is density-aware with floor "
+            "max(4005, 6*n_monomers); free-space default all unique dimers)."
         ),
     )
     return parser.parse_args(argv)

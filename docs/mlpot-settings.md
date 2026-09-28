@@ -182,15 +182,70 @@ If you saw smoother heating with “XLA” enabled, that was likely **`JAX_ENABL
 
 ## Medium PBC dense liquids (500–2000 monomers)
 
-Before long production runs on equilibrated periodic boxes, validate the sparse dimer cap:
+Before long production runs on equilibrated periodic boxes, validate the sparse
+dimer cap. Use the `max_active_dimers` value printed in the MLpot setup report
+when you want the standalone check to match a specific run:
 
 ```bash
 python scripts/validate_mlpot_sparse_dimers.py \
   --crd path/to/mini_full_mlpot_TAG.crd \
-  --n-monomers 1000 --atoms-per-monomer 10 --box-size 40
+  --n-monomers 1000 --atoms-per-monomer 10 --box-size 40 \
+  --ml-max-active-dimers "$CAP_FROM_SETUP_REPORT"
 ```
 
 See [Medium PBC workflow](mlpot-medium-pbc.md) for caps, `ml_batch_size` defaults, and JAX-MD handoff.
+
+## Sparse ML dimers and pair-list safety
+
+Sparse ML dimer mode evaluates every monomer plus only dimer pairs whose
+monomer COM distance is inside the active ML radius. Production behavior is:
+
+- Active ML dimers use `r < mm_switch_on` by default. `ml_switch_width` is the
+  inner handoff width, not extra support beyond `mm_switch_on`; the optional
+  `MMML_ML_DIMER_ACTIVE_MARGIN` / `ml_dimer_active_margin` adds an explicit
+  margin only when you ask for one.
+- PBC runs with a known box size derive the sparse cap from the expected
+  in-range pair count at that density, multiplied by a 1.4 safety margin and
+  never below the fallback floor `max(4005, 6 * n_monomers)`. Free-space
+  clusters use all `n(n-1)/2` unique dimers so they cannot silently drop a pair.
+- The cap is a static JAX shape. If a step has more active dimers than the cap,
+  `SparseDimerCapOverflow` fails closed instead of truncating the force field.
+  Raise `--ml-max-active-dimers` or `MMML_MLPOT_MAX_ACTIVE_DIMERS`, then restart
+  and revalidate the equilibrated geometry.
+
+For large PBC boxes, the callback also keeps a host Verlet list over monomer
+centroids (`dimer_centroid_nl` in the setup report). This is a candidate list:
+the jitted code still applies the exact `r < active_radius` test before
+building PhysNet batches, so energies and forces match the all-pairs sparse
+path while the list is valid. The default skin is 1 Å and rebuilds trigger when
+a centroid moves more than skin/2 or the box changes. Useful controls:
+
+| Knob | Meaning |
+|------|---------|
+| `MMML_ML_DIMER_CENTROID_NL=0` | Disable the centroid candidate list; keep all-pairs sparse selection. |
+| `MMML_ML_DIMER_CENTROID_NL_SKIN_A` | Override the centroid-list skin. Larger skins rebuild less often but carry more candidates. |
+| `MMML_MLPOT_CHUNK_BUDGET=0` | Evaluate every padded PhysNet chunk; useful for A/B timing or parity checks. |
+
+The MM atom-pair list has a separate inner COM filter, `mm_r_min`. That filter
+uses whole-molecule centroids under PBC before deciding which JAX/MM atom pairs
+to keep. With complementary handoff, keep `mm_r_min` below `mm_switch_on`; using
+`mm_r_min >= mm_switch_on` removes MM from part of the ML→MM handoff interval.
+
+To measure what is happening in a live run, enable profiling:
+
+```bash
+export MMML_MLPOT_PROFILE=1
+```
+
+PyCHARMM workflows write `mlpot_profile.json` in the output directory every 500
+ML callbacks and at exit. Check:
+
+- `steady_state.n_active_dimers`: whether the active set approaches the cap.
+- `steady_state.chunk_budget`: whether the chunk budget is stable or repeatedly
+  growing.
+- `dimer_nl_builds / dimer_nl_calls` and `dimer_nl_candidates`: whether the
+  centroid list is doing useful work or rebuilding too often.
+- `mm_pair_rebuilds / mm_pair_calls`: whether the JAX/MM pair list is stable.
 
 ## Callback failures stop the run (exit code 86)
 
