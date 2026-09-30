@@ -39,7 +39,9 @@ Primary smoke is matched `AR1:500` @ 90 K / \(P_\mathrm{sat}\) for **200 ps**
 (MM-only literature LJ; matched `mm-switch` 7+3.39 Å). jax-md holds
 \(\langle\rho\rangle\approx 1.33\) / \(\langle P\rangle\approx 1.7\) bar; continuous
 CHARMM CPT only mildly expands (\(\rho\approx 1.28\)). The older `AR1:108` box
-still gas-collapses under CHARMM. ASE has no `pbc_npt`. Details:
+still gas-collapses under CHARMM when the piston is reseeded each segment.
+ASE `pbc_npt` is an isotropic Melchionna integrator and needs calculator
+`stress`. Details:
 [`docs/images/npt_argon_water/README.md`](images/npt_argon_water/README.md).
 
 ---
@@ -224,7 +226,7 @@ For MM bonded energy parity (different question), see
 |--|-------------|-------------|
 | Length | Å | Å |
 | Energy (runner tests) | eV | kcal/mol (`VIRAL` / `mlpot_set_virial`) |
-| Pressure CLI / YAML | bar (`--pressure`) | atm (`--npt-pressure`) |
+| Pressure CLI / YAML | atm (`--pressure`) | atm (`--npt-pressure`) |
 | Conversion | \(1\,\mathrm{atm}=1.01325\,\mathrm{bar}\) | |
 
 ---
@@ -237,3 +239,6 @@ For MM bonded energy parity (different question), see
 | #263 | MLpot strain virial → `mlpot_set_virial`; CPT step accounting; MM extent margin |
 | #267 | In-memory CPT sub-chunks: chunk-local step counter |
 | #248 | NVT→NPT CPT cold start (coords vs leap-frog displacement) |
+| restart crystal | `READYN` adopts `XTLTYP` from the `REST` header before `XTLSYM`; writers store the full 3×3 |
+| CPT segments | segment 2+ keeps `pmass>0`, `pref`, `iasvel=0`; `IUPTEN` log appends |
+| ASE `pbc_npt` | isotropic Melchionna NPT when the calculator implements `stress` |

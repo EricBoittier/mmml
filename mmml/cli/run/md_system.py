@@ -3906,8 +3906,6 @@ def build_command(args: argparse.Namespace) -> tuple[str, list[str]]:
         if args.traj_export_molecular_wrap:
             cmd.append("--traj-export-molecular-wrap")
     else:
-        if args.setup == "pbc_npt":
-            raise ValueError("pbc_npt requires --backend jaxmd or --backend auto")
         cmd = [
             "--spacing",
             str(args.spacing),
@@ -3918,7 +3916,18 @@ def build_command(args: argparse.Namespace) -> tuple[str, list[str]]:
             "--traj-chunk-frames",
             str(args.traj_chunk_frames),
         ]
-        if args.setup == "all":
+        if args.setup == "pbc_npt":
+            cmd.extend(
+                [
+                    "--only",
+                    "pbc_npt",
+                    "--pressure",
+                    str(args.pressure),
+                    "--nvt-temp-K",
+                    str(args.temperature),
+                ]
+            )
+        elif args.setup == "all":
             cmd.append("--all")
         else:
             effective_setup = _ase_jaxmd_setup_name(args.setup)

@@ -2021,11 +2021,21 @@ def _write_synthetic_charmm_restart(
             lines.append(" " + " ".join(_fmt(flat[j]) for j in range(i, min(i + 3, len(flat)))))
         return lines
 
-# REST 48 1 CUBI 2 !NTITLE followed by title <<--- note format
+    from mmml.interfaces.pycharmmInterface.charmm_restart_io import (
+        crystal_parameter_lines,
+        format_rest_header,
+        lattice_type_for_cell,
+    )
 
-#     # CHARMM restart header (minimal safe values)
+    cell = handoff.cell
+    crystal_cell = None
+    if cell is not None and handoff.pbc:
+        cell_arr = np.asarray(cell, dtype=float)
+        if cell_arr.shape == (3, 3) and float(np.max(np.abs(cell_arr))) > 0.0:
+            crystal_cell = cell_arr
+    xtltyp = lattice_type_for_cell(crystal_cell) if crystal_cell is not None else ""
     lines: list[str] = [
-        "REST  SYNTHETIC-HANDOFF      0",
+        format_rest_header(xtltyp=xtltyp),
         " !NATOM,NPRIV,NSTEP,NSAVC,NSAVV,JHSTRT,SEED,FIRSTT,FINALT,TBATH,TOL,IHTFRQ,IUNSAV",
         f"  {n_atoms:8d}         0         0         1         0         0"
         "         0  0.000000000000000D+00  3.000000000000000D+02"
@@ -2041,26 +2051,8 @@ def _write_synthetic_charmm_restart(
             lines.append(" !VELOCITIES")
             lines.extend(_coord_lines(vel))
 
-    cell = handoff.cell
-    if cell is not None and handoff.pbc:
-        cell_arr = np.asarray(cell, dtype=float)
-        if cell_arr.shape == (3, 3):
-            # Cubic: use diagonal element
-            side = float(np.mean(np.diag(cell_arr)))
-        else:
-            side = float(cell_arr.flat[0])
-        if side > 0.0:
-            lines.append(" !CRYSTAL PARAMETERS")
-            # 6 angles + 6 lengths: orthorhombic cubic
-            lines.append(
-                f" {_fmt(side)} {_fmt(0.0)} {_fmt(0.0)}"
-            )
-            lines.append(
-                f" {_fmt(0.0)} {_fmt(side)} {_fmt(0.0)}"
-            )
-            lines.append(
-                f" {_fmt(0.0)} {_fmt(0.0)} {_fmt(side)}"
-            )
+    if crystal_cell is not None:
+        lines.extend(crystal_parameter_lines(crystal_cell))
 
     path = Path(path).expanduser().resolve()
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -2263,19 +2255,24 @@ def _patch_handoff_into_restart_template(
 
     if handoff.cell is not None and handoff.pbc:
         cell_arr = np.asarray(handoff.cell, dtype=float)
-        if cell_arr.shape == (3, 3):
-            # Cubic: use diagonal element
-            side = float(np.mean(np.diag(cell_arr)))
-        else:
+        if cell_arr.shape != (3, 3):
             side = float(cell_arr.flat[0])
-        if side > 0.0:
-            def _fmt(v: float) -> str:
-                return f"{float(v):.15E}".replace("E", "D")
-            crystal_block = " !CRYSTAL PARAMETERS\n" + "\n".join([
-                f" {_fmt(side)} {_fmt(0.0)} {_fmt(0.0)}",
-                f" {_fmt(0.0)} {_fmt(side)} {_fmt(0.0)}",
-                f" {_fmt(0.0)} {_fmt(0.0)} {_fmt(side)}"
-            ]) + "\n"
+            cell_arr = np.diag([side, side, side])
+        if float(np.max(np.abs(cell_arr))) > 0.0:
+            from mmml.interfaces.pycharmmInterface.charmm_restart_io import (
+                crystal_parameter_lines,
+                lattice_type_for_cell,
+                set_rest_header_lattice_token,
+            )
+
+            crystal_block = "\n".join(crystal_parameter_lines(cell_arr)) + "\n"
+            patched_lines = text.splitlines()
+            if patched_lines:
+                patched_lines[0] = set_rest_header_lattice_token(
+                    patched_lines[0],
+                    lattice_type_for_cell(cell_arr),
+                )
+                text = "\n".join(patched_lines) + ("\n" if text.endswith("\n") else "")
             if " !CRYSTAL PARAMETERS" in text:
                 text = re.sub(
                     r" !CRYSTAL PARAMETERS.*?(?=\n !|\Z)",

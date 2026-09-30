@@ -1414,6 +1414,29 @@ def _save_cutoff_plot(
     return out_path
 
 
+_ATM_PER_BAR = 1.01325
+
+
+def ase_npt_externalstress(pressure_atm: float) -> float:
+    """Target pressure in atm as ASE external stress (eV/Å³).
+
+    A positive scalar is compression, matching jax-md ``--pressure`` (atm):
+    ``p_atm * 1.01325 bar * units.bar``.
+    """
+    return float(pressure_atm) * _ATM_PER_BAR * float(units.bar)
+
+
+def require_ase_npt_stress(atoms: Atoms) -> None:
+    """Refuse NpT when the calculator cannot supply the stress the barostat needs."""
+    calc = getattr(atoms, "calc", None)
+    props = set(getattr(calc, "implemented_properties", []) or [])
+    if "stress" not in props:
+        name = type(calc).__name__ if calc is not None else "None"
+        raise ValueError(
+            f"pbc_npt requires a calculator that implements stress (got {name})"
+        )
+
+
 def run_md(
     *,
     name: str,
@@ -1436,6 +1459,7 @@ def run_md(
     charmm_tolenr: float,
     charmm_tolgrd: float,
     charmm_nbxmod: int,
+    pressure_atm: float = 1.0,
     path_prefix: Path | None = None,
     timings: dict[str, float] | None = None,
     log_lines: list[str] | None = None,
@@ -1483,6 +1507,25 @@ def run_md(
             fixcm=False,
             rng=rng,
         )
+    elif mode == "npt":
+        from ase.md.npt import NPT
+
+        require_ase_npt_stress(atoms)
+        MaxwellBoltzmannDistribution(atoms, temperature_K=nvt_temp_K, rng=rng)
+        Stationary(atoms)
+        ZeroRotation(atoms)
+        ttime = 25.0 * units.fs
+        ptime = 75.0 * units.fs
+        bulk_modulus_eV_A3 = 0.6
+        dyn = NPT(
+            atoms,
+            timestep=dt,
+            temperature_K=nvt_temp_K,
+            externalstress=ase_npt_externalstress(pressure_atm),
+            ttime=ttime,
+            pfactor=(ptime ** 2) * bulk_modulus_eV_A3,
+        )
+        dyn.set_fraction_traceless(0.0)
     else:
         raise ValueError(mode)
 
@@ -1802,6 +1845,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--rescue-fire-fmax", type=float, default=0.1, help="Rescue ASE FIRE fmax target (eV/A).")
     parser.add_argument("--rescue-fire-maxstep", type=float, default=0.02, help="Rescue ASE FIRE maxstep (A).")
     parser.add_argument("--nvt-temp-K", type=float, default=300.0)
+    parser.add_argument(
+        "--pressure",
+        type=float,
+        default=1.0,
+        help="Target pressure in atm for --only pbc_npt (same units as jax-md --pressure).",
+    )
     parser.add_argument("--nve-temp-K", type=float, default=10.0)
     parser.add_argument("--langevin-friction", type=float, default=0.02)
     parser.add_argument("--seed", type=int, default=123)
@@ -2679,6 +2728,7 @@ def main(argv: list[str] | None = None) -> int:
             out_dir=out_dir,
             nvt_temp_K=args.nvt_temp_K,
             nve_temp_K=args.nve_temp_K,
+            pressure_atm=float(getattr(args, "pressure", 1.0)),
             langevin_friction=args.langevin_friction,
             seed=args.seed,
             monomer_offsets=monomer_offsets,
@@ -2704,7 +2754,9 @@ def main(argv: list[str] | None = None) -> int:
         set_handoff_out(
             handoff_from_atoms(
                 atoms,
-                temperature_K=float(args.nvt_temp_K if mode.startswith("nvt") else args.nve_temp_K),
+                temperature_K=float(
+                    args.nvt_temp_K if mode.startswith("nvt") or mode == "npt" else args.nve_temp_K
+                ),
                 metadata={"backend": "ase", "mode": mode, "pbc": use_pbc},
             )
         )
@@ -2729,6 +2781,7 @@ def main(argv: list[str] | None = None) -> int:
             "vac_nve": (False, "nve"),
             "vac_nvt_nhc": (False, "nvt_nhc"),
             "vac_nvt_langevin": (False, "nvt_langevin"),
+            "pbc_npt": (True, "npt"),
         }
         if args.only not in mapping:
             raise SystemExit(f"--only must be one of {sorted(mapping)}")

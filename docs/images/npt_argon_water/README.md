@@ -17,7 +17,7 @@ coord dump was saved); cell length is from the live CPT trajectory.
 |---------|---------------------:|-------------------:|-----:|-------|
 | **jax-md** (unified) | 1.335 | 1.66 | ~11 min (GPU) | continuous Nose–Hoover; ⟨T⟩ ≈ 90 K |
 | **PyCHARMM** CPT (10 ps segments, no reseed) | 1.281 | −17.7 (noisy) | ~2.5 min (CPU) | mild expansion only (L 28.87→29.79) |
-| **ASE** | — | — | — | `pbc_npt` not supported |
+| **ASE** | — | — | — | `--backend ase --setup pbc_npt` (isotropic Melchionna NPT; needs calculator `stress`) |
 | NIST sat. (90 K) | **1.379** | **1.335** | — | reference |
 
 Matched `mm-switch` 7+3.39 Å (fits under L/2 ≈ 14.4 Å). Larger box removes
@@ -29,11 +29,16 @@ remain.
 ![pressure tensor parity](ar1_90k_n500_pressure_tensor_parity.png)
 
 On 16 frames from the jax-md trajectory, both engines’ **strain** pressure
-(virial only; `PI**` is 0 outside DYNA on this build). **Diagonal** components
-use orthorhombic uniaxial strain and agree to numerical noise after \(t>0\).
-Off-diagonal / shear is **not** shown: this KEY_LIBRARY CHARMM still reports a
-cubic cell after `define_tri` (even γ=85° → get_unit_cell γ=90°), so shear FD
-was cubic MIC with remapped coords and produced fake systematic slopes.
+(virial only; `PI**` is 0 outside DYNA on this build). Diagonal components
+agree to numerical noise after \(t>0\). Shear is included in the next
+`plot_argon_pressure_tensor_parity.py` run: `define_tri` calls
+`crystal_define_tri`, and `READYN` adopts the restart header’s lattice type
+before `XTLSYM` (a `CUBI` session used to zero the off-diagonal of `XTLABC`).
+The figure currently in this directory is the diagonal-only plot from before
+that change; regenerate it to refresh the shear panels. The CHARMM density
+residual (⟨ρ⟩ 1.281, noisy ⟨P⟩) is the CPT piston across segments, not this
+virial. Later EQUI/PROD segments keep `iasvel=0` and `pmass>0`, and the
+`IUPTEN` log appends instead of truncating on every `dyna`.
 
 | | \(P_{xx,yy,zz}\) |
 |--|--:|

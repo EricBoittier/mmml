@@ -150,6 +150,7 @@ class CharmmTrajectoryFiles:
     restart_write_unit: int = 2
     trajectory_unit: int = 1
     pressure_tensor_log_unit: int = 29
+    append_pressure_tensor_log: bool = False
 
     def open_for_run(self) -> tuple[list[Any], dict[str, Any], list[Any]]:
         """Open dynamics I/O; returns ``(open_files, dynamics_io_kwargs, io_aliases)``."""
@@ -207,6 +208,7 @@ class CharmmTrajectoryFiles:
                 file_unit=self.pressure_tensor_log_unit,
                 formatted=True,
                 read_only=False,
+                append=bool(self.append_pressure_tensor_log),
             )
             open_files.append(f)
             kw["iupten"] = self.pressure_tensor_log_unit
@@ -5487,9 +5489,12 @@ def _overlap_chunk_io(
         restart_read=rread,
         restart_write=rwri,
         trajectory=traj,
+        pressure_tensor_log=io.pressure_tensor_log,
         restart_read_unit=io.restart_read_unit,
         restart_write_unit=io.restart_write_unit,
         trajectory_unit=io.trajectory_unit,
+        pressure_tensor_log_unit=io.pressure_tensor_log_unit,
+        append_pressure_tensor_log=bool(io.append_pressure_tensor_log) or int(chunk_index) > 0,
     )
 
 
@@ -5527,6 +5532,7 @@ def _drop_chunk_io_restart_write(
         restart_write_unit=chunk_io.restart_write_unit,
         trajectory_unit=chunk_io.trajectory_unit,
         pressure_tensor_log_unit=chunk_io.pressure_tensor_log_unit,
+        append_pressure_tensor_log=chunk_io.append_pressure_tensor_log,
     )
 
 
@@ -5543,6 +5549,7 @@ def _drop_trajectory_io(io: Optional[CharmmTrajectoryFiles]) -> Optional[CharmmT
         restart_write_unit=io.restart_write_unit,
         trajectory_unit=io.trajectory_unit,
         pressure_tensor_log_unit=io.pressure_tensor_log_unit,
+        append_pressure_tensor_log=io.append_pressure_tensor_log,
     )
 
 
@@ -6459,9 +6466,9 @@ def _apply_cpt_in_memory_continuation_kw(kw: dict[str, Any]) -> None:
     Preserves Hoover CPT barostat state in RAM between sub-chunks.  Plain
     ``write restart`` / ``READYN`` handoffs do not restore piston internals.
 
-    Particle velocities use ``iasvel=1`` at the bath target — not ``iasvel=0`` /
-    COMP — because COMP-as-velocity continues to yield T≈10¹² on this build even
-    after post-dyna velocity-cache sync into comparison coordinates.
+    A live piston (``pmass > 0``) keeps particle velocities (``iasvel=0``).
+    Heat / fixed-cell CPT (``pmass`` unset or 0) still redraws velocities at the
+    bath target: COMP-as-velocity yields T≈10¹² on this build.
     """
     kw["restart"] = False
     kw["new"] = False
@@ -6472,6 +6479,10 @@ def _apply_cpt_in_memory_continuation_kw(kw: dict[str, Any]) -> None:
     _strip_stale_heat_ramp_keywords(kw)
     if int(kw.get("ihtfrq", 0) or 0) != 0:
         kw["ihtfrq"] = 0
+    pmass = kw.get("pmass")
+    if pmass is not None and int(pmass) > 0:
+        kw["iasvel"] = 0
+        return
     _apply_bussi_iasvel_one_at_ramp_target(kw)
 
 
@@ -7711,6 +7722,8 @@ def _run_cpt_stability_subchunk_loop(
                 pressure_tensor_log_unit=(
                     io.pressure_tensor_log_unit if io is not None else 29
                 ),
+                append_pressure_tensor_log=bool(is_continuation)
+                or bool(io.append_pressure_tensor_log if io is not None else False),
             )
             if is_continuation and mlpot_ctx is not None and read_path is not None:
                 _prepare_overlap_chunk_after_restart(
@@ -8518,9 +8531,17 @@ def run_dynamics_with_io(
                             restart_read=chunk_io.restart_read or _planned_read,
                             restart_write=planned_write,
                             trajectory=traj,
+                            pressure_tensor_log=(
+                                chunk_io.pressure_tensor_log
+                                if chunk_io.pressure_tensor_log is not None
+                                else (io.pressure_tensor_log if io is not None else None)
+                            ),
                             restart_read_unit=chunk_io.restart_read_unit,
                             restart_write_unit=chunk_io.restart_write_unit,
                             trajectory_unit=chunk_io.trajectory_unit,
+                            pressure_tensor_log_unit=chunk_io.pressure_tensor_log_unit,
+                            append_pressure_tensor_log=bool(chunk_io.append_pressure_tensor_log)
+                            or int(chunk_index) > 0,
                         )
                 elif io is None:
                     chunk_io = None

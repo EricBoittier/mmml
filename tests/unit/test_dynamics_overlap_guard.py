@@ -3938,6 +3938,64 @@ def test_apply_cpt_in_memory_continuation_kw():
     assert "_skip_ase_cold_velocity_assign" not in kw
 
 
+def test_apply_cpt_in_memory_continuation_keeps_velocities_when_piston_is_live():
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        _apply_cpt_in_memory_continuation_kw,
+    )
+
+    kw: dict = {
+        "cpt": True,
+        "pmass": 400,
+        "pint pconst pref": 1.3176,
+        "restart": True,
+        "start": True,
+        "iasvel": 1,
+        "iunrea": 3,
+        "hoover reft": 90.0,
+    }
+    _apply_cpt_in_memory_continuation_kw(kw)
+    assert kw["iasvel"] == 0
+    assert kw["start"] is False
+    assert kw["pmass"] == 400
+    assert kw["pint pconst pref"] == pytest.approx(1.3176)
+
+
+def test_later_overlap_chunk_appends_pressure_log(tmp_path: Path):
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        CharmmTrajectoryFiles,
+        _overlap_chunk_io,
+    )
+
+    log = tmp_path / "pressure.dat"
+    io = CharmmTrajectoryFiles(pressure_tensor_log=log)
+    first = _overlap_chunk_io(io, chunk_index=0, n_chunks=3)
+    later = _overlap_chunk_io(io, chunk_index=2, n_chunks=3)
+    assert first.pressure_tensor_log == log
+    assert first.append_pressure_tensor_log is False
+    assert later.append_pressure_tensor_log is True
+
+
+def test_lock_pure_mm_npt_segment_continuation():
+    from mmml.interfaces.pycharmmInterface.mlpot.staged_workflow import (
+        lock_pure_mm_npt_segment_continuation,
+    )
+
+    kw = {
+        "cpt": True,
+        "pmass": 86,
+        "pint pconst pref": 1.3,
+        "iasvel": 1,
+        "start": True,
+        "new": True,
+    }
+    lock_pure_mm_npt_segment_continuation(kw)
+    assert kw["iasvel"] == 0
+    assert kw["start"] is False
+    assert kw["new"] is False
+    with pytest.raises(ValueError, match="pmass"):
+        lock_pure_mm_npt_segment_continuation({"cpt": True, "pmass": 0, "pint pconst pref": 1.0})
+
+
 def _write_test_restart(path: Path, global_step: int) -> None:
     path.write_text(
         f"REST     1    {global_step:5d}\n"

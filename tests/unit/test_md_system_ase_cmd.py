@@ -67,6 +67,31 @@ def _ase_args(**overrides) -> Namespace:
     return Namespace(**base)
 
 
+def test_build_command_ase_pbc_npt_forwards_pressure() -> None:
+    from mmml.cli.run.md_pbc_suite.ase import build_parser
+    from mmml.cli.run.md_system import build_command
+
+    backend, argv = build_command(_ase_args(setup="pbc_npt", pressure=1.3176, temperature=90.0))
+    assert backend == "ase"
+    assert argv[argv.index("--only") + 1] == "pbc_npt"
+    assert argv[argv.index("--pressure") + 1] == "1.3176"
+    assert argv[argv.index("--nvt-temp-K") + 1] == "90.0"
+    parsed = build_parser().parse_args(argv)
+    assert parsed.only == "pbc_npt"
+    assert parsed.pressure == pytest.approx(1.3176)
+
+
+def test_ase_npt_refuses_calculator_without_stress() -> None:
+    from ase import Atoms
+
+    from mmml.cli.run.md_pbc_suite.ase import ase_npt_externalstress, require_ase_npt_stress
+
+    atoms = Atoms("Ar", positions=[[0.0, 0.0, 0.0]])
+    with pytest.raises(ValueError, match="implements stress"):
+        require_ase_npt_stress(atoms)
+    assert ase_npt_externalstress(1.0) == pytest.approx(1.01325 * 6.241509125883258e-07)
+
+
 def test_build_command_ase_uses_mm_cutoff_not_switch_width() -> None:
     from mmml.cli.run.md_system import build_command
 

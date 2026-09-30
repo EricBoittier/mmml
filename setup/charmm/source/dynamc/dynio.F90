@@ -705,9 +705,10 @@ SUBROUTINE READYN(U,NATOM,XOLD,YOLD,ZOLD,X,Y,Z,VX,VY,VZ, &
   ENDIF
   !
   IF(XTLTPR /= '    ') THEN
-     IF(XTLTYP /= XTLTPR) THEN
-        CALL WRNDIE(0,'<READYN>','Crystal types do not match')
-     ENDIF
+     ! Adopt the file's lattice type before symmetry projection.  A session
+     ! installed as CUBI otherwise keeps that type, and XTLSYM zeros
+     ! XTLABC(2,4,5), so a sheared restart cannot survive the read.
+     XTLTYP = XTLTPR
      READ(U,'(/A)',END=9) LINE
      READ(U,'(3D22.15)',END=9) XTLABC
      IF(QP21XCEN) IMXCEN = 0.25*XTLABC(1)
@@ -720,6 +721,9 @@ SUBROUTINE READYN(U,NATOM,XOLD,YOLD,ZOLD,X,Y,Z,VX,VY,VZ, &
      READ(U,'(3D22.15)',END=9) UC1B
      READ(U,'(3D22.15)',END=9) UC2B
      READ(U,'(3D22.15)',END=9) GRAD1A, GRAD1B, GRAD2A, GRAD2B
+     CALL XTLSYM(XTLABC,XUCELL,XTLTYP,XDIM,XTLREF)
+     CALL XTLLAT(XUCELL,XTLABC)
+     XTLREF(1:6) = XUCELL(1:6)
   ENDIF
   !
   READ(U,'(/A)',END=9) LINE

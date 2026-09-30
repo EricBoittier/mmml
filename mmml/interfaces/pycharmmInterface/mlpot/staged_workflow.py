@@ -205,15 +205,14 @@ def _prepare_npt_pressure_checks(
     if stage not in ("equi", "prod"):
         return
     use_cpt = bool(charmm_pbc and kw.get("cpt"))
-    if not first_segment:
-        return
-    maybe_report_instantaneous_pressure_tensor(
-        stage=stage,
-        temp=temp,
-        args=args,
-        use_cpt=use_cpt,
-        mlpot_ctx=mlpot_ctx,
-    )
+    if first_segment:
+        maybe_report_instantaneous_pressure_tensor(
+            stage=stage,
+            temp=temp,
+            args=args,
+            use_cpt=use_cpt,
+            mlpot_ctx=mlpot_ctx,
+        )
     npt_opts = _npt_cpt_options(args)
     maybe_configure_stage_pressure_tensor_io(
         io,
@@ -221,6 +220,8 @@ def _prepare_npt_pressure_checks(
         log_path=_stage_pressure_tensor_log_path(stage, paths),
         pressure_log_interval=int(npt_opts.get("pressure_log_interval", 0)),
     )
+    if not first_segment:
+        io.append_pressure_tensor_log = True
 
 
 
@@ -1074,6 +1075,30 @@ def _configure_npt_dynamics_start(
         )
 
 
+
+
+def lock_pure_mm_npt_segment_continuation(kw: dict[str, Any]) -> None:
+    """Keep the live CPT piston and velocities on EQUI/PROD segment 2+.
+
+    A fresh ``start`` / ``iasvel=1`` redraws velocities and reinitializes the
+    piston, so a chain of short segments does not hold ``pref``.
+    ``pmass`` is CHARMM's ``int(sum(mass)/50)`` and must stay positive.
+    ``pref`` is atmospheres.
+    """
+    if not bool(kw.get("cpt")):
+        return
+    pmass = kw.get("pmass")
+    if pmass is None or int(pmass) <= 0:
+        raise ValueError(
+            "NPT segment continuation requires pmass = int(sum(mass)/50) > 0 "
+            f"(got {pmass!r})"
+        )
+    has_pref = "pint pconst pref" in kw or "PRXX" in kw
+    if not has_pref:
+        raise ValueError("NPT segment continuation requires pref in atm")
+    kw["iasvel"] = 0
+    kw["start"] = False
+    kw["new"] = False
 
 
 def _configure_equi_dynamics_start(
@@ -3170,21 +3195,25 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                         restart_prefix="equi",
                         restart_write=seg_io.restart_write,
                     )
-                    cpt_seed = _maybe_configure_cpt_in_memory_overlap_start(
-                        stage="equi",
-                        kw=kw,
-                        io=seg_io,
-                        use_memory=use_memory,
-                        prev_restart_is_current_state=prev_restart_is_current_state,
-                        stage_overlap=stage_overlap,
-                        mlpot_ctx=ctx,
-                        nstep=nstep,
-                        args=args,
-                        timestep_ps=timestep_ps,
-                        use_pbc=charmm_pbc,
-                        temp=temp,
-                        box_side=box_side,
-                    )
+                    if seg_i > 0:
+                        lock_pure_mm_npt_segment_continuation(kw)
+                        cpt_seed = None
+                    else:
+                        cpt_seed = _maybe_configure_cpt_in_memory_overlap_start(
+                            stage="equi",
+                            kw=kw,
+                            io=seg_io,
+                            use_memory=use_memory,
+                            prev_restart_is_current_state=prev_restart_is_current_state,
+                            stage_overlap=stage_overlap,
+                            mlpot_ctx=ctx,
+                            nstep=nstep,
+                            args=args,
+                            timestep_ps=timestep_ps,
+                            use_pbc=charmm_pbc,
+                            temp=temp,
+                            box_side=box_side,
+                        )
                     if cpt_seed is not None:
                         restart_path = cpt_seed
                     elif seg_i == 0:
@@ -3344,21 +3373,25 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                         restart_prefix="prod",
                         restart_write=seg_io.restart_write,
                     )
-                    cpt_seed = _maybe_configure_cpt_in_memory_overlap_start(
-                        stage="prod",
-                        kw=kw,
-                        io=seg_io,
-                        use_memory=use_memory,
-                        prev_restart_is_current_state=prev_restart_is_current_state,
-                        stage_overlap=stage_overlap,
-                        mlpot_ctx=ctx,
-                        nstep=nstep,
-                        args=args,
-                        timestep_ps=timestep_ps,
-                        use_pbc=charmm_pbc,
-                        temp=temp,
-                        box_side=box_side,
-                    )
+                    if seg_i > 0:
+                        lock_pure_mm_npt_segment_continuation(kw)
+                        cpt_seed = None
+                    else:
+                        cpt_seed = _maybe_configure_cpt_in_memory_overlap_start(
+                            stage="prod",
+                            kw=kw,
+                            io=seg_io,
+                            use_memory=use_memory,
+                            prev_restart_is_current_state=prev_restart_is_current_state,
+                            stage_overlap=stage_overlap,
+                            mlpot_ctx=ctx,
+                            nstep=nstep,
+                            args=args,
+                            timestep_ps=timestep_ps,
+                            use_pbc=charmm_pbc,
+                            temp=temp,
+                            box_side=box_side,
+                        )
                     if cpt_seed is not None:
                         restart_path = cpt_seed
                     dyn_result = run_dynamics_with_io(

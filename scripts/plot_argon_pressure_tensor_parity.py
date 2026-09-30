@@ -44,19 +44,16 @@ EV_A3_TO_PA = 1.602176634e-19 / 1e-30
 EV_A3_TO_BAR = EV_A3_TO_PA * 1.0e-5
 KCAL_MOL_TO_EV = 1.0 / 23.060547830619026
 
-COMPONENTS = ("xx", "yy", "zz")
+COMPONENTS = ("xx", "yy", "zz", "xy", "xz", "yz")
 COMP_TO_IJ = {
     "xx": (0, 0),
     "yy": (1, 1),
     "zz": (2, 2),
-    # Off-diagonal strain needs a live triclinic crystal. On this KEY_LIBRARY
-    # build ``define_tri(..., gamma=85)`` still reports γ=90 via get_unit_cell,
-    # so shear FD was cubic-MIC + remapped coords — systematic slopes, not physics.
     "xy": (0, 1),
     "xz": (0, 2),
     "yz": (1, 2),
 }
-PLOT_COMPONENTS = ("xx", "yy", "zz")  # honest parity only
+PLOT_COMPONENTS = COMPONENTS
 
 MM_SWITCH_ON = 7.0
 MM_SWITCH_WIDTH = 3.39
@@ -300,8 +297,9 @@ def plot_parity(rows: list[dict]) -> None:
     # t=0 is post-FIRE / pre-NpT; CHARMM crystal FD is unreliable there.
     rows = [r for r in rows if float(r["t_ps"]) > 0.5]
     apply_plot_style("icml")
-    colors = comparison_colors("icml", n=3)
-    fig, axes = plt.subplots(1, 3, figsize=(10.5, 3.6))
+    colors = comparison_colors("icml", n=len(PLOT_COMPONENTS))
+    fig, axes = plt.subplots(2, 3, figsize=(10.5, 6.4))
+    axes = np.asarray(axes).ravel()
 
     sc = None
     for ax, comp, color in zip(axes, PLOT_COMPONENTS, colors):
@@ -336,8 +334,8 @@ def plot_parity(rows: list[dict]) -> None:
 
     fig.colorbar(sc, ax=axes.tolist(), fraction=0.035, pad=0.02, label="t (ps)")
     fig.suptitle(
-        r"AR1:500  $P_{ii}=-\frac{1}{V}\partial U/\partial\varepsilon_{ii}$"
-        r"  (virial, ortho strain, $t>0$)",
+        r"AR1:500  $P=-\frac{1}{V}\partial U/\partial\varepsilon$"
+        r"  (virial, including shear, $t>0$)",
         fontsize=11,
         y=1.02,
     )

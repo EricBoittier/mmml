@@ -143,7 +143,7 @@ def define_mono(length_a, length_b, length_c, angle_beta):
     length_b = ctypes.c_double(length_b)
     length_c = ctypes.c_double(length_c)
     angle_beta = ctypes.c_double(angle_beta)
-    success = lib.charmm.crystal_define_ortho(ctypes.byref(length_a),
+    success = lib.charmm.crystal_define_mono(ctypes.byref(length_a),
                                               ctypes.byref(length_b),
                                               ctypes.byref(length_c),
                                               ctypes.byref(angle_beta))
@@ -180,12 +180,12 @@ def define_tri(length_a, length_b, length_c,
     angle_alpha = ctypes.c_double(angle_alpha)
     angle_beta = ctypes.c_double(angle_beta)
     angle_gamma = ctypes.c_double(angle_gamma)
-    success = lib.charmm.crystal_define_ortho(ctypes.byref(length_a),
-                                              ctypes.byref(length_b),
-                                              ctypes.byref(length_c),
-                                              ctypes.byref(angle_alpha),
-                                              ctypes.byref(angle_beta),
-                                              ctypes.byref(angle_gamma))
+    success = lib.charmm.crystal_define_tri(ctypes.byref(length_a),
+                                             ctypes.byref(length_b),
+                                             ctypes.byref(length_c),
+                                             ctypes.byref(angle_alpha),
+                                             ctypes.byref(angle_beta),
+                                             ctypes.byref(angle_gamma))
     return success
 
 
