@@ -18,7 +18,10 @@ CLI flags: [`mmml/interfaces/pycharmmInterface/cutoffs.py`](https://github.com/E
 
 ## What The Three Numbers Mean
 
-The switches use **monomer COM-COM distance** `r`, not atom-atom distance. The default tuple is:
+The switches use **monomer COM-COM distance** `r`, not atom-atom distance. In
+this code path, "COM" is the unweighted atom centroid of each monomer after the
+ML atom ordering is applied, not a mass-weighted center of mass. The default
+tuple is:
 
 ```text
 mm_switch_on / mm_switch_width / ml_switch_width = 8.0 / 5.0 / 1.5 Å
@@ -116,6 +119,57 @@ Legacy cosine tapers (`ml_switch_simple`, `mm_switch_simple`) remain for plottin
 ![Legacy narrow ML cutoffs](images/mlpot-settings/cutoffs_dcm9-stability.png)
 
 Sparse ML dimer evaluation uses COM distance &lt; `mm_switch_on` (8 Å with current default). The switched MM neighbor-list reach is `mm_switch_on + mm_switch_width` (13 Å with current defaults).
+
+### Sparse-dimer centroid neighbor list
+
+For capped sparse-dimer runs, MLpot now avoids scanning every
+`n_monomers * (n_monomers - 1) / 2` dimer each callback. The callback maintains a
+host-side Verlet list over monomer centroids and passes its padded candidate ids
+to the jitted calculator (`ml_dimer_candidates`). The in-graph selection still
+applies the same `centroid_distance < active_radius` test to those candidates,
+so energies, forces, active-dimer counts, and batch ordering match the old
+all-pairs path when the list is valid.
+
+Definitions and defaults:
+
+- `active_radius = mm_switch_on + ml_dimer_active_margin`; the margin defaults
+  to `0 Å` because `ml_switch_scale` is exactly zero at `mm_switch_on`.
+- The list radius is `active_radius + skin` plus a small float tolerance. The
+  skin defaults to `1.0 Å`; a rebuild is triggered when any centroid moves more
+  than `skin / 2` or when the box changes.
+- Candidate ids are sorted global dimer ids in `itertools.combinations` order,
+  padded with the out-of-range sentinel `n_dimers`. Padding is masked before any
+  gather that can affect forces.
+- If the candidate count exceeds the current capacity, capacity grows with
+  headroom and the next callback retraces once. Pairs are never truncated.
+
+Operational knobs:
+
+```bash
+# Default: enabled whenever sparse dimers are capped.
+export MMML_ML_DIMER_CENTROID_NL=1
+
+# Disable for parity debugging; this restores the all-pairs sparse selection.
+export MMML_ML_DIMER_CENTROID_NL=0
+
+# Increase for faster-moving liquids to rebuild less often; decrease for tighter
+# memory/shape bounds if profiling shows many candidates.
+export MMML_ML_DIMER_CENTROID_NL_SKIN_A=1.0
+
+# Initial capacity headroom after each rebuild/growth.
+export MMML_ML_DIMER_CENTROID_NL_HEADROOM=1.3
+```
+
+With MLpot profiling enabled, the summary includes counters such as:
+
+```text
+ML dimer centroid list: 14 rebuilds / 5000 calls, 482 candidates (capacity 643)
+```
+
+Treat frequent rebuilds as a skin-size issue. Treat "growing to ..." messages as
+shape-capacity events: occasional growth during warmup is expected, but repeated
+growth means the equilibrated box has more near dimers than the initial
+trajectory sample suggested.
 
 **Wide ML taper (7 / 5 / 1.0 Å)**
 
