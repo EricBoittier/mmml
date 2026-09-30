@@ -927,9 +927,9 @@ Full help (all categories). Short index: -h One category: -hN or -halias (see
                         I/O stays float64.
   --ml-max-active-dimers N
                         pycharmm: sparse ML dimer slot cap per step (PBC default
-                        max(1000, 6*n_monomers); free-space default all unique
-                        dimers). Run scripts/validate_mlpot_sparse_dimers.py to
-                        check.
+                        is density-aware with floor max(4005, 6*n_monomers);
+                        free-space default all unique dimers). Run
+                        scripts/validate_mlpot_sparse_dimers.py to check.
   --ml-cutoff ML_CUTOFF
                         lambda_ti: ML cutoff (Å).
   --ml-switch-width, --ml-cutoff-distance ML_SWITCH_WIDTH

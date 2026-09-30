@@ -34,7 +34,7 @@ From [config.yaml](config.yaml):
 - `no_echeck: true` for the 0.5 ps NVE leg (in-run echeck stops ML USER clusters within ~1k steps; `run_job.py` still validates DCD length)
 - `save_forces_npz: true`, `forces_npz_interval: 1`
 - Packmol sphere `R = 18 * (N/60)^(1/3)` Å
-- **Free-space ML dimers:** `max_active_dimers = N(N−1)/2` (every unique pair evaluated each step; not the PBC `max(1000, 6N)` cap). Unset `MMML_MLPOT_MAX_ACTIVE_DIMERS` unless you intentionally override this.
+- **Free-space ML dimers:** `max_active_dimers = N(N−1)/2` (every unique pair evaluated each step; not the PBC density-aware cap with `max(4005, 6N)` floor). Unset `MMML_MLPOT_MAX_ACTIVE_DIMERS` unless you intentionally override this.
 
 ## Run
 

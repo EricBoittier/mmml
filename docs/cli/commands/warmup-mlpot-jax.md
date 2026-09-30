@@ -83,9 +83,10 @@ Other options:
   --ml-gpu-count ML_GPU_COUNT
                         JAX pmap GPU count
   --ml-max-active-dimers N
-                        Sparse ML dimer slot cap per step (PBC default all
-                        unique dimers when n≤4005; same as md-system --ml-max-
-                        active-dimers).
+                        Sparse ML dimer slot cap per step (PBC warmup default
+                        uses the fallback floor: all unique dimers when
+                        n<=4005). Pass the same value as md-system --ml-max-
+                        active-dimers to match production.
   --hybrid-hamiltonian {handoff,shared_cutoff}
                         Hybrid assembly: handoff preserves the existing COM-
                         switched Hamiltonian; shared_cutoff uses additive ML+MM

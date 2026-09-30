@@ -939,7 +939,8 @@ def setup_calculator(
         ml_gpu_count: Parallel PhysNet chunks across this many local JAX GPUs
             (default 1). Use with ``CUDA_VISIBLE_DEVICES`` and ``MMML_MLPOT_N_GPUS``.
         ml_max_active_dimers: Cap on sparse ML dimer slots per step. Periodic
-            default is ``max(1000, 6*n_monomers)``; free-space default is all
+            default is density-aware when box volume is known, with floor
+            ``max(4005, 6*n_monomers)``; free-space default is all
             unique dimers, ``n_monomers*(n_monomers-1)//2``. Lower explicit/env
             caps are promoted in free-space mode to avoid dropping pairs.
         ml_dimer_active_margin: Å beyond ``mm_switch_on`` that sparse ML dimers

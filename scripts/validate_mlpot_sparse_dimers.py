@@ -218,7 +218,7 @@ def main() -> int:
         free_space=free_space,
     )
     if args.ml_max_active_dimers is None:
-        policy = "free-space all-pairs" if free_space else "PBC max(1000, 6n)"
+        policy = "free-space all-pairs" if free_space else "PBC fallback floor max(4005, 6n)"
         print(f"  default policy cap   = {default_cap} ({policy})")
 
     if args.proposed_cap is not None:

@@ -342,7 +342,7 @@ Ranked by relevance to NVE instabilities observed in [`dcm_nve_scaling`](../../.
 | 4 | Unused Fortran pair indices | N/A today (Python ignores `idxu/idxv`) | CHARMM and Python disagree at Fortran layer | Future embedding work must reconcile |
 | 5 | `mlpot_is_init` caching | Stale `idxi/j/u/v` if `mlpot_update` skipped | Updates only on `QDONB`; not every ENER | Low impact today; relevant for future embedding |
 | 6 | jax-md skin / interval (PBC) | Force discontinuities near cutoff | `skin > dr_threshold` (0.5 Å) or `update_interval > 1` | Defaults: interval=1, skin=0.25 Å |
-| 7 | Sparse dimer cap (PBC) | Missing ML dimer contributions | Cap too low ([`mlpot_sparse_dimer_policy.py`](mlpot_sparse_dimer_policy.py)) | Free-space: all dimers; PBC: `max(1000, 6n)` default |
+| 7 | Sparse dimer cap (PBC) | Missing ML dimer contributions | Cap too low ([`mlpot_sparse_dimer_policy.py`](mlpot_sparse_dimer_policy.py)) | Free-space: all dimers; PBC: density-aware cap with `max(4005, 6n)` floor |
 | 8 | `mm_r_min` mis-tuning | Handoff gap or double-counting | MM scaled to zero inside handoff zone | Keep `mm_r_min` below `mm_switch_on - ml_switch_width` |
 | 9 | Overlap rescue NBXMOD | Exclusion topology drift | Production stays on recovery `NBXMOD 2`; `NBXMOD 5` not restored | Documented in [`block_terms.py`](block_terms.py) |
 

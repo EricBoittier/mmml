@@ -2050,7 +2050,7 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         default=None,
         metavar="N",
-        help="Sparse ML dimer slot cap (PBC default max(1000, 6*n_monomers))."
+        help="Sparse ML dimer slot cap (PBC default is density-aware with floor max(4005, 6*n_monomers))."
     )
     parser.add_argument(
         "--mlpot-profile",
