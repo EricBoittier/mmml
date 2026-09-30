@@ -17,7 +17,8 @@
 #     --run-all
 #
 # Sense-check: NPT log prints P0, Pkin0, Pvir0. Campaign chains via depends_on
-# (geometry handoff; velocities rethermalized). Pkin0 should be O(N kT / V);
+# and, by default, continues velocities, the thermostat, and the piston
+# momentum (see docs/md-cg-capabilities-checklist.md). Pkin0 should be O(N kT / V);
 # Instantaneous P still fluctuates on short runs.
 
 defaults:

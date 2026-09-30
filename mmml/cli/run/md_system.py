@@ -724,7 +724,12 @@ def build_parser() -> argparse.ArgumentParser:
         "--dcd-nsavc",
         type=int,
         default=1,
-        help="pycharmm: DCD frame every N integration/SD steps",
+        help=(
+            "Write a positions DCD when > 0 and --output-dir is set (default: 1). "
+            "On --jaxmd-unified the frame spacing is the driver record interval "
+            "(100 steps); this flag only turns the file on. "
+            "PyCHARMM still saves a frame every N integration/SD steps."
+        ),
     )
     parser.add_argument(
         "--dcd-interval-ps",
@@ -1893,7 +1898,13 @@ def build_parser() -> argparse.ArgumentParser:
         "--continue-velocities",
         action=argparse.BooleanOptionalAction,
         default=True,
-        help="Use velocities from handoff when present (else re-thermalize).",
+        help=(
+            "On --continue-from / campaign depends_on, restore jax-md momenta, "
+            "the Nose–Hoover chain, the Langevin RNG, and the NPT piston momentum "
+            "(default: on). --no-continue-velocities draws new Maxwell velocities. "
+            "A CHARMM .res restores velocities only; the chain and RNG stay in "
+            "handoff/state.npz."
+        ),
     )
     parser.add_argument(
         "--handoff-write-res",

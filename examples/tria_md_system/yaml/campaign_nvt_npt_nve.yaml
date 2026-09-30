@@ -4,8 +4,12 @@
 #   uv run mmml md-embedding build -o artifacts/md_embedding/aaa --n-waters 10
 #   # writes model.psf / model.crd / model.pdb + box.json
 #
-# Smoke campaign (jaxmd-unified). Legs chain via ``depends_on`` (geometry
-# handoff: positions + box; velocities rethermalized; FIRE skipped after NVT).
+# Smoke campaign (jaxmd-unified). Legs chain via ``depends_on``. The default
+# keeps positions, the cell, velocities, the Nose–Hoover chain, the Langevin
+# RNG, and the NPT piston momentum, and skips FIRE after the first leg.
+# ``--no-continue-velocities`` or ``handoff_pre_minimize: true`` draws new
+# Maxwell velocities instead. Each leg also writes trajectory.dcd (stride
+# 100 steps; a 0.05 ps / 0.5 fs smoke is the start frame and the end frame).
 #
 # NPT pass on this short smoke: finite E + finite V + Vfinal/V0 in [0.5, 2]
 # (see driver volume gate). Not a density-equilibration criterion.

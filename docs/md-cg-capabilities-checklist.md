@@ -31,7 +31,7 @@ on the shared pipeline.
 | FIRE, NVE, NVT (Langevin or Nosé–Hoover) | ✅ | ✅ | ✅ |
 | NPT (Nosé–Hoover piston; `pressure` is bar) | — | ✅ | ✅ |
 | Temperature schedule (`200->300:0.25,300:0.75`) | ✅ | ✅ | ✅ |
-| Geometry handoff (`--continue-from`, campaign `depends_on`) | ✅ | ✅ positions, cell, velocities, Nose–Hoover chain, Langevin RNG, NPT piston momentum | ✅ same, when `--continue-velocities` and FIRE is skipped |
+| Geometry handoff (`--continue-from`, campaign `depends_on`) | ✅ | ✅ positions, cell, velocities, Nose–Hoover chain, Langevin RNG, NPT piston momentum | ✅ default restores all of that |
 | Rigid-body Monte Carlo | — | ✅ | ✅ |
 | `ml_intra` + `mm_nonbonded` | ✅ | ✅ | ✅ |
 | Mechanical embedding (`--ml-resnames` + `mm_bonded`) | ✅ | ✅ | ✅ |
@@ -49,7 +49,7 @@ on the shared pipeline.
 | PyXtal / `--template-pdb` | legacy CLI | builders exist | ⬜ `NotImplementedError` |
 | Separate peptide and water checkpoints | ✅ | one model | ⬜ |
 | PME / ScaFaCoS inside the jitted loop | some ASE paths | ASE face only | ⬜ the jax face refuses a non-`mic` solver |
-| DCD + full restart (velocities, thermostat, RNG) | ✅ | ✅ `trajectory.dcd` plus `integrator_*` in the npz | ✅ when `--dcd-nsavc` > 0 and `--output-dir` is set |
+| DCD + full restart (velocities, thermostat, RNG) | ✅ | ✅ `integrator_*` in the npz; DCD when requested | ✅ default: DCD on if `--output-dir` is set; stride 100 steps |
 
 Near/far interaction policies still fail closed on the unified CLI. A
 mechanical policy (one ML provider on the solute, CGenFF on every pair)
@@ -286,22 +286,111 @@ That campaign is three short legs, chained by `depends_on`:
 | `npt` | `pbc_npt`, `depends_on: nvt`, `barostat_tau: 1.0e6` | `Vfinal/V0` stays inside `[0.5, 2]` |
 | `nve` | `pbc_nve`, `depends_on: npt` | A production-style leg from the NPT cell |
 
-Handoff copies positions and the cell, and, when the previous leg was the
-unified jax-md driver, the particle velocities (Å/ps), the Nose–Hoover chain,
-the Langevin RNG, and the NPT piston momentum. The next leg restores that
-integrator state, and skips FIRE unless `--handoff-pre-minimize` is set.
-FIRE, or `--continue-velocities` off, drops the restart and draws new
-Maxwell velocities: the saved momenta would describe the pre-minimization
-geometry. The cell still comes from the geometry handoff; the piston
-momentum is what continues the volume's rate of change. Rigid-body Monte
-Carlo starts a new NumPy generator from the seed.
+#### Restart and DCD defaults
 
-`--dcd-nsavc` greater than zero with `--output-dir` writes `trajectory.dcd`
-beside `trajectory.npz`. The DCD holds the frames the driver already records
-(default every 100 steps). Its header stride is that same `record_every`.
-Velocities and the thermostat stay in the npz (`momenta`, `masses`, and
-`integrator_*`) and in `handoff/state.npz`. A CHARMM `.res` written by
-`save_handoff` carries the velocities; the chain and the RNG stay in the npz.
+On `--jaxmd-unified` these are the defaults. A fresh leg draws new momenta.
+A later leg that sees a handoff keeps the previous integrator.
+
+| Flag | Default | What that does |
+|---|---|---|
+| `--output-dir` | unset | No `trajectory.npz`, no DCD, no `handoff/` on disk |
+| `--dcd-nsavc` | `1` | With `--output-dir`, write `trajectory.dcd` |
+| driver record interval | every 100 steps | DCD and npz frame spacing. `--dcd-nsavc` only turns the file on |
+| `--continue-velocities` | on | Restore momenta, Nose–Hoover chain, Langevin RNG, NPT piston momentum |
+| `--handoff-pre-minimize` | off | Skip FIRE after a handoff, so the saved momenta still match the coordinates |
+| `--handoff-write-res` | on | `handoff/final.res` gets positions and velocities (Å/ps) |
+| `--nvt-integrator` | `auto` → Langevin | Fresh NVT. NPT stays Nose–Hoover. NVE has momenta and no chain |
+
+`--ps 0.5 --dt-fs 0.5` is 1000 steps, so the DCD has 11 frames: step 0 and
+every 100th step through 1000. A campaign smoke of `--ps 0.05` at the same
+`dt` is 100 steps, so the DCD has the start frame and the end frame. The
+final integrator is in the npz either way.
+
+With `--output-dir artifacts/md_system/nvt_fresh` the run writes:
+
+```text
+trajectory.npz          positions, momenta, masses, integrator_*
+trajectory.dcd          positions only, stride 100
+handoff/state.npz       positions, cell, velocities, integrator_*
+handoff/final.res       positions and velocities for CHARMM
+handoff/manifest.json
+```
+
+Fresh NVT (Langevin from `--seed`). This is the default restart behaviour
+for a run that has nothing to continue:
+
+```bash
+uv run mmml md-system --setup pbc_nvt --backend jaxmd --jaxmd-unified \
+  --composition "TIP3:4" --box-size 15.0 \
+  --checkpoint examples/sppoky-epoch-0010_params.json \
+  --dt-fs 0.5 --ps 0.5 --seed 0 \
+  --output-dir artifacts/md_system/nvt_fresh
+```
+
+Continue that leg. Default flags restore the Langevin RNG and the momenta,
+and skip FIRE:
+
+```bash
+uv run mmml md-system --setup pbc_nvt --backend jaxmd --jaxmd-unified \
+  --composition "TIP3:4" --box-size 15.0 \
+  --checkpoint examples/sppoky-epoch-0010_params.json \
+  --dt-fs 0.5 --ps 0.5 --seed 0 \
+  --continue-from artifacts/md_system/nvt_fresh \
+  --output-dir artifacts/md_system/nvt_cont
+```
+
+The trialanine campaign does the same across `depends_on`: `npt` continues
+`nvt`, and `nve` continues `npt`, including the piston momentum. The cell
+comes from the geometry handoff.
+
+```bash
+uv run mmml md-system \
+  --config examples/tria_md_system/yaml/campaign_nvt_npt_nve.yaml \
+  --run-all
+```
+
+Draw new Maxwell velocities on the continue (chain and RNG start over too):
+
+```bash
+uv run mmml md-system --setup pbc_nvt --backend jaxmd --jaxmd-unified \
+  --composition "TIP3:4" --box-size 15.0 \
+  --checkpoint examples/sppoky-epoch-0010_params.json \
+  --dt-fs 0.5 --ps 0.5 --seed 0 \
+  --continue-from artifacts/md_system/nvt_fresh \
+  --no-continue-velocities \
+  --output-dir artifacts/md_system/nvt_retherm
+```
+
+Run FIRE on the handed coordinates, then draw new velocities. The saved
+momenta would describe the pre-minimization geometry, so the restart is
+dropped:
+
+```bash
+uv run mmml md-system --setup pbc_nvt --backend jaxmd --jaxmd-unified \
+  --composition "TIP3:4" --box-size 15.0 \
+  --checkpoint examples/sppoky-epoch-0010_params.json \
+  --dt-fs 0.5 --ps 0.5 --seed 0 \
+  --continue-from artifacts/md_system/nvt_fresh \
+  --handoff-pre-minimize \
+  --output-dir artifacts/md_system/nvt_fire
+```
+
+Keep the npz and the handoff, and skip the DCD:
+
+```bash
+uv run mmml md-system --setup pbc_nve --backend jaxmd --jaxmd-unified \
+  --composition "TIP3:4" --box-size 15.0 \
+  --checkpoint examples/sppoky-epoch-0010_params.json \
+  --dt-fs 0.5 --ps 0.5 --seed 0 \
+  --dcd-nsavc 0 \
+  --output-dir artifacts/md_system/nve_npz_only
+```
+
+A continue from `handoff/final.res` or any CHARMM `.res` restores velocities
+only. The Nose–Hoover chain and the Langevin RNG live in `handoff/state.npz`
+(`integrator_*`). Point `--continue-from` at the run directory, or at
+`handoff/state.npz`, to keep them. Rigid-body Monte Carlo starts a new
+NumPy generator from the seed on every leg.
 
 A dilute box at the default piston time (`1000 * dt`) can sit at a large
 instantaneous pressure and collapse; raise `barostat_tau` (metal time) for
@@ -373,6 +462,7 @@ other than `mic`.
 | Liquid, one ML model, classical pairs | §3.3 |
 | Solute ML, solvent bonded + classical pairs | §3.4 |
 | NPT smoke that must not slam the cell | §3.4 trialanine campaign, with `barostat_tau` |
+| Continue velocities, thermostat, and RNG | §3.4 defaults: `--continue-from` a run dir |
 | Whole-monomer MC | §3.5 |
 | Peptide with an ML water shell and a repulsive wall | §3.1 `cg_jaxmd_unified.py` |
 | Umbrella on `r(C–X) − r(C–N)` | §3.2 `rxncoor` |
