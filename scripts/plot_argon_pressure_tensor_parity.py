@@ -29,7 +29,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-from mmml.interfaces.pycharmmInterface.crystal_cell import charmm_symmetric_cell
+from mmml.interfaces.pycharmmInterface.crystal_cell import (
+    CHARMM_ANGLE_RSMALL_DEG,
+    charmm_symmetric_cell,
+)
 from mmml.utils.plotting.styles import apply_plot_style, comparison_colors
 
 REPO = Path(__file__).resolve().parents[1]
@@ -76,6 +79,8 @@ def _env() -> None:
     os.environ.setdefault("MMML_NO_CHARMM_MPI", "1")
     os.environ.setdefault("MMML_NO_MPI_RERUN", "1")
     os.environ.setdefault("JAX_PLATFORMS", "cpu")
+    # Shear finite differences are ~0.001 kcal/mol. Float32 truncates them.
+    os.environ.setdefault("JAX_ENABLE_X64", "1")
 
 
 def _box_to_abc_angles(box: np.ndarray) -> tuple[float, float, float, float, float, float]:
@@ -216,21 +221,23 @@ def _setup():
         frac = pos @ np.linalg.inv(box)
         a, b, c, alpha, beta, gamma = _box_to_abc_angles(box)
         crystal.free_crystal()
+        # Same snap as ``GenTen``: a coarser cutoff (1e-4°) called
+        # ``define_ortho`` while the symmetric cell still carried shear.
         if (
-            abs(alpha - 90.0) < 1e-4
-            and abs(beta - 90.0) < 1e-4
-            and abs(gamma - 90.0) < 1e-4
+            abs(alpha - 90.0) < CHARMM_ANGLE_RSMALL_DEG
+            and abs(beta - 90.0) < CHARMM_ANGLE_RSMALL_DEG
+            and abs(gamma - 90.0) < CHARMM_ANGLE_RSMALL_DEG
         ):
             ok = crystal.define_ortho(a, b, c)
         else:
             ok = crystal.define_tri(a, b, c, alpha, beta, gamma)
         if not ok:
             raise RuntimeError(f"crystal define failed for box={box}")
-        if not crystal.build(build_cut):
-            raise RuntimeError("crystal.build failed")
         cell = cell_fn(a, b, c, alpha, beta, gamma)
         pos_canon = frac @ cell
         coor.set_positions(pd.DataFrame(pos_canon, columns=["x", "y", "z"]))
+        if not crystal.build(build_cut):
+            raise RuntimeError("crystal.build failed")
         safe_energy_show()
         ener_kcal = float(lingo.get_energy_value("ENER"))
         return ener_kcal * KCAL_MOL_TO_EV

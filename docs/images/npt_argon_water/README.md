@@ -36,8 +36,13 @@ cell, while `define_tri` / `XTLAXS` installs the symmetric Nosé–Klein cell
 of the same metric. Those frames coincide for an orthogonal box and differ
 by a rotation once an angle leaves 90°, so the CHARMM minimum image on a
 sheared step was the wrong set of distances. The parity script now writes
-coordinates in that symmetric cell. Regenerate the figure before reading
-\(P_{xy,xz,yz}\) off it. The CHARMM density
+coordinates in that symmetric cell, and it builds the image list after those
+coordinates are in place. On one AR1:500 frame the symmetric placement
+matches the jax-md energy to \(10^{-13}\,\mathrm{eV}\) at \(\gamma=85^\circ\)
+(the crystallographic placement is \(9.4\,\mathrm{eV}\) off) and the
+finite-difference tensor, including \(P_{xy,xz,yz}\), agrees to
+\(\sim 10^{-7}\,\mathrm{bar}\). The checked-in figure is still the scattered
+shear plot from the old placement. The CHARMM density
 residual (⟨ρ⟩ 1.281, noisy ⟨P⟩) is the CPT piston across segments, not this
 virial. Later EQUI/PROD segments keep `iasvel=0` and `pmass>0`, and the
 `IUPTEN` log appends instead of truncating on every `dyna`.
