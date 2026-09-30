@@ -29,6 +29,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
+from mmml.interfaces.pycharmmInterface.crystal_cell import charmm_symmetric_cell
 from mmml.utils.plotting.styles import apply_plot_style, comparison_colors
 
 REPO = Path(__file__).resolve().parents[1]
@@ -89,20 +90,6 @@ def _box_to_abc_angles(box: np.ndarray) -> tuple[float, float, float, float, flo
         return float(np.degrees(np.arccos(c)))
 
     return la, lb, lc, ang(b_v, c_v), ang(a_v, c_v), ang(a_v, b_v)
-
-
-def _abc_angles_to_box(
-    a: float, b: float, c: float, alpha: float, beta: float, gamma: float
-) -> np.ndarray:
-    """Standard crystallographic cell (columns = a,b,c). Same metric as input box."""
-    al, be, ga = np.radians([alpha, beta, gamma])
-    ax = float(a)
-    bx = float(b) * np.cos(ga)
-    by = float(b) * np.sin(ga)
-    cx = float(c) * np.cos(be)
-    cy = float(c) * (np.cos(al) - np.cos(be) * np.cos(ga)) / np.sin(ga)
-    cz = float(np.sqrt(max(float(c) ** 2 - cx**2 - cy**2, 0.0)))
-    return np.array([[ax, bx, cx], [0.0, by, cy], [0.0, 0.0, cz]], dtype=np.float64)
 
 
 def _mm_energy_eV(pos: np.ndarray, box: np.ndarray, nbdata, settings) -> float:
@@ -209,14 +196,20 @@ def _setup():
     )
     build_cut = float(cuts.cutim)
 
-    def charmm_energy_eV(pos: np.ndarray, box: np.ndarray) -> float:
-        """Install ``box`` metric via crystal, evaluate ENER at matching fractionals.
+    def charmm_energy_eV(
+        pos: np.ndarray,
+        box: np.ndarray,
+        cell_fn=charmm_symmetric_cell,
+    ) -> float:
+        """Install ``box`` metric via crystal, evaluate ENER in CHARMM's frame.
 
-        CHARMM only accepts (a,b,c,α,β,γ), which canonicalizes the Cartesian
-        cell orientation. Placing ``pos`` from the raw strained box into that
-        cell without remapping made shear FD apples-to-oranges (systematic
-        off-diagonal slopes). We keep fractional coords and remap into the
-        crystallographic cell (same metric → same MIC distances).
+        ``define_tri`` keeps ``(a,b,c,α,β,γ)`` and ``XTLAXS`` rebuilds a
+        symmetric shape matrix (Nosé–Klein), not the lower-triangular
+        crystallographic cell. Those two embeddings share a metric and differ
+        by a rotation once an angle leaves 90°. Fractionals are rewritten with
+        ``cell_fn`` (default: that symmetric cell) so the minimum-image
+        distances match the lattice CHARMM actually built. The crystallographic
+        placement is the previous, wrong frame and is only for comparison.
         """
         box = np.asarray(box, dtype=np.float64).reshape(3, 3)
         pos = np.asarray(pos, dtype=np.float64).reshape(-1, 3)
@@ -235,7 +228,7 @@ def _setup():
             raise RuntimeError(f"crystal define failed for box={box}")
         if not crystal.build(build_cut):
             raise RuntimeError("crystal.build failed")
-        cell = _abc_angles_to_box(a, b, c, alpha, beta, gamma)
+        cell = cell_fn(a, b, c, alpha, beta, gamma)
         pos_canon = frac @ cell
         coor.set_positions(pd.DataFrame(pos_canon, columns=["x", "y", "z"]))
         safe_energy_show()

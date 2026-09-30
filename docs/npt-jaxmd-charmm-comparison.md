@@ -242,3 +242,4 @@ For MM bonded energy parity (different question), see
 | restart crystal | `READYN` adopts `XTLTYP` from the `REST` header before `XTLSYM`; writers store the full 3×3 |
 | CPT segments | segment 2+ keeps `pmass>0`, `pref`, `iasvel=0`; `IUPTEN` log appends |
 | ASE `pbc_npt` | isotropic Melchionna NPT when the calculator implements `stress` |
+| shear cell | CHARMM `ENER` coordinates use the Nosé–Klein symmetric cell, not the crystallographic embedding |

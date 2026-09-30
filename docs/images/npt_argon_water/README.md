@@ -30,12 +30,14 @@ remain.
 
 On 16 frames from the jax-md trajectory, both engines’ **strain** pressure
 (virial only; `PI**` is 0 outside DYNA on this build). Diagonal components
-agree to numerical noise after \(t>0\). Shear is included in the next
-`plot_argon_pressure_tensor_parity.py` run: `define_tri` calls
-`crystal_define_tri`, and `READYN` adopts the restart header’s lattice type
-before `XTLSYM` (a `CUBI` session used to zero the off-diagonal of `XTLABC`).
-The figure currently in this directory is the diagonal-only plot from before
-that change; regenerate it to refresh the shear panels. The CHARMM density
+agree to numerical noise after \(t>0\). The shear panels in the checked-in
+figure do not: they place atoms in the lower-triangular crystallographic
+cell, while `define_tri` / `XTLAXS` installs the symmetric Nosé–Klein cell
+of the same metric. Those frames coincide for an orthogonal box and differ
+by a rotation once an angle leaves 90°, so the CHARMM minimum image on a
+sheared step was the wrong set of distances. The parity script now writes
+coordinates in that symmetric cell. Regenerate the figure before reading
+\(P_{xy,xz,yz}\) off it. The CHARMM density
 residual (⟨ρ⟩ 1.281, noisy ⟨P⟩) is the CPT piston across segments, not this
 virial. Later EQUI/PROD segments keep `iasvel=0` and `pmass>0`, and the
 `IUPTEN` log appends instead of truncating on every `dyna`.
