@@ -14,10 +14,15 @@ from the legacy backend):
   builder and ``--from-pdb`` full-system loading are wired here).
 - lambda-TI.
 
-Geometry handoff (``--continue-from`` / campaign ``depends_on``) is supported:
-positions + box are applied; velocities / thermostat / barostat state are not
-(rethermalize downstream). FIRE is skipped after handoff unless
-``--handoff-pre-minimize``.
+Geometry handoff (``--continue-from`` / campaign ``depends_on``) is supported.
+Positions and the cell come from the geometry handoff. When
+``--continue-velocities`` is on and FIRE is skipped, the next leg also
+restores jax-md momenta, the Nose–Hoover chain, the Langevin RNG, and the
+NPT piston momentum from ``integrator_*`` keys (or Å/ps velocities when only
+those were saved). ``--handoff-pre-minimize`` drops that restart and
+rethermalizes, because FIRE moves the coordinates. A DCD of the recorded
+frames is written next to ``trajectory.npz`` when ``--dcd-nsavc`` is positive
+and ``--output-dir`` is set.
 
 See ``docs/md-cg-unification-design.md`` (§0, §9, §11) and
 ``docs/md-cg-unification-handoff.md`` for the surrounding architecture.
@@ -146,8 +151,10 @@ def _resolve_handoff_in(args: Any):
 def _apply_incoming_handoff(args: Any, system):
     """Overlay handoff positions (+ cell) onto the built topology system.
 
-    Returns ``(system, from_handoff)``. Geometry-only: velocities are ignored
-    (driver rethermalizes). Raises on atom-count / Z mismatches.
+    Returns ``(system, from_handoff)``. Positions and the cell are applied
+    here. Velocities and the integrator restart are attached to the ensemble
+    later, when FIRE is skipped and ``--continue-velocities`` is on.
+    Raises on atom-count / Z mismatches.
     """
     handoff = _resolve_handoff_in(args)
     if handoff is None:
@@ -189,6 +196,28 @@ def _apply_incoming_handoff(args: Any, system):
     return system, True
 
 
+def _restart_payload_from_handoff(args: Any) -> dict | None:
+    """Integrator leaves to feed the next leg, or None to rethermalize.
+
+    FIRE after a handoff moves the coordinates, so the saved momenta would
+    describe a different geometry. ``--continue-velocities`` off means the
+    same thing: draw a new Maxwell distribution.
+    """
+    if not bool(getattr(args, "continue_velocities", True)):
+        return None
+    if bool(getattr(args, "handoff_pre_minimize", False)):
+        return None
+    handoff = _resolve_handoff_in(args)
+    if handoff is None:
+        return None
+    integrator = getattr(handoff, "integrator", None)
+    if isinstance(integrator, dict) and integrator:
+        return dict(integrator)
+    if handoff.velocities is not None:
+        return {"velocities_ang_ps": np.asarray(handoff.velocities, dtype=np.float64)}
+    return None
+
+
 def _publish_unified_handoff(args: Any, system, traj) -> None:
     """Publish final geometry for campaign ``depends_on`` / ``save_handoff``."""
     from mmml.cli.run.md_handoff import MdHandoffState, set_handoff_out
@@ -207,18 +236,34 @@ def _publish_unified_handoff(args: Any, system, traj) -> None:
     else:
         cell = None
         pbc = False
+    from mmml.md.restart import ang_ps_from_momenta
+
+    restart = traj.metadata.get("restart") or None
+    velocities = None
+    if isinstance(restart, dict) and restart.get("momentum") is not None and restart.get("mass") is not None:
+        velocities = ang_ps_from_momenta(restart["momentum"], restart["mass"])
+    carried = "positions+box"
+    if velocities is not None:
+        carried = "positions+box+velocities"
+    if isinstance(restart, dict) and (
+        restart.get("chain") or restart.get("thermostat") or restart.get("rng") is not None
+    ):
+        carried += "+integrator"
     set_handoff_out(
         MdHandoffState(
             positions=R,
             atomic_numbers=np.asarray(system.Z, dtype=np.int32),
-            velocities=None,
+            velocities=velocities,
             cell=cell,
             pbc=pbc,
             temperature_K=float(getattr(args, "temperature", 300.0)),
+            step=int(traj.metadata.get("steps") or 0) or None,
+            integrator=restart if isinstance(restart, dict) else None,
             metadata={
                 "backend": "jaxmd-unified",
                 "source": "run_unified_jaxmd",
-                "note": "geometry-only; velocities not preserved",
+                "note": carried,
+                "velocities_source": "jaxmd-momenta" if velocities is not None else None,
             },
         )
     )
@@ -676,6 +721,24 @@ def run_unified_jaxmd(args: Any) -> int:
         else:
             system = _fire_minimize_system(
                 args, run_config, system, ctx, term_kwargs
+            )
+
+        from dataclasses import replace
+
+        params = dict(run_config.ensemble.params)
+        changed = False
+        if int(getattr(args, "dcd_nsavc", 0) or 0) > 0 and getattr(args, "output_dir", None):
+            params["write_dcd"] = True
+            changed = True
+        if from_handoff:
+            payload = _restart_payload_from_handoff(args)
+            if payload:
+                params["restart"] = payload
+                changed = True
+        if changed:
+            run_config = replace(
+                run_config,
+                ensemble=replace(run_config.ensemble, params=params),
             )
 
         traj = assemble_and_run(

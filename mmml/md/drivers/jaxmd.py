@@ -414,6 +414,16 @@ class JaxmdDriver:
         if is_npt:
             print(f"    [{self.name}] NPT: init state + E0/P0 (first compile)…", flush=True)
         state = _init_state(init_position, dynamic_kwargs)
+        restart = options.get("restart")
+        if restart and ensemble.ensemble != "min":
+            from mmml.md.restart import apply_integrator_restart
+
+            state = apply_integrator_restart(state, restart)
+            print(
+                f"    [{self.name}] restored integrator "
+                f"({restart.get('kind', 'velocities')})",
+                flush=True,
+            )
 
         frames = [np.asarray(jax.device_get(_real_of(state)))]
         boxes = [None if box is None else np.asarray(jax.device_get(_box_of(state)))]
@@ -574,6 +584,9 @@ class JaxmdDriver:
                 next_record = min(completed + self.record_every, ensemble.n_steps)
 
         frames = [np.asarray(f) for f in frames]
+        from mmml.md.restart import flatten_restart, snapshot_integrator
+
+        restart_snapshot = snapshot_integrator(state)
         # Z (atomic numbers) and box are needed downstream to reconstruct ASE
         # Atoms for structural analysis (bonds/angles/dihedrals/RDF via
         # mmml.utils.plotting.trajectory_structure) without re-running the
@@ -603,7 +616,23 @@ class JaxmdDriver:
                     pressures_vir_bar, dtype=np.float64
                 )
                 npz_kwargs["target_pressure_bar"] = float(ensemble.pressure_bar)
+            if momenta and all(m is not None for m in momenta):
+                npz_kwargs["momenta"] = np.asarray(momenta)
+                npz_kwargs["masses"] = np.asarray(jax.device_get(state.mass))
+            for key, value in flatten_restart(restart_snapshot).items():
+                npz_kwargs[f"integrator_{key}"] = value
             np.savez(path, **npz_kwargs)
+            if bool(options.get("write_dcd", False)):
+                from mmml.md.restart import write_position_dcd
+
+                dcd_boxes = boxes if any(item is not None for item in boxes) else None
+                write_position_dcd(
+                    path.with_suffix(".dcd"),
+                    frames,
+                    boxes=dcd_boxes,
+                    dt_fs=float(ensemble.dt_fs),
+                    record_every=int(self.record_every),
+                )
 
         metadata: dict[str, Any] = {
             "steps": completed,
@@ -618,6 +647,7 @@ class JaxmdDriver:
         if momenta and all(m is not None for m in momenta):
             metadata["momenta"] = np.asarray(momenta)
             metadata["masses"] = np.asarray(jax.device_get(state.mass))
+        metadata["restart"] = restart_snapshot
         if is_npt:
             metadata["boxes"] = np.asarray(boxes)
             metadata["volumes_A3"] = np.asarray(volumes_A3, dtype=np.float64)

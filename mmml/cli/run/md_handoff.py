@@ -31,6 +31,9 @@ class MdHandoffState:
   pressure_atm: float | None = None
   step: int | None = None
   metadata: dict[str, Any] = field(default_factory=dict)
+  # jax-md chain / Langevin RNG / piston momentum. Not JSON; round-trips
+  # through ``integrator_*`` arrays in ``state.npz``.
+  integrator: dict[str, Any] | None = None
 
   def __post_init__(self) -> None:
     self.positions = np.asarray(self.positions, dtype=np.float64)
@@ -1687,6 +1690,7 @@ def load_handoff_from_npz(path: Path, *, frame: int = 0) -> MdHandoffState:
     pressure_atm=float(data["pressure_atm"]) if "pressure_atm" in data.files else None,
     step=int(data["step"]) if "step" in data.files else None,
     metadata=dict(meta),
+    integrator=_integrator_from_npz(data),
   )
 
 
@@ -1964,13 +1968,30 @@ def enrich_handoff_from_restart_files(
     )
 
 
+def _integrator_from_npz(data) -> dict[str, Any] | None:
+  from mmml.md.restart import unflatten_restart
+
+  flat = {key: data[key] for key in data.files if str(key).startswith("integrator_")}
+  if not flat:
+    return None
+  restored = unflatten_restart(flat)
+  return restored or None
+
+
 def handoff_to_npz_dict(handoff: MdHandoffState) -> dict[str, Any]:
+  # Integrator arrays are stored as their own keys. JSON metadata cannot hold them.
+  meta = {key: value for key, value in handoff.metadata.items() if key != "integrator"}
   out: dict[str, Any] = {
     "positions": handoff.positions,
     "atomic_numbers": handoff.atomic_numbers,
     "pbc": np.bool_(handoff.pbc),
-    "metadata": json.dumps(handoff.metadata),
+    "metadata": json.dumps(meta),
   }
+  if handoff.integrator:
+    from mmml.md.restart import flatten_restart
+
+    for key, value in flatten_restart(handoff.integrator).items():
+      out[f"integrator_{key}"] = value
   if handoff.velocities is not None:
     out["velocities"] = handoff.velocities
   if handoff.cell is not None:

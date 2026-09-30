@@ -403,3 +403,127 @@ def test_npt_forces_are_real_space_and_conserve_energy():
     pe = np.asarray(traj.metadata["energies"])
     assert np.ptp(pe) > 1e-3, "potential must actually vary for the test to bite"
     assert np.ptp(e_tot) < 0.02 * np.ptp(pe), (e_tot, pe)
+
+
+def _continue_matches_uninterrupted(ensemble: str, thermostat: str | None, extra: dict):
+    """Two steps, then two more from the saved integrator, match four steps."""
+    system = _system()
+    energy = HybridEnergy([_HarmonicTerm()], system, EnergyContext())
+    params = {"masses": np.ones(2), "seed": 4, "float64": True, **extra}
+    spec = dict(
+        ensemble=ensemble,
+        space="free",
+        temperature_K=150.0,
+        dt_fs=0.1,
+        thermostat=thermostat,
+    )
+    reference = JaxmdDriver(record_every=1).run(
+        system, energy, EnsembleSpec(n_steps=4, params=params, **spec)
+    )
+    first = JaxmdDriver(record_every=1).run(
+        system, energy, EnsembleSpec(n_steps=2, params=params, **spec)
+    )
+    continued = MolecularSystem(
+        R=np.asarray(first.metadata["positions"][-1]),
+        Z=system.Z,
+        box=None,
+        mol_id=system.mol_id,
+    )
+    energy_b = HybridEnergy([_HarmonicTerm()], continued, EnergyContext())
+    # A different seed would draw new momenta if the restart were ignored.
+    cont_params = {**params, "seed": 99, "restart": first.metadata["restart"]}
+    second = JaxmdDriver(record_every=1).run(
+        continued, energy_b, EnsembleSpec(n_steps=2, params=cont_params, **spec)
+    )
+    np.testing.assert_allclose(
+        second.metadata["positions"][-1],
+        reference.metadata["positions"][-1],
+        atol=1e-5,
+    )
+    return first
+
+
+def test_nve_restart_continues_the_trajectory():
+    first = _continue_matches_uninterrupted("nve", None, {})
+    assert first.metadata["restart"]["kind"] == "nve"
+
+
+def test_langevin_restart_continues_the_rng():
+    first = _continue_matches_uninterrupted(
+        "nvt", "langevin", {"langevin_gamma": 1.0}
+    )
+    assert first.metadata["restart"]["kind"] == "nvt_langevin"
+    assert "rng" in first.metadata["restart"]
+
+
+def test_nose_hoover_restart_continues_the_chain():
+    first = _continue_matches_uninterrupted("nvt", "nhc", {})
+    assert first.metadata["restart"]["kind"] == "nvt_nose_hoover"
+    assert "chain" in first.metadata["restart"]
+
+
+def test_npt_restart_continues_piston_momentum():
+    system = _periodic_system(n_side=2, spacing=4.0)
+    energy = HybridEnergy([_HarmonicTerm()], system, EnergyContext())
+    params = {
+        "float64": True,
+        "seed": 3,
+        "barostat_kwargs": {"tau": 1.0e6},
+        "thermostat_kwargs": {"tau": 1.0e6},
+    }
+    spec = dict(ensemble="npt", dt_fs=0.5, temperature_K=50.0, pressure_bar=1.0)
+    reference = JaxmdDriver(record_every=1).run(
+        system, energy, EnsembleSpec(n_steps=4, params=params, **spec)
+    )
+    first = JaxmdDriver(record_every=1).run(
+        system, energy, EnsembleSpec(n_steps=2, params=params, **spec)
+    )
+    assert first.metadata["restart"]["kind"] == "npt_nose_hoover"
+    box = np.asarray(first.metadata["boxes"][-1])
+    continued = MolecularSystem(
+        R=np.asarray(first.metadata["positions"][-1]),
+        Z=system.Z,
+        box=box,
+        mol_id=system.mol_id,
+    )
+    energy_b = HybridEnergy([_HarmonicTerm()], continued, EnergyContext())
+    second = JaxmdDriver(record_every=1).run(
+        continued,
+        energy_b,
+        EnsembleSpec(n_steps=2, params={**params, "seed": 99, "restart": first.metadata["restart"]}, **spec),
+    )
+    np.testing.assert_allclose(
+        second.metadata["positions"][-1],
+        reference.metadata["positions"][-1],
+        atol=1e-5,
+    )
+    np.testing.assert_allclose(
+        second.metadata["boxes"][-1],
+        reference.metadata["boxes"][-1],
+        atol=1e-5,
+    )
+
+
+def test_write_dcd_and_integrator_npz(tmp_path: Path):
+    system = _system()
+    energy = HybridEnergy([_HarmonicTerm()], system, EnergyContext())
+    output = tmp_path / "trajectory.npz"
+    result = JaxmdDriver(record_every=1, output_path=output).run(
+        system,
+        energy,
+        EnsembleSpec(
+            ensemble="nve",
+            space="free",
+            dt_fs=0.1,
+            n_steps=2,
+            params={"masses": np.ones(2), "seed": 1, "write_dcd": True},
+        ),
+    )
+    assert result.metadata["restart"]["kind"] == "nve"
+    dcd = output.with_suffix(".dcd")
+    assert dcd.exists()
+    assert dcd.read_bytes()[4:8] == b"CORD"
+    saved = np.load(output)
+    assert "momenta" in saved.files
+    assert "integrator_momentum" in saved.files
+    assert str(saved["integrator_kind"]) == "nve"

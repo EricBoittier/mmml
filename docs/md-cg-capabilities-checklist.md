@@ -31,7 +31,7 @@ on the shared pipeline.
 | FIRE, NVE, NVT (Langevin or Nosé–Hoover) | ✅ | ✅ | ✅ |
 | NPT (Nosé–Hoover piston; `pressure` is bar) | — | ✅ | ✅ |
 | Temperature schedule (`200->300:0.25,300:0.75`) | ✅ | ✅ | ✅ |
-| Geometry handoff (`--continue-from`, campaign `depends_on`) | ✅ | 🚧 positions + box | 🚧 velocities are rethermalized |
+| Geometry handoff (`--continue-from`, campaign `depends_on`) | ✅ | ✅ positions, cell, velocities, Nose–Hoover chain, Langevin RNG, NPT piston momentum | ✅ same, when `--continue-velocities` and FIRE is skipped |
 | Rigid-body Monte Carlo | — | ✅ | ✅ |
 | `ml_intra` + `mm_nonbonded` | ✅ | ✅ | ✅ |
 | Mechanical embedding (`--ml-resnames` + `mm_bonded`) | ✅ | ✅ | ✅ |
@@ -49,7 +49,7 @@ on the shared pipeline.
 | PyXtal / `--template-pdb` | legacy CLI | builders exist | ⬜ `NotImplementedError` |
 | Separate peptide and water checkpoints | ✅ | one model | ⬜ |
 | PME / ScaFaCoS inside the jitted loop | some ASE paths | ASE face only | ⬜ the jax face refuses a non-`mic` solver |
-| DCD + full restart (velocities, thermostat, RNG) | ✅ | 🚧 | 🚧 |
+| DCD + full restart (velocities, thermostat, RNG) | ✅ | ✅ `trajectory.dcd` plus `integrator_*` in the npz | ✅ when `--dcd-nsavc` > 0 and `--output-dir` is set |
 
 Near/far interaction policies still fail closed on the unified CLI. A
 mechanical policy (one ML provider on the solute, CGenFF on every pair)
@@ -286,11 +286,26 @@ That campaign is three short legs, chained by `depends_on`:
 | `npt` | `pbc_npt`, `depends_on: nvt`, `barostat_tau: 1.0e6` | `Vfinal/V0` stays inside `[0.5, 2]` |
 | `nve` | `pbc_nve`, `depends_on: npt` | A production-style leg from the NPT cell |
 
-Handoff copies positions and the cell. The next leg draws new velocities and
-skips FIRE unless `--handoff-pre-minimize` is set. A dilute box at the
-default piston time (`1000 * dt`) can sit at a large instantaneous pressure
-and collapse; raise `barostat_tau` (metal time) for the smoke. The denser
-200-water / 30 Å recipe is
+Handoff copies positions and the cell, and, when the previous leg was the
+unified jax-md driver, the particle velocities (Å/ps), the Nose–Hoover chain,
+the Langevin RNG, and the NPT piston momentum. The next leg restores that
+integrator state, and skips FIRE unless `--handoff-pre-minimize` is set.
+FIRE, or `--continue-velocities` off, drops the restart and draws new
+Maxwell velocities: the saved momenta would describe the pre-minimization
+geometry. The cell still comes from the geometry handoff; the piston
+momentum is what continues the volume's rate of change. Rigid-body Monte
+Carlo starts a new NumPy generator from the seed.
+
+`--dcd-nsavc` greater than zero with `--output-dir` writes `trajectory.dcd`
+beside `trajectory.npz`. The DCD holds the frames the driver already records
+(default every 100 steps). Its header stride is that same `record_every`.
+Velocities and the thermostat stay in the npz (`momenta`, `masses`, and
+`integrator_*`) and in `handoff/state.npz`. A CHARMM `.res` written by
+`save_handoff` carries the velocities; the chain and the RNG stay in the npz.
+
+A dilute box at the default piston time (`1000 * dt`) can sit at a large
+instantaneous pressure and collapse; raise `barostat_tau` (metal time) for
+the smoke. The denser 200-water / 30 Å recipe is
 `examples/tria_md_system/yaml/campaign_nvt_npt_dense.yaml`.
 
 A block temperature schedule on any NVT or NPT leg:
