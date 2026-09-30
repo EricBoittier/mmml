@@ -50,7 +50,6 @@ on the shared pipeline.
 | Separate peptide and water checkpoints | ✅ | one model | ⬜ |
 | PME / ScaFaCoS inside the jitted loop | some ASE paths | ASE face only | ⬜ the jax face refuses a non-`mic` solver |
 | DCD + full restart (velocities, thermostat, RNG) | ✅ | 🚧 | 🚧 |
-| apocharmm device-side forces | — | ⬜ | ⬜ |
 
 Near/far interaction policies still fail closed on the unified CLI. A
 mechanical policy (one ML provider on the solute, CGenFF on every pair)
