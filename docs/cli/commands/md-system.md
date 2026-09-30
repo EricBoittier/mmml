@@ -479,7 +479,11 @@ Full help (all categories). Short index: -h One category: -hN or -halias (see
   --verbose             Print CHARMM BLOCK Rich summaries and extra MLpot setup
                         detail
   --dcd-nsavc DCD_NSAVC
-                        pycharmm: DCD frame every N integration/SD steps
+                        Write a positions DCD when > 0 and --output-dir is set
+                        (default: 1). On --jaxmd-unified the frame spacing is
+                        the driver record interval (100 steps); this flag only
+                        turns the file on. PyCHARMM still saves a frame every N
+                        integration/SD steps.
   --dcd-interval-ps PS  pycharmm: DCD save interval in ps (overrides --dcd-nsavc
                         when set)
   --dcd-max-frames N    pycharmm: cap DCD output to ~N frames per stage when
@@ -1104,8 +1108,12 @@ Full help (all categories). Short index: -h One category: -hN or -halias (see
                         Frame index for .h5/.traj continue-from (default: -1
                         last).
   --continue-velocities, --no-continue-velocities
-                        Use velocities from handoff when present (else re-
-                        thermalize).
+                        On --continue-from / campaign depends_on, restore jax-md
+                        momenta, the Nose–Hoover chain, the Langevin RNG, and
+                        the NPT piston momentum (default: on). --no-continue-
+                        velocities draws new Maxwell velocities. A CHARMM .res
+                        restores velocities only; the chain and RNG stay in
+                        handoff/state.npz.
   --handoff-write-res, --no-handoff-write-res
                         Write handoff/final.res alongside state.npz after
                         dynamics.
