@@ -14,6 +14,7 @@ import pytest
 import subprocess
 
 from benchmarks.gpu_bench_lib import (
+    BENCH_GROUPS,
     CheckResult,
     TimingRow,
     all_blocking_checks_passed,
@@ -33,6 +34,7 @@ from benchmarks.gpu_bench_lib import (
     render_gpu_report_html,
     render_gpu_report_json,
     resolve_asv_command,
+    resolve_bench_regex,
     run_asv,
     run_correctness_checks,
     run_gpu_benchmark,
@@ -172,6 +174,42 @@ def test_gpu_bench_list_checks_exits_zero():
     from benchmarks.gpu_bench import main
 
     assert main(["--list-checks"]) == 0
+
+
+def test_gpu_bench_list_groups_exits_zero():
+    from benchmarks.gpu_bench import main
+
+    assert main(["--list-groups"]) == 0
+
+
+def test_resolve_bench_regex_empty_is_full_suite():
+    assert resolve_bench_regex() is None
+    assert resolve_bench_regex(groups=[], bench="") is None
+
+
+def test_resolve_bench_regex_named_groups():
+    assert resolve_bench_regex(groups=["md"]) == "bench_md_driver"
+    assert resolve_bench_regex(groups=["md,neighbors"]) == (
+        "bench_md_driver|bench_neighbors"
+    )
+    assert resolve_bench_regex(groups=["md", "neighbors"]) == (
+        "bench_md_driver|bench_neighbors"
+    )
+    assert resolve_bench_regex(groups=["throughput"]) == BENCH_GROUPS["throughput"]
+    assert resolve_bench_regex(groups=["ml"], bench="MDSystemSize") == (
+        f"{BENCH_GROUPS['ml']}|MDSystemSize"
+    )
+
+
+def test_resolve_bench_regex_unknown_group():
+    with pytest.raises(ValueError, match="unknown bench group"):
+        resolve_bench_regex(groups=["not-a-group"])
+
+
+def test_gpu_bench_unknown_group_exits_two():
+    from benchmarks.gpu_bench import main
+
+    assert main(["--group", "not-a-group"]) == 2
 
 
 def test_build_asv_run_argv_requires_commit_hash():

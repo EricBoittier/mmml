@@ -35,6 +35,59 @@ REPORT_JSON_NAME = "gpu-report.json"
 
 _METADATA_JSON_NAMES = frozenset({"machine.json", "benchmarks.json"})
 
+#: Named asv subsets so a GPU job can time related modules without the full suite.
+#: Values are ``asv --bench`` regexes; several ``--group`` flags are OR-combined.
+BENCH_GROUPS: dict[str, str] = {
+    "md": "bench_md_driver",
+    "physnet": "bench_ml_physnet",
+    "calculator": "bench_calculator",
+    "ml": "bench_ml_physnet|bench_calculator",
+    "mm": "bench_mm_energy",
+    "neighbors": "bench_neighbors",
+    "constraints": "bench_constraints",
+    "data": "bench_data",
+    "throughput": "bench_md_driver|bench_neighbors|bench_constraints",
+}
+
+
+def flatten_group_names(values: Sequence[str] | None) -> list[str]:
+    """``--group md --group neighbors`` or ``--group md,neighbors`` → unique names."""
+    names: list[str] = []
+    for raw in values or ():
+        for part in str(raw).split(","):
+            name = part.strip().lower()
+            if name:
+                names.append(name)
+    return list(dict.fromkeys(names))
+
+
+def resolve_bench_regex(
+    *,
+    groups: Sequence[str] | None = None,
+    bench: str | None = None,
+) -> str | None:
+    """Combine ``--group`` names and an optional ``--bench`` regex.
+
+    Unknown group names raise ``ValueError``. An empty selection means the
+    full suite (``None``, so asv gets no ``--bench``).
+    """
+    parts: list[str] = []
+    seen: set[str] = set()
+    for name in flatten_group_names(groups):
+        regex = BENCH_GROUPS.get(name)
+        if regex is None:
+            known = ", ".join(BENCH_GROUPS)
+            raise ValueError(f"unknown bench group {name!r}; known: {known}")
+        if regex not in seen:
+            seen.add(regex)
+            parts.append(regex)
+    extra = (bench or "").strip()
+    if extra and extra not in seen:
+        parts.append(extra)
+    if not parts:
+        return None
+    return "|".join(parts)
+
 
 @dataclass(frozen=True, slots=True)
 class CheckResult:

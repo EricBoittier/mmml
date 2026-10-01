@@ -4,6 +4,7 @@
 # Submit:
 #   sbatch ~/mmml/benchmarks/slurm_bench_gpu.sh
 #   sbatch --export=ALL,BENCH_PATTERN=bench_md_driver ~/mmml/benchmarks/slurm_bench_gpu.sh
+#   sbatch --export=ALL,BENCH_GROUP=md ~/mmml/benchmarks/slurm_bench_gpu.sh
 #
 # Monitor:
 #   tail -f ~/tests/runs/slurm-mmml-bench-*.out
@@ -53,6 +54,9 @@ nvidia-smi --query-gpu=name,memory.total,driver_version --format=csv,noheader ||
 ARGS=()
 if [[ -n "${BENCH_PATTERN:-}" ]]; then
   ARGS+=(--bench "${BENCH_PATTERN}")
+fi
+if [[ -n "${BENCH_GROUP:-}" ]]; then
+  ARGS+=(--group "${BENCH_GROUP}")
 fi
 if [[ -n "${CHECK_NAMES:-}" ]]; then
   IFS=',' read -ra _CHECKS <<< "${CHECK_NAMES}"

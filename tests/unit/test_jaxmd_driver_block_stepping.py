@@ -36,7 +36,7 @@ def _mono_atom_pbc_system(n=4, spacing=5.0, box=20.0):
     )
 
 
-def _run(block_size, record_every, n_steps, skin_A=0.0):
+def _run(block_size, record_every, n_steps, skin_A=0.0, ensemble="nve"):
     from mmml.md.assemble import build_hybrid_energy
     from mmml.md.config import EnsembleSpec
     from mmml.md.drivers import JaxmdDriver
@@ -48,8 +48,8 @@ def _run(block_size, record_every, n_steps, skin_A=0.0):
     neighbor_fn = make_intermolecular_neighbor_fn(
         system, cutoff_A=12.0, capacity=64, skin_A=skin_A
     )
-    ensemble = EnsembleSpec(
-        ensemble="nve",
+    spec = EnsembleSpec(
+        ensemble=ensemble,
         temperature_K=50.0,
         n_steps=n_steps,
         dt_fs=0.1,
@@ -58,7 +58,7 @@ def _run(block_size, record_every, n_steps, skin_A=0.0):
     driver = JaxmdDriver(
         record_every=record_every, block_size=block_size, neighbor_fn=neighbor_fn
     )
-    return driver.run(system, energy, ensemble), neighbor_fn
+    return driver.run(system, energy, spec), neighbor_fn
 
 
 def test_block_stepping_matches_step_at_a_time():
@@ -104,3 +104,69 @@ def test_skin_cache_does_not_change_the_trajectory():
 def test_energies_stay_finite_across_blocks():
     traj, _ = _run(block_size=4, record_every=4, n_steps=12)
     assert np.all(np.isfinite(np.asarray(traj.metadata["energies"])))
+
+
+def _ensemble_cadence(ensemble: str, monkeypatch, *, make_block_stepper):
+    """Run a tiny box and count block dispatches + neighbor refreshes."""
+    import mmml.md.step_batching as step_batching
+    from mmml.md.assemble import build_hybrid_energy
+    from mmml.md.config import EnsembleSpec
+    from mmml.md.drivers import JaxmdDriver
+    from mmml.md.energy import EnergyContext
+    from mmml.md.neighbors import make_intermolecular_neighbor_fn
+
+    tallies = {"neighbor": 0, "block_dispatches": 0, "block_steps": []}
+
+    def make_and_count(fn, block_steps, **kwargs):
+        inner = make_block_stepper(fn, block_steps, **kwargs)
+
+        def counted(state, **dyn):
+            tallies["block_dispatches"] += 1
+            tallies["block_steps"].append(int(block_steps))
+            return inner(state, **dyn)
+
+        return counted
+
+    monkeypatch.setattr(step_batching, "make_block_stepper", make_and_count)
+
+    system = _mono_atom_pbc_system()
+    energy = build_hybrid_energy(system, ("mm_nonbonded",), EnergyContext())
+    real_nfn = make_intermolecular_neighbor_fn(
+        system, cutoff_A=12.0, capacity=64, skin_A=0.0
+    )
+
+    def neighbor_fn(pos, box):
+        tallies["neighbor"] += 1
+        return real_nfn(pos, box)
+
+    spec = EnsembleSpec(
+        ensemble=ensemble,
+        temperature_K=50.0,
+        n_steps=12,
+        dt_fs=0.1,
+        params={"seed": 7},
+    )
+    JaxmdDriver(record_every=4, block_size=4, neighbor_fn=neighbor_fn).run(
+        system, energy, spec
+    )
+    return tallies
+
+
+def test_nve_and_nvt_share_block_and_neighbor_cadence(monkeypatch):
+    """NVE must not skip (or extra-dispatch) blocks relative to NVT.
+
+    A GPU asv run saw NVE ~3× slower than NVT on the same 512-water box. If
+    the driver cadence matches, that gap is integrator kernel cost, not a
+    missed ``fori_loop``.
+    """
+    import mmml.md.step_batching as step_batching
+
+    original = step_batching.make_block_stepper
+    nve = _ensemble_cadence("nve", monkeypatch, make_block_stepper=original)
+    nvt = _ensemble_cadence("nvt", monkeypatch, make_block_stepper=original)
+    assert nve["neighbor"] == nvt["neighbor"] > 0
+    assert nve["block_dispatches"] == nvt["block_dispatches"] > 0
+    assert nve["block_steps"] == nvt["block_steps"]
+    # 12 steps, block_size=4, record_every=4 → three full jitted blocks.
+    assert nve["block_dispatches"] == 3
+    assert nve["block_steps"] == [4, 4, 4]
