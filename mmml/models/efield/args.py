@@ -62,7 +62,7 @@ def build_train_parser() -> argparse.ArgumentParser:
         "--output-dir",
         type=str,
         default=".",
-        help="Directory for params-*.json, config-*.json, and symlinks",
+        help="Directory for history.jsonl, Orbax/JSON weights, config-*.json, and symlinks",
     )
     parser.add_argument("--features", type=int, default=10)
     parser.add_argument("--max_degree", type=int, default=4)
@@ -188,7 +188,13 @@ def build_train_parser() -> argparse.ArgumentParser:
         type=int,
         default=0,
         metavar="N",
-        help="Save EMA checkpoint every N epochs to params-epoch-NNNN-<uuid>.json (0 = no periodic saves)",
+        help="Save EMA weights every N epochs (0 = no periodic saves)",
+    )
+    parser.add_argument(
+        "--save-format",
+        choices=("json", "orbax", "both"),
+        default="both",
+        help="Weight dump: Orbax dir (orbax/), JSON params-*.json, or both (default)",
     )
     return parser
 

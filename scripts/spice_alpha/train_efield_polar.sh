@@ -20,6 +20,7 @@ fi
 # MessagePass promotes, and EFieldPhysNet.init raises in e3x.nn.add.
 # load_ef_npz is float32; keep the process on float32 for efield-train.
 export JAX_ENABLE_X64=0
+export PYTHONUNBUFFERED="${PYTHONUNBUFFERED:-1}"
 export XLA_PYTHON_CLIENT_PREALLOCATE="${XLA_PYTHON_CLIENT_PREALLOCATE:-false}"
 export XLA_PYTHON_CLIENT_MEM_FRACTION="${XLA_PYTHON_CLIENT_MEM_FRACTION:-0.85}"
 # Polar jacrev autotune OOMs (login12: "All configs failed during profiling"
@@ -33,6 +34,9 @@ NUM_ITERATIONS="${NUM_ITERATIONS:-2}"
 NUM_BASIS_FUNCTIONS="${NUM_BASIS_FUNCTIONS:-10}"
 CUTOFF="${CUTOFF:-10.0}"
 ENERGY_WEIGHT="${ENERGY_WEIGHT:-1.0}"
+FORCES_WEIGHT="${FORCES_WEIGHT:-100.0}"
+DIPOLE_WEIGHT="${DIPOLE_WEIGHT:-0.1}"
+CHARGE_WEIGHT="${CHARGE_WEIGHT:-1000.0}"
 POLAR_WEIGHT="${POLAR_WEIGHT:-1.0}"
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -46,14 +50,24 @@ EXTRA=()
 if [[ "${GRADIENT_CHECKPOINT:-0}" != "0" ]]; then
   EXTRA+=(--gradient-checkpoint)
 fi
+if [[ -n "${SAVE_FORMAT:-}" ]]; then
+  EXTRA+=(--save-format "$SAVE_FORMAT")
+fi
+if [[ -n "${SAVE_EVERY:-}" ]]; then
+  EXTRA+=(--save-every "$SAVE_EVERY")
+fi
+if [[ -n "${RESTART:-}" ]]; then
+  EXTRA+=(--restart "$RESTART")
+fi
 
 mmml efield-train \
   --train-npz "$SPLITS/energies_forces_dipoles_train.npz" \
   --valid-npz "$SPLITS/energies_forces_dipoles_valid.npz" \
   --output-dir "$CKPT" \
   --energy_weight "$ENERGY_WEIGHT" \
-  --forces_weight 100.0 \
-  --dipole_weight 0.1 \
+  --forces_weight "$FORCES_WEIGHT" \
+  --dipole_weight "$DIPOLE_WEIGHT" \
+  --charge_weight "$CHARGE_WEIGHT" \
   --polar_weight "$POLAR_WEIGHT" \
   --polar-at-zero-field \
   --field_scale 0.001 \
