@@ -32,7 +32,7 @@ import sys
 import warnings
 import logging
 from datetime import datetime
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import List, Tuple, Callable, Optional, Dict, Any
 from contextlib import contextmanager
 

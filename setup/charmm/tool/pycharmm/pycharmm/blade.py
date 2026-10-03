@@ -292,7 +292,7 @@ def check_restraints():
     >>> if issues:
     ...     print(f"Incompatible restraints: {issues}")
     """
-    from pycharmm.restraints import _state, BACKEND_INCOMPATIBILITY
+    from pycharmm.restraints import _state
 
     conflicts = _state._check_backend_conflicts('blade')
     return conflicts

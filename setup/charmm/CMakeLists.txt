@@ -1796,6 +1796,10 @@ if(NOT as_library)
 else()
   add_library(${charmm_lib} SHARED ${charmm_fortran_sources})
 endif()
+# Target name stays `chmm` so it does not collide with the `charmm`
+# executable. The on-disk name stays libcharmm.so / libcharmm.dylib:
+# rebuild_charmm_mlpot.sh and CHARMM_LIB_DIR look for that file.
+set_target_properties(${charmm_lib} PROPERTIES OUTPUT_NAME charmm)
 
 if(charmm_c_files)
   add_library(charmm_c ${charmm_c_files})
@@ -1831,9 +1835,9 @@ if((blade OR domdec_gpu) AND cuda)
   # domdec_gpu .cu sources reference symbols defined in charmm_cxx
   # (e.g. EnergyVirial::EnergyVirial in source/domdec_gpu/EnergyVirial.cpp).
   # Declare the dependency so charmm_cuda is linked before charmm_cxx in
-  # libchmm.so; without this, ld processes the cxx archive before the
+  # libcharmm.so; without this, ld processes the cxx archive before the
   # cuda archive triggers the reference, leaving EnergyVirial symbols
-  # undefined in libchmm.so and breaking ctypes.CDLL with RTLD_NOW.
+  # undefined in libcharmm.so and breaking ctypes.CDLL with RTLD_NOW.
   if(charmm_cxx_files)
     target_link_libraries(charmm_cuda PRIVATE charmm_cxx)
   endif()

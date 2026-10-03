@@ -39,7 +39,7 @@ Obtain `COOR STAT` on the selection of atoms called `HYD`
 
 
 import ctypes
-import math
+import importlib.util
 import typing
 from collections.abc import Iterable
 
@@ -58,12 +58,9 @@ import pycharmm.atom_info as atom_info
 # Optional performance libraries (graceful fallback if not installed)
 # =============================================================================
 
-# Try to import numexpr for faster boolean array operations
-try:
-    import numexpr as ne
-    _HAS_NUMEXPR = True
-except ImportError:
-    _HAS_NUMEXPR = False
+# Presence only: callers check the flag. Importing numexpr here left an
+# unused binding, and the module is optional.
+_HAS_NUMEXPR = importlib.util.find_spec("numexpr") is not None
 
 # Try to import numba for JIT compilation
 try:

@@ -93,7 +93,7 @@ def store_number(scalar_array,numbered_array,**kwargs):
     numbered_array: str
     selection:      SelectAtoms()
     """
-    store_command =    join_command = ' '.join(['scalar', scalar_array, 'store',numbered_array])
+    store_command = ' '.join(['scalar', scalar_array, 'store', numbered_array])
     store_script = pycharmm.script.CommandScript(store_command,**kwargs)
     store_script.run()
     return
@@ -106,7 +106,7 @@ def recall_number(scalar_array,numbered_array,**kwargs):
     numbered_array: str
     selection:      SelectAtoms()
     """
-    recall_command =    join_command = ' '.join(['scalar', scalar_array, 'recall',numbered_array])
+    recall_command = ' '.join(['scalar', scalar_array, 'recall', numbered_array])
     recall_script = pycharmm.script.CommandScript(recall_command,**kwargs)
     recall_script.run()
     return

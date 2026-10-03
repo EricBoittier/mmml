@@ -86,4 +86,4 @@ def resolve_charmm_lib_path(charmm_lib_dir=''):
     return _discover_repo_charmm_lib(suffix) or ('libcharmm' + suffix)
 
 
-from pycharmm.loader import lib as charmm  # noqa: E402
+from pycharmm.loader import lib as charmm  # noqa: E402, F401

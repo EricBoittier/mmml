@@ -363,13 +363,6 @@ def free():
     return
 
 
-def get_unit_cell() -> list[float]:
-    """Unit cell edge lengths and angles (Å, degrees) from ``image_get_ucell``."""
-    import pycharmm.image as image
-
-    return image.get_ucell()
-
-
 def get_cubic_side() -> float:
     """Cubic box edge length (Å) from ``XUCELL`` (assumes ``CUBI``)."""
     return float(get_unit_cell()[0])

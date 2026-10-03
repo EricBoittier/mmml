@@ -271,7 +271,10 @@ test-data:
 # ==============================================================================
 
 lint:
-	uv run ruff check mmml/ scripts/ setup/charmm/tool/pycharmm/pycharmm/
+	# Pin the repo config. c52a1 ships its own [tool.ruff] under
+	# setup/charmm/tool/pycharmm, and ruff would otherwise judge that tree
+	# by upstream's rule set instead of this project's.
+	uv run ruff check --config pyproject.toml mmml/ scripts/ setup/charmm/tool/pycharmm/pycharmm/
 
 # Duplicated definitions / dead imports / syntax breakage, repo-wide.
 # A bad merge that concatenates two versions of a file shows up here as F811
@@ -286,7 +289,7 @@ lint:
 # a gate that is red on day one gets ignored. Conflict markers are always fatal.
 # Run: make lint-dupes
 lint-dupes:
-	@uv run ruff check --select F811 mmml/ scripts/ setup/charmm/tool/pycharmm/pycharmm/
+	@uv run ruff check --config pyproject.toml --select F811 mmml/ scripts/ setup/charmm/tool/pycharmm/pycharmm/
 	@if git grep -nE '^(<<<<<<< |>>>>>>> )' -- '*.py' '*.sh' '*.yaml' '*.yml' '*.toml' '*.md'; then \
 	  echo "lint-dupes: unresolved conflict markers above" >&2; exit 1; \
 	fi
@@ -325,7 +328,7 @@ type-check:
 	uv run mypy mmml/
 
 deadcode:
-	uv run ruff check --select F401,F841,F541 mmml/ scripts/ setup/charmm/tool/pycharmm/pycharmm/
+	uv run ruff check --config pyproject.toml --select F401,F841,F541 mmml/ scripts/ setup/charmm/tool/pycharmm/pycharmm/
 	uvx vulture mmml scripts setup/charmm/tool/pycharmm/pycharmm --min-confidence 80
 
 deadcode-fix:

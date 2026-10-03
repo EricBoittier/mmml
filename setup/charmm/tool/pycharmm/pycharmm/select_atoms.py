@@ -33,7 +33,6 @@ are either 1 or 2, and whose atom names are either N or CA
 
 import ctypes
 import random
-import re
 import string
 import typing
 import weakref

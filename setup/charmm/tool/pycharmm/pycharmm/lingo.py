@@ -53,8 +53,6 @@ import ctypes
 import warnings
 from contextlib import contextmanager
 
-import pandas
-
 import pycharmm
 from pycharmm.loader import lib
 import pycharmm.atom_info as atom_info

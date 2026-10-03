@@ -55,7 +55,6 @@ Backend Compatibility
 Author: Stanislav Cherepanov <stanislc@umich.edu>
 """
 
-from contextlib import contextmanager
 import ctypes
 import logging
 import warnings
@@ -573,7 +572,6 @@ class _RestraintState:
             return []
 
         # Get existing selection atoms
-        existing_atoms = set()
         restraint_state = self.active.get(restraint_key, {})
         for sel_str in restraint_state.get('selections', []):
             # Would need to parse selection string - complex

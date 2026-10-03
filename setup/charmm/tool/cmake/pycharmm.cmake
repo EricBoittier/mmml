@@ -61,34 +61,64 @@ option(pip_lock "Serialize pip installs with a file lock (QA only)" OFF)
 
 set(PIP_STAMP_FILE ${CMAKE_BINARY_DIR}/.pip_install_stamp)
 
-if(pip_lock)
-  set(_PIP_INSTALL_CMD
-    sh -c "${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tool/cmake/pip_locked.py install ${PYCHARMM_HOME} || ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tool/cmake/pip_locked.py install --no-build-isolation ${PYCHARMM_HOME}")
-  set(_PIP_COMMENT "Installing Python package (locked)")
-else()
-  set(_PIP_INSTALL_CMD
-    sh -c "${Python3_EXECUTABLE} -m pip install -q ${PYCHARMM_HOME} || ${Python3_EXECUTABLE} -m pip install -q --no-build-isolation ${PYCHARMM_HOME}")
-  set(_PIP_COMMENT "Installing Python package")
+# Homebrew and Debian mark the base interpreter EXTERNALLY-MANAGED (PEP 668).
+# `pip install` then aborts, and this target is part of `all`, so the CHARMM
+# library build fails after it has already linked. A virtualenv (prefix !=
+# base_prefix) is still allowed to install. MMML imports the source tree
+# under tool/pycharmm, so skipping the system install is safe.
+set(_pycharmm_skip_pip OFF)
+execute_process(
+  COMMAND ${Python3_EXECUTABLE} -c
+    "import pathlib, sys, sysconfig; marker = pathlib.Path(sysconfig.get_path('stdlib')) / 'EXTERNALLY-MANAGED'; sys.exit(0 if marker.is_file() and sys.prefix == sys.base_prefix else 1)"
+  RESULT_VARIABLE _pycharmm_ext_managed
+)
+if(_pycharmm_ext_managed EQUAL 0)
+  set(_pycharmm_skip_pip ON)
+  message(WARNING
+    "Python ${Python3_EXECUTABLE} is externally managed (PEP 668). "
+    "Skipping pip install of pycharmm so the CHARMM build can finish. "
+    "Pass -DPython3_EXECUTABLE=/path/to/venv/bin/python to install it, "
+    "or import tool/pycharmm directly.")
 endif()
 
-add_custom_command(
-  # Declare a file output so CMake can track whether this command
-  # needs to re-run. Without OUTPUT, CMake has no way to skip the
-  # install on subsequent builds.
-  OUTPUT  ${PIP_STAMP_FILE}
+if(_pycharmm_skip_pip)
+  add_custom_command(
+    OUTPUT ${PIP_STAMP_FILE}
+    COMMAND ${CMAKE_COMMAND} -E touch ${PIP_STAMP_FILE}
+    COMMENT "Skipping pycharmm pip install (externally managed Python)"
+  )
+else()
+  # One shell script so the `||` fallback is not split into a second command
+  # name (that produced "No such file or directory" under make).
+  if(pip_lock)
+    set(_PIP_INSTALL_BODY
+      "\"${Python3_EXECUTABLE}\" \"${CMAKE_SOURCE_DIR}/tool/cmake/pip_locked.py\" install \"${PYCHARMM_HOME}\" || \"${Python3_EXECUTABLE}\" \"${CMAKE_SOURCE_DIR}/tool/cmake/pip_locked.py\" install --no-build-isolation \"${PYCHARMM_HOME}\"")
+    set(_PIP_COMMENT "Installing Python package (locked)")
+  else()
+    set(_PIP_INSTALL_BODY
+      "\"${Python3_EXECUTABLE}\" -m pip install -q \"${PYCHARMM_HOME}\" || \"${Python3_EXECUTABLE}\" -m pip install -q --no-build-isolation \"${PYCHARMM_HOME}\"")
+    set(_PIP_COMMENT "Installing Python package")
+  endif()
+  add_custom_command(
+    # Declare a file output so CMake can track whether this command
+    # needs to re-run. Without OUTPUT, CMake has no way to skip the
+    # install on subsequent builds.
+    OUTPUT  ${PIP_STAMP_FILE}
 
-  COMMAND ${_PIP_INSTALL_CMD}
+    COMMAND sh -c ${_PIP_INSTALL_BODY}
+    VERBATIM
 
-  # Touch the stamp file only after a successful install. If pip fails
-  # the stamp is not created, so CMake will retry on the next build
-  # rather than silently skipping a broken install.
-  COMMAND ${CMAKE_COMMAND} -E touch ${PIP_STAMP_FILE}
+    # Touch the stamp file only after a successful install. If pip fails
+    # the stamp is not created, so CMake will retry on the next build
+    # rather than silently skipping a broken install.
+    COMMAND ${CMAKE_COMMAND} -E touch ${PIP_STAMP_FILE}
 
-  # Re-run pip whenever any source file changes, not just when the
-  # configure step happens to re-run.
-  DEPENDS configure_library_loc ${PYCHARMM_SOURCE_FILES}
-  COMMENT ${_PIP_COMMENT}
-)
+    # Re-run pip whenever any source file changes, not just when the
+    # configure step happens to re-run.
+    DEPENDS configure_library_loc ${PYCHARMM_SOURCE_FILES}
+    COMMENT ${_PIP_COMMENT}
+  )
+endif()
 
 add_custom_target(pip_install_pycharmm ALL
   # ALL ensures this target is included in the default build, so no

@@ -414,55 +414,6 @@ def update_nbxmod():
     lib.nbonds_update_nbxmod()
 
 
-def get_cutnb():
-    """Get the current value of cutnb from CHARMM
-
-    Returns
-    -------
-    float
-        the current cutnb value
-    """
-    get_cutnb_c = lib.nbonds_get_cutnb
-    get_cutnb_c.restype = ctypes.c_double
-    cutnb = get_cutnb_c()
-    return cutnb
-
-
-def get_ctonnb():
-    """Get the current value of ctonnb from CHARMM
-
-    Returns
-    -------
-    float
-        the current ctonnb value
-    """
-    get_ctonnb_c = lib.nbonds_get_ctonnb
-    get_ctonnb_c.restype = ctypes.c_double
-    ctonnb = get_ctonnb_c()
-    return ctonnb
-
-
-def get_ctofnb():
-    """Get the current value of ctofnb from CHARMM
-
-    Returns
-    -------
-    float
-        the current ctofnb value
-    """
-    get_ctofnb_c = lib.nbonds_get_ctofnb
-    get_ctofnb_c.restype = ctypes.c_double
-    ctofnb = get_ctofnb_c()
-    return ctofnb
-
-
-def update_nbxmod():
-    """Update the NBXMod parameter in CHARMM based on current nonbond settings.
-    """
-    lib.nbonds_update_nbxmod()
-
-
-
 def get_primary_pair_count():
     """Return the number of primary-cell pairs in the current JNB list.
 

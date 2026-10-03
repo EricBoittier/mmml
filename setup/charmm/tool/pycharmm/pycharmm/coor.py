@@ -22,7 +22,6 @@ See [corman documentation](https://academiccharmm.org/documentation/version/c47b
 """
 
 import ctypes
-import typing
 
 import pandas
 import numpy as np
@@ -971,7 +970,6 @@ def dist(selection1, selection2 = None, cutoff = None, resi = True, omit_14excl 
     """
     contactDict = {}
 
-    from pycharmm import psf
     from pycharmm import atom_info
     from copy import copy
     # import pycharmm.select as pyc_select # Not directly used in this version of dist

@@ -283,6 +283,8 @@ Environment:
   CHARMM_BUILD_DIR  CMake build directory (default: \$HOME/.cache/mmml-charmm-build/${PLATFORM_TAG}
                     or .../${PLATFORM_TAG}-nompi with --no-mpi)
   CHARMM_BUILD_TYPE CMake build type (default: Release; --debug sets RelWithDebInfo)
+  CHARMM_PYTHON     Interpreter for the pycharmm pip target (default: \$ROOT/.venv/bin/python
+                    when that exists). Avoids Homebrew/PEP 668 "externally managed" pip.
   OPENMPI_ROOT      OpenMPI prefix (ignored with --no-mpi; default: auto-detect)
   MPI_CC/MPI_CXX/MPI_FC  Override MPI compiler wrappers (ignored with --no-mpi)
   FFTW_ROOT         Double-precision FFTW prefix (libfftw3); falls back to EBROOTFFTW.
@@ -412,6 +414,15 @@ if [[ -d "$NFS_BUILD" ]]; then
   fi
 fi
 
+# Prefer the project virtualenv so `make all` does not pip-install pycharmm
+# into Homebrew Python (PEP 668 externally-managed-environment).
+_charmm_python=""
+if [[ -n "${CHARMM_PYTHON:-}" ]]; then
+  _charmm_python="$CHARMM_PYTHON"
+elif [[ -x "$ROOT/.venv/bin/python" ]]; then
+  _charmm_python="$ROOT/.venv/bin/python"
+fi
+
 needs_configure=0
 if [[ "$CLEAN" == 1 ]]; then
   echo "Cleaning $BUILD_DIR"
@@ -448,6 +459,13 @@ else
       needs_configure=1
     elif [[ -f "$keywords_inc" ]] && ! grep -q '"ADUMBRXNCOR"' "$keywords_inc"; then
       echo "keywords.inc missing ADUMBRXNCOR; reconfiguring for KEY_ADUMBRXNCOR (umbrella rxncor)"
+      needs_configure=1
+    fi
+  fi
+  if [[ "$needs_configure" == 0 && -n "$_charmm_python" ]]; then
+    cached_py="$(grep '^_Python3_EXECUTABLE:INTERNAL=' "$BUILD_DIR/CMakeCache.txt" 2>/dev/null | cut -d= -f2- || true)"
+    if [[ -n "$cached_py" && "$cached_py" != "$_charmm_python" ]]; then
+      echo "CMake Python is $cached_py; reconfiguring with $_charmm_python (not an externally managed interpreter)"
       needs_configure=1
     fi
   fi
@@ -580,6 +598,10 @@ if [[ "$needs_configure" == 1 ]]; then
     # Link ADUMB ↔ RXNCOR (umbrella rxncor / ?ADUMBRXN). Comma-delimited list.
     -Dadd_keywords=ADUMBRXNCOR
   )
+  if [[ -n "$_charmm_python" ]]; then
+    CMAKE_ARGS+=(-DPython3_EXECUTABLE="$_charmm_python")
+    echo "pyCHARMM install interpreter: $_charmm_python"
+  fi
   if [[ "$NO_MPI" != 1 ]]; then
     CMAKE_ARGS+=(
       -DMPI_C_COMPILER="$MPI_CC"
@@ -768,7 +790,11 @@ EOF
 fi
 
 echo "Building $LIB_BASENAME in $BUILD_DIR ..."
-cmake --build "$BUILD_DIR" -j "$(_build_jobs)"
+# c52a1's default `all` target also pip-installs pyCHARMM into whatever
+# Python CMake found. On GitHub's Ubuntu image that is the externally
+# managed system interpreter, so `pip install` aborts the library build.
+# The shared library target is `chmm` (OUTPUT_NAME=charmm → libcharmm.so).
+cmake --build "$BUILD_DIR" -j "$(_build_jobs)" --target chmm
 cmake --install "$BUILD_DIR" || true
 
 BUILT=""
