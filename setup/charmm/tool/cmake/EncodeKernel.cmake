@@ -19,7 +19,4 @@ function(encode_kernel filename out_var out_str)
   # Record the variable declaration and definition.
   set(${out_var} ${variable_name} PARENT_SCOPE)
   set(${out_str} ${file_content} PARENT_SCOPE)
-  # SET(${out_var}
-  #   static\ const\ std::string\ ${variable_name}\ =\ \"${file_content}\"\;\n
-  #   PARENT_SCOPE)
 endfunction()

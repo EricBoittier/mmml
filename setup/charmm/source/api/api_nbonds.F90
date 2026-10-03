@@ -3,7 +3,6 @@ module api_nbonds
   implicit none
 contains
 
-#if KEY_LIBRARY == 1
   !> @brief set update frequency for the nonbonded list
   !
   ! set the update frequency for the non-bonded list. Used in the
@@ -121,7 +120,9 @@ contains
     use inbnd, only: cutnb
     use psf, only: natom
     use image, only: cutim, natim
+#if KEY_PBEQ==1 /*pbeq*/
     use pbeq, only: qgsbp, srdist
+#endif /*pbeq*/
     use exelecm, only: qextnd
     use stream, only: prnlev, outu
 
@@ -324,7 +325,7 @@ contains
 
     bnbnd%lnbopt(14) = .false.
     bnbnd%lnbopt(25) = .false.
-    
+
 #if KEY_MMFF == 1
     lvtrunc = .false.
     lvgrom = .false.
@@ -336,61 +337,35 @@ contains
 
   !> @brief get distance cutoff for generating the list of pairs
   !
-  !> param[out] old_cutnb current cutnb value
-  !> @return success 1 on success
-  function nbonds_get_cutnb(old_cutnb) bind(c) result(success)
-    use, intrinsic :: iso_c_binding, only: c_double, c_int
+  !> @return current cutnb value
+  function nbonds_get_cutnb() bind(c) result(out_cutnb)
+    use, intrinsic :: iso_c_binding, only: c_double
     use inbnd, only: cutnb
-
     implicit none
-
-    real(c_double) :: old_cutnb
-    integer(c_int) :: success
-
-    success = 0
-    old_cutnb = cutnb
-    success = 1
+    real(c_double) :: out_cutnb
+    out_cutnb = cutnb
   end function nbonds_get_cutnb
 
-  ! Addition Kai Toepfer May 2022
   !> @brief get distance from which switching function is used
   !
-  !> param[out] old_ctonnb current starting distance for switching function
-  !> @return old_ctonnb old ctonnb value
-  function nbonds_get_ctonnb(old_ctonnb) bind(c) result(success)
-    use, intrinsic :: iso_c_binding, only: c_double, c_int
-    use bases_fcm, only: bnbnd
+  !> @return current ctonnb value
+  function nbonds_get_ctonnb() bind(c) result(out_ctonnb)
+    use, intrinsic :: iso_c_binding, only: c_double
     use inbnd, only: ctonnb
-
     implicit none
-
-    real(c_double) :: old_ctonnb
-    integer(c_int) :: success
-    
-    success = 0
-    old_ctonnb = ctonnb
-    !old_ctonnb = bnbnd%nbdist(2)
-    success = 1
+    real(c_double) :: out_ctonnb
+    out_ctonnb = ctonnb
   end function nbonds_get_ctonnb
 
   !> @brief get distance at which switching function stops being used
   !
-  !> param[out] old_ctofnb current stopping distance for switching function
-  !> @return old_ctofnb old ctofnb value
-  function nbonds_get_ctofnb(old_ctofnb) bind(c) result(success)
-    use, intrinsic :: iso_c_binding, only: c_double, c_int
-    use bases_fcm, only: bnbnd
+  !> @return current ctofnb value
+  function nbonds_get_ctofnb() bind(c) result(out_ctofnb)
+    use, intrinsic :: iso_c_binding, only: c_double
     use inbnd, only: ctofnb
-
     implicit none
-
-    real(c_double) :: old_ctofnb
-    integer(c_int) :: success
-    
-    success = 0
-    old_ctofnb = ctofnb
-    !old_ctofnb = bnbnd%nbdist(3)
-    success = 1
+    real(c_double) :: out_ctofnb
+    out_ctofnb = ctofnb
   end function nbonds_get_ctofnb
 
   !> @brief Update non bonded exclusion list
@@ -400,13 +375,12 @@ contains
     use, intrinsic :: iso_c_binding, only: c_int
     use bases_fcm, only: bnbnd
     use nbexcl, only: upinb
-    
+
     implicit none
 
     call upinb(bnbnd)
-    
-  end subroutine nbonds_update_bnbnd
 
+  end subroutine nbonds_update_bnbnd
 
   !> @brief Count primary-cell pairs in the current CHARMM JNB list.
   function nbonds_get_primary_pair_count() bind(c) result(n_pairs)
@@ -478,5 +452,4 @@ contains
     success = 1
   end function nbonds_export_primary_pairs
 
-#endif /* KEY_LIBRARY */
 end module api_nbonds

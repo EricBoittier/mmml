@@ -19,7 +19,7 @@ SUBROUTINE WRXYZ(IUN,X,Y,Z,VX,VY,VZ,DX,DY,DZ,ISTEP)
   use reawri
   use stream
 #if KEY_MULTICOM==1 /*  VO stringm */
-  use multicom_aux   
+  use multicom_aux
 #endif
   implicit none
   !
@@ -29,22 +29,22 @@ SUBROUTINE WRXYZ(IUN,X,Y,Z,VX,VY,VZ,DX,DY,DZ,ISTEP)
   !
   if (IUN < 0 .OR. (IOLEV.LT.0 &
 #if KEY_MULTICOM==1 /*  VO stringm */
- &                             .and.(ME_LOCAL.ne.0)    &      
+ &                             .and.(ME_LOCAL.ne.0)    &
 #endif
  &                             )) RETURN
   IF(MXYZ <  0) RETURN
   !
-  IF(MXYZ >  0) THEN 
+  IF(MXYZ >  0) THEN
   WRITE(IUN,'(I5)')NATOM
   write(IUN,'(5E25.15)') ISTEP*DELTA*TIMFAC, &
        EPROP(TOTE),EPROP(TOTKE),EPROP(EPOT),EPROP(TEMPS)
-  ELSE 
-    IF(ISTEP.EQ.1) THEN 
+  ELSE
+    IF(ISTEP.EQ.1) THEN
       WRITE(IUN,'(A)') '!     Step #            Time                     Etot                    Etotke                    Epot                    Temp'
-    ENDIF 
+    ENDIF
   write(IUN,'(I12,5E25.15)') ISTEP,ISTEP*DELTA*TIMFAC, &
        EPROP(TOTE),EPROP(TOTKE),EPROP(EPOT),EPROP(TEMPS)
-  ENDIF 
+  ENDIF
   DO I=1,NATOM
      IF(MXYZ == 1) &
           WRITE(IUN,'(A2,1X,3E25.15)') ATYPE(I)(1:2),X(I),Y(I),Z(I)
@@ -65,27 +65,30 @@ END SUBROUTINE WRXYZ
 
 SUBROUTINE WRIDYN(U,NATOM,XOLD,YOLD,ZOLD,X,Y,Z,VX,VY,VZ, &
 #if KEY_CHEQ==1
-     CG,CGOLD,VCG,QCG,                     & 
+     CG,CGOLD,VCG,QCG,                     &
 #endif
 #if KEY_PIPF==1
-     UIND,UINDO,VUIND,QPFDYN,              & 
+     UIND,UINDO,VUIND,QPFDYN,              &
 #endif
 #if KEY_PIPF==1
-     NPFBATHS,PFNHSBATH,PFNHSOBATH,        & 
+     NPFBATHS,PFNHSBATH,PFNHSOBATH,        &
 #endif
 #if KEY_DYNVV2==1
-     QCONSTRAINTS,DXC,DYC,DZC,             & 
+     QCONSTRAINTS,DXC,DYC,DZC,             &
 #endif
      NPRIV,JHSTRT,NDEGF,NSTEP, &
      NSAVC,NSAVV,SEED,AVETEM,ISTPSA,LDYNA &
+#if KEY_MIDSINR == 1
+    ,q_midsinr,v_1ij,v_2ij,L_val &
+#endif
 #if KEY_BLOCK==1
      ,QLMC,QLDM,NBLOCK,BXLAMB,BLDOLD,BVLAMB,NSAVL &    /*ldm*/
 #endif
 #if KEY_FOURD==1
-     ,VFD,FDOLD                            & 
+     ,VFD,FDOLD                            &
 #endif
 #if KEY_SCCDFTB==1
-     ,qlamda,qpkac,icntdyn,iavti,dvdl,dvdlav,dtmp1 &  
+     ,qlamda,qpkac,icntdyn,iavti,dvdl,dvdlav,dtmp1 &
 #endif
 #if KEY_DHDGB==1
 !AP/MF
@@ -124,14 +127,14 @@ SUBROUTINE WRIDYN(U,NATOM,XOLD,YOLD,ZOLD,X,Y,Z,VX,VY,VZ, &
   use clcg_mod
   use memory
 #if KEY_MULTICOM==1 /*  VO stringm */
-  use multicom_aux    
+  use multicom_aux
 #endif
 #if KEY_BLOCK==1
   use lambdam,only : qmld, msld_write_restart  /*ldm*/
 #endif
 #if KEY_FLUCQ==1
   use flucq
-#endif 
+#endif
   use phmd
 
   implicit none
@@ -149,20 +152,19 @@ SUBROUTINE WRIDYN(U,NATOM,XOLD,YOLD,ZOLD,X,Y,Z,VX,VY,VZ, &
 #if KEY_CHEQ==1
   real(chm_real) CG(*),CGOLD(*),VCG(*)
   LOGICAL QCG
-#endif 
+#endif
   ! PJ 06/2005
 #if KEY_PIPF==1
   real(chm_real) UIND(3,*),UINDO(3,*),VUIND(3,*)
-  INTEGER J
   LOGICAL QPFDYN
   INTEGER NPFBATHS
   real(chm_real) PFNHSBATH(*),PFNHSOBATH(*)
-#endif 
-#if KEY_DYNVV2==1
-  LOGICAL QCONSTRAINTS                      
 #endif
 #if KEY_DYNVV2==1
-  real(chm_real) DXC(*), DYC(*), DZC(*)             
+  LOGICAL QCONSTRAINTS
+#endif
+#if KEY_DYNVV2==1
+  real(chm_real) DXC(*), DYC(*), DZC(*)
 #endif
   INTEGER NPRIV, JHSTRT, NDEGF, NSTEP, NSAVC, NSAVV
   real(chm_real) AVETEM,SEED
@@ -182,15 +184,20 @@ SUBROUTINE WRIDYN(U,NATOM,XOLD,YOLD,ZOLD,X,Y,Z,VX,VY,VZ, &
 #endif /*  ldm*/
 #if KEY_FOURD==1
   real(chm_real) VFD(*), FDOLD(*)
-#endif 
+#endif
 #if KEY_SCCDFTB==1
   logical qlamda,qpkac
   integer icntdyn, iavti
   real(chm_real) dvdl,dvdlav,dtmp1
-#endif 
+#endif
+#if KEY_MIDSINR == 1
+  logical :: q_midsinr
+  integer :: L_val
+  real(chm_real) :: v_1ij(3,L_val,natom),v_2ij(3,L_val,natom)
+#endif
 !
   ! local
-  INTEGER I
+  INTEGER I,J
   ! begin
   NSED='    '
   IF(QNOSE) NSED='NOSE'
@@ -204,7 +211,7 @@ SUBROUTINE WRIDYN(U,NATOM,XOLD,YOLD,ZOLD,X,Y,Z,VX,VY,VZ, &
   !
   ! get the seeds to write in this file first.
   !
-  ! This code is before iolev < 0, since in parallel we need 
+  ! This code is before iolev < 0, since in parallel we need
   ! seeds from every CPU
   !
 #if KEY_PARALLEL==1
@@ -251,24 +258,24 @@ SUBROUTINE WRIDYN(U,NATOM,XOLD,YOLD,ZOLD,X,Y,Z,VX,VY,VZ, &
 #endif /* (repdstr)*/
      if(iolev < 0 &
 #if KEY_MULTICOM==1 /*  VO stringm */
-  &                .and. (ME_LOCAL.NE.0) &           
+  &                .and. (ME_LOCAL.NE.0) &
 #endif
   &                ) return
 #if KEY_REPDSTR==1  /*repdstr*/
-  endif                            
+  endif
 #endif
 !-- ##ELSE (ens_case)
 !--   ! for parallel ensemble, only masters of each ensemble member write output.
 #if KEY_PARALLEL==1
-!--   if (iolev < 0 ) return     
+!--   if (iolev < 0 ) return
 #endif
 !-- ##ENDIF (ens_case)
 
 
 
-  if (reallow) then   
+  if (reallow) then
      REWIND(UNIT=U)
-  endif 
+  endif
 #if KEY_DHDGB==1
 !AP/MF
   WRITE(U,'(A4,2I6,2X,A4,2X,A4,A4)') &
@@ -276,7 +283,7 @@ SUBROUTINE WRIDYN(U,NATOM,XOLD,YOLD,ZOLD,X,Y,Z,VX,VY,VZ, &
 #else /**/
   WRITE(U,'(A4,2I6,2X,A4,2X,A4)') &
        'REST',VERNUM,LDYNA,XTLTYP,NSED
-#endif          
+#endif
   !
 !  WRITE(U,'(A4,2I6,2X,A4,2X,A4)') &
 !       'REST',VERNUM,LDYNA,XTLTYP,NSED
@@ -364,8 +371,13 @@ SUBROUTINE WRIDYN(U,NATOM,XOLD,YOLD,ZOLD,X,Y,Z,VX,VY,VZ, &
   !
   ! write current flags, energies and statistics
   WRITE(U,'(/A)') ' !ENERGIES and STATISTICS'
-  WRITE(U,'(128L1)') (QEPROP(I), I = 1,LENENP)
-  WRITE(U,'(128L1)') (QETERM(I), I = 1,LENENT)
+  ! The repeat count must be >= LENENT (energym.F90).  If it is smaller,
+  ! Fortran format reversion writes the remaining flags to a second record
+  ! and every subsequent read in this file is off by one record.  It must
+  ! also match the LINE buffer in READYN, which infers the writing version's
+  ! LENENT from the trimmed length of these lines.
+  WRITE(U,'(256L1)') (QEPROP(I), I = 1,LENENP)
+  WRITE(U,'(256L1)') (QETERM(I), I = 1,LENENT)
   WRITE(U,'(I8,3D22.15)') ISTPSA,FITA,FITP,AVETEM
   WRITE(U,'(3D22.15)') (EPROP(I),EPRPP(I),EPRP2P(I),I=1,LENENP)
   WRITE(U,'(2D22.15)') (EPRPA(I),EPRP2A(I),I=1,LENENP)
@@ -396,6 +408,25 @@ SUBROUTINE WRIDYN(U,NATOM,XOLD,YOLD,ZOLD,X,Y,Z,VX,VY,VZ, &
 #if KEY_FOURD==1 /*4dendif*/
   ENDIF
 #endif /* (4dendif)*/
+
+! write middle sin(r) thermostat (velocity) variables
+#if KEY_MIDSINR == 1  /* MID-SINR */
+  if(q_midsinr) then
+     ! v1 value
+     WRITE(U,'(/A)') ' !V1X,V1Y,V1Z'
+     do i=1,natom
+        WRITE(U,'(3D22.15)')(v_1ij(1,j,i),v_1ij(2,j,i),v_1ij(3,j,i),j=1,L_val)
+     end do
+
+     ! v2 value
+     WRITE(U,'(/A)') ' !V2X,V2Y,V2Z'
+     do i=1,natom
+        WRITE(U,'(3D22.15)')(v_2ij(1,j,i),v_2ij(2,j,i),v_2ij(3,j,i),j=1,L_val)
+     end do
+  end if
+#endif /* MID-SINR */
+!
+
 #if KEY_DYNVV2==1 /*dynvv2_write*/
   ! BEGIN DYNA VV2 (G. Lamoureux)
   IF (QCONSTRAINTS) THEN
@@ -405,10 +436,10 @@ SUBROUTINE WRIDYN(U,NATOM,XOLD,YOLD,ZOLD,X,Y,Z,VX,VY,VZ, &
   ! END DYNA VV2 (G. Lamoureux)
 #endif /* (dynvv2_write)*/
 #if KEY_FLUCQ==1
-  IF(QFLUC) CALL FQRWRI(U)   
+  IF(QFLUC) CALL FQRWRI(U)
 #endif
 #if KEY_PHMD==1
-  IF(QPHMD) CALL PHMDWRIT(U) 
+  IF(QPHMD) CALL PHMDWRIT(U)
 #endif
 #if KEY_BLOCK==1 /*ldm*/
   if (qmld) then
@@ -426,7 +457,7 @@ SUBROUTINE WRIDYN(U,NATOM,XOLD,YOLD,ZOLD,X,Y,Z,VX,VY,VZ, &
   IF (QCG) WRITE(U,'(/A)') ' !CG,CGOLD,VCG'
   IF (QCG) WRITE(U,'(3D22.15)') &
        (CG(I),CGOLD(I),VCG(I),I=1,NATOM)
-#endif 
+#endif
   ! PJ 06/2005
 #if KEY_PIPF==1
   IF (QPFDYN) WRITE(U,'(/A)') ' !UIND,UINDO,VUIND'
@@ -442,7 +473,7 @@ SUBROUTINE WRIDYN(U,NATOM,XOLD,YOLD,ZOLD,X,Y,Z,VX,VY,VZ, &
         WRITE(U,'(2D22.15)') PFNHSBATH(I),PFNHSOBATH(I)
      ENDDO
   ENDIF
-#endif 
+#endif
 #if KEY_SCCDFTB==1
   IF(qlamda.or.qpkac) THEN
      WRITE(U,'(/A)') ' !SCCDFTB-TI Parameters'
@@ -451,7 +482,7 @@ SUBROUTINE WRIDYN(U,NATOM,XOLD,YOLD,ZOLD,X,Y,Z,VX,VY,VZ, &
      WRITE(U,'(/A)')  ' !dvdl,dvdlav,dtmp1'
      WRITE(U,'(3D22.15)') dvdl,dvdlav,dtmp1
   ENDIF
-#endif 
+#endif
 #if KEY_REPLICA==1
 #if KEY_RPATH==1
   IF(QPROPT.AND.(NREPL > 0))THEN
@@ -460,8 +491,8 @@ SUBROUTINE WRIDYN(U,NATOM,XOLD,YOLD,ZOLD,X,Y,Z,VX,VY,VZ, &
      WRITE(U,'(3D22.15)')(PMF(I),I=1,NREPL)
      WRITE(U,'(3D22.15)')(FLUC(I),I=1,NREPL)
   ENDIF
-#endif 
-#endif 
+#endif
+#endif
   !
   ! ready
   !
@@ -479,28 +510,32 @@ END SUBROUTINE WRIDYN
 
 SUBROUTINE READYN(U,NATOM,XOLD,YOLD,ZOLD,X,Y,Z,VX,VY,VZ, &
 #if KEY_CHEQ==1
-     CG,CGOLD,VCG,QCG,                     & 
+     CG,CGOLD,VCG,QCG,                     &
 #endif
 #if KEY_PIPF==1
-     UIND,UINDO,VUIND,QPFDYN,              & 
+     UIND,UINDO,VUIND,QPFDYN,              &
 #endif
 #if KEY_PIPF==1
-     NPFBATHS,PFNHSBATH,PFNHSOBATH,        & 
+     NPFBATHS,PFNHSBATH,PFNHSOBATH,        &
 #endif
 #if KEY_DYNVV2==1
-     QCONSTRAINTS,DXC,DYC,DZC,             & 
+     QCONSTRAINTS,DXC,DYC,DZC,             &
 #endif
      NPRIV, &
      JHSTRT,NDEGF,NSTEP,NSAVC,NSAVV,SEED,AVETEM, &
      ISTPSA,LDYNA &
+#if KEY_MIDSINR == 1
+    ,q_midsinr,q_midsinr_vinit    &
+    ,v_1ij,v_2ij,L_val            &
+#endif
 #if KEY_BLOCK
      ,QLMC,QLDM,NBLOCK,BXLAMB,BLDOLD,BVLAMB,NSAVL &   !BLOCK  !ldm
 #endif
 #if KEY_FOURD==1
-     ,VFD,FDOLD                            & 
+     ,VFD,FDOLD                            &
 #endif
 #if KEY_SCCDFTB==1
-     ,qlamda,qpkac,qsccres,icntdyn,iavti,dvdl,dvdlav,dtmp1 &   
+     ,qlamda,qpkac,qsccres,icntdyn,iavti,dvdl,dvdlav,dtmp1 &
 #endif
 #if KEY_DHDGB==1
 !AP/MF
@@ -540,7 +575,7 @@ SUBROUTINE READYN(U,NATOM,XOLD,YOLD,ZOLD,X,Y,Z,VX,VY,VZ, &
 #endif
   use pathm
 #if KEY_FLUCQ==1
-  use flucq     
+  use flucq
 #endif
   use phmd
   use gbsw
@@ -548,7 +583,7 @@ SUBROUTINE READYN(U,NATOM,XOLD,YOLD,ZOLD,X,Y,Z,VX,VY,VZ, &
   use clcg_mod,only:clcginit, setseed
   use memory
 #if KEY_MULTICOM==1 /*  VO stringm */
-  use multicom_aux   
+  use multicom_aux
 #endif
 #if KEY_BLOCK==1
   use lambdam,only:qmld,msld_read_restart,msld_restart_broadcast  /*ldm*/
@@ -562,19 +597,19 @@ SUBROUTINE READYN(U,NATOM,XOLD,YOLD,ZOLD,X,Y,Z,VX,VY,VZ, &
 #if KEY_CHEQ==1
   real(chm_real) CG(*),CGOLD(*),VCG(*)
   LOGICAL QCG
-#endif 
+#endif
   ! PJ 06/2005
 #if KEY_PIPF==1
   real(chm_real) UIND(3,*),UINDO(3,*),VUIND(3,*)
   LOGICAL QPFDYN
   INTEGER NPFBATHS
   real(chm_real) PFNHSBATH(*),PFNHSOBATH(*)
-#endif 
-#if KEY_DYNVV2==1
-  LOGICAL QCONSTRAINTS                        
 #endif
 #if KEY_DYNVV2==1
-  real(chm_real) DXC(*), DYC(*), DZC(*)               
+  LOGICAL QCONSTRAINTS
+#endif
+#if KEY_DYNVV2==1
+  real(chm_real) DXC(*), DYC(*), DZC(*)
 #endif
   INTEGER NPRIV, JHSTRT, NDEGF, NSTEP, NSAVC, NSAVV
   real(chm_real) SEED
@@ -593,19 +628,28 @@ SUBROUTINE READYN(U,NATOM,XOLD,YOLD,ZOLD,X,Y,Z,VX,VY,VZ, &
 
 #if KEY_FOURD==1
   real(chm_real) VFD(*), FDOLD(*)
-#endif 
+#endif
 #if KEY_SCCDFTB==1
   logical qlamda,qsccres,qpkac
   integer icntdyn, iavti
   real(chm_real) dvdl,dvdlav,dtmp1
-#endif 
+#endif
+
+#if KEY_MIDSINR == 1
+  logical :: q_midsinr,q_midsinr_vinit
+  integer :: L_val
+  real(chm_real) :: v_1ij(3,L_val,natom),v_2ij(3,L_val,natom)
+#endif
 
   ! local
   INTEGER I, J, NATOMQ, ILENEP, ILENET, IVERS, LDYNAR
   real(chm_real) :: xtla
   character(len=1) BIT
   character(len=4) HDR, XTLTPR
-  character(len=128) LINE
+  ! Must be >= LENENT (energym.F90): READYN infers the writing version's
+  ! LENENT from the TRIMmed length of the QETERM flag line, so a shorter
+  ! buffer truncates it and mis-detects the restart-file version.
+  character(len=256) LINE
   character(len=4) NSEO
   LOGICAL QET, MISMAT
   character(len=512*22) rngline
@@ -632,15 +676,31 @@ SUBROUTINE READYN(U,NATOM,XOLD,YOLD,ZOLD,X,Y,Z,VX,VY,VZ, &
   nrandl=nrand
   call chmalloc('dynio.src','WRIDYN','allseeds',nrandl*numnodl,intg=allseeds)
 
+  ! The restart file is read from unit U, which the caller takes from the
+  ! command line.  DYNAmics leaves IUNREA at -1 when the command does not
+  ! name a unit, and nothing below checks U before rewinding and reading it,
+  ! so an unnamed unit reaches the Fortran runtime as unit -1: the process
+  ! either dies inside the runtime's REWIND or blocks forever on a
+  ! preconnected unit, in both cases without telling the user what was
+  ! wrong.  Refuse it here instead, which covers every caller of READYN.
+  !
+  ! Checked before the IOLEV branch below so that every process evaluates
+  ! it: U comes from the parsed command and is therefore the same on all of
+  ! them, so they all reach the same verdict rather than some aborting while
+  ! others carry on waiting.
+  IF (U <= 0) CALL WRNDIE(-3,'<READYN>', &
+       'No restart file: OPEN UNIT <n> READ FORMatted NAME <file> first, '// &
+       'then name that unit on the command (DYNAmics ... IUNRea <n>)')
+
   IF(IOLEV < 0 &
 #if KEY_MULTICOM==1 /*  VO stringm */
-  &            .and. ( ME_LOCAL.ne.0 ) &             
+  &            .and. ( ME_LOCAL.ne.0 ) &
 #endif
   &            ) GOTO 900
   !
-  if (reallow) then 
+  if (reallow) then
      REWIND(UNIT=U)
-  endif             
+  endif
 #if KEY_DHDGB==1
 !AP/MF
   READ(U,'(A4,2I6,2X,A4,2X,A4,A4)',END=9) &
@@ -854,6 +914,27 @@ SUBROUTINE READYN(U,NATOM,XOLD,YOLD,ZOLD,X,Y,Z,VX,VY,VZ, &
 #if KEY_FOURD==1 /*4dendif*/
   ENDIF
 #endif /* (4dendif)*/
+
+! read middle sin(r) thermostat (velocity) variables
+#if KEY_MIDSINR == 1  /* MID-SINR */
+  if(q_midsinr .and. .not. q_midsinr_vinit) then
+     ! v1 value
+     READ(U,'(/A)',END=9) LINE
+     do i=1,natom
+        READ(U,'(3D22.15)',END=9) (v_1ij(1,j,i),v_1ij(2,j,i),v_1ij(3,j,i),j=1,L_val)
+     end do
+
+     ! v2 value
+     READ(U,'(/A)',END=9) LINE
+     do i=1,natom
+        READ(U,'(3D22.15)',END=9) (v_2ij(1,j,i),v_2ij(2,j,i),v_2ij(3,j,i),j=1,L_val)
+     end do
+     !
+     !q_midsinr_vinit =.false.
+  end if
+#endif /* MID-SINR */
+!
+
 #if KEY_DYNVV2==1 /*dynvv2_read*/
   ! BEGIN DYNA VV2 (G. Lamoureux)
   IF (QCONSTRAINTS) THEN
@@ -863,7 +944,7 @@ SUBROUTINE READYN(U,NATOM,XOLD,YOLD,ZOLD,X,Y,Z,VX,VY,VZ, &
   ! END DYNA VV2 (G. Lamoureux)
 #endif /* (dynvv2_read)*/
 #if KEY_FLUCQ==1
-  IF(QFLUC) CALL FQRREA(U)   
+  IF(QFLUC) CALL FQRREA(U)
 #endif
 #if KEY_BLOCK==1 /*ldm*/
   if(qmld) then
@@ -881,7 +962,7 @@ SUBROUTINE READYN(U,NATOM,XOLD,YOLD,ZOLD,X,Y,Z,VX,VY,VZ, &
   IF (QCG) READ(U,'(/A)',END=9) LINE
   IF (QCG) READ(U,'(3D22.15)',END=9) &
        (CG(I),CGOLD(I),VCG(I),I=1,NATOM)
-#endif 
+#endif
   ! PJ 06/2005
 #if KEY_PIPF==1
   IF (QPFDYN) READ(U,'(/A)',END=9) LINE
@@ -897,7 +978,7 @@ SUBROUTINE READYN(U,NATOM,XOLD,YOLD,ZOLD,X,Y,Z,VX,VY,VZ, &
         READ(U,'(2D22.15)') PFNHSBATH(I),PFNHSOBATH(I)
      ENDDO
   ENDIF
-#endif 
+#endif
 #if KEY_SCCDFTB==1
   if((qlamda.or.qpkac).and.qsccres) then
      READ(U,'(/A)',END=9) LINE
@@ -906,7 +987,7 @@ SUBROUTINE READYN(U,NATOM,XOLD,YOLD,ZOLD,X,Y,Z,VX,VY,VZ, &
      READ(U,'(/A)',END=9) LINE
      READ(U,'(3D22.15)',END=9) dvdl,dvdlav,dtmp1
   ENDIF
-#endif 
+#endif
 #if KEY_REPLICA==1
 #if KEY_RPATH==1
   IF(QPROPT.AND.(NREPL > 0))THEN
@@ -915,8 +996,8 @@ SUBROUTINE READYN(U,NATOM,XOLD,YOLD,ZOLD,X,Y,Z,VX,VY,VZ, &
      READ(U,'(3D22.15)',END=9)(PMF(I),I=1,NREPL)
      READ(U,'(3D22.15)',END=9)(FLUC(I),I=1,NREPL)
   ENDIF
-#endif 
-#endif 
+#endif
+#endif
 
   !
   ! Correct for different restart file formats
@@ -927,7 +1008,7 @@ SUBROUTINE READYN(U,NATOM,XOLD,YOLD,ZOLD,X,Y,Z,VX,VY,VZ, &
 #else /**/
   ! If not at nih assume older file uses verlet
   IF(LDYNAR == 0) LDYNAR=-1
-#endif 
+#endif
   IF(LDYNA /= LDYNAR) THEN
      IF (LDYNA > 0) THEN
         ! switch from verlet to leap-frog
@@ -956,10 +1037,10 @@ SUBROUTINE READYN(U,NATOM,XOLD,YOLD,ZOLD,X,Y,Z,VX,VY,VZ, &
 #if KEY_PHMD==1
   IF(QGBSW.or.QGBMV)THEN
     IF (QPHMD)THEN
-        CALL PHMDREAD(U) 
+        CALL PHMDREAD(U)
     ENDIF
   ENDIF
-#endif 
+#endif
 #if KEY_GRAPE==1
   ! store velocities for FMM export
   !write(*,*)'before writing velocities: igrape, save_igrape', igrape, save_igrape
@@ -990,7 +1071,7 @@ SUBROUTINE READYN(U,NATOM,XOLD,YOLD,ZOLD,X,Y,Z,VX,VY,VZ, &
   !
 #if KEY_PARALLEL==1
 #if KEY_MULTICOM==1 /*  VO stringm */
-  if (SIZE_LOCAL.gt.1) then        
+  if (SIZE_LOCAL.gt.1) then
 #endif
   ! nose
   CALL PSND8(SN11,MAXNOS)
@@ -1011,7 +1092,7 @@ SUBROUTINE READYN(U,NATOM,XOLD,YOLD,ZOLD,X,Y,Z,VX,VY,VZ, &
   CALL PSND8(DXC,NATOM)
   CALL PSND8(DYC,NATOM)
   CALL PSND8(DZC,NATOM)
-#endif 
+#endif
   ! END TPCONTROL (G. Lamoureux)
   !
   CALL PSND8(XTLABC,6)
@@ -1138,27 +1219,35 @@ SUBROUTINE READYN(U,NATOM,XOLD,YOLD,ZOLD,X,Y,Z,VX,VY,VZ, &
   CALL PSND8(X,NATOM)
   CALL PSND8(Y,NATOM)
   CALL PSND8(Z,NATOM)
+
+#if KEY_MIDSINR == 1
+  if(q_midsinr) then
+     call PSND8m(v_1ij,3*L_val*NATOM)
+     call PSND8m(v_2ij,3*L_val*NATOM)
+  end if
+#endif
+
 #if KEY_CHEQ==1
   IF(QCG) THEN
      CALL PSND8(CG,NATOM)
      CALL PSND8(VCG,NATOM)
      CALL PSND8(CGOLD,NATOM)
   ENDIF
-#endif 
+#endif
 #if KEY_BLOCK==1
   if(qmld) then
      call msld_restart_broadcast(nblock)
   endif
-#endif 
+#endif
 #if KEY_PHMD==1
   IF(QPHMD)THEN
      CALL PSND8(CG,NATOM)
      CALL PSND8(PH_THETA,NTITR)
   ENDIF
-#endif 
+#endif
   CALL PSNDC(XTLTPR,1)
 #if KEY_FLUCQ==1
-  CALL FQRUPD   
+  CALL FQRUPD
 #endif
 #if KEY_FOURD==1 /*4dpar*/
   IF(DIM4.AND.(REST4 == 1)) THEN
@@ -1168,9 +1257,9 @@ SUBROUTINE READYN(U,NATOM,XOLD,YOLD,ZOLD,X,Y,Z,VX,VY,VZ, &
   ENDIF
 #endif /* (4dpar)*/
 #if KEY_MULTICOM==1 /*  VO */
-  endif                         
+  endif
 #endif
-#endif 
+#endif
   !
   IF(XTLTPR /= '    ') THEN
      CALL XTLLAT(XUCELL,XTLABC)
@@ -1200,7 +1289,7 @@ SUBROUTINE WRETERM(NPRIV,TIME,QHEADER)
   use stream
   use version
 #if KEY_MULTICOM==1 /*  VO string */
-  use multicom_aux                         
+  use multicom_aux
 #endif
   implicit none
   INTEGER NPRIV
@@ -1211,7 +1300,7 @@ SUBROUTINE WRETERM(NPRIV,TIME,QHEADER)
   !
   IF(KUNIT < 0 .OR. (IOLEV <= 0 &
 #if KEY_MULTICOM==1
-     &  .and. (ME_LOCAL.ne.0)   &           
+     &  .and. (ME_LOCAL.ne.0)   &
 #endif
      &                          )) RETURN
   !
@@ -1244,10 +1333,10 @@ SUBROUTINE WRETERM(NPRIV,TIME,QHEADER)
        EPROP(EPOT),EPROP(EPOT)-EPROP(TOTKE), &
        EPROP(TEMPS),ETERM(BOND),ETERM(ANGLE), &
 #if KEY_CMAP==1
-       ETERM(DIHE)+ETERM(CMAP),ETERM(IMDIHE),ETERM(VDW), &   
+       ETERM(DIHE)+ETERM(CMAP),ETERM(IMDIHE),ETERM(VDW), &
 #endif
 #if KEY_CMAP==0
-       ETERM(DIHE),ETERM(IMDIHE),ETERM(VDW), &               
+       ETERM(DIHE),ETERM(IMDIHE),ETERM(VDW), &
 #endif
        ETERM(ELEC),ETERM(HBOND),ETERM(CHARM), &
        ETERM(DMC),ETERM(RGY)
@@ -1268,7 +1357,7 @@ SUBROUTINE WRETERM(NPRIV,TIME,QHEADER)
 #else /**/
 160 FORMAT(I16,4F16.4,/,5F16.4,/,5F16.4,:/,5F16.4)
 170 FORMAT(5F16.4)
-#endif 
+#endif
   ! machine dependent call to flush output buffers
   CALL GFLUSH(KUNIT)
   RETURN
@@ -1294,7 +1383,7 @@ SUBROUTINE  WRITLD(NBLOCK,NPRIV,ISTEP,NSTEP,delta)
   use image
   use version
 #if KEY_MULTICOM==1 /*  VO stringm */
-  use multicom_aux        
+  use multicom_aux
 #endif
   !
   !joined with block   use blockappend     ! yw070702 Theta-dynamics
@@ -1316,7 +1405,7 @@ SUBROUTINE  WRITLD(NBLOCK,NPRIV,ISTEP,NSTEP,delta)
   !
   IF(IUNLDM < 0 .OR. (IOLEV < 0   &
 #if KEY_MULTICOM==1 /*  VO stringm */
-    &                           .and. (ME_LOCAL.ne.0)     &           
+    &                           .and. (ME_LOCAL.ne.0)     &
 #endif
     &                           )) RETURN
   !
@@ -1364,7 +1453,7 @@ SUBROUTINE  WRITLD(NBLOCK,NPRIV,ISTEP,NSTEP,delta)
      ELSE                                   !
         WRITE(IUNLDM) (SNGL(BiXLAM(I)*BiXLAM(I)),I=1,NBLOCK)
      ENDIF                                  ! wy070702
-#endif 
+#endif
   ENDIF
   !
   !++  LN MOD /APR 90
@@ -1404,7 +1493,7 @@ end module dynio
       use consta
       use stream
 #if KEY_MULTICOM==1 /*  VO stringm */
-      use multicom_aux           
+      use multicom_aux
 #endif
       use param_store, only: set_param
       use parallel,only:psnd4,psnd8
@@ -1421,12 +1510,12 @@ end module dynio
 !
       IF(IOLEV.GT.0 &
 #if KEY_MULTICOM==1
-    &               .or. (ME_LOCAL.eq.0) &          
+    &               .or. (ME_LOCAL.eq.0) &
 #endif
     &               ) THEN
          int8traju=0     !assume 32 bit ints
          IF (reallow)    REWIND(IUNIT)
-      ENDIF              
+      ENDIF
             READ(IUNIT) HDR,ICNTRL
             ! store bytes of icntrl(10) in delta4
             delta4 = transfer(icntrl(10), delta4)
@@ -1434,11 +1523,11 @@ end module dynio
 #if KEY_PARALLEL==1
       CALL PSNDC(HDR,1)
       CALL PSND4(ICNTRL,20)
-#endif 
+#endif
 !
       DELTA=DELTA4*TIMFAC ! switch from AKMA time to picoseconds - BRB
 #if KEY_PARALLEL==1
-      CALL PSND8(delta,1)                               
+      CALL PSND8(delta,1)
 #endif
 !
       IF(PRNLEV.GE.2) THEN
@@ -1472,4 +1561,3 @@ end module dynio
    END subroutine ldm_gticnt
 
 !============================================================================
-

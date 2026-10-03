@@ -155,7 +155,7 @@ or a change of the psf (e.g., REPLica).
 4.  FVSCal
     One major problem with ACE1 (and gneralized Born methods in general)
 is the overestimation of the desolvation by the pairwise de-screening
-function ESELFIK (see ace.src). One way to reduce the impact of this
+function ESELFIK (see ace.F90). One way to reduce the impact of this
 systematic error is to reduce the volume that is assigned to the atoms
 by a constant factor FVSCal < 1 as proposed in Calimet et al., Proteins
 45 (2001), 144-158. The default value for FVSCal is 1.0, though a value

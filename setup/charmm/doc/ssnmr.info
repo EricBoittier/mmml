@@ -23,7 +23,7 @@ References  : J. Lee, J. Chen, C. L. Brooks III, and W. Im,
 * Menu:
 
 * 15N Chemical shift : Syntax           ::   Syntax of 15N chemical shift
-* 15N Cheimical shift : Charmm input    ::   Example of 15N chemical shift 
+* 15N Chemical shift : Charmm input    ::   Example of 15N chemical shift 
 * 15N-1H dipolar coupling: Syntax       ::   Syntax of 15N-1H dipolar coupling 
 * 15N-1H dipolar coupling: Charmm input ::   Example of 15N-1H dipolar coupling 
 

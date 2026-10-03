@@ -18,12 +18,15 @@
 
 Classes
 =======
-- `CharmmFile` -- open and close files with access to unit number and file name
+- `CharmmFile` -- open and close files with access to unit number and file name.
+  Supports the context manager protocol (``with`` statement) for
+  automatic cleanup.
 """
 
 import ctypes
 
-import pycharmm.lib as lib
+# import pycharmm.loader as lib
+from pycharmm.loader import lib
 
 
 def c_api_path_buffer(file_name: str) -> tuple[ctypes.Array, ctypes.c_int]:
@@ -56,8 +59,17 @@ def _resolve_charmm_fortran_path(file_name, *, read_only, append):
 
 
 class CharmmFile:
-    """
-    A class to manipulate files at the fortran level
+    """A class to manipulate files at the Fortran level.
+
+    Can be used as a context manager::
+
+        with CharmmFile('traj.dcd', file_unit=40, read_only=False) as dcd:
+            DynamicsScript(..., iuncrd=dcd.file_unit).run()
+        # file is automatically closed here
+
+    A closed file can be reopened in a different mode::
+
+        dcd.open(read_only=True)
     """
     def __init__(self, file_name, file_unit=-1,
                  read_only=True, append=False, formatted=False):
@@ -93,8 +105,29 @@ class CharmmFile:
         if self.is_open:
             self.close()
 
-    def open(self):
+    def __enter__(self):
+        if not self.is_open:
+            self.open()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
+        return False
+
+    def open(self, read_only=None, append=None, formatted=None):
         """Open the file
+
+        Parameters
+        ----------
+        read_only : bool, optional
+            Override the read/write mode for this open call.
+            If not given, uses the current setting.
+        append : bool, optional
+            Override the append mode.  If not given, uses the
+            current setting.
+        formatted : bool, optional
+            Override the formatted flag.  If not given, uses the
+            current setting.
 
         Returns
         -------
@@ -103,6 +136,13 @@ class CharmmFile:
         """
         if self.is_open:
             return True
+
+        if read_only is not None:
+            self.read_only = read_only
+        if append is not None:
+            self.append = append
+        if formatted is not None:
+            self.formatted = formatted
 
         fn = ctypes.c_char_p(self.file_name.encode())
         len_fn = ctypes.c_int(len(self.file_name))
@@ -117,24 +157,22 @@ class CharmmFile:
         if self.append:
             to_append = ctypes.c_int(1)
 
-        formatted = ctypes.c_int(0)
+        fmt = ctypes.c_int(0)
         if self.formatted:
-            formatted = ctypes.c_int(1)
+            fmt = ctypes.c_int(1)
 
         new_unit = ctypes.c_int(self.file_unit)
 
         # Open the file by calling a charmm fortran routine
-        charmm_unit = lib.charmm.charmm_file_open(
+        charmm_unit = lib.charmm_file_open(
             fn, len_fn,
             to_read, to_write, to_append,
-            formatted,
+            fmt,
             new_unit)
 
-        if not charmm_unit == -1:
+        if charmm_unit != -1:
             self.file_unit = charmm_unit
             self.is_open = True
-
-        # consider throwing an error if charmm_unit == -1
 
         return self.is_open
 
@@ -149,12 +187,11 @@ class CharmmFile:
         success_bit = 0
         if self.is_open:
             unit = ctypes.c_int(self.file_unit)
-            success_bit = lib.charmm.charmm_file_close(unit)
+            success_bit = lib.charmm_file_close(unit)
 
         if success_bit == 1:
             self.is_open = False
             if self._io_alias is not None:
                 self._io_alias.finalize()
 
-        # otherwise, think about throwing a specific error here
         return not self.is_open

@@ -90,10 +90,14 @@ void calcLigGrid(void * ocl_selected_device,
     // printf("Old Address=%p\n",d_LigGrid_F);
   }
 
-  cl_float zero = 0.0;
-  status = clEnqueueFillBuffer(q, *d_LigGrid, &zero, sizeof(cl_float), 0,
-                               LigGridSize, 0, NULL, NULL);
-  ocl_check_status(status);
+  /* Zero the ligand grid buffer using host-side memset + write */
+  {
+    float * zeros = (float *)calloc(LigGridSize, 1);
+    status = clEnqueueWriteBuffer(q, *d_LigGrid, CL_TRUE, 0,
+                                  LigGridSize, zeros, 0, NULL, NULL);
+    ocl_check_status(status);
+    free(zeros);
+  }
 
   // atoms parameters
   status = CL_SUCCESS;
@@ -116,8 +120,8 @@ void calcLigGrid(void * ocl_selected_device,
   ocl_check_status(status);
 
   cl_kernel lig_kernel;
-  status = ocl_compile_kernel(Kernels::generateLigGrid, "generateLigGrid",
-                              ctx, dev_id,
+  status = ocl_compile_kernel(Kernels::gpu_compat + "\n" + Kernels::generateLigGrid,
+                              "generateLigGrid", ctx, dev_id,
                               lig_kernel);
   if (status != CL_SUCCESS) {
     return;

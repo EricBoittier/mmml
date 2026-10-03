@@ -5054,7 +5054,16 @@ contains
         EPSWVDW = 0.1520D0
         SIGWVDW = 1.7682D0
         GVDW    = ZERO
+        ! Take only this rank's stride of atoms, as the HDGB branch above
+        ! and the SASA loop earlier in this routine already do.  GVDW goes
+        ! into ETERM(ASP) and TVDW into T(), and both are summed over ranks
+        ! (GComb(T,nmvsel) below), so looping 1..nmvsel on every rank
+        ! multiplies this term -- energy and force alike -- by NUMNOD.
+#if KEY_PARALLEL==1
+        DO I = MyNodP, nmvsel, NumNod
+#else /**/
         DO I = 1, nmvsel
+#endif
             EPSIW = SQRT(ABS(EFF(ITC(IAC(I))))*EPSWVDW)
             SIGIW = VDWR(ITC(IAC(I))) + SIGWVDW
             SIGIW = SIGIW*SIGIW
@@ -5066,7 +5075,6 @@ contains
                  - X4VDW*X3VDW
             TVDW(I) = THREE*X4VDW*X3VDW*X2VDW
             T(I) = T(I) + TVDW(I)
-           WRITE(6,*) 'GB i ->  ' ,GVDW,I
 
         END DO
 
@@ -7239,7 +7247,16 @@ contains
         EPSWVDW = 0.1520D0
         SIGWVDW = 1.7682D0
         GVDW    = ZERO
+        ! Take only this rank's stride of atoms, as the HDGB branch above
+        ! and the SASA loop earlier in this routine already do.  GVDW goes
+        ! into ETERM(ASP) and TVDW into T(), and both are summed over ranks
+        ! (GComb(T,nmvsel) below), so looping 1..nmvsel on every rank
+        ! multiplies this term -- energy and force alike -- by NUMNOD.
+#if KEY_PARALLEL==1
+        DO I = MyNodP, nmvsel, NumNod
+#else /**/
         DO I = 1, nmvsel
+#endif
             EPSIW = SQRT(ABS(EFF(ITC(IAC(I))))*EPSWVDW)
             SIGIW = VDWR(ITC(IAC(I))) + SIGWVDW
             SIGIW = SIGIW*SIGIW
@@ -7251,7 +7268,6 @@ contains
                  - X4VDW*X3VDW
             TVDW(I) = THREE*X4VDW*X3VDW*X2VDW
             T(I) = T(I) + TVDW(I)
-           WRITE(6,*) 'GB i ->  ' ,GVDW,I
 
         END DO
 

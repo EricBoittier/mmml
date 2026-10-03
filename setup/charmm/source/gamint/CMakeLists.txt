@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 2.8) # same as CHARMM ? MUST TEST !!!!
+cmake_minimum_required(VERSION 3.18) # same as CHARMM ? MUST TEST !!!!
 
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DLINUX64") # just for zunix.c
 
@@ -121,6 +121,14 @@ file(GLOB HPCCHEM
   RELATIVE "${CMAKE_CURRENT_SOURCE_DIR}/gamess"
   "${CMAKE_CURRENT_SOURCE_DIR}/gamess/hpcchem_*.src")
 
+file(GLOB GPUsrc
+  RELATIVE "${CMAKE_CURRENT_SOURCE_DIR}/gamess"
+  "${CMAKE_CURRENT_SOURCE_DIR}/gamess/gpu_*.src")
+
+file(GLOB TGPUsrc
+  RELATIVE "${CMAKE_CURRENT_SOURCE_DIR}/gamess"
+  "${CMAKE_CURRENT_SOURCE_DIR}/gamess/tgpu_*.src")
+
 # do we care if we double the above files???
 list(REMOVE_ITEM GmsSource modmnfun.src)
 list(REMOVE_ITEM GmsSource params.src)
@@ -145,6 +153,11 @@ list(REMOVE_ITEM GmsSource ryspol.src)
 #list(REMOVE_ITEM GmsSource mod_1e_primitives.src)
 # later make this optional:
 list(REMOVE_ITEM GmsSource ${CCSD3Source})
+list(REMOVE_ITEM GmsSource ${GPUsrc})
+list(REMOVE_ITEM GmsSource ${TGPUsrc})
+list(REMOVE_ITEM GmsSource rimp2int.src)
+list(REMOVE_ITEM GmsSource rimp2gpu.src)
+list(REMOVE_ITEM GmsSource rimp2subs.src)
 #list(REMOVE_ITEM GmsSource ${HPCCHEM})
 # include just hpcchem_stub.src
 list(REMOVE_ITEM GmsSource hpcchem_driver.src)

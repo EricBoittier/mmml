@@ -2658,18 +2658,18 @@ FUNCTION Chi2REPD( NATOM,ISLCT1,CG,TARGET,ISDRUDE, &
 
      !        Compute 1/(r_gi)^2 or 1/(r_pgi)^2
      RR2=0.0D0
-     IF(ISDRUDE(i)) THEN
+     IF(ISDRUDE(IA)) THEN
         DO G=1,NGRID
-           rd2 = (X(i)-GRIDX(g))**2 + (Y(i)-GRIDY(g))**2 &
-                + (Z(i)-GRIDZ(g))**2
-           r2 = (X(i-1)-GRIDX(g))**2 + (Y(i-1)-GRIDY(g))**2 &
-                + (Z(i-1)-GRIDZ(g))**2
+           rd2 = (X(IA)-GRIDX(g))**2 + (Y(IA)-GRIDY(g))**2 &
+                + (Z(IA)-GRIDZ(g))**2
+           r2 = (X(IA-1)-GRIDX(g))**2 + (Y(IA-1)-GRIDY(g))**2 &
+                + (Z(IA-1)-GRIDZ(g))**2
            rr2 = rr2 + (1.0/sqrt(rd2) - 1/sqrt(r2))**2
         ENDDO
      ELSE
         DO G=1,NGRID
-           r2 = (X(i-1)-GRIDX(g))**2 + (Y(i-1)-GRIDY(g))**2 &
-                + (Z(i-1)-GRIDZ(g))**2
+           r2 = (X(IA-1)-GRIDX(g))**2 + (Y(IA-1)-GRIDY(g))**2 &
+                + (Z(IA-1)-GRIDZ(g))**2
            rr2 = rr2 + 1.0/r2
         ENDDO
      ENDIF
@@ -3755,7 +3755,8 @@ SUBROUTINE FITPARAM
   use number
 
   real(chm_real)  LAMBDA
-  real(chm_real)  CHI2, CHI20, CONV, CHI2RESTR, CHI2RESTR2
+  real(chm_real)  CHI2, CHI20, CONV, CHI2RESTR
+  real(chm_real) :: CHI2RESTR2 = 0.0D0
   INTEGER ITER, COUNTER2
   INTEGER I,J
   real(chm_real)  DELTA, TOLERA
@@ -3805,6 +3806,7 @@ SUBROUTINE FITPARAM
   NEXP=GTRMI(COMLYN,COMLEN,'NEXP',0)
   NGRP=GTRMI(COMLYN,COMLEN,'NGRP',1)
   NDIP=GTRMI(COMLYN,COMLEN,'NDIP',0)
+  UEXP=GTRMI(COMLYN,COMLEN,'UEXP',10)
   UFUN=UEXP+1
   !
   IF(NEXP.EQ.0) THEN

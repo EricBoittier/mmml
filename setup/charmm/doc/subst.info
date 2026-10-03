@@ -38,6 +38,19 @@ Control and system variables:
 'MYNODE'  - Current node number (0 to NUMNODE-1)
 'NUMNODE' - The number of nodes (distributed memory)
 'NCPU'    - The number of CPUs (shared memory use)
+'NTHREAD' - The OpenMP team size for this process, i.e. what
+            OMP_NUM_THREADS resolved to.  1 in a build without OpenMP.
+'NGPU'    - The number of GPUs this process can see.  This honours
+            CUDA_VISIBLE_DEVICES, so it is the number available to this
+            run rather than the number of cards in the machine, and it
+            is 0 in a build with no CUDA runtime linked.
+
+            NTHREAD and NGPU let an input file decide for itself whether
+            a GPU-backed feature can run here, instead of finding out by
+            aborting part way in.  BLaDE, for example, needs a GPU of its
+            own for every OpenMP thread, and every rank on a node sees
+            the same devices, so the blade testcases skip themselves
+            unless NGPU is at least NUMNODE*NTHREAD.
 'SYSSTAT' -
 'CPUTIME' - CPU time used at last call to TIMRE (TIMER NOW, TIMER DIFF)
 'ELATIME' - Elapsed time  at last call to TIMRE (TIMER NOW, TIMER DIFF)
@@ -411,8 +424,16 @@ Miscellaneous:
 ---------------------------------------------------------------------
 pref.dat Keywords:
 
-The following keywords have substitutions of 0 or 1 for set or not-set,
+The following keywords have substitutions of 1 or 0 for set or not-set,
 respectively.
+
+A keyword whose name is also the name of an energy term is published under
+an alias instead, because "?NAME" is resolved against the energy properties
+and energy terms before the parameter store is consulted: asking for ?GSBP
+gets the current GSBP energy, not the compile flag.  The aliases are
+
+  CMAP -> ?CMAPSET   GSBP -> ?QGSBP    MMPT  -> ?QMMPT
+  TSM  -> ?QTSM      EDS  -> ?QEDS     PRIMO -> ?QPRIMO   SMBP -> ?QSMBP
 
 ACE       FOURD     MOLVIB  	OLDDYN    PNOE     RXNCOR   
 ADUMB     GAMESS    MPI     	PARAFULL  POLAR    SCALAR   

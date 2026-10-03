@@ -1,0 +1,46 @@
+* BLaDE PMEL Mode Energy Validation Test
+* Compares CPU (DOMDEC) vs BLaDE single-point energies
+* Tests multiple random lambda configurations for ON/EX/NN modes
+*
+
+if ?blade .ne. 1 then
+   echo "Test NOT performed. BLADE must be defined in pref.dat"
+   stop
+endif
+
+if ?block .ne. 1 then
+   echo "Test NOT performed. BLOCK must be defined in pref.dat"
+   stop
+endif
+
+! BLaDE needs a GPU of its own for every OpenMP thread in every rank, and
+! all ranks on one node see the same devices -- so N ranks x T threads want
+! N*T GPUs.  ?NGPU honours CUDA_VISIBLE_DEVICES; ?NTHREAD is the OpenMP
+! team size.  Across several nodes this is conservative, each node bringing
+! its own GPUs, so it can skip a run that would in fact work -- a needless
+! skip beats aborting inside BLaDE, which is what happens when the counts
+! do not add up.  Reported as an explicit SKIP because the grader matches
+! "TESTCASE RESULT: SKIP" but not the mixed-case "Test NOT performed" this
+! guard printed before.
+calc bladegpu = ?numnode * ?nthread
+if ?ngpu .lt. @bladegpu then
+   echo BLADE_PMEL_ENERGY TESTCASE RESULT: SKIP
+   stop
+endif
+
+stream datadir.def
+
+set sysname = 14benz
+set box = 32.964000
+set tol = 1e-4
+set testct = 0
+set failct = 0
+
+echo ============================================================
+echo      BLaDE PMEL Mode Energy Validation Test Suite
+echo ============================================================
+echo
+echo This test compares CPU vs BLaDE energies at random lambda
+echo configurations for PMEL modes ON, EX, and NN.
+echo Tolerance: @tol relative error
+echo

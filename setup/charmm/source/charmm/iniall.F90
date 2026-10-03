@@ -10,238 +10,241 @@ SUBROUTINE INIALL
   use bases_fcm
 
 #if KEY_ACE==1
-  use ace_module,only:ace_init          
+  use ace_module,only:ace_init
 #endif
   use actclus_mod
 #if KEY_AFM==1
-  use afm_module,only: afm_init              
+  use afm_module,only: afm_init
 #endif
-  use block_fcm,only:block_init 
+  use block_fcm,only:block_init
 #if KEY_CADPAC==1
-  use cadpac_mod,only:cadpac_init  
+  use cadpac_mod,only:cadpac_init
 #endif
   use clcg_mod,only:clcg_iniall
   use rndnum
 #if KEY_CHEQ==1
-  use cheq,only: cheq_iniall,allocate_cheq             
+  use cheq,only: cheq_iniall,allocate_cheq
 #endif
 #if KEY_HMCOM==1
-  use cstran_mod,only:hmcm_init 
+  use cstran_mod,only:hmcm_init
 #endif
   use code,only:code_init
   use conshelix_m
-  use consph,only:consph_init    
+  use consph,only:consph_init
   use contrl,only:contrl_init
   use corman_mod,only: corman_init
 #if KEY_RMD==1
-  use cross,only: cross_iniall_init  
+  use cross,only: cross_iniall_init
 #endif
   use ctitla,only:ctitla_init
 #if KEY_CVELOCI==1
-  use cveloci_mod,only:cveloci_init  
+  use cveloci_mod,only:cveloci_init
 #endif
   use defltsm,only:deflts_iniall
 #if KEY_DIMB==1
-  use dimb,only:dimb_init            
+  use dimb,only:dimb_init
 #endif
 #if KEY_DIMS==1
-  use dims,only:dims_init            
+  use dims,only:dims_init
 #endif
 #if KEY_DMCONS==1
-  use dmcons,only:dmcons_init        
+  use dmcons,only:dmcons_init
 #endif
 #if KEY_EDS==1
-  use edsmod,only:eds_init           
+  use edsmod,only:eds_init
 #endif
 #if KEY_EMAP==1
-  use emapmod,only:emap_iniall          
+  use emapmod,only:emap_iniall
 #endif
 #if KEY_ESTATS==1
-  use estats_mod                     
+  use estats_mod
 #endif
   use eutil,only:enerin,skipe
   use etablem,only:etable_init
 #if KEY_TNPACK==1
-  use euler,only:euler_init          
+  use euler,only:euler_init
 #endif
   use ewald_1m,only:ewald_init
   use exelecm,only:exelec_init
   use fast,only:faster_init
   use ffieldm,only:ffield_init
 #if KEY_MMFF==1 || KEY_CFF==1 /*ff_fcm*/
-  use rtf,only:ucase    
+  use rtf,only:ucase
   use mmffm
 #endif /* (ff_fcm)*/
 #if KEY_FLUCQ==1
-  use flucq,only:flucq_init          
+  use flucq,only:flucq_init
 #endif
 #if KEY_FMA==1
-  use fmam,only:fma_init             
+  use fmam,only:fma_init
 #endif
 #if KEY_FOURD==1
-  use fourdm,only:fourd_init         
+  use fourdm,only:fourd_init
 #endif
 #if KEY_FACTS==1
-  use facts_module,only:facts_init   
+  use facts_module,only:facts_init
 #endif
 #if KEY_GENETIC==1
-  use galgor,only:galgor_init        
+  use galgor,only:galgor_init
 #endif
   use gamess_fcm
 #if KEY_GAMUS==1
-  use gamusmodule, only: dogamus, mgamus, idgamus, gamusdi, params 
+  use gamusmodule, only: dogamus, mgamus, idgamus, gamusdi, params
 #endif
 #if KEY_GCMC==1
-  use gcmc,only:gcmc_init            
+  use gcmc,only:gcmc_init
 #endif
-  use genborn,only: genborn_init     
-  use gbim,only: gbim_init           
+  use genborn,only: genborn_init
+  use gbim,only: gbim_init
 #if KEY_GRAPE==1
-  use grape,only:grape_ltm_init      
+  use grape,only:grape_ltm_init
 #endif
 #if KEY_NOGRAPHICS==0
-  use graph,only:graph_ltm_init      
+  use graph,only:graph_ltm_init
 #endif
 #if KEY_GRID==1
-  use grid_dock,only:grid_init            
+  use grid_dock,only:grid_init
 #endif
   use hbanal_mod,only:hbanal_init
   use hbondm,only:hbond_init
 #if KEY_HQBM==1
-  use hqbmm, only: hqinit!, allocate_hqbm  
+  use hqbmm, only: hqinit!, allocate_hqbm
 #endif
 #if KEY_TSM==1
-  use icpert,only:icpert_init        
+  use icpert,only:icpert_init
 #endif
   use image,only:image_init
   use image_routines_module, only: inimag
   use inbnd,only:inbnd_init
 #if KEY_MMFF==1
-  use io,only:io_init                
+  use io,only:io_init
 #endif
 #if KEY_BLOCK==1
-  use lambdam,only:ldm_init          
+  use lambdam,only:ldm_init
 #endif
 #if KEY_LONEPAIR==1
-  use lonepr,only:lonepair_init      
+  use lonepr,only:lonepair_init
 #endif
 #if KEY_RXNCOR==1
-  use lupcom,only:lupcom_init        
+  use lupcom,only:lupcom_init
 #endif
   use machutil,only:machdep_init
 #if KEY_MC==1
-  use mc,only:mc_init                
+  use mc,only:mc_init
 #endif
 #if KEY_MULTCAN==1
-  use mltcanon,only:mltcan_init      
+  use mltcanon,only:mltcan_init
 #endif
 #if KEY_MNDO97==1
-  use mndo97,only:mndo97_iniall      
+  use mndo97,only:mndo97_iniall
 #endif
 #if KEY_MSCALE==1
-  use mscalemod,only:mscale_iniall   
+  use mscalemod,only:mscale_iniall
 #endif
 #if KEY_NOMISC==0
-  use noem,only:noe_init             
+  use noem,only:noe_init
 #endif
   use nose_mod,only:nose_init
 #if KEY_OVERLAP==1
-  use olap,only:olap_init            
+  use olap,only:olap_init
 #endif
+#if KEY_OPENMM == 1
+  use fstore, only: fstore_init
+#endif  /* KEY_OPENMM */
   use parallel,only:parallel_iniall,mynod
   use param,only:param_iniall
 #if KEY_RPATH==1 && KEY_REPLICA==1
-  use pathm,only:path_iniall         
+  use pathm,only:path_iniall
 #endif
 #if KEY_PBEQ==1
-  use pbeq,only:pbeq_iniall          
+  use pbeq,only:pbeq_iniall
 #endif
 #if KEY_PBOUND==1
-  use pbound,only:pbound_init        
+  use pbound,only:pbound_init
 #endif
 #if KEY_PERT==1
-  use pert,only:pert_iniall          
+  use pert,only:pert_iniall
 #endif
 #if KEY_PHMD==1
-  use phmd,only:phmd_iniall          
+  use phmd,only:phmd_iniall
 #endif
 #if KEY_PIPF==1
-  use pipfm, only: pipf_iniall       
+  use pipfm, only: pipf_iniall
 #endif
 #if KEY_POLAR==1
-  use polarm, only: polar_iniall     
+  use polarm, only: polar_iniall
 #endif
 #if KEY_PRIMSH==1
-  use primsh, only:primsh_iniall     
+  use primsh, only:primsh_iniall
 #endif
 #if KEY_PROTO==1
-  use proto_mod,only:proto_init      
+  use proto_mod,only:proto_init
 #endif
   use psf,only:psf_iniall
   use pull_mod,only:epull_init
 #if KEY_QUANTUM==1
-  use quantm,only:quantum_init       
+  use quantm,only:quantum_init
 #endif
 #if KEY_REPDSTR==1
-  use repdstr,only:repdstr_iniall 
-  use repdstrmod                     
+  use repdstr,only:repdstr_iniall
+  use repdstrmod
 #endif
   use reawri,only:reawri_init,iseed
   use replica_mod,only:replica_iniall
   use resdist_ltm,only:resdist_iniall
 #if KEY_RGYCONS==1
-  use rgym,only:rgy_iniall           
+  use rgym,only:rgy_iniall
 #endif
   use rtf,only:rtf_iniall
 #if KEY_RXNCOR==1
-  use rxncom,only:rxncor_iniall      
+  use rxncom,only:rxncor_iniall
 #endif
 #if KEY_RXNCONS==1
-  use rxncons,only:rxncons_iniall    
+  use rxncons,only:rxncons_iniall
 #endif
-  use rush_mod,only:rush_init        
+  use rush_mod,only:rush_init
 #if KEY_SASAE==1
-  use sasa,only:sasa_init            
+  use sasa,only:sasa_init
 #endif
 #if KEY_NOMISC==0
-  use sbound,only:sbound_init        
+  use sbound,only:sbound_init
 #endif
   use storage
 #if KEY_SCCDFTB==1
-  use sccdftb,only:sccdftb_init      
+  use sccdftb,only:sccdftb_init
 #endif
   use selctam,only:select_init
   use shake,only:shake_iniall
 #if KEY_SHAPES==1
-  use shapes,only:shapes_init        
+  use shapes,only:shapes_init
 #endif
 #if KEY_SHELL==1
-  use shell,only:shell_init          
+  use shell,only:shell_init
 #endif
 #if KEY_SPACDEC==1
-  use spacdec,only:spacdec_iniall    
+  use spacdec,only:spacdec_iniall
 #endif
   use squantm
   use ssbpm,only: ssbpm_init
   use stream,only:stream_iniall
   use string,only:string_iniall
 #if KEY_ASPENER==1
-  use surface,only:surface_iniall    
+  use surface,only:surface_iniall
 #endif
 #if KEY_ASPMEMB==1
-  use surfmemb,only:surfmemb_iniall  
+  use surfmemb,only:surfmemb_iniall
 #endif
 #if KEY_MTS==1
-  use tbmts,only:tbmts_iniall        
+  use tbmts,only:tbmts_iniall
 #endif
 #if KEY_TORQUE==1
-  use torque,only:torque_iniall      
+  use torque,only:torque_iniall
 #endif
 #if KEY_TRAVEL==1
-  use travel,only:travel_iniall      
+  use travel,only:travel_iniall
 #endif
 #if KEY_TMD==1
-  use tmd,only:tmd_iniall            
+  use tmd,only:tmd_iniall
 #endif
 #if KEY_RISM==1 /*rism_fcm*/
   use rism
@@ -249,9 +252,9 @@ SUBROUTINE INIALL
   use distri
 #endif /* (rism_fcm)*/
 #if KEY_ADUMB==1
-  use umb                            
+  use umb
 #endif
-  use umbcor 
+  use umbcor
   use univ,only: runivf
   use varcutm
 #if KEY_ZEROM==1
@@ -260,10 +263,13 @@ SUBROUTINE INIALL
   use timerm,only:timer_iniall
   use valbond, only: vbresd,vbinid,vbdond
 #if KEY_CONSHELIX==1
-  use conshelix_fcm                  
+  use conshelix_fcm
 #endif
 #if KEY_SSNMR==1
   use ssnmr,only:ccs_iniall
+#endif
+#if KEY_MODELLER==1
+  use modeller, only:mod_iniall
 #endif
   use gopair, only : GoPair_initialize
 #if KEY_DHDGB==1
@@ -280,253 +286,256 @@ SUBROUTINE INIALL
   character(len=4) WINIT
 #if KEY_MMFF==0 && KEY_CFF==0
   logical ucase
-#endif 
+#endif
   !=======================================================================
   ! VALBOND.FCM
 #if KEY_VALBOND==1
-  VBRESD = .FALSE.    
+  VBRESD = .FALSE.
 #endif
 #if KEY_VALBOND==1
-  VBINID = .FALSE.    
+  VBINID = .FALSE.
 #endif
 #if KEY_VALBOND==1
-  VBDOND = .FALSE.    
+  VBDOND = .FALSE.
 #endif
   !
   !=======================================================================
- 
+
 #if KEY_ACE==1
-  call ace_init  
+  call ace_init
 #endif
   call actclus_init
 #if KEY_AFM==1
-  call afm_init       
+  call afm_init
 #endif
 #if KEY_BLOCK==1
-  call block_init     
+  call block_init
 #endif
-#if KEY_CADPACK==1
-  call cadpac_init    
+#if KEY_CADPAC==1
+  call cadpac_init
 #endif
 #if KEY_HMCOM==1
-  call hmcm_init      
+  call hmcm_init
 #endif
   call code_init
-  call consph_init    
+  call consph_init
 #if KEY_CONSHELIX==1
-  call conshelix_iniall 
+  call conshelix_iniall
 #endif
   call contrl_init
   call corman_init
 #if KEY_RMD==1
-  call cross_iniall_init 
+  call cross_iniall_init
 #endif
   call ctitla_init
 #if KEY_CVELOCI==1
-  call cveloci_init    
+  call cveloci_init
 #endif
 #if KEY_DIMB==1
-  call dimb_init       
+  call dimb_init
 #endif
 #if KEY_DIMS==1
-  call dims_init       
+  call dims_init
 #endif
 #if KEY_DMCONS==1
-  call dmcons_init     
+  call dmcons_init
 #endif
 #if KEY_EDS==1
-  call eds_init        
+  call eds_init
 #endif
 #if KEY_EMAP==1
-  call emap_iniall     
+  call emap_iniall
 #endif
   call enerin
   call epull_init
   call etable_init
 #if KEY_TNPACK==1
-  call euler_init      
+  call euler_init
 #endif
   call ewald_init
   call exelec_init
   call faster_init
-  call ffield_init(ucase) 
+  call ffield_init(ucase)
 #if KEY_FLUCQ==1
-  call flucq_init      
+  call flucq_init
 #endif
 #if KEY_FMA==1
-  call fma_init        
+  call fma_init
 #endif
 #if KEY_FOURD==1
-  call fourd_init      
+  call fourd_init
 #endif
 #if KEY_FACTS==1
-  call facts_init      
+  call facts_init
 #endif
 #if KEY_GENETIC==1
-  call galgor_init     
+  call galgor_init
 #endif
 #if KEY_GAMESS==1 || KEY_GAMESSUK==1 || KEY_QCHEM==1 || KEY_SQUANTM==1 || KEY_MNDO97==1 || KEY_QTURBO==1 || KEY_G09==1
   call gamess_ltm_init
-#endif 
-#if KEY_GCMC==1
-  call gcmc_init       
 #endif
-  call genborn_init    
-  call gbim_init       
+#if KEY_GCMC==1
+  call gcmc_init
+#endif
+  call genborn_init
+  call gbim_init
   call GoPair_initialize()
 #if KEY_NOGRAPHICS==0
-  call graph_ltm_init  
+  call graph_ltm_init
 #endif
 #if KEY_GRAPE==1
-  call grape_ltm_init  
+  call grape_ltm_init
 #endif
 #if KEY_GRID==1
-  call grid_init       
+  call grid_init
 #endif
   call hbanal_init
   call hbond_init
 #if KEY_TSM==1
-  call icpert_init     
+  call icpert_init
 #endif
   call image_init
   call inbnd_init
 #if KEY_MMFF==1
-  call io_init         
+  call io_init
 #endif
 #if KEY_NBIPS==1
-  call ipsinit         
+  call ipsinit
 #endif
 #if KEY_BLOCK==1
-  call ldm_init        
+  call ldm_init
 #endif
 #if KEY_LONEPAIR==1
-  call lonepair_init   
+  call lonepair_init
 #endif
 #if KEY_RXNCOR==1
-  call lupcom_init     
+  call lupcom_init
 #endif
   call machdep_init
 #if KEY_MC==1
-  call mc_init         
+  call mc_init
 #endif
 #if KEY_MULTCAN==1
-  call mltcan_init     
+  call mltcan_init
 #endif
 #if KEY_MNDO97==1
-  call mndo97_iniall   
+  call mndo97_iniall
 #endif
 #if KEY_MSCALE==1
-  call mscale_iniall   
+  call mscale_iniall
 #endif
 #if KEY_NOMISC==0
-  call noe_init        
+  call noe_init
 #endif
   call nose_init
 #if KEY_OVERLAP==1
-  call olap_init       
+  call olap_init
 #endif
-  call parallel_iniall 
+#if KEY_OPENMM == 1
+  call fstore_init()
+#endif  /* KEY_OPENMM */
+  call parallel_iniall
   call param_iniall
 #if KEY_REPLICA==1 && KEY_RPATH==1
-  call path_iniall     
+  call path_iniall
 #endif
 #if KEY_PBEQ==1
-  call pbeq_iniall     
+  call pbeq_iniall
 #endif
 #if KEY_PBOUND==1
-  call pbound_init     
+  call pbound_init
 #endif
 #if KEY_PERT==1
-  call pert_iniall     
+  call pert_iniall
 #endif
 #if KEY_PHMD==1
-  call phmd_iniall     
+  call phmd_iniall
 #endif
 #if KEY_PIPF==1
-  call pipf_iniall     
+  call pipf_iniall
 #endif
 #if KEY_POLAR==1
-  call polar_iniall    
+  call polar_iniall
 #endif
 #if KEY_PRIMSH==1
-  call primsh_iniall   
+  call primsh_iniall
 #endif
 #if KEY_PROTO==1
-  call proto_init      
+  call proto_init
 #endif
-  call psf_iniall      
+  call psf_iniall
 #ifdef KEY_RESIZE
   call resize_init
-#endif  
+#endif
 #if KEY_QUANTUM==1
-  call quantum_init    
+  call quantum_init
 #endif
   call reawri_init
 #if KEY_REPDSTR==1
-  call repdstr_iniall  
+  call repdstr_iniall
 #endif
   call replica_iniall
   call resdist_iniall
 #if KEY_RGYCONS==1
-  call rgy_iniall      
+  call rgy_iniall
 #endif
   call rtf_iniall
 #if KEY_RXNCOR==1
-  call rxncor_iniall   
+  call rxncor_iniall
 #endif
 #if KEY_RXNCONS==1
-  call rxncons_iniall  
+  call rxncons_iniall
 #endif
-  call rush_init       
+  call rush_init
 #if KEY_SASAE==1
-  call sasa_init       
+  call sasa_init
 #endif
 #if KEY_NOMISC==0
-  call sbound_init     
+  call sbound_init
 #endif
 #if KEY_SCCDFTB==1
-  call sccdftb_init    
+  call sccdftb_init
 #endif
   call ssbpm_init
   call storage_allocate()
   call select_init
   call shake_iniall
 #if KEY_SHAPES==1
-  call shapes_init     
+  call shapes_init
 #endif
 #if KEY_SPACDEC==1
-  call spacdec_iniall  
+  call spacdec_iniall
 #endif
 #if KEY_SHELL==1
-  call shell_init      
+  call shell_init
 #endif
   call clcg_iniall(iseed,mynod)
 #if KEY_SQUANTM==1
-  call squantm_iniall  
+  call squantm_iniall
 #endif
   call stream_iniall
   call string_iniall
 #if KEY_ASPENER==1
-  call surface_iniall  
+  call surface_iniall
 #endif
 #if KEY_ASPMEMB==1
-  call surfmemb_iniall 
+  call surfmemb_iniall
 #endif
 #if KEY_MTS==1
-  call tbmts_iniall     
+  call tbmts_iniall
 #endif
   call timer_iniall
 #if KEY_TMD==1
-  call tmd_iniall         
+  call tmd_iniall
 #endif
 #if KEY_TRAVEL==1
-  call travel_iniall      
+  call travel_iniall
 #endif
 #if KEY_TSM==1
-  call tsmclear           
+  call tsmclear
 #endif
 #if KEY_TORQUE==1
-  call torque_iniall      
+  call torque_iniall
 #endif
   ! UMB.FCM
 #if KEY_ADUMB==1 /*adumb_init*/
@@ -555,20 +564,20 @@ SUBROUTINE INIALL
   gamusdi=0
   params%ngauss=0
   params%ndim=0
-#endif 
+#endif
   call deflts_iniall
 
 #if KEY_ESTATS==1
-  call energy_anal_iniall     
+  call energy_anal_iniall
 #endif
 #if KEY_ZEROM==1
-  call zerom_iniall           
+  call zerom_iniall
 #endif
 #if KEY_ACTBOND==1
-  call actbond_iniall         
+  call actbond_iniall
 #endif
 #if KEY_RISM==1
-  call struc_iniall           
+  call struc_iniall
 #endif
   call runivf(-2)
 
@@ -584,12 +593,12 @@ SUBROUTINE INIALL
   winit='INIT'
   call gthbct(winit,j)
 #if KEY_CHEQ==1
-  call cheq_iniall()        
+  call cheq_iniall()
 #endif
   !=======================================================================
   ! initialize hqbm
 #if KEY_HQBM==1
-  call hqinit                                                
+  call hqinit
 #endif
 
   return
@@ -617,7 +626,7 @@ SUBROUTINE HEADER
 #if KEY_INSIGHT==1
   character(len=24) fdate
   external     fdate
-#endif 
+#endif
 
   integer :: month, day, year, hour, minute, second, &
     oslen, mypid
@@ -631,7 +640,7 @@ SUBROUTINE HEADER
   OSNAME='CRAY XT4/XT5'
 #else /**/
   CALL SYSID(OSNAME)
-#endif 
+#endif
   !
   IF(PRNLEV <= 0) RETURN
   !
@@ -654,11 +663,12 @@ SUBROUTINE HEADER
   ENDIF
 
   WRITE (OUTU, 51)
-51 FORMAT(7x,'Copyright(c) 1984-2023  ', &
+51 FORMAT(7x,'Copyright(c) 1984-2026  ', &
        'President and Fellows of Harvard College', &
        /,30x,'All Rights Reserved')
 
-  WRITE (OUTU, '(A)') center_pad('Current operating system: ' // OSNAME, 80)
+  WRITE (OUTU, '(A)') center_pad('Current operating system: ' // &
+                                 OSNAME(1:oslen), 80)
 
 ! BIOVIA Code Start : Print out compiler version
 #ifdef __INTEL_COMPILER
@@ -687,7 +697,7 @@ SUBROUTINE HEADER
   mypid = getpid()
   WRITE(OUTU,44) MYPID
   call set_param('PID',MYPID)
-#endif 
+#endif
 44 FORMAT(12X,'PID of the current process is: ',I6)
   RETURN
 contains
@@ -716,15 +726,15 @@ SUBROUTINE STOPCH(DIENAM)
   use erfcd_mod
   use pme_module,only:pmesh_clear,qpme
   use zdata_mod,only: QZMOD
-  use new_timer,only:timer_stop,T_total,finish_timers,write_timers 
+  use new_timer,only:timer_stop,T_total,finish_timers,write_timers
 #if KEY_CHEQ==1
-  use cheq,only:cheqstop              
+  use cheq,only:cheqstop
 #endif
 #if KEY_REPDSTR==1
-  use repdstrmod                      
+  use repdstrmod
 #endif
 #if KEY_GRAPE==1
-  use grapemod,only: grapefin         
+  use grapemod,only: grapefin
 #endif
   use allocdat
   use deallocdat
@@ -735,17 +745,18 @@ SUBROUTINE STOPCH(DIENAM)
   use dimens_fcm
   use bases_fcm
 #if KEY_HQBM==1
-  use hqbmm, only: hqfin              
+  use hqbmm, only: hqfin
 #endif
   use inbnd
   use image
 #if KEY_LOOKUP==1
-  use lookup,only:wwsetup              
+  use lookup,only:wwsetup
 #endif
   use selctam
   use scalar_module
   use storage
   use stream
+  use parallel, only: q_pycharmm_embedded, pycharmm_user_comm_set
   !MEK.. 94/07/12 add the following three lines
   use psf
   use shake
@@ -755,25 +766,25 @@ SUBROUTINE STOPCH(DIENAM)
   use repdstr
   use number
 #if KEY_MSCALE==1
-  use mscalemod,only:qmscale,qmscmain,mscalefin  
+  use mscalemod,only:qmscale,qmscmain,mscalefin
 #endif
-#endif 
+#endif
 
   use lambdam !Css for SS
 #if KEY_FSSHK==1
-  use fstshk,only:fsrscshk  
+  use fstshk,only:fsrscshk
 #endif
   use datstr,only:freedt_nbond,freedt_image
   use machutil,only:die
   use vangle_mm, only: ptrfin
-  use consph,only: consph_cleanup 
+  use consph,only: consph_cleanup
 #if KEY_EDS==1
-  use edsmod,only: eds_cleanup 
+  use edsmod,only: eds_cleanup
 #endif
 #if KEY_DOMDEC==1
   use domdec_common,only: q_domdec, q_split, ndirect
   use domdec_dr_common, only : nrecip, q_direct_node, q_recip_node, &
-                               comm_direct, comm_recip, mynod_split 
+                               comm_direct, comm_recip, mynod_split
 #endif
   use nbexcl,only:makitc_clr
 #if KEY_ENSEMBLE==1
@@ -809,11 +820,11 @@ SUBROUTINE STOPCH(DIENAM)
   ENDIF
   ! Grape/Gpu comes before parallel!
 #if KEY_GRAPE==1
-  CALL GRAPEFIN   
+  CALL GRAPEFIN
 #endif
   ! Finish MSCALE
 #if KEY_MSCALE==1
-  IF (QMSCALE.AND.QMSCMAIN) CALL MSCALEFIN    
+  IF (QMSCALE.AND.QMSCMAIN) CALL MSCALEFIN
 #endif
 #if KEY_REPDSTR==1
   !     We are at the end, so globalize and normalize I/O
@@ -822,22 +833,22 @@ SUBROUTINE STOPCH(DIENAM)
      CALL PSETGLOB
      CALL DREPRESIO(IOLEV,PRNLEV,WRNLEV)
   ENDIF
-#endif 
+#endif
   !     Measuring load balance
   !
 !  CALL PSYNC()
 !  !
 !#if KEY_DOMDEC==1
-!  if (.not.q_domdec) then  
+!  if (.not.q_domdec) then
 !#endif
 !#if KEY_ZEROM==0
 !     CALL BALPRN()
 !#endif
 !#if KEY_DOMDEC==1
-!  endif  
+!  endif
 !#endif
   !
-#endif 
+#endif
   !
   ! close all files
   DO I=1,99
@@ -864,7 +875,7 @@ SUBROUTINE STOPCH(DIENAM)
      call chmdealloc('iniall.src','STOPCH','MCCOUNT',MCBOXES,intg=MCCOUNT)
      call chmdealloc('iniall.src','STOPCH','MCLAMD',MCBOXES,crl=MCLAMD)
   ENDIF
-#endif 
+#endif
 
   call storage_deallocate()
 
@@ -874,7 +885,7 @@ SUBROUTINE STOPCH(DIENAM)
   CALL PTRFIN
 
 #if KEY_FSSHK==1
-  IF (QSHAKE .AND. QFSHAKE) CALL FSRSCSHK     
+  IF (QSHAKE .AND. QFSHAKE) CALL FSRSCSHK
 #endif
 
   ! Release space held by various parts of the ewald code.
@@ -905,21 +916,21 @@ SUBROUTINE STOPCH(DIENAM)
   !
 #if KEY_CHEQ==1
   CALL CHEQSTOP
-#endif 
+#endif
   !
 #if KEY_LOOKUP==1
   ! Maybe not necessary?
   T='RELEASE'
   TLEN=7
   CALL WWSETUP(T,TLEN)
-#endif 
+#endif
   !
 #if KEY_SHAPES==1
   IF(ORDSHP > 0) CALL FREESHP(.TRUE.)
-#endif 
-  CALL CONSPH_CLEANUP 
+#endif
+  CALL CONSPH_CLEANUP
 #if KEY_EDS==1
-  CALL EDS_CLEANUP 
+  CALL EDS_CLEANUP
 #endif
 
   call timer_stop(T_total)
@@ -934,13 +945,13 @@ SUBROUTINE STOPCH(DIENAM)
   !
   CALL ENSFIN
 #if KEY_PARALLEL==1
-  CALL PARFIN     
+  CALL PARFIN
 #endif
   !
 #if KEY_HQBM==1
-  CALL HQFIN      
+  CALL HQFIN
 #endif
-  ! 
+  !
 #if KEY_QCHEM==1
   call unlink('charges.dat')
 #endif
@@ -951,17 +962,31 @@ SUBROUTINE STOPCH(DIENAM)
   !
   ! print out termination status
   IF (PRNLEV > 0) CALL PRTSTATS(DIENAM)
-  
+
 ! BIOVIA Code Start
 #if KEY_LICENSE==1
   ! release charmm license
   call release_licenses()
 #endif
 ! BIOVIA Code End
-  ! dont go back!
-  STOP
-  ! Make sure we don't go back...
-  CALL DIE
+  ! Standalone charmm: end the process here.  Embedded (pyCHARMM): a
+  ! Fortran STOP would kill the host process before its own shutdown
+  ! runs -- in particular before mpi4py's atexit MPI_Finalize -- leaving
+  ! MPI un-finalized (mpirun then reports abnormal termination).  So
+  ! when embedded we return to the host and let it shut down cleanly.
+  !
+  ! pycharmm_user_comm_set counts as embedded too, and must be tested
+  ! separately: CHARMM_MULTINODE clears q_pycharmm_embedded, but a host
+  ! that supplied a base communicator is still an embedded N x M run.
+  ! Testing only q_pycharmm_embedded there STOPs the Python host mid-run,
+  ! and every peer rank in the job is then stuck in whatever collective it
+  ! was waiting on -- a guaranteed hang.  PARFIN already tests both.
+  if (.not. (q_pycharmm_embedded .or. pycharmm_user_comm_set)) then
+     ! dont go back!
+     STOP
+     ! Make sure we don't go back...
+     CALL DIE
+  end if
 END SUBROUTINE STOPCH
 
 SUBROUTINE PRTSTATS(DIENAM)
@@ -1028,7 +1053,7 @@ SUBROUTINE PRTSTATS(DIENAM)
        20X,' ELAPSED TIME: ',F8.2,2X,A8/ &
        20X,'     CPU TIME: ',F8.2,2X,A8)
 #if KEY_PATHSCALE==1
-  call & 
+  call &
 #endif
   flush (OUTU)
   RETURN
@@ -1049,12 +1074,32 @@ SUBROUTINE GETPREF()
   integer, parameter :: MAXKEYS = 300     ! should match limits in tool/prefx.f
   integer :: i
 
+  ! How many GPUs this process can see; 0 in a build with no CUDA runtime.
+  interface
+     function charmm_gpu_count() bind(C, name='charmm_gpu_count')
+       use, intrinsic :: iso_c_binding, only: c_int
+       integer(c_int) :: charmm_gpu_count
+     end function charmm_gpu_count
+  end interface
+
   IF(num_pref_keys > MAXKEYS) THEN
      CALL WRNDIE(-5,'<GETPREF>', &
           'Too many compile keys. Memory overwrite.')
      CALL DIE ! if you are not dead yet.
   END IF
 
+  ! A compile keyword whose name is also the name of an energy term cannot be
+  ! published under its own name: subenr (source/util/parse.F90) resolves
+  ! `?NAME' against the energy properties and the energy terms BEFORE it looks
+  ! in the parameter store, so `?GSBP' reads the current GSBP energy -- zero
+  ! until a GSBP calculation has been run -- and never the flag set here.  A
+  ! script written as `if ?GSBP .ne. 1 then ... stop' therefore stops in every
+  ! build, including one with GSBP compiled in.  TSM and CMAP already had
+  ! aliases for this reason; GSBP, MMPT, PRIMO and SMBP did not.
+  !
+  ! To find the full set:
+  !   grep -oE "CETERM\(\w+\) *= *'[^']+'" source/energy/eutil.F90
+  ! and intersect the quoted names with tool/cmake/prefx_keywords.cmake.
   do i = 1, num_pref_keys
      if (pref_keys(i) == 'TSM') then
         call set_param('QTSM', 1)
@@ -1063,16 +1108,34 @@ SUBROUTINE GETPREF()
         call set_param('CMAPSET', 1)
      elseif (pref_keys(i) == 'EDS') then
         call set_param('QEDS', 1)
+     elseif (pref_keys(i) == 'GSBP') then
+        call set_param('QGSBP', 1)
+     elseif (pref_keys(i) == 'MMPT') then
+        call set_param('QMMPT', 1)
+     elseif (pref_keys(i) == 'PRIMO') then
+        call set_param('QPRIMO', 1)
+     elseif (pref_keys(i) == 'SMBP') then
+        call set_param('QSMBP', 1)
      else
         call set_param(pref_keys(i), 1)
      end if
   end do
 
-  ! Add key for default size (at the moment) 
+  ! Add key for default size (at the moment)
   call set_param('XXLARGE', 1)
+
+  ! Runtime hardware counts, so a script can tell whether a GPU-backed
+  ! feature can run here rather than finding out by aborting.  ?NGPU
+  ! honours CUDA_VISIBLE_DEVICES and is 0 where no CUDA runtime is linked.
+  ! ?NTHREAD is the OpenMP team size; parallel_iniall publishes the real
+  ! value in an OpenMP build, so only the serial default belongs here.
+  call set_param('NGPU', int(charmm_gpu_count()))
+#ifndef _OPENMP
+  call set_param('NTHREAD', 1)
+#endif
 #if KEY_PARALLEL==0
-  call set_param('MYNODE', 0)   
-  call set_param('NUMNODE', 1)  
+  call set_param('MYNODE', 0)
+  call set_param('NUMNODE', 1)
 #endif
   return
 END SUBROUTINE GETPREF
@@ -1081,6 +1144,7 @@ subroutine parse_size(comlyn,comlen,qrdcmd)
   use dimens_fcm
   use string
   use stream
+  use cmdpar, only: cmdpar_reinit
 
   implicit none
   character(len=*),intent(inout) :: comlyn
@@ -1151,7 +1215,7 @@ subroutine parse_size(comlyn,comlen,qrdcmd)
      case('MAXCRT')
         size_arg = nexti(comlyn, comlen)
         call set_dimen(new_chsize%maxcrt, size_arg)
-#endif 
+#endif
      case('MAXSHK')
         size_arg = nexti(comlyn, comlen)
         call set_dimen(new_chsize%maxshk, size_arg)
@@ -1168,6 +1232,12 @@ subroutine parse_size(comlyn,comlen,qrdcmd)
         size_arg = nexti(comlyn, comlen)
         call set_dimen(new_chsize%maxitc, size_arg)
         call set_dimen(new_chsize%maxcn, size_arg*(size_arg+1)/2)
+     case('MAXPAR')
+        size_arg = nexti(comlyn, comlen)
+        call cmdpar_reinit(size_arg) ! handle immediately
+     case('IATBMX')
+        size_arg = nexti(comlyn, comlen)
+        call set_dimen(new_chsize%iatbmx, size_arg)
      case default
         write(outu,'("    DIMENSION> Unknown redimension size: ",a6)') word
         write(outu,'("    DIMENSION> Skipping: ",a6,/)')word
@@ -1194,7 +1264,7 @@ subroutine allocate_all
   use fourdm
   use gamess_fcm
 #if KEY_MCMA==1
-  use mcmamod        
+  use mcmamod
 #endif
   use mtp_fcm
   use mtpl_fcm
@@ -1222,7 +1292,7 @@ subroutine allocate_all
 
 !  call allocate_actclus
 #if KEY_CHEQ==1
-  call allocate_cheqinit 
+  call allocate_cheqinit
 #endif
 !  call allocate_cnst
   call allocate_code
@@ -1231,12 +1301,12 @@ subroutine allocate_all
   call allocate_deriv
   call allocate_fast_ltm
 #if KEY_MCMA==1
-  call allocate_mcma  
+  call allocate_mcma
 #endif
   call allocate_psf_ltm
   call allocate_param_ltm
 #if KEY_MTS==1
-  call allocate_tbmts  
+  call allocate_tbmts
 #endif
 
 #if KEY_DHDGB==1
@@ -1294,6 +1364,7 @@ end subroutine store_common_params
 subroutine print_charmm_sizes()
   use dimens_fcm
   use stream
+  use cmdpar, only: maxpar
   if (wrnlev >= 2) then
      write (outu, 10) 'Size  ', 'Original', 'New'
      write (outu, 20) 'MAXA  ', MAXA, get_dimen(new_chsize%MAXA, MAXA)
@@ -1305,6 +1376,8 @@ subroutine print_charmm_sizes()
      write (outu, 20) 'MAXPAD', MAXPAD, get_dimen(new_chsize%MAXPAD, MAXPAD)
      write (outu, 20) 'MAXRES', MAXRES, get_dimen(new_chsize%MAXRES, MAXRES)
      write (outu, 20) 'MAXSEG', MAXSEG, get_dimen(new_chsize%MAXSEG, MAXSEG)
+     write (outu, 20) 'IATBMX', IATBMX, get_dimen(new_chsize%IATBMX, IATBMX)
+     write (outu, 20) 'MAXPAR', MAXPAR
      write (outu, 20) 'MAXATC', MAXATC
      write (outu, 20) 'MAXCB ', MAXCB
      write (outu, 20) 'MAXCT ', MAXCT
@@ -1313,7 +1386,7 @@ subroutine print_charmm_sizes()
      write (outu, 20) 'MAXCH ', MAXCH
      write (outu, 20) 'MAXCN ', MAXCN
 #if KEY_CMAP==1
-     write (outu, 20) 'MAXCRT', MAXCRT, get_dimen(new_chsize%MAXCRT, MAXCRT) 
+     write (outu, 20) 'MAXCRT', MAXCRT, get_dimen(new_chsize%MAXCRT, MAXCRT)
 #endif
 10   format(a6,2a12)
 20   format(a6,2i12)
@@ -1321,4 +1394,3 @@ subroutine print_charmm_sizes()
 
   return
 end subroutine print_charmm_sizes
-

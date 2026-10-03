@@ -3,7 +3,6 @@ module api_eval
   implicit none
 contains
 
-#if KEY_LIBRARY == 1
   !> @brief evaluate an expression in charmm's native script language
   !
   ! the script array is read from 1 to nchar or c_null_char
@@ -176,7 +175,7 @@ contains
     integer(c_int), value, intent(in) :: len_name, len_val
 
     ! return value
-    integer(kind(bool)) :: is_found
+    integer(c_int) :: is_found
 
        ! local vars
     character(len=len_name) :: f_name
@@ -268,7 +267,7 @@ contains
     integer(c_int), value, intent(in) :: len_name, len_val
 
     ! return value
-    integer(kind(bool)) :: is_found
+    integer(c_int) :: is_found
 
        ! local vars
     character(len=len_name) :: f_name
@@ -551,6 +550,5 @@ contains
     call chmdealloc('api/api_eval.inp', 'builtins_strs_get', 'vals', &
          n, ch8 = vals)
   end subroutine builtins_strs_get
-#endif /* KEY_LIBRARY */
 
 end module api_eval

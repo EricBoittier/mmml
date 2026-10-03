@@ -89,7 +89,7 @@ SYSTem    - whatever is provided by random_number() routine in
             vs integer(4) compilation. Use ?NRAND value to query
 
 USER      - a user_random() function is provided in
-            charmm/usersb.src. This routine can be replaced by users
+            charmm/usersb.F90. This routine can be replaced by users
             to test their own RNG.
  
 

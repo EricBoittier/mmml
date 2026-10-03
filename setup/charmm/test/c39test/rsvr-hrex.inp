@@ -133,8 +133,8 @@ repd reset
 outu 6
 prnlev 5 node 0
 
-if @result .ne. 4 echo TESTCASE RESULT: FAILED
-if @result .eq. 4 echo TESTCASE RESULT: PASSED
+if @result .ne. 4 echo RSVR-HREX TESTCASE RESULT: FAIL
+if @result .eq. 4 echo RSVR-HREX TESTCASE RESULT: PASS
 
 stop
 

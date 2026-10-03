@@ -30,9 +30,9 @@ File: Galgor, Node: Implementation, Up: (doc/commands.info), Next: Syntax
 
 
 Name               Keyword               Module
-GA setup           GALGOR SETUP          genetic.src
-Genetic algorithm  GALGOR EVOLVE         genetic.src, genetic2.src
-Monte Carlo        GALGOR EVOLVE MCARLO  genetic.src, genetic2.src  
+GA setup           GALGOR SETUP          genetic.F90
+Genetic algorithm  GALGOR EVOLVE         genetic.F90
+Monte Carlo        GALGOR EVOLVE MCARLO  genetic.F90  
 
 This code was created by Michal Vieth, Heidi Daigler and  Charles Brooks III
 at The Scripps Research Institute during the summer/fall of 1997

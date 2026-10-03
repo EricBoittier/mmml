@@ -1513,5 +1513,651 @@ SUBROUTINE SELMTS(TBM2,TBM4,J1,J3,QIMM)
 end SUBROUTINE SELMTS
 #endif /* (mts_b)*/
 
+  ! middle-scheme SIN(R) related
+#if KEY_MIDSINR == 1 /*mid-sinr*/
+  subroutine midsinr_init_holo(natom,atfrst,atlast,l_val,qmass_1,KBT,deltasL, &
+                               imove,dx,dy,dz,amass,vx,vy,vz,  &
+                               v_1ij)
+     !
+     ! Equilibrate thermostat variable v_1ij around the current velocity
+     !
+     ! ioption = 1 : b_val calc. only using dx/dy/dz
+     !         = 2 :                  using both dx/dy/dz & xmi/ymi/zmi
+     use chm_kinds
+     use chm_types
+     use dimens_fcm
+     use number
+
+     implicit none
+     integer :: natom,l_val,atfrst,atlast
+     integer :: imove(*)
+     real(chm_real) :: dx(*),dy(*),dz(*),amass(*),vx(*),vy(*),vz(*)
+     real(chm_real) :: v_1ij(3,L_val,natom)
+     real(chm_real) :: qmass_1,KBT,deltasL
+
+     ! local variables
+     integer        :: i,j,k,k_val
+     real(chm_real) :: ll_val,ll_val2,ll_val3,b_tmp,c_val,b_val(3),e_pbdt(3),e_mbdt(3), &
+                       cosh_val(3),sinh_val(3)
+     real(chm_real) :: vxyz_i(3),s_val(3)
+
+     ! local varaibles set
+     ll_val = float(L_val)
+     ll_val2= qmass_1*float(L_val)/float(L_val+1)
+     ll_val3= float(L_val)*KBT
+
+     ! Equilibrate v_1ij around the current velocity
+     do k=1,5 ! equilibrate by running 5 times.
+        do i=atfrst,atlast
+           if(imove(i) == 0) then
+              b_tmp    = DELTASL/SQRT(ll_val*amass(i)*KBT)   ! KBT=TBATH*KBOLTZ
+              b_val(1) =-dx(i)*b_tmp
+              b_val(2) =-dy(i)*b_tmp
+              b_val(3) =-dz(i)*b_tmp
+
+              ! cosh (b dt) = 1/2*(e^(b dt) + e^(-b dt)) &
+              ! sinh (b dt) = 1/2*(e^(b dt) - e^(-b dt))
+              c_val         = sqrt(ll_val*KBT/amass(i))
+              e_pbdt(1:3)   = EXP( b_val(1:3))
+              e_mbdt(1:3)   = EXP(-b_val(1:3))
+              cosh_val(1:3) = half*(e_pbdt(1:3)+e_mbdt(1:3))
+              sinh_val(1:3) = half*(e_pbdt(1:3)-e_mbdt(1:3))
+              vxyz_i(1)= vx(i)*cosh_val(1) + c_val*sinh_val(1)
+              vxyz_i(2)= vy(i)*cosh_val(2) + c_val*sinh_val(2)
+              vxyz_i(3)= vz(i)*cosh_val(3) + c_val*sinh_val(3)
+
+              s_val(1:3) = zero
+              do j=1,L_val
+                 s_val(1:3) = s_val(1:3)+v_1ij(1:3,j,i)*v_1ij(1:3,j,i)
+              end do
+              s_val(1:3)=amass(i)*vxyz_i(1:3)*vxyz_i(1:3)+ll_val2*s_val(1:3)
+              s_val(1:3)=sqrt( ll_val3/s_val(1:3) )
+
+              !! update velocity
+              !vx(i) = s_val(1)*vxyz_i(1)
+              !vy(i) = s_val(2)*vxyz_i(2)
+              !vz(i) = s_val(3)*vxyz_i(3)
+
+              ! update v_1,i,j
+              do j=1,L_val
+                 v_1ij(1:3,j,i) = s_val(1:3)*v_1ij(1:3,j,i)
+              end do
+           end if
+        end do
+     end do
+     return
+  end subroutine midsinr_init_holo
+
+  subroutine midsinr_propagate_dt(natom,atfrst,atlast,l_val,qmass_1,KBT,deltasL, &
+                                  imove,dx,dy,dz,amass,vx,vy,vz,  &
+                                  v_1ij,ioption)
+     !
+     ! middle-scheme SIN(R) thermostat, propogate by dt/2
+     !
+     ! deltas can be deltas        (dt/2)
+     !               SS2X          (DELTA*NMTS1/2) for MTS; middle-step case
+     !               SA2X          (DELTA*NMTS0/2)
+     !
+     ! dx/dy/dz can also be 
+     !               dx/dy/dz      (call with DELTAS or SA2X); init & outer-step propagation
+     !               XMI,YMI,ZMI   (call with DELTAS); inner-step  propagation
+     !               XMM,YMM,ZMM   (call with SS2X)  ; middle-step propagation
+     !
+     ! ioption = 1: normal (all moving particles)
+     !           2: do the cycle over (imts(i) >=0) case
+     !
+     use chm_kinds
+     use chm_types
+     use dimens_fcm
+     use number
+     !!use tbmts   ! for mts case imts array
+
+     implicit none
+     integer :: natom,l_val,atfrst,atlast,ioption
+     integer :: imove(*)
+     real(chm_real) :: dx(*),dy(*),dz(*),amass(*),vx(*),vy(*),vz(*)
+     real(chm_real) :: v_1ij(3,L_val,natom)
+     real(chm_real) :: qmass_1,KBT,deltasL
+
+     ! local variables
+     integer        :: i,j,k,k_val
+     real(chm_real) :: ll_val,ll_val2,ll_val3,b_tmp,c_val,b_val(3),e_pbdt(3),e_mbdt(3), &
+                       cosh_val(3),sinh_val(3)
+     real(chm_real) :: vxyz_i(3),s_val(3)
+
+     ! local varaibles set
+     ll_val = float(L_val)
+     ll_val2= qmass_1*float(L_val)/float(L_val+1)
+     ll_val3= float(L_val)*KBT
+
+     ! propogate by dt/2
+#if KEY_MTS==1
+     if(ioption == 1) then
+#endif
+        do i=atfrst,atlast
+           if(imove(i) == 0) then
+              b_tmp    = DELTASL/SQRT(ll_val*amass(i)*KBT)   ! KBT=TBATH*KBOLTZ
+              b_val(1) =-dx(i)*b_tmp
+              b_val(2) =-dy(i)*b_tmp
+              b_val(3) =-dz(i)*b_tmp
+
+              ! cosh (b dt) = 1/2*(e^(b dt) + e^(-b dt)) &
+              ! sinh (b dt) = 1/2*(e^(b dt) - e^(-b dt))
+              c_val         = sqrt(ll_val*KBT/amass(i))
+              e_pbdt(1:3)   = EXP( b_val(1:3))
+              e_mbdt(1:3)   = EXP(-b_val(1:3))
+              cosh_val(1:3) = half*(e_pbdt(1:3)+e_mbdt(1:3))
+              sinh_val(1:3) = half*(e_pbdt(1:3)-e_mbdt(1:3))
+              vxyz_i(1)= vx(i)*cosh_val(1) + c_val*sinh_val(1)
+              vxyz_i(2)= vy(i)*cosh_val(2) + c_val*sinh_val(2)
+              vxyz_i(3)= vz(i)*cosh_val(3) + c_val*sinh_val(3)
+
+              s_val(1:3) = zero
+              do j=1,L_val
+                 s_val(1:3) = s_val(1:3)+v_1ij(1:3,j,i)*v_1ij(1:3,j,i)
+              end do
+              s_val(1:3)=amass(i)*vxyz_i(1:3)*vxyz_i(1:3)+ll_val2*s_val(1:3)
+              s_val(1:3)=sqrt( ll_val3/s_val(1:3) )
+
+              ! update velocity
+              vx(i) = s_val(1)*vxyz_i(1)
+              vy(i) = s_val(2)*vxyz_i(2)
+              vz(i) = s_val(3)*vxyz_i(3)
+
+              ! update v_1,i,j
+              do j=1,L_val
+                 v_1ij(1:3,j,i) = s_val(1:3)*v_1ij(1:3,j,i)
+              end do
+           end if
+        end do
+#if KEY_MTS==1
+     else if(ioption == 2) then
+        do i=atfrst,atlast
+           if(imts(i) >= 0 .and. imove(i) == 0) then
+              b_tmp    = DELTASL/SQRT(ll_val*amass(i)*KBT)   ! KBT=TBATH*KBOLTZ
+              b_val(1) =-dx(i)*b_tmp
+              b_val(2) =-dy(i)*b_tmp
+              b_val(3) =-dz(i)*b_tmp
+
+              ! cosh (b dt) = 1/2*(e^(b dt) + e^(-b dt)) &
+              ! sinh (b dt) = 1/2*(e^(b dt) - e^(-b dt))
+              c_val         = sqrt(ll_val*KBT/amass(i))
+              e_pbdt(1:3)   = EXP( b_val(1:3))
+              e_mbdt(1:3)   = EXP(-b_val(1:3))
+              cosh_val(1:3) = half*(e_pbdt(1:3)+e_mbdt(1:3))
+              sinh_val(1:3) = half*(e_pbdt(1:3)-e_mbdt(1:3))
+              vxyz_i(1)= vx(i)*cosh_val(1) + c_val*sinh_val(1)
+              vxyz_i(2)= vy(i)*cosh_val(2) + c_val*sinh_val(2)
+              vxyz_i(3)= vz(i)*cosh_val(3) + c_val*sinh_val(3)
+
+              s_val(1:3) = zero
+              do j=1,L_val
+                 s_val(1:3) = s_val(1:3)+v_1ij(1:3,j,i)*v_1ij(1:3,j,i)
+              end do
+              s_val(1:3)=amass(i)*vxyz_i(1:3)*vxyz_i(1:3)+ll_val2*s_val(1:3)
+              s_val(1:3)=sqrt( ll_val3/s_val(1:3) )
+
+              ! update velocity
+              vx(i) = s_val(1)*vxyz_i(1)
+              vy(i) = s_val(2)*vxyz_i(2)
+              vz(i) = s_val(3)*vxyz_i(3)
+
+              ! update v_1,i,j
+              do j=1,L_val
+                 v_1ij(1:3,j,i) = s_val(1:3)*v_1ij(1:3,j,i)
+              end do
+           end if
+        end do
+     end if
+#endif
+     return
+  end subroutine midsinr_propagate_dt
+
+  subroutine midsinr_thermostat_init1(natom,l_val,qmass_1,qmass_2,gamma_val,KBT,deltaL, &
+                                      v_1ij,v_2ij,ig)
+     ! init of middle sin(r) thermostat variables.
+     use chm_kinds
+     use chm_types
+     use dimens_fcm
+     use number
+     use consta, only: TIMFAC,PI
+     use parallel
+     use clcg_mod,only : random
+
+     implicit none
+     integer :: natom,l_val,atfrst,atlast,ig
+     real(chm_real) :: v_1ij(3,L_val,natom),v_2ij(3,L_val,natom)
+     real(chm_real) :: qmass_1,qmass_2,gamma_val,KBT,deltaL
+
+     ! local variables
+     integer :: itm,j
+     real(chm_real) :: rand_val(3),z_val,r1_tmp,r2_tmp,aa_val,bb_val,cc_val,dd_val
+     real(chm_real),parameter :: PIS=PI
+
+     !
+     ! do itm = 1,natom
+     !   v_1ij(1:3,1:L_val,itm) = zero  ! zeroing values...
+     !   v_2ij(1:3,1:L_val,itm) = zero
+     !end do
+     z_val  = EXP(-TIMFAC*gamma_val*DELTAL)
+     r1_tmp = sqrt(KBT*(one-z_val**2)/qmass_1)  ! sqrt(kT/q1 * (1-z^2)
+     r2_tmp = sqrt(KBT*(one-z_val**2)/qmass_2)
+#if KEY_PARALLEL==1
+     if(mynod==0) then
+#endif
+        do itm=1,natom
+           do j=1,L_val
+              aa_val = sqrt(mintwo*log(random(ig)))
+              bb_val = two*PIS*random(ig)
+              cc_val = sqrt(mintwo*log(random(ig)))
+              dd_val = two*PIS*random(ig)
+              rand_val(1) = aa_val*COS(bb_val)
+              rand_val(2) = aa_val*SIN(bb_val)
+              rand_val(3) = cc_val*COS(dd_val)
+              v_1ij(1:3,j,itm) = r1_tmp*rand_val(1:3)
+
+              aa_val = sqrt(mintwo*log(random(ig)))
+              bb_val = two*PIS*random(ig)
+              rand_val(1) = cc_val*SIN(dd_val)
+              rand_val(2) = aa_val*COS(bb_val)
+              rand_val(3) = aa_val*SIN(bb_val)
+              v_2ij(1:3,j,itm) = r2_tmp*rand_val(1:3)
+           end do
+        end do
+#if KEY_PARALLEL==1
+     end if
+     if(numnod>0) then
+        call PSND8m(v_1ij,3*L_val*natom)
+        call PSND8m(v_2ij,3*L_val*natom)
+     end if
+#endif
+     return
+  end subroutine midsinr_thermostat_init1
+
+  subroutine midsinr_thermostat_update(natom,atfrst,atlast,l_val,qmass_1,qmass_2,gamma_val, &
+                                       KBT,deltasL,deltaL,imove,vx,vy,vz,amass,                 &
+                                       v_1ij,v_2ij,ig,ioption)
+     !
+     ! update iso-Kinetic thermostat variables (by propagating it by dt)
+     !
+     ! deltas can be deltas        (dt/2)          ; for inner loop update (where skipping not moving particles
+     !                                                                      during the inner loop)
+     !               SA2X          (DELTA*NMTS0/2) ; for outer loop update (where applied to all particles)
+     !
+     ! deltasL = deltaL/2; i.e., deltaL = dt (or DT) ; deltasL = dt/2 (or DT/2)
+     !
+     ! ioption==1: it is applied to all imove(i)==0 particles
+     !
+     !          2: it is applied to imts(i) >= 0 and imove(i)==0 particles
+     !             for imts(i)<0 particles, which do not move during the inner time step, 
+     !             updated in the outer loop (ioption==3)
+     ! 
+     !          3: it is applied to imts(i) <  0 and imove(i)==0 particles
+     !             for their updates at the outer loop.
+     !
+     ! How is L_iso-K updated?
+     ! 1) L_iso-K by dt/2  (for outer step, Dt/2)
+     ! 2) L_DOU by dt      (for outer step, Dt)
+     ! 3) L_iso-K by dt/2  (for outer step, Dt/2)
+     !
+     use chm_kinds
+     use chm_types
+     use dimens_fcm
+     use number
+     !!use tbmts   ! for mts case imts array
+     use consta, only: TIMFAC,PI
+     use clcg_mod,only : random
+
+     implicit none
+     integer :: natom,l_val,atfrst,atlast,ioption,ig
+     integer :: imove(*)
+     real(chm_real) :: vx(*),vy(*),vz(*),amass(*)
+     real(chm_real) :: v_1ij(3,L_val,natom),v_2ij(3,L_val,natom)
+     real(chm_real) :: qmass_1,qmass_2,gamma_val,KBT,deltasL,deltaL
+
+     ! local variables
+     integer        :: i,j,k,k_val
+     real(chm_real) :: ll_val,ll_val2,ll_val3
+     real(chm_real) :: s_val(3),z_val,r_qmg,r_tmp,aa_val,bb_val,cc_val,dd_val,rval
+     real(chm_real) :: vs_1ij(3,L_val),rand_val(3),u_val(3)
+     real(chm_real),parameter :: PIS=PI
+
+     ! local varaibles set
+     ll_val = float(L_val)
+     ll_val2= qmass_1*float(L_val)/float(L_val+1)
+     ll_val3= float(L_val)*KBT
+     rval   = TIMFAC*DELTASL
+
+     z_val  = EXP(-TIMFAC*gamma_val*DELTAL)
+     r_qmg  = one/(gamma_val*qmass_2)
+     r_tmp  = sqrt(KBT*(one-z_val*z_val)/qmass_2) ! sqrt(kT/q2 * (1-z^2)
+
+     ! 1. apply L_iso-K by dt/2
+#if KEY_MTS==1
+     if(ioption == 1) then
+#endif
+        do i=atfrst,atlast
+           if(imove(i) == 0) then
+              s_val(1:3) = zero
+              do j=1,L_val
+                 do k=1,3
+                   vs_1ij(k,j)=v_1ij(k,j,i)*EXP(-v_2ij(k,j,i)*rval)
+                   s_val(k)   =s_val(k)+vs_1ij(k,j)*vs_1ij(k,j)
+                 end do
+              end do
+              s_val(1) = amass(i)*vx(i)*vx(i) + ll_val2*s_val(1)
+              s_val(2) = amass(i)*vy(i)*vy(i) + ll_val2*s_val(2)
+              s_val(3) = amass(i)*vz(i)*vz(i) + ll_val2*s_val(3)
+              s_val(1:3) = sqrt ( ll_val3/s_val(1:3) )
+
+              ! update velocity
+              vx(i) = s_val(1)*vx(i)
+              vy(i) = s_val(2)*vy(i)
+              vz(i) = s_val(3)*vz(i)
+
+              ! update v_1,i,j
+              do j=1,L_val
+                 v_1ij(1:3,j,i)=s_val(1:3)*vs_1ij(1:3,j)
+              end do
+           end if
+        end do
+#if KEY_MTS==1
+     else if(ioption == 2) then
+        do i=atfrst,atlast
+           if(imts(i) >= 0 .and. imove(i) == 0) then
+              s_val(1:3) = zero
+              do j=1,L_val
+                 do k=1,3
+                   vs_1ij(k,j)=v_1ij(k,j,i)*EXP(-v_2ij(k,j,i)*rval)
+                   s_val(k)   =s_val(k)+vs_1ij(k,j)*vs_1ij(k,j)
+                 end do
+              end do
+              s_val(1) = amass(i)*vx(i)*vx(i) + ll_val2*s_val(1)
+              s_val(2) = amass(i)*vy(i)*vy(i) + ll_val2*s_val(2)
+              s_val(3) = amass(i)*vz(i)*vz(i) + ll_val2*s_val(3)
+              s_val(1:3) = sqrt ( ll_val3/s_val(1:3) )
+
+              ! update velocity
+              vx(i) = s_val(1)*vx(i)
+              vy(i) = s_val(2)*vy(i)
+              vz(i) = s_val(3)*vz(i)
+
+              ! update v_1,i,j
+              do j=1,L_val
+                 v_1ij(1:3,j,i)=s_val(1:3)*vs_1ij(1:3,j)
+              end do
+           end if
+        end do
+     else if(ioption == 3) then
+        do i=atfrst,atlast
+           if(imts(i) <  0 .and. imove(i) == 0) then
+              s_val(1:3) = zero
+              do j=1,L_val
+                 do k=1,3
+                   vs_1ij(k,j)=v_1ij(k,j,i)*EXP(-v_2ij(k,j,i)*rval)
+                   s_val(k)   =s_val(k)+vs_1ij(k,j)*vs_1ij(k,j)
+                 end do
+              end do
+              s_val(1) = amass(i)*vx(i)*vx(i) + ll_val2*s_val(1)
+              s_val(2) = amass(i)*vy(i)*vy(i) + ll_val2*s_val(2)
+              s_val(3) = amass(i)*vz(i)*vz(i) + ll_val2*s_val(3)
+              s_val(1:3) = sqrt ( ll_val3/s_val(1:3) )
+
+              ! update velocity
+              vx(i) = s_val(1)*vx(i)
+              vy(i) = s_val(2)*vy(i)
+              vz(i) = s_val(3)*vz(i)
+
+              ! update v_1,i,j
+              do j=1,L_val
+                 v_1ij(1:3,j,i)=s_val(1:3)*vs_1ij(1:3,j)
+              end do
+           end if
+        end do
+     end if
+#endif
+
+     ! 2. apply L_DOU by dt
+     k_val  = 0
+#if KEY_MTS==1
+     if(ioption == 1) then
+#endif
+        do i=atfrst,atlast
+           if(imove(i) == 0) then
+              do j=1,L_val
+                 ! based on the subroutine DLNGV ... ig should be passed in.
+                 if(k_val == 0) then
+                    k_val = 1
+                    aa_val = sqrt(mintwo*log(random(ig)))
+                    bb_val = two*PIS*random(ig)
+                    cc_val = sqrt(mintwo*log(random(ig)))
+                    dd_val = two*PIS*random(ig)
+                    rand_val(1) = aa_val*COS(bb_val)
+                    rand_val(2) = aa_val*SIN(bb_val)
+                    rand_val(3) = cc_val*COS(dd_val)
+                 else
+                    k_val = 0
+                    aa_val = sqrt(mintwo*log(random(ig)))
+                    bb_val = two*PIS*random(ig)
+                    rand_val(1) = cc_val*SIN(dd_val)
+                    rand_val(2) = aa_val*COS(bb_val)
+                    rand_val(3) = aa_val*SIN(bb_val)
+                 end if
+
+                 u_val(1:3)    =r_qmg*(qmass_1*v_1ij(1:3,j,i)*v_1ij(1:3,j,i)-KBT)
+                 v_2ij(1:3,j,i)=z_val*v_2ij(1:3,j,i) + u_val(1:3)*(one-z_val) + r_tmp*rand_val(1:3)
+              end do
+           end if
+        end do
+#if KEY_MTS==1
+     else if(ioption == 2) then
+        do i=atfrst,atlast
+           if(imts(i) >= 0 .and. imove(i) == 0) then
+              do j=1,L_val
+                 ! based on the subroutine DLNGV ... ig should be passed in.
+                 if(k_val == 0) then
+                    k_val = 1
+                    aa_val = sqrt(mintwo*log(random(ig)))
+                    bb_val = two*PIS*random(ig)
+                    cc_val = sqrt(mintwo*log(random(ig)))
+                    dd_val = two*PIS*random(ig)
+                    rand_val(1) = aa_val*COS(bb_val)
+                    rand_val(2) = aa_val*SIN(bb_val)
+                    rand_val(3) = cc_val*COS(dd_val)
+                 else
+                    k_val = 0
+                    aa_val = sqrt(mintwo*log(random(ig)))
+                    bb_val = two*PIS*random(ig)
+                    rand_val(1) = cc_val*SIN(dd_val)
+                    rand_val(2) = aa_val*COS(bb_val)
+                    rand_val(3) = aa_val*SIN(bb_val)
+                 end if
+
+                 u_val(1:3)    =r_qmg*(qmass_1*v_1ij(1:3,j,i)*v_1ij(1:3,j,i)-KBT)
+                 v_2ij(1:3,j,i)=z_val*v_2ij(1:3,j,i) + u_val(1:3)*(one-z_val) + r_tmp*rand_val(1:3)
+              end do
+           end if
+        end do
+     else if(ioption == 3) then
+        do i=atfrst,atlast
+           if(imts(i) <  0 .and. imove(i) == 0) then
+              do j=1,L_val
+                 ! based on the subroutine DLNGV ... ig should be passed in.
+                 if(k_val == 0) then
+                    k_val = 1
+                    aa_val = sqrt(mintwo*log(random(ig)))
+                    bb_val = two*PIS*random(ig)
+                    cc_val = sqrt(mintwo*log(random(ig)))
+                    dd_val = two*PIS*random(ig)
+                    rand_val(1) = aa_val*COS(bb_val)
+                    rand_val(2) = aa_val*SIN(bb_val)
+                    rand_val(3) = cc_val*COS(dd_val)
+                 else
+                    k_val = 0
+                    aa_val = sqrt(mintwo*log(random(ig)))
+                    bb_val = two*PIS*random(ig)
+                    rand_val(1) = cc_val*SIN(dd_val)
+                    rand_val(2) = aa_val*COS(bb_val)
+                    rand_val(3) = aa_val*SIN(bb_val)
+                 end if
+
+                 u_val(1:3)    =r_qmg*(qmass_1*v_1ij(1:3,j,i)*v_1ij(1:3,j,i)-KBT)
+                 v_2ij(1:3,j,i)=z_val*v_2ij(1:3,j,i) + u_val(1:3)*(one-z_val) + r_tmp*rand_val(1:3)
+              end do
+           end if
+        end do
+     end if
+#endif
+
+     ! 3. apply L_iso-K by dt/2
+#if KEY_MTS==1
+     if(ioption == 1) then
+#endif
+        do i=atfrst,atlast
+           if(imove(i) == 0) then
+              s_val(1:3) = zero
+              do j=1,L_val
+                 do k=1,3
+                    vs_1ij(k,j)=v_1ij(k,j,i)*EXP(-v_2ij(k,j,i)*rval)
+                    s_val(k)   =s_val(k)+vs_1ij(k,j)*vs_1ij(k,j)
+                 end do
+              end do
+              s_val(1) = amass(i)*vx(i)*vx(i) + ll_val2*s_val(1)
+              s_val(2) = amass(i)*vy(i)*vy(i) + ll_val2*s_val(2)
+              s_val(3) = amass(i)*vz(i)*vz(i) + ll_val2*s_val(3)
+              s_val(1:3) = sqrt ( ll_val3/s_val(1:3) )
+
+              ! update velocity
+              vx(i) = s_val(1)*vx(i)
+              vy(i) = s_val(2)*vy(i)
+              vz(i) = s_val(3)*vz(i)
+
+              ! update v_1,i,j
+              do j=1,L_val
+                 v_1ij(1:3,j,i)=s_val(1:3)*vs_1ij(1:3,j)
+              end do
+           end if
+        end do
+#if KEY_MTS==1
+     else if(ioption == 2) then
+        do i=atfrst,atlast
+           if(imts(i) >= 0 .and. imove(i) == 0) then
+              s_val(1:3) = zero
+              do j=1,L_val
+                 do k=1,3
+                    vs_1ij(k,j)=v_1ij(k,j,i)*EXP(-v_2ij(k,j,i)*rval)
+                    s_val(k)   =s_val(k)+vs_1ij(k,j)*vs_1ij(k,j)
+                 end do
+              end do
+              s_val(1) = amass(i)*vx(i)*vx(i) + ll_val2*s_val(1)
+              s_val(2) = amass(i)*vy(i)*vy(i) + ll_val2*s_val(2)
+              s_val(3) = amass(i)*vz(i)*vz(i) + ll_val2*s_val(3)
+              s_val(1:3) = sqrt ( ll_val3/s_val(1:3) )
+
+              ! update velocity
+              vx(i) = s_val(1)*vx(i)
+              vy(i) = s_val(2)*vy(i)
+              vz(i) = s_val(3)*vz(i)
+
+              ! update v_1,i,j
+              do j=1,L_val
+                 v_1ij(1:3,j,i)=s_val(1:3)*vs_1ij(1:3,j)
+              end do
+           end if
+        end do
+     else if(ioption == 3) then
+        do i=atfrst,atlast
+           if(imts(i) <  0 .and. imove(i) == 0) then
+              s_val(1:3) = zero
+              do j=1,L_val
+                 do k=1,3
+                    vs_1ij(k,j)=v_1ij(k,j,i)*EXP(-v_2ij(k,j,i)*rval)
+                    s_val(k)   =s_val(k)+vs_1ij(k,j)*vs_1ij(k,j)
+                 end do
+              end do
+              s_val(1) = amass(i)*vx(i)*vx(i) + ll_val2*s_val(1)
+              s_val(2) = amass(i)*vy(i)*vy(i) + ll_val2*s_val(2)
+              s_val(3) = amass(i)*vz(i)*vz(i) + ll_val2*s_val(3)
+              s_val(1:3) = sqrt ( ll_val3/s_val(1:3) )
+
+              ! update velocity
+              vx(i) = s_val(1)*vx(i)
+              vy(i) = s_val(2)*vy(i)
+              vz(i) = s_val(3)*vz(i)
+
+              ! update v_1,i,j
+              do j=1,L_val
+                 v_1ij(1:3,j,i)=s_val(1:3)*vs_1ij(1:3,j)
+              end do
+           end if
+        end do
+     end if
+#endif 
+     return
+  end subroutine midsinr_thermostat_update
+
+  subroutine midsinr_temperature_check(natom,atfrst,atlast,l_val,qmass_1,qmass_2,ndegf, &
+                                       imove,amass,vx,vy,vz,                            &
+                                       v_1ij,v_2ij,istep)
+     !
+     ! calculate temperature and check
+     use chm_kinds
+     use chm_types
+     use dimens_fcm
+     use number
+     !!use tbmts   ! for mts case imts array
+     use consta, only: KBOLTZ
+     use parallel
+
+     implicit none
+     integer :: natom,l_val,atfrst,atlast,istep,ndegf
+     integer :: imove(*)
+     real(chm_real) :: amass(*),vx(*),vy(*),vz(*)
+     real(chm_real) :: v_1ij(3,L_val,natom),v_2ij(3,L_val,natom)
+     real(chm_real) :: qmass_1,qmass_2
+
+     ! local variables
+     integer :: i,j
+     real(chm_real) :: ll_val2,tempi_local(3),rval,ravl
+
+     ! reference taget temperature = (L+1)/L*system_temp
+     ! since <1/2 m v_i^2> = L/L+1 kT/2
+     !ll_val = float(L_val+1)/float(L_val)
+     !EPROP(TEMPS)=ll_val*TEMPI/(KBOLTZ*NDEGF)
+
+     ! LkT = sum m v_i^2 + q1*L/(L+1) sum (sum v_1ij^2)
+     tempi_local(1:3) = zero
+     ll_val2          = qmass_1 * float(L_val)/float(L_val + 1)
+     do i=atfrst,atlast
+        if(imove(i)==0) then
+           tempi_local(1) = tempi_local(1) + amass(i)*(vx(i)**2 + vy(i)**2 + vz(i)**2)
+
+           rval = zero
+           ravl = zero
+           do j=1,L_val
+              rval=rval+dot_product(v_1ij(1:3,j,i),v_1ij(1:3,j,i))
+              ravl=ravl+dot_product(v_2ij(1:3,j,i),v_2ij(1:3,j,i))
+           end do
+           tempi_local(2) = tempi_local(2) + rval
+           tempi_local(3) = tempi_local(3) + ravl
+        end if
+     end do
+     tempi_local(2) = tempi_local(1) + ll_val2*tempi_local(2)
+     tempi_local(3) = qmass_2*tempi_local(3)
+#if KEY_PARALLEL==1
+     call gcomb(tempi_local,3)
+     if(mynod==0) then
+#endif
+        tempi_local(1) = tempi_local(1)/(KBOLTZ*NDEGF)               ! based on vx,vy,vz
+        tempi_local(2) = tempi_local(2)/(float(L_val)*KBOLTZ*NDEGF)  ! for isokinetic constraints (v_1)
+        tempi_local(3) = tempi_local(3)/(float(L_val)*KBOLTZ*NDEGF)  ! for v_2
+        write(6,'(A,I7,3F12.5)') 'TEMP:',istep,tempi_local(1),tempi_local(2),tempi_local(3)
+#if KEY_PARALLEL==1
+     end if   ! (mynod==0)
+#endif
+     return
+  end subroutine midsinr_temperature_check
+#endif    /*mid-sinr*/
+
 end module tbmts
 

@@ -30,6 +30,13 @@ typedef enum eeterm {
   eenbrecipself,
   eenbrecipexcl,
   eelambda,
+  eetheta,      // MSLD theta bias energy
+  eecats,
+  eenoe,        // NOE restraint energy
+  eeharmonic,   // Harmonic positional restraint energy
+  eemmfp,       // MMFP (GEO) restraint energy
+  eeresd,       // eeresd
+  eemlp,        // eemlp
   eebias,
   eepotential,
   eekinetic,
@@ -155,6 +162,10 @@ struct NoePotential {
   real rpeak;
   real rswitch;
   real nswitch;
+  real c0x;
+  real c0y;
+  real c0z;
+  bool is_pnoe;
 };
 
 struct HarmonicPotential {
@@ -163,6 +174,69 @@ struct HarmonicPotential {
   real n;
   real3 r0;
 };
+
+struct BoRestPotential {
+  int idx[2];
+  real kr;
+  real r0;
+  int block;
+};
+
+struct AnRestPotential {
+  int idx[3];
+  real kt;
+  real t0;
+  int block;
+};
+
+struct DiRestPotential {
+  int idx[4];
+  real kphi;
+  int nphi;
+  real phi0;
+  real width;  // flat-bottom half-width in radians (default 0 = pure harmonic)
+  int block;
+};
+
+// eeresd-begin
+struct ResdPotential {
+  int i1;
+  int i2;
+  int j1;
+  int j2;
+  real ci;
+  real cj;
+  real rdist;
+  real kdist;
+}; // eeresd-end
+
+// eemlp-begin
+struct MLPotential { // host arrays
+  std::string ptname;
+  int ptnml;
+  int mlnatoms;
+  int ptgpuid = -1; 
+  int is_tani = -1; 
+  std::vector<int> mlatomidx;  
+  std::vector<int> mlSidx;
+  std::vector<int> mlZidx;
+  std::vector<int> mlmaskid;
+#ifdef WITH_TORCH
+  torch::jit::script::Module model; // PyTorch model
+#endif
+};
+struct MLPotentialDev { //device arrays
+  int  ptnml;
+  int  mlnatoms;
+  int *mlatomidx; 
+  int *mlSidx;
+  int *mlZidx;
+  int *mlmaskid;  
+  // buffers
+  float  *ml_qm_coords_s_d;   
+  float  *ml_qm_grad_s_d;     
+  float  *ml_energy_s_d;       
+}; // eemlp-end
 
 class Potential {
   public:
@@ -229,6 +303,7 @@ class Potential {
   std::set<int> *angleExcl;
   std::set<int> *diheExcl;
   std::set<int> *msldExcl;
+  std::set<int> *mlpExcl; // eemlp, Nonbonded exclusion for ML region
   std::set<int> *allExcl;
   // std::vector<Int2> excls_tmp;
   // struct Int2 *excls;
@@ -300,7 +375,21 @@ class Potential {
   struct HarmonicPotential *harms;
   struct HarmonicPotential *harms_d;
   real3_x harmCenter;
-
+  int boRestCount;
+  struct BoRestPotential *boRests;
+  struct BoRestPotential *boRests_d;
+  int anRestCount;
+  struct AnRestPotential *anRests;
+  struct AnRestPotential *anRests_d;
+  int diRestCount;
+  struct DiRestPotential *diRests;
+  struct DiRestPotential *diRests_d;
+  int resdCount;                 // eeresd 
+  struct ResdPotential *resds;   // eeresd     
+  struct ResdPotential *resds_d; // eeresd  
+  int MLPModelCount;             // eemlp
+  struct MLPotential *mlp_h;     // eemlp
+  struct MLPotentialDev mlp_d;   // eemlp
   int (*prettifyPlan)[2];
 
   Potential();
@@ -309,7 +398,7 @@ class Potential {
   void initialize(System *system);
 
   void reset_force(System *system,bool calcEnergy);
-  void calc_force(int step,System *system);
+  void calc_force(long int step,System *system,bool refillRandom);
 };
 
 #endif

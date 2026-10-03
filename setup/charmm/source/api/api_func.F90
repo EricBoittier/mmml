@@ -26,43 +26,50 @@ module api_func
   integer, allocatable :: idxk(:), idxkp(:)
   
   interface
-     function callback(natom, &
-          x_pos, y_pos, z_pos, &
-          dx, dy, dz) bind(c)
-       use, intrinsic :: iso_c_binding, only: c_double, c_int
-       implicit none
-       real(c_double) :: callback
-       integer(c_int), value :: natom
-       real(c_double), dimension(*) :: &
-            x_pos, y_pos, z_pos, &
-            dx, dy, dz
-     end function callback
-  
-  function callback_mlpot(    &
-          natom, ntrans, natim, &
-          idxp,                 &
-          x_pos, y_pos, z_pos,  &
-          dx, dy, dz,           &
-          Nmlp, Nmlmmp,         &
-          idxi, idxj,           &
-          idxjp,                &
-          idxu, idxv,           &
-          idxup, idxvp) bind(c)
-       use, intrinsic :: iso_c_binding, only: c_double, c_int
-       implicit none
-       real(c_double) :: callback_mlpot
-       integer(c_int), value :: natom, ntrans, natim, Nmlp, Nmlmmp
-       integer(c_int), dimension(*) :: idxp
-       real(c_double), dimension(*) :: &
-            x_pos, y_pos, z_pos, &
-            dx, dy, dz
-        integer(c_int), dimension(*) :: idxi, idxj, idxjp
-        integer(c_int), dimension(*) :: idxu, idxv, idxup, idxvp
-     end function callback_mlpot
+
+    function callback(natom, x_pos, y_pos, z_pos, dx, dy, dz) bind(c)
+      use, intrinsic :: iso_c_binding, only: c_double, c_int
+      implicit none
+      real(c_double) :: callback
+      integer(c_int), value :: natom
+      real(c_double), dimension(*) :: &
+        x_pos, y_pos, z_pos, &
+        dx, dy, dz
+    end function callback
+
+    function callback_mlpot(    &
+        natom, ntrans, natim,   &
+        idxp,                   &
+        x_pos, y_pos, z_pos,    &
+        dx, dy, dz,             &
+        Nmlp, Nmlmmp,           &
+        idxi, idxj,             &
+        idxjp,                  &
+        idxu, idxv,             &
+        idxup, idxvp) bind(c)
+      use, intrinsic :: iso_c_binding, only: c_double, c_int
+      implicit none
+      real(c_double) :: callback_mlpot
+      integer(c_int), value :: natom, ntrans, natim, Nmlp, Nmlmmp
+      integer(c_int), dimension(*) :: idxp
+      real(c_double), dimension(*) :: &
+        x_pos, y_pos, z_pos, &
+        dx, dy, dz
+      integer(c_int), dimension(*) :: idxi, idxj, idxjp
+      integer(c_int), dimension(*) :: idxu, idxv, idxup, idxvp
+    end function callback_mlpot
+
+    function callback_ener() bind(c)
+      use, intrinsic :: iso_c_binding, only: c_double
+      implicit none
+      real(c_double) :: callback_ener
+    end function callback_ener
+
   end interface
   
   procedure(callback), pointer :: user_func
   procedure(callback_mlpot), pointer :: user_mlpot
+  procedure(callback_ener), pointer :: user_mlmm_elec
 
   double precision, save :: mlpot_e_vdw = 0.d0
   double precision, save :: mlpot_e_elec = 0.d0
@@ -127,9 +134,10 @@ contains
     qeterm(user) = .false.
   end subroutine func_unset
 
-  subroutine func_call(out_energy, natom, &
-             x_pos, y_pos, z_pos, &
-             dx, dy, dz) bind(c)
+  subroutine func_call(     &
+      out_energy, natom,    &
+      x_pos, y_pos, z_pos,  &
+      dx, dy, dz) bind(c)
     use, intrinsic :: iso_c_binding, only: c_double, c_int
     implicit none
     real(c_double) :: out_energy
@@ -147,12 +155,14 @@ contains
   
   
   
-  ! Addition Kai Toepfer Jan 2024
-  subroutine mlpot_set_func(new_mlpot) bind(c)
+  ! Rework Kai Toepfer Jan 2025
+  subroutine mlpot_set_func(new_mlpot, new_mlmm) bind(c)
     use energym, only: qeterm, user
     implicit none
     procedure(callback_mlpot) :: new_mlpot
+    procedure(callback_ener) :: new_mlmm
     user_mlpot => new_mlpot
+    user_mlmm_elec => new_mlmm
     qeterm(user) = .true.
     mlpot_is_init = .false.
   end subroutine mlpot_set_func
@@ -161,6 +171,7 @@ contains
     use energym, only: qeterm, user
     implicit none
     user_mlpot => null()
+    user_mlmm_elec => null()
     qeterm(user) = .false.
     mlpot_is_init = .false.
   end subroutine mlpot_unset
@@ -200,10 +211,10 @@ contains
 
   end subroutine mlpot_set_properties
 
-  subroutine mlpot_update(          &
-             Natom, Ntrans, Natim,  &
-             jnb, inblo,            &
-             imattr, imjnb, imblo) bind(c)
+  subroutine mlpot_update(    &
+      Natom, Ntrans, Natim,   &
+      jnb, inblo,             &
+      imattr, imjnb, imblo) bind(c)
     use, intrinsic :: iso_c_binding, only: c_double, c_int
     use stream, only: outu,prnlev
     implicit none
@@ -386,21 +397,21 @@ contains
 
   end subroutine mlpot_update
 
-  subroutine mlpot_call(            &
-             out_euser,             &
-             natom, ntrans, natim,  &
-             x_pos, y_pos, z_pos,   &
-             dx, dy, dz,            &
-             jnb, inblo,            &
-             imattr, imjnb, imblo) bind(c)
+  subroutine mlpot_call(    &
+      out_euser,            &
+      out_eelec,            &
+      natom, ntrans, natim, &
+      x_pos, y_pos, z_pos,  &
+      dx, dy, dz,           &
+      jnb, inblo,           &
+      imattr, imjnb, imblo) bind(c)
     use, intrinsic :: iso_c_binding, only: c_double, c_int
     use energym, only: eterm, qeterm, vdw, elec, imvdw, imelec
     implicit none
-    real(c_double) :: out_energy
-    real(c_double) :: out_euser
+    real(c_double) :: out_euser, out_eelec
+    real(c_double) :: out_mlpot, out_mlmm_elec
     integer(c_int), value :: natom, ntrans, natim
-    real(c_double), dimension(*) :: x_pos, y_pos, z_pos, &
-         dx, dy, dz
+    real(c_double), dimension(*) :: x_pos, y_pos, z_pos, dx, dy, dz
     integer(c_int), dimension(*) :: jnb, inblo, imattr, imjnb, imblo
 
     ! A virial staged by the previous callback must not leak into this step.
@@ -408,25 +419,27 @@ contains
 
     ! Update ML-ML and MM-MM atom pair lists
     if(.not. mlpot_is_init) then
-        call mlpot_update(                  &
-          natom, ntrans, natim,             &
-          jnb, inblo, imattr, imjnb, imblo)
+      call mlpot_update(                  &
+        natom, ntrans, natim,             &
+        jnb, inblo, imattr, imjnb, imblo)
     endif
 
     ! Call ML potential function
-    out_energy = user_mlpot(  &
-         natom, ntrans, natim,&
-         idxp,                &
-         x_pos, y_pos, z_pos, &
-         dx, dy, dz,          &
-         Nmlp, Nmlmmp,        &
-         idxi, idxj,          &
-         idxjp,               &
-         idxu, idxv,          &
-         idxup, idxvp)
+    out_mlpot = user_mlpot( &
+      natom, ntrans, natim, &
+      idxp,                 &
+      x_pos, y_pos, z_pos,  &
+      dx, dy, dz,           &
+      Nmlp, Nmlmmp,         &
+      idxi, idxj,           &
+      idxjp,                &
+      idxu, idxv,           &
+      idxup, idxvp)
+    out_mlmm_elec = user_mlmm_elec()
 
     ! Add ML potential and (if active) ML-MM electrostatic energy
-    out_euser = out_euser + out_energy
+    out_euser = out_euser + out_mlpot
+    out_eelec = out_eelec + out_mlmm_elec
 
     if (mlpot_route_nb_eterms) then
       if (qeterm(vdw)) eterm(vdw) = eterm(vdw) + mlpot_e_vdw

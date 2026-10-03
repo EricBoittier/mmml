@@ -13,6 +13,15 @@
 #include "update/rex.h"
 
 #include "main/real3.h"
+#include "main/gpu_check.h"
+
+// NaN detection: atomically set flag with atom index (only first NaN is recorded)
+__device__ inline void check_nan_set_flag(real_v v, int atomIdx, int *nanFlag)
+{
+  if (!isfinite(v)) {
+    atomicCAS(nanFlag, -1, atomIdx);  // Store atom index (-1 means no NaN)
+  }
+}
 
 
 
@@ -42,7 +51,6 @@ __global__ void update_V(struct LeapState ls,struct LeapParms2 lp1,struct LeapPa
     if (isfinite(ls.ism[i])) {
       // Force is dU/dx by convention in this program, not -dU/dx
       ls.v[i]=ls.v[i]-lp.halfdt*ls.ism[i]*ls.ism[i]*ls.f[i];
-      // if (!(ls.v[i] < 100 && ls.v[i] > -100)) printf("Crashing V i=%d, v=%f, f=%f, x=%f\n",i,ls.v[i],ls.f[i],ls.x[i]); // DEBUG
     }
   }
 }
@@ -63,12 +71,11 @@ __global__ void update_VV(struct LeapState ls,struct LeapParms2 lp1,struct LeapP
       // Force is dU/dx by convention in this program, not -dU/dx
       real_v v=ls.v[i]-lp.halfdt*ls.ism[i]*ls.ism[i]*ls.f[i];
       ls.v[i]=v-lp.halfdt*ls.ism[i]*ls.ism[i]*ls.f[i];
-      // if (!(ls.v[i] < 100 && ls.v[i] > -100)) printf("Crashing VV i=%d, v=%f, f=%f, x=%f\n",i,ls.v[i],ls.f[i],ls.x[i]); // DEBUG
     }
   }
 }
 
-__global__ void update_VhbpR(struct LeapState ls,struct LeapParms2 lp1,struct LeapParms2 lp2,real_x *bx)
+__global__ void update_VhbpR(struct LeapState ls,struct LeapParms2 lp1,struct LeapParms2 lp2,real_x *bx,int *nanFlag)
 {
   int i=blockIdx.x*blockDim.x+threadIdx.x;
   struct LeapParms2 lp;
@@ -88,13 +95,14 @@ __global__ void update_VhbpR(struct LeapState ls,struct LeapParms2 lp1,struct Le
     if (isfinite(ls.ism[i])) {
       x+=lp.halfdt*v;
       ls.v[i]=v;
-      // if (!(ls.v[i] < 100 && ls.v[i] > -100)) printf("Crashing VhbpR i=%d, v=%f, f=%f, x=%f\n",i,ls.v[i],ls.f[i],ls.x[i]); // DEBUG
       ls.x[i]=x;
+      // NaN detection
+      check_nan_set_flag(v, i, nanFlag);
     }
   }
 }
 
-__global__ void update_VVhbpR(struct LeapState ls,struct LeapParms2 lp1,struct LeapParms2 lp2,real_x *bx)
+__global__ void update_VVhbpR(struct LeapState ls,struct LeapParms2 lp1,struct LeapParms2 lp2,real_x *bx,int *nanFlag)
 {
   int i=blockIdx.x*blockDim.x+threadIdx.x;
   struct LeapParms2 lp;
@@ -114,8 +122,9 @@ __global__ void update_VVhbpR(struct LeapState ls,struct LeapParms2 lp1,struct L
     if (isfinite(ls.ism[i])) {
       x+=lp.halfdt*v;
       ls.v[i]=v;
-      // if (!(ls.v[i] < 100 && ls.v[i] > -100)) printf("Crashing VVhbpR i=%d, v=%f, f=%f, x=%f\n",i,ls.v[i],ls.f[i],ls.x[i]); // DEBUG
       ls.x[i]=x;
+      // NaN detection
+      check_nan_set_flag(v, i, nanFlag);
     }
   }
 }
@@ -156,7 +165,6 @@ __global__ void update_hbpR(struct LeapState ls,struct LeapParms2 lp1,struct Lea
     real_x x=ls.x[i];
     if (bx) bx[i]=x;
     if (isfinite(ls.ism[i])) {
-      // if (!(ls.v[i] < 100 && ls.v[i] > -100)) printf("Crashing hbpR i=%d, v=%f, f=%f, x=%f\n",i,ls.v[i],ls.f[i],ls.x[i]); // DEBUG
       ls.x[i]=x+lp.halfdt*ls.v[i];
     }
   }
@@ -175,13 +183,19 @@ __global__ void update_OO(struct LeapState ls,struct LeapParms2 lp1,struct LeapP
 
   if (i < ls.N) {
     if (isfinite(ls.ism[i])) {
-      ls.v[i]=lp.friction*ls.v[i]+lp.noise*ls.ism[i]*ls.random[i];
-      // if (!(ls.v[i] < 100 && ls.v[i] > -100)) printf("Crashing OO i=%d, v=%f, r=%f, x=%f\n",i,ls.v[i],ls.random[i],ls.x[i]); // DEBUG
+      real fric=lp.friction;
+      real nois=lp.noise;
+      if (i >= ls.N1 && ls.lambda_friction_d) {
+        int li=i-ls.N1;
+        fric=ls.lambda_friction_d[li];
+        nois=ls.lambda_noise_d[li];
+      }
+      ls.v[i]=fric*ls.v[i]+nois*ls.ism[i]*ls.random[i];
     }
   }
 }
 
-__global__ void update_OOhbpR(struct LeapState ls,struct LeapParms2 lp1,struct LeapParms2 lp2,real_x *bx)
+__global__ void update_OOhbpR(struct LeapState ls,struct LeapParms2 lp1,struct LeapParms2 lp2,real_x *bx,int *nanFlag)
 {
   int i=blockIdx.x*blockDim.x+threadIdx.x;
   struct LeapParms2 lp;
@@ -195,13 +209,21 @@ __global__ void update_OOhbpR(struct LeapState ls,struct LeapParms2 lp1,struct L
   if (i < ls.N) {
     real_v v=ls.v[i];
     real_x x=ls.x[i];
-    v=lp.friction*v+lp.noise*ls.ism[i]*ls.random[i];
+    real fric=lp.friction;
+    real nois=lp.noise;
+    if (i >= ls.N1 && ls.lambda_friction_d) {
+      int li=i-ls.N1;
+      fric=ls.lambda_friction_d[li];
+      nois=ls.lambda_noise_d[li];
+    }
+    v=fric*v+nois*ls.ism[i]*ls.random[i];
     if (bx) bx[i]=x;
     if (isfinite(ls.ism[i])) {
       x+=lp.halfdt*v;
       ls.v[i]=v;
-      // if (!(ls.v[i] < 100 && ls.v[i] > -100)) printf("Crashing OOhbpR i=%d, v=%f, r=%f, x=%f\n",i,ls.v[i],ls.random[i],ls.x[i]); // DEBUG
       ls.x[i]=x;
+      // NaN detection
+      check_nan_set_flag(v, i, nanFlag);
     }
   }
 }
@@ -235,21 +257,25 @@ void State::update(int step,System *system)
   if ((system->run->step%system->run->freqNRG)==0) {
     // Update V from previous step
     update_V<<<(leapState->N+BLUP-1)/BLUP,BLUP,0,r->updateStream>>>(*leapState,*leapParms2,*lambdaLeapParms2);
+    gpuCheck(cudaGetLastError());
     // Velocity Constraint
     holonomic_velocity(system);
     // Kinetic Energy
     kinetic_energy_kernel<<<(leapState->N+BLUP-1)/BLUP,BLUP,BLUP*sizeof(real)/32,r->updateStream>>>(*leapState,energy_d+eekinetic);
+    gpuCheck(cudaGetLastError());
     // Update V for current step
     // update_V<<<(leapState->N+BLUP-1)/BLUP,BLUP,0,r->updateStream>>>(*leapState,*leapParms2,*lambdaLeapParms2);
     // holonomic_velocity(system);
     // update_hbpR<<<(leapState->N+BLUP-1)/BLUP,BLUP,0,r->updateStream>>>(*leapState,*leapParms2,*lambdaLeapParms2,positionCons_d);
-    update_VhbpR<<<(leapState->N+BLUP-1)/BLUP,BLUP,0,r->updateStream>>>(*leapState,*leapParms2,*lambdaLeapParms2,positionCons_d);
+    update_VhbpR<<<(leapState->N+BLUP-1)/BLUP,BLUP,0,r->updateStream>>>(*leapState,*leapParms2,*lambdaLeapParms2,positionCons_d,nanFlag_d);
+    gpuCheck(cudaGetLastError());
   } else {
     // Update V from previous step and for current step
     // update_VV<<<(leapState->N+BLUP-1)/BLUP,BLUP,0,r->updateStream>>>(*leapState,*leapParms2,*lambdaLeapParms2);
     // holonomic_velocity(system);
     // update_hbpR<<<(leapState->N+BLUP-1)/BLUP,BLUP,0,r->updateStream>>>(*leapState,*leapParms2,*lambdaLeapParms2,positionCons_d);
-    update_VVhbpR<<<(leapState->N+BLUP-1)/BLUP,BLUP,0,r->updateStream>>>(*leapState,*leapParms2,*lambdaLeapParms2,positionCons_d);
+    update_VVhbpR<<<(leapState->N+BLUP-1)/BLUP,BLUP,0,r->updateStream>>>(*leapState,*leapParms2,*lambdaLeapParms2,positionCons_d,nanFlag_d);
+    gpuCheck(cudaGetLastError());
   }
   // Velocity Constraint
   // holonomic_velocity(system); // superfluous, I think
@@ -264,7 +290,8 @@ void State::update(int step,System *system)
   // update_OO<<<(leapState->N+BLUP-1)/BLUP,BLUP,0,r->updateStream>>>(*leapState,*leapParms2,*lambdaLeapParms2);
   // holonomic_velocity(system); // superfluous, I think
   // update_hbpR<<<(leapState->N+BLUP-1)/BLUP,BLUP,0,r->updateStream>>>(*leapState,*leapParms2,*lambdaLeapParms2,positionCons_d);
-  update_OOhbpR<<<(leapState->N+BLUP-1)/BLUP,BLUP,0,r->updateStream>>>(*leapState,*leapParms2,*lambdaLeapParms2,positionCons_d);
+  update_OOhbpR<<<(leapState->N+BLUP-1)/BLUP,BLUP,0,r->updateStream>>>(*leapState,*leapParms2,*lambdaLeapParms2,positionCons_d,nanFlag_d);
+  gpuCheck(cudaGetLastError());
   // Velocity Constraint
   // holonomic_velocity(system); // superfluous, I think
   // Update spatial coordinates
@@ -298,6 +325,7 @@ void State::set_fd(System *system)
 
   if ((void*)positionBuffer_fd != (void*)positionBuffer_d) {
     set_fd_kernel<<<(N+BLUP-1)/BLUP,BLUP,0,system->run->updateStream>>>(N,positionBuffer_fd,positionBuffer_d);
+    gpuCheck(cudaGetLastError());
   }
 }
 
@@ -306,5 +334,6 @@ void State::kinetic_energy(System *system)
 {
   if (system->id==0) {
     kinetic_energy_kernel<<<(leapState->N+BLUP-1)/BLUP,BLUP,BLUP*sizeof(real)/32,0>>>(*leapState,energy_d+eekinetic);
+    gpuCheck(cudaGetLastError());
   }
 }

@@ -9,7 +9,9 @@
 #include "CudaPMEDirectForceBlock.h"
 #include "CudaDirectForceKernels.h"
 
-#define NTHREAD14 512
+// Block size for the 1-4 kernels; must match the __launch_bounds__ on the
+// kernels (see nthread14 in CudaDirectForceKernels.h).
+#define NTHREAD14 nthread14
 
 //
 // Merge results from calc_force

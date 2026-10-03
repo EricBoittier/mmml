@@ -2463,7 +2463,7 @@ SUBROUTINE NBNDAS(NBC,COMBIN,NBTYPE,NBEXP,ITMP)
         !
         !-----convert A and B to r* and epsilon
         !
-        DO I=1,K
+        DO I=1,NNBDP
            IF (CNB1(I) == 0 .OR. CNB2(I).EQ.0) THEN
               CNB2(I+MAXCN) = ZERO
               CNB5(I) = ZERO

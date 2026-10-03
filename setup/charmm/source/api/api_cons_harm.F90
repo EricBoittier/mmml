@@ -28,10 +28,29 @@ contains
   integer(c_int) function cons_harm_turn_off() bind(c)
     use, intrinsic :: iso_c_binding, only: c_int
     use cstran_mod, only: clear_harm_const
+#if KEY_BLADE==1
+    use blade_main, only: system_dirty
+#endif
+#if KEY_OPENMM==1
+    use omm_ctrl, only: omm_system_changed
+#endif
+#if KEY_DOMDEC==1
+    use domdec_common, only: domdec_system_changed
+#endif
     implicit none
     cons_harm_turn_off = -1
     call clear_harm_const()
     cons_harm_turn_off = 1
+
+#if KEY_BLADE==1
+    system_dirty = .true.
+#endif
+#if KEY_OPENMM==1
+    call omm_system_changed()
+#endif
+#if KEY_DOMDEC==1
+    call domdec_system_changed()
+#endif
   end function cons_harm_turn_off
 
   !> @brief set up absolute harmonic constraints
@@ -53,6 +72,15 @@ contains
          abs_opts_t, force_const_t, &
          setup_harm_const
     use psf, only: natom
+#if KEY_BLADE==1
+    use blade_main, only: system_dirty
+#endif
+#if KEY_OPENMM==1
+    use omm_ctrl, only: omm_system_changed
+#endif
+#if KEY_DOMDEC==1
+    use domdec_common, only: domdec_system_changed
+#endif
 
     implicit none
 
@@ -102,6 +130,16 @@ contains
             force_const_opts, abs_opts)
     end if
     success = f2c_logical(qsuccess)
+
+#if KEY_BLADE==1
+    system_dirty = .true.
+#endif
+#if KEY_OPENMM==1
+    call omm_system_changed()
+#endif
+#if KEY_DOMDEC==1
+    call domdec_system_changed()
+#endif
   end function cons_harm_setup_absolute
 
 
@@ -124,6 +162,15 @@ contains
          abs_opts_t, force_const_t, &
          setup_harm_const
     use psf, only: natom
+#if KEY_BLADE==1
+    use blade_main, only: system_dirty
+#endif
+#if KEY_OPENMM==1
+    use omm_ctrl, only: omm_system_changed
+#endif
+#if KEY_DOMDEC==1
+    use domdec_common, only: domdec_system_changed
+#endif
 
     implicit none
 
@@ -173,6 +220,16 @@ contains
             force_const_opts, abs_opts)
     end if
     success = f2c_logical(qsuccess)
+
+#if KEY_BLADE==1
+    system_dirty = .true.
+#endif
+#if KEY_OPENMM==1
+    call omm_system_changed()
+#endif
+#if KEY_DOMDEC==1
+    call domdec_system_changed()
+#endif
   end function cons_harm_setup_pca
 
 
@@ -195,6 +252,15 @@ contains
          relative_opts_t, force_const_t, &
          setup_harm_const
     use psf, only: natom
+#if KEY_BLADE==1
+    use blade_main, only: system_dirty
+#endif
+#if KEY_OPENMM==1
+    use omm_ctrl, only: omm_system_changed
+#endif
+#if KEY_DOMDEC==1
+    use domdec_common, only: domdec_system_changed
+#endif
 
     implicit none
 
@@ -242,6 +308,16 @@ contains
             force_const_opts, relative_opts=rel_opts)
     end if
     success = f2c_logical(qsuccess)
+
+#if KEY_BLADE==1
+    system_dirty = .true.
+#endif
+#if KEY_OPENMM==1
+    call omm_system_changed()
+#endif
+#if KEY_DOMDEC==1
+    call domdec_system_changed()
+#endif
   end function cons_harm_setup_best_fit
 
 
@@ -264,6 +340,15 @@ contains
          relative_opts_t, force_const_t, &
          setup_harm_const
     use psf, only: natom
+#if KEY_BLADE==1
+    use blade_main, only: system_dirty
+#endif
+#if KEY_OPENMM==1
+    use omm_ctrl, only: omm_system_changed
+#endif
+#if KEY_DOMDEC==1
+    use domdec_common, only: domdec_system_changed
+#endif
 
     implicit none
 
@@ -308,6 +393,16 @@ contains
             force_const_opts, relative_opts=rel_opts)
     end if
     success = f2c_logical(qsuccess)
+
+#if KEY_BLADE==1
+    system_dirty = .true.
+#endif
+#if KEY_OPENMM==1
+    call omm_system_changed()
+#endif
+#if KEY_DOMDEC==1
+    call domdec_system_changed()
+#endif
   end function cons_harm_setup_relative
 
 

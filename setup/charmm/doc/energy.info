@@ -104,7 +104,7 @@ is INCLude which implies that subsequent energy term are to be removed
 from the energy calculation. NOTE: that EXCLude implies that the
 energy term is to be computed.
         If for some reason, the list presented here is out of date, the
-data in SKIPE(energy.src) and in ENER.FCM of the source should be
+data in SKIPE(energy.F90) and in ENER.FCM of the source should be
 consulted.
 
 
@@ -131,6 +131,7 @@ item::=
           [ EHARM]   [ GEO  ]  [ MDIP ]   [ STRB ]
           [ VATT ]   [ VREP ]  [ IMVREP ] [IMVATT]
           [ OOPL ]   [ CMAP ]  [ EPOL ]   [ CPUC ]
+          [ MLPO ]   [ MLEL ]
 
 description:
 
@@ -178,6 +179,8 @@ description:
   OOPL   - out-of-plane (MMFF)
   CMAP   - 2D dihedral cross term energy correction map
   EPOL   - polarization energy computed from PIPF (see pipf.info)
+  MLPO   - MLpot internal ML atom potential energy (see mlpot.info)
+  MLEL   - MLpot ML-charge/MM-charge electrostatic energy (see mlpot.info)
 
 Examples;
 
@@ -512,6 +515,12 @@ Energy term names:
  'EWEX'  - Ewald exclusion correction energy
  'EWQC'  - Ewald total charge correction energy
  'EWUT'  - Ewald utility energy term (for misc. corrections)
+ 'NNPO'  - Neural-network potential via OpenMM-Torch
+ 'CFIN'  - OpenMM custom-force bucket: internal coords (BOND/ANGLE/TORSION)
+ 'CFNB'  - OpenMM custom-force bucket: nonbonded (NONBONDED/GB)
+ 'CFEX'  - OpenMM custom-force bucket: external (EXTERNAL)
+ 'CFMB'  - OpenMM custom-force bucket: many-body (COMPOUND/CENTROID/H_BOND/MANY_PARTICLE)
+ 'CFCV'  - OpenMM custom-force bucket: collective variables (CV/VOLUME/RMSD/RG)
 
 Energy Pressure/Virial Terms:
 

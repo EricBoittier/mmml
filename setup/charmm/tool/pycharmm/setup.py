@@ -1,23 +1,20 @@
 import setuptools
+import shutil
+import os
 
-with open('README.md', 'r') as fh:
-    long_description = fh.read()
+# Clean up stale build artifacts that cause "File exists" errors
+# This fixes: [Errno 17] File exists: 'build/bdist.../wheel/pycharmm-X.X.X.dist-info'
+build_dir = os.path.join(os.path.dirname(__file__), 'build')
+if os.path.exists(build_dir):
+    # Remove any existing .dist-info directories in the wheel build path
+    bdist_wheel_dir = os.path.join(build_dir, 'bdist.linux-x86_64', 'wheel')
+    if os.path.exists(bdist_wheel_dir):
+        for item in os.listdir(bdist_wheel_dir):
+            if item.endswith('.dist-info'):
+                dist_info_path = os.path.join(bdist_wheel_dir, item)
+                print(f"Cleaning stale dist-info: {dist_info_path}")
+                shutil.rmtree(dist_info_path, ignore_errors=True)
 
 setuptools.setup(
-    name='pycharmm',
-    version='0.0.1',
-    author='Josh Buckner',
-    author_email='bucknerj@umich.edu',
-    description='a python library for molecular dynamics with CHARMM',
-    long_description=long_description,
-    long_description_content_type='text/markdown',
-    url='https://brooks.chem.lsa.umich.edu',
-    packages=setuptools.find_packages(),
-    classifiers=(
-        'Programming Language :: Python :: 3',
-        'License :: OSI Approved :: GNU GPLv3 License',
-        'Operating System :: OS Independent',
-    ),
-    python_requires='>=3.4',
-    install_requires=['pandas', 'numpy', 'scipy'],
+    packages=setuptools.find_packages()
 )

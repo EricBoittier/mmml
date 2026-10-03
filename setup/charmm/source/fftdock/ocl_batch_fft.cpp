@@ -1,30 +1,172 @@
 #if KEY_FFTDOCK == 1
 #if HAS_OPENCL == 1
 
-// target OpenCL 1.2 devices
-#define CL_USE_DEPRECATED_OPENCL_1_2_APIS
-
 #ifdef __APPLE__
 #include <OpenCL/opencl.h>
 #else
 #include <CL/opencl.h>
 #endif
 
-#include <clFFT.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 #include <kernels.h>
 #include <ocl_util.h>
+
+#ifdef VKFFT_BACKEND
+/* ================================================================== */
+/*  VkFFT implementation                                               */
+/* ================================================================== */
+
+#include <vkFFT.h>
+
+/*
+ * VkFFT plan wrapper.
+ *
+ * Stores the VkFFT application object and the OpenCL handles that must
+ * remain valid for the lifetime of the plan.  The bufferSize /
+ * inputBufferSize members are pointed to by the VkFFT configuration,
+ * so they must also survive.
+ */
+struct VkFFTPlanWrapper {
+  VkFFTApplication app;
+  uint64_t bufferSize;
+  uint64_t inputBufferSize;
+  cl_context context;
+  cl_device_id device;
+};
+
+extern "C" void init_fft() {}
+extern "C" void tear_down_fft() {}
+
+/*
+ * Helper: create a VkFFT R2C plan.
+ *
+ * Grid data layout (set by the grid-generation kernels):
+ *   linear index = ix * ydim * zdim + iy * zdim + iz
+ * i.e. Z is the fastest-varying (contiguous) dimension.
+ *
+ * VkFFT size[0] = fastest dimension, so:
+ *   size[0] = zdim,  size[1] = ydim,  size[2] = xdim
+ *
+ * For R2C the last *logical* dimension (size[0] = zdim) is halved in
+ * the complex output: odist = xdim * ydim * (zdim/2 + 1).
+ *
+ * inverseReturn – if true, sets inverseReturnToInputBuffer so that an
+ * inverse (C2R) transform writes to the real (inputBuffer) side.
+ */
+static VkFFTPlanWrapper * create_plan(cl_context ctx, cl_command_queue queue,
+                                      int x, int y, int z,
+                                      int batch, int inverseReturn) {
+  VkFFTPlanWrapper * w = new VkFFTPlanWrapper();
+  memset(w, 0, sizeof(*w));
+
+  w->context = ctx;
+  clGetCommandQueueInfo(queue, CL_QUEUE_DEVICE,
+                        sizeof(cl_device_id), &w->device, NULL);
+
+  uint64_t idist = (uint64_t)x * y * z;
+  uint64_t odist = (uint64_t)x * y * (z / 2 + 1);
+  w->inputBufferSize = sizeof(float) * batch * idist;
+  w->bufferSize      = 2 * sizeof(float) * batch * odist;
+
+  VkFFTConfiguration cfg = {};
+  cfg.FFTdim = 3;
+  cfg.size[0] = z;   /* fastest — R2C halves this dimension */
+  cfg.size[1] = y;
+  cfg.size[2] = x;   /* slowest */
+  cfg.coordinateFeatures = batch;
+  cfg.performR2C = 1;
+  if (inverseReturn)
+    cfg.inverseReturnToInputBuffer = 1;
+
+  cfg.device  = &w->device;
+  cfg.context = &w->context;
+
+  cfg.bufferNum  = 1;
+  cfg.bufferSize = &w->bufferSize;
+
+  cfg.isInputFormatted = 1;
+  cfg.inputBufferNum   = 1;
+  cfg.inputBufferSize  = &w->inputBufferSize;
+
+  VkFFTResult res = initializeVkFFT(&w->app, cfg);
+  if (res != VKFFT_SUCCESS) {
+    fprintf(stderr, "VkFFT plan creation failed (error %d), "
+            "dims %dx%dx%d batch %d\n", (int)res, x, y, z, batch);
+    delete w;
+    return NULL;
+  }
+  return w;
+}
+
+extern "C"
+void make_fft_r2c_plan(void * ocl_context, void * ocl_queue,
+                        int x, int y, int z, int batch_size,
+                        void ** out_plan) {
+  cl_context ctx   = *static_cast<cl_context *>(ocl_context);
+  cl_command_queue q = *static_cast<cl_command_queue *>(ocl_queue);
+  *out_plan = static_cast<void *>(create_plan(ctx, q, x, y, z, batch_size, 0));
+}
+
+extern "C"
+void make_fft_c2r_plan(void * ocl_context, void * ocl_queue,
+                        int x, int y, int z, int batch_size,
+                        void ** out_plan) {
+  cl_context ctx   = *static_cast<cl_context *>(ocl_context);
+  cl_command_queue q = *static_cast<cl_command_queue *>(ocl_queue);
+  *out_plan = static_cast<void *>(create_plan(ctx, q, x, y, z, batch_size, 1));
+}
+
+extern "C"
+void destroy_fft_plan(void ** plan_ptr) {
+  VkFFTPlanWrapper * w = static_cast<VkFFTPlanWrapper *>(*plan_ptr);
+  if (w) {
+    deleteVkFFT(&w->app);
+    delete w;
+  }
+  *plan_ptr = NULL;
+}
+
+static void fft_forward_r2c(void * plan, cl_command_queue * queue,
+                             cl_mem * real_buf, cl_mem * complex_buf) {
+  VkFFTPlanWrapper * w = static_cast<VkFFTPlanWrapper *>(plan);
+  VkFFTLaunchParams lp = {};
+  lp.commandQueue = queue;
+  lp.inputBuffer  = real_buf;
+  lp.buffer       = complex_buf;
+  VkFFTResult res = VkFFTAppend(&w->app, -1, &lp);
+  if (res != VKFFT_SUCCESS)
+    fprintf(stderr, "VkFFT R2C error %d\n", (int)res);
+}
+
+static void fft_inverse_c2r(void * plan, cl_command_queue * queue,
+                              cl_mem * complex_buf, cl_mem * real_buf) {
+  VkFFTPlanWrapper * w = static_cast<VkFFTPlanWrapper *>(plan);
+  VkFFTLaunchParams lp = {};
+  lp.commandQueue = queue;
+  lp.buffer      = complex_buf;
+  lp.inputBuffer = real_buf;
+  VkFFTResult res = VkFFTAppend(&w->app, 1, &lp);
+  if (res != VKFFT_SUCCESS)
+    fprintf(stderr, "VkFFT C2R error %d\n", (int)res);
+}
+
+#else /* !VKFFT_BACKEND — use clFFT */
+/* ================================================================== */
+/*  clFFT implementation                                               */
+/* ================================================================== */
+
+#include <clFFT.h>
 
 #define clfft_check_status ocl_check_status
 
 extern "C"
 void init_fft() {
   clfftSetupData fftSetup;
-  cl_int err;
-  err = clfftInitSetupData(&fftSetup);
+  cl_int err = clfftInitSetupData(&fftSetup);
   clfft_check_status(err);
-
   err = clfftSetup(&fftSetup);
   clfft_check_status(err);
 }
@@ -35,472 +177,332 @@ void tear_down_fft() {
   clfft_check_status(err);
 }
 
-extern "C"
-void rigid_fft_dock(void * ocl_device, void * ocl_context, void * ocl_queue,
-                    int xdim, int ydim, int zdim,
-		    int batch_size, int idx_batch,
-		    int num_quaternions, int num_grid,
-		    void * potential_r2c_plan,
-		    void * lig_r2c_plan,
-		    void * c2r_plan,
-		    const float * grid_potential,
-                    float * EnergyGrid,
-                    void ** d_LigGrid_Fort, void ** d_LigGrid_FFT_Fort,
-                    void ** d_GridPot_Fort, void ** d_GridPot_FFT_Fort,
-                    void ** d_LigSum_Fort, void ** d_LigSum_FFT_Fort) {
-  OclDevice * selectedDev = static_cast<OclDevice *>(ocl_device);
-  cl_device_id dev_id = selectedDev->getDevId();
+/*
+ * Create a clFFT R2C or C2R plan.
+ *
+ * clFFT uses column-major convention: dims[0] = fastest dimension.
+ * Our grid layout has Z fastest, so we pass dims = {z, y, x}.
+ * Default strides are then {1, z, z*y} which matches our data.
+ * R2C halves dim[0] in the output: odist = (z/2+1) * y * x.
+ */
+static clfftPlanHandle * create_clfft_plan(cl_context ctx,
+                                            cl_command_queue * q_ptr,
+                                            int x, int y, int z,
+                                            int batch_size,
+                                            int is_c2r) {
+  /* dims[0] = fastest varying = z */
+  size_t dims[3] = {(size_t)z, (size_t)y, (size_t)x};
+  size_t idist = (size_t)x * y * z;
+  size_t odist = (size_t)x * y * (z / 2 + 1);
 
-  cl_context * context_ptr = static_cast<cl_context *>(ocl_context);
-  cl_context ctx = *context_ptr;
+  clfftPlanHandle * plan = new clfftPlanHandle();
+  clfftStatus res;
 
-  cl_command_queue * q_ptr = static_cast<cl_command_queue *>(ocl_queue);
-  cl_command_queue queue = *q_ptr;
+  res = clfftCreateDefaultPlan(plan, ctx, CLFFT_3D, dims);
+  clfft_check_status(res);
 
-  int inembed[3];
-  inembed[0] = xdim;
-  inembed[1] = ydim;
-  inembed[2] = zdim;
-  int idist = inembed[0] * inembed[1] * inembed[2];
-
-  int onembed[3];
-  onembed[0] = xdim;
-  onembed[1] = ydim;
-  onembed[2] = (zdim / 2) + 1;
-  int odist = onembed[0] * onembed[1] * onembed[2];
-
-  cl_mem
-    * d_lig_complex_ptr = NULL,
-    * d_potential_real_ptr = NULL,
-    * d_potential_complex_ptr = NULL,
-    * d_lig_sum_real_ptr = NULL,
-    * d_lig_sum_complex_ptr = NULL;
-
-  cl_int status = CL_SUCCESS;
-
-  // FFT transformation for potential grids
-  if (idx_batch == 1) {
-    d_potential_real_ptr = new cl_mem();
-    status = CL_SUCCESS;
-    *d_potential_real_ptr = clCreateBuffer(ctx,
-                                        CL_MEM_READ_ONLY |
-                                        CL_MEM_COPY_HOST_PTR,
-                                        sizeof(float) * num_grid * idist,
-                                        (void *) grid_potential,
-                                        &status);
-    ocl_check_status(status);
-    *d_GridPot_Fort = static_cast<void *>(d_potential_real_ptr);
-
-    d_potential_complex_ptr = new cl_mem();
-    status = CL_SUCCESS;
-    *d_potential_complex_ptr = clCreateBuffer(ctx,
-                                              CL_MEM_READ_WRITE,
-                                              2 * sizeof(float)
-                                                * num_grid * odist,
-                                              NULL, &status);
-    ocl_check_status(status);
-    *d_GridPot_FFT_Fort = static_cast<void *>(d_potential_complex_ptr);
-
-    status = CL_SUCCESS;
-    int d_lig_complex_bytes = 2 * sizeof(float) * num_grid * batch_size * odist;
-    d_lig_complex_ptr = new cl_mem();
-    *d_lig_complex_ptr = clCreateBuffer(ctx,
-                                        CL_MEM_READ_WRITE,
-                                        d_lig_complex_bytes,
-                                        NULL, &status);
-    ocl_check_status(status);
-    *d_LigGrid_FFT_Fort = static_cast<void *>(d_lig_complex_ptr);
-
-    d_lig_sum_complex_ptr = new cl_mem();
-    status = CL_SUCCESS;
-    int d_lig_sum_complex_bytes = 2 * sizeof(float) * batch_size * odist;
-    *d_lig_sum_complex_ptr = clCreateBuffer(ctx,
-                                            CL_MEM_READ_WRITE,
-                                            d_lig_sum_complex_bytes,
-                                            NULL, &status);
-    ocl_check_status(status);
-    *d_LigSum_FFT_Fort = static_cast<void *>(d_lig_sum_complex_ptr);
-
-    d_lig_sum_real_ptr = new cl_mem();
-    status = CL_SUCCESS;
-    int d_lig_sum_real_bytes = sizeof(float) * batch_size * idist;
-    *d_lig_sum_real_ptr = clCreateBuffer(ctx,
-                                         CL_MEM_READ_WRITE,
-                                         d_lig_sum_real_bytes,
-                                         NULL, &status);
-    ocl_check_status(status);
-    *d_LigSum_Fort = static_cast<void *>(d_lig_sum_real_ptr);
+  if (is_c2r) {
+    res = clfftSetLayout(*plan, CLFFT_HERMITIAN_INTERLEAVED, CLFFT_REAL);
+    clfft_check_status(res);
+    res = clfftSetPlanDistance(*plan, odist, idist);
   } else {
-    d_potential_real_ptr = static_cast<cl_mem *>(*d_GridPot_Fort);
-    d_potential_complex_ptr = static_cast<cl_mem *>(*d_GridPot_FFT_Fort);
-    d_lig_complex_ptr = static_cast<cl_mem *>(*d_LigGrid_FFT_Fort);
-    d_lig_sum_real_ptr = static_cast<cl_mem *>(*d_LigSum_Fort);
-    d_lig_sum_complex_ptr = static_cast<cl_mem *>(*d_LigSum_FFT_Fort);
+    res = clfftSetLayout(*plan, CLFFT_REAL, CLFFT_HERMITIAN_INTERLEAVED);
+    clfft_check_status(res);
+    res = clfftSetPlanDistance(*plan, idist, odist);
   }
+  clfft_check_status(res);
 
-  clfftPlanHandle * pot_plan = static_cast<clfftPlanHandle *>(potential_r2c_plan);
-  clfftStatus clfftResult = clfftEnqueueTransform(*pot_plan,
-                                                  CLFFT_FORWARD, 1,
-                                                  q_ptr, 0, NULL, NULL,
-                                                  d_potential_real_ptr,
-                                                  d_potential_complex_ptr,
-                                                  NULL);
-  clfft_check_status(clfftResult);
+  res = clfftSetPlanBatchSize(*plan, batch_size);
+  clfft_check_status(res);
 
-  // FFT transform for ligand grids
-  //printf("FFT memory=%d\n",d_LigGrid_Fort);
+  /* Use default column-major strides: {1, z, z*y} */
 
-  //cudaMalloc((void **)&d_lig_f, sizeof(cufftReal)*num_grid*batch_size*idist);
-  //CUDA_CHECK();
-  //cudaMemcpy(d_lig_f, LigGrid,
-  // 	     sizeof(cufftReal)*num_grid*batch_size*idist,
-  //     cudaMemcpyHostToDevice);
+  res = clfftSetPlanPrecision(*plan, CLFFT_SINGLE);
+  clfft_check_status(res);
+  res = clfftSetResultLocation(*plan, CLFFT_OUTOFPLACE);
+  clfft_check_status(res);
 
-  clfftPlanHandle * lig_plan = static_cast<clfftPlanHandle *>(lig_r2c_plan);
-  cl_mem * d_lig_real_ptr = static_cast<cl_mem *>(*d_LigGrid_Fort);
-  clfftResult = clfftEnqueueTransform(*lig_plan,
-                                      CLFFT_FORWARD, 1,
-                                      q_ptr, 0, NULL, NULL,
-                                      d_lig_real_ptr, d_lig_complex_ptr,
-                                      NULL);
-  clfft_check_status(clfftResult);
+  res = clfftBakePlan(*plan, 1, q_ptr, NULL, NULL);
+  clfft_check_status(res);
 
-  status = clFinish(queue);
-  ocl_check_status(status);
-
-  cl_kernel conj_mult_kernel;
-  status = ocl_compile_kernel(Kernels::conjMult, "conjMult",
-                              ctx, dev_id,
-                              conj_mult_kernel);
-  if (status != CL_SUCCESS) {
-    return;
-  }
-
-  int conj_mult_size = batch_size * num_grid * odist;
-  status = clSetKernelArg(conj_mult_kernel, 0, sizeof(int), (void *) &conj_mult_size);
-  ocl_check_status(status);
-
-  status = clSetKernelArg(conj_mult_kernel, 1, sizeof(cl_mem), (void *) d_potential_complex_ptr);
-  ocl_check_status(status);
-
-  status = clSetKernelArg(conj_mult_kernel, 2, sizeof(cl_mem), (void *) d_lig_complex_ptr);
-  ocl_check_status(status);
-
-  status = clSetKernelArg(conj_mult_kernel, 3, sizeof(int), (void *) &odist);
-  ocl_check_status(status);
-
-  status = clSetKernelArg(conj_mult_kernel, 4, sizeof(int), (void *) &num_grid);
-  ocl_check_status(status);
-
-  size_t
-    localSize = 256,
-    globalSize = 1024 * localSize;
-
-  // Inverse FFT transform to calcualte energy grids
-  status = clEnqueueNDRangeKernel(queue, conj_mult_kernel, 1, NULL,
-                                  &globalSize, &localSize,
-                                  0, NULL, NULL);
-  ocl_check_status(status);
-
-  cl_kernel sum_grids_kernel;
-  status = ocl_compile_kernel(Kernels::sumGrids, "sumGrids",
-                              ctx, dev_id,
-                              sum_grids_kernel);
-  if (status != CL_SUCCESS) {
-    return;
-  }
-
-  int sum_grids_size = batch_size * odist;
-  status = clSetKernelArg(sum_grids_kernel, 0, sizeof(int), (void *) &sum_grids_size);
-  ocl_check_status(status);
-
-  status = clSetKernelArg(sum_grids_kernel, 1, sizeof(cl_mem), (void *) d_lig_complex_ptr);
-  ocl_check_status(status);
-
-  status = clSetKernelArg(sum_grids_kernel, 2, sizeof(cl_mem), (void *) d_lig_sum_complex_ptr);
-  ocl_check_status(status);
-
-  status = clSetKernelArg(sum_grids_kernel, 3, sizeof(int), (void *) &num_grid);
-  ocl_check_status(status);
-
-  status = clSetKernelArg(sum_grids_kernel, 4, sizeof(int), (void *) &odist);
-  ocl_check_status(status);
-
-  status = clSetKernelArg(sum_grids_kernel, 5, sizeof(int), (void *) &idist);
-  ocl_check_status(status);
-
-  status = clEnqueueNDRangeKernel(queue, sum_grids_kernel, 1, NULL,
-                                  &globalSize, &localSize,
-                                  0, NULL, NULL);
-  ocl_check_status(status);
-
-  clfftPlanHandle * back_plan = static_cast<clfftPlanHandle *>(c2r_plan);
-  clfftResult = clfftEnqueueTransform(*back_plan, CLFFT_BACKWARD, 1, q_ptr,
-                                      0, NULL, NULL,
-                                      d_lig_sum_complex_ptr, d_lig_sum_real_ptr, NULL);
-  clfft_check_status(clfftResult);
-
-  status = clFinish(queue);
-  ocl_check_status(status);
-
-  // copy energy grid from GPU to CPU
-  //printf("batch_size: %d \n", batch_size);
-  //printf("idist: %d \n", idist);
-
-  cl_kernel correct_ener_kernel;
-  status = ocl_compile_kernel(Kernels::correctEnergy, "correctEnergy",
-                              ctx, dev_id,
-                              correct_ener_kernel);
-  if (status != CL_SUCCESS) {
-    return;
-  }
-
-  int correct_ener_size = batch_size * idist;
-  status = clSetKernelArg(correct_ener_kernel, 0, sizeof(int), (void *) &correct_ener_size);
-  ocl_check_status(status);
-
-  status = clSetKernelArg(correct_ener_kernel, 1, sizeof(int), (void *) &idist);
-  ocl_check_status(status);
-
-  status = clSetKernelArg(correct_ener_kernel, 2, sizeof(cl_mem), (void *) d_lig_sum_real_ptr);
-  ocl_check_status(status);
-
-  status = clEnqueueNDRangeKernel(queue, correct_ener_kernel, 1, NULL,
-                                  &globalSize, &localSize,
-                                  0, NULL, NULL);
-  ocl_check_status(status);
-
-  status = clFinish(queue);
-  ocl_check_status(status);
-
-  // copy energy grid from GPU to CPU
-  status = clEnqueueReadBuffer(queue, *d_lig_sum_real_ptr, CL_TRUE, 0,
-                               sizeof(float) * correct_ener_size,
-                               EnergyGrid, 0, NULL, NULL);
-  ocl_check_status(status);
-
-  //removed for efficiency
-  //for (int i = 0; i < batch_size*idist; i++)
-  //{
-  //  EnergyGrid[i] = EnergyGrid[i] / sqrt(idist);
-  //}
-
-  //GPU memory deallocation was moved to clean_FFTDock_GPU
-  //cudaFree(d_potential_f);
-  //cudaFree(d_potential_F);
-  //cudaFree(d_lig_f);
-  //cudaFree(d_lig_F);
-  //cudaFree(d_lig_sum_F);
-  //cudaFree(d_lig_sum_f);
-}
-
-extern "C"
-void destroy_fft_plan(void ** clfft_plan) {
-  clfftPlanHandle * plan = static_cast<clfftPlanHandle *>(*clfft_plan);
-  clfftStatus clfftResult = clfftDestroyPlan(plan);
-  clfft_check_status(clfftResult);
-  delete plan;
-  *clfft_plan = NULL;
+  return plan;
 }
 
 extern "C"
 void make_fft_r2c_plan(void * ocl_context, void * ocl_queue,
-                       size_t x, size_t y, size_t z,
-                       size_t batch_size,
-                       void ** out_plan) {
-  cl_context * ctx_ptr = static_cast<cl_context *>(ocl_context);
-  cl_context ctx = *ctx_ptr;
-
+                        int x, int y, int z, int batch_size,
+                        void ** out_plan) {
+  cl_context ctx = *static_cast<cl_context *>(ocl_context);
   cl_command_queue * q_ptr = static_cast<cl_command_queue *>(ocl_queue);
-
-  size_t
-    inembed[3] = {x, y, z},
-    onembed[3] = {x, y, 1 + z / 2},
-    idist = x * y * z,
-    odist = x * y * (1 + z / 2),
-    stride[3] = {1, x, x * y};
-
-  clfftStatus clfftResult;
-
-  clfftPlanHandle * plan = new clfftPlanHandle();
-  clfftResult = clfftCreateDefaultPlan(plan, ctx, CLFFT_3D, inembed);
-  clfft_check_status(clfftResult);
-  if (clfftResult == CLFFT_SUCCESS) {
-    *out_plan = static_cast<void *>(plan);
-  }
-
-  clfftResult = clfftSetLayout(*plan, CLFFT_REAL, CLFFT_HERMITIAN_INTERLEAVED);
-  clfft_check_status(clfftResult);
-
-  clfftResult = clfftSetPlanBatchSize(*plan, batch_size);
-  clfft_check_status(clfftResult);
-
-  clfftResult = clfftSetPlanDistance(*plan, idist, odist);
-  clfft_check_status(clfftResult);
-
-  clfftResult = clfftSetPlanInStride(*plan, CLFFT_3D, stride);
-  clfft_check_status(clfftResult);
-
-  clfftResult = clfftSetPlanOutStride(*plan, CLFFT_3D, stride);
-  clfft_check_status(clfftResult);
-
-  clfftResult = clfftSetPlanPrecision(*plan, CLFFT_SINGLE);
-  clfft_check_status(clfftResult);
-
-  clfftResult = clfftSetResultLocation(*plan, CLFFT_OUTOFPLACE);
-  clfft_check_status(clfftResult);
-
-  clfftResult = clfftBakePlan(*plan, 1, q_ptr, NULL, NULL);
-  clfft_check_status(clfftResult);
-};
-
-extern "C"
-void make_fft_c2r_plan(void * ocl_context, void * ocl_queue,
-                       size_t x, size_t y, size_t z,
-                       size_t batch_size,
-                       void ** out_plan) {
-  cl_context * ctx_ptr = static_cast<cl_context *>(ocl_context);
-  cl_context ctx = *ctx_ptr;
-
-  cl_command_queue * q_ptr = static_cast<cl_command_queue *>(ocl_queue);
-
-  size_t
-    inembed[3] = {x, y, z},
-    onembed[3] = {x, y, 1 + z / 2},
-    idist = x * y * z,
-    odist = x * y * (1 + z / 2),
-    stride[3] = {1, x, x * y};
-
-  clfftStatus clfftResult;
-
-  clfftPlanHandle * plan = new clfftPlanHandle();
-  clfftResult = clfftCreateDefaultPlan(plan, ctx, CLFFT_3D, inembed);
-  clfft_check_status(clfftResult);
-  if (clfftResult == CLFFT_SUCCESS) {
-    *out_plan = static_cast<void *>(plan);
-  }
-
-  clfftResult = clfftCreateDefaultPlan(plan, ctx, CLFFT_3D, onembed);
-  clfft_check_status(clfftResult);
-
-  clfftResult = clfftSetLayout(*plan, CLFFT_HERMITIAN_INTERLEAVED, CLFFT_REAL);
-  clfft_check_status(clfftResult);
-
-  clfftResult = clfftSetPlanBatchSize(*plan, batch_size);
-  clfft_check_status(clfftResult);
-
-  clfftResult = clfftSetPlanDistance(*plan, odist, idist);
-  clfft_check_status(clfftResult);
-
-  clfftResult = clfftSetPlanInStride(*plan, CLFFT_3D, stride);
-  clfft_check_status(clfftResult);
-
-  clfftResult = clfftSetPlanOutStride(*plan, CLFFT_3D, stride);
-  clfft_check_status(clfftResult);
-
-  clfftResult = clfftSetPlanPrecision(*plan, CLFFT_SINGLE);
-  clfft_check_status(clfftResult);
-
-  clfftResult = clfftSetResultLocation(*plan, CLFFT_OUTOFPLACE);
-  clfft_check_status(clfftResult);
-
-  clfftResult = clfftBakePlan(*plan, 1, q_ptr, NULL, NULL);
-  clfft_check_status(clfftResult);
-};
-
-extern "C"
-void batchFFT(cl_context * ctx,
-              cl_command_queue * q,
-              clfftPlanHandle plan,
-              size_t x, size_t y, size_t z,
-              size_t batch_size,
-              float * grid_potential)
-{
-  size_t
-    inembed[3] = {x, y, z},
-    onembed[3] = {x, y, 1 + z / 2},
-    idist = x * y * z,
-    odist = x * y * (1 + z / 2),
-    stride[3] = {1, x, x * y};
-
-  clfftStatus clfftResult;
-
-  cl_int status = CL_SUCCESS;
-  cl_mem d_potential_f = clCreateBuffer(*ctx,
-                                        CL_MEM_READ_ONLY |
-                                        CL_MEM_COPY_HOST_PTR,
-                                        sizeof(float) * batch_size * idist,
-                                        (void *) grid_potential,
-                                        &status);
-  ocl_check_status(status);
-
-  status = CL_SUCCESS;
-  cl_mem d_potential_F = clCreateBuffer(*ctx, CL_MEM_READ_WRITE,
-                                        2 * sizeof(float) * batch_size * odist,
-                                        NULL, &status);
-  ocl_check_status(status);
-
-  clfftStatus fft_status = clfftEnqueueTransform(plan, CLFFT_FORWARD, 1,
-                                                 q, 0, NULL, NULL,
-                                                 &d_potential_f, &d_potential_F,
-                                                 NULL);
-  clfft_check_status(fft_status);
-
-  status = clFinish(*q);
-  ocl_check_status(status);
-
-  status = clReleaseMemObject(d_potential_f);
-  ocl_check_status(status);
-
-  clReleaseMemObject(d_potential_f);
-  ocl_check_status(status);
-
-  clReleaseMemObject(d_potential_F);
-  ocl_check_status(status);
+  *out_plan = static_cast<void *>(create_clfft_plan(ctx, q_ptr,
+                                                     x, y, z, batch_size, 0));
 }
 
 extern "C"
-void clean_fftdock_gpu(void ** d_LigGrid_Fort,
-                       void ** d_LigGrid_FFT_Fort,
-                       void ** d_GridPot_Fort,
-                       void ** d_GridPot_FFT_Fort,
-                       void ** d_LigSum_Fort,
-                       void ** d_LigSum_FFT_Fort) {
-  cl_mem * lig_grid_real = static_cast<cl_mem *>(*d_LigGrid_Fort);
-  cl_int status = clReleaseMemObject(*lig_grid_real);
-  ocl_check_status(status);
-  delete lig_grid_real;
-  *d_LigGrid_Fort = NULL;
+void make_fft_c2r_plan(void * ocl_context, void * ocl_queue,
+                        int x, int y, int z, int batch_size,
+                        void ** out_plan) {
+  cl_context ctx = *static_cast<cl_context *>(ocl_context);
+  cl_command_queue * q_ptr = static_cast<cl_command_queue *>(ocl_queue);
+  *out_plan = static_cast<void *>(create_clfft_plan(ctx, q_ptr,
+                                                     x, y, z, batch_size, 1));
+}
 
-  cl_mem * lig_grid_complex = static_cast<cl_mem *>(*d_LigGrid_FFT_Fort);
-  status = clReleaseMemObject(*lig_grid_complex);
-  ocl_check_status(status);
-  delete lig_grid_complex;
-  *d_LigGrid_FFT_Fort = NULL;
+extern "C"
+void destroy_fft_plan(void ** plan_ptr) {
+  clfftPlanHandle * plan = static_cast<clfftPlanHandle *>(*plan_ptr);
+  if (plan) {
+    clfftDestroyPlan(plan);
+    delete plan;
+  }
+  *plan_ptr = NULL;
+}
 
-  cl_mem * grid_pot_real = static_cast<cl_mem *>(*d_GridPot_Fort);
-  status = clReleaseMemObject(*grid_pot_real);
-  ocl_check_status(status);
-  delete grid_pot_real;
-  *d_GridPot_Fort = NULL;
+static void fft_forward_r2c(void * plan, cl_command_queue * queue,
+                             cl_mem * real_buf, cl_mem * complex_buf) {
+  clfftPlanHandle * p = static_cast<clfftPlanHandle *>(plan);
+  clfftStatus res = clfftEnqueueTransform(*p, CLFFT_FORWARD, 1, queue,
+                                          0, NULL, NULL,
+                                          real_buf, complex_buf, NULL);
+  clfft_check_status(res);
+}
 
-  cl_mem * grid_pot_complex = static_cast<cl_mem *>(*d_GridPot_FFT_Fort);
-  status = clReleaseMemObject(*grid_pot_complex);
-  ocl_check_status(status);
-  delete grid_pot_complex;
-  *d_GridPot_FFT_Fort = NULL;
+static void fft_inverse_c2r(void * plan, cl_command_queue * queue,
+                              cl_mem * complex_buf, cl_mem * real_buf) {
+  clfftPlanHandle * p = static_cast<clfftPlanHandle *>(plan);
+  clfftStatus res = clfftEnqueueTransform(*p, CLFFT_BACKWARD, 1, queue,
+                                          0, NULL, NULL,
+                                          complex_buf, real_buf, NULL);
+  clfft_check_status(res);
+}
 
-  cl_mem * lig_sum_real = static_cast<cl_mem *>(*d_LigSum_Fort);
-  status = clReleaseMemObject(*lig_sum_real);
-  ocl_check_status(status);
-  delete lig_sum_real;
-  *d_LigSum_Fort = NULL;
+#endif /* VKFFT_BACKEND */
 
-  cl_mem * lig_sum_complex = static_cast<cl_mem *>(*d_LigSum_FFT_Fort);
-  status = clReleaseMemObject(*lig_sum_complex);
+/* ================================================================== */
+/*  rigid_fft_dock – main FFT docking pipeline (shared)                */
+/* ================================================================== */
+
+extern "C"
+void rigid_fft_dock(void * ocl_device, void * ocl_context, void * ocl_queue,
+                    int xdim, int ydim, int zdim,
+                    int batch_size, int idx_batch,
+                    int num_quaternions, int num_grid,
+                    void * potential_r2c_plan,
+                    void * lig_r2c_plan,
+                    void * c2r_plan,
+                    const float * grid_potential,
+                    float * EnergyGrid,
+                    void ** d_LigGrid_Fort, void ** d_LigGrid_FFT_Fort,
+                    void ** d_GridPot_Fort, void ** d_GridPot_FFT_Fort,
+                    void ** d_LigSum_Fort, void ** d_LigSum_FFT_Fort) {
+
+  OclDevice * selectedDev = static_cast<OclDevice *>(ocl_device);
+  cl_device_id dev_id = selectedDev->getDevId();
+
+  cl_context ctx   = *static_cast<cl_context *>(ocl_context);
+  cl_command_queue queue = *static_cast<cl_command_queue *>(ocl_queue);
+  cl_command_queue * q_ptr = static_cast<cl_command_queue *>(ocl_queue);
+
+  int idist = xdim * ydim * zdim;
+  int odist = xdim * ydim * (zdim / 2 + 1);
+
+  cl_mem * d_potential_real_ptr    = NULL;
+  cl_mem * d_potential_complex_ptr = NULL;
+  cl_mem * d_lig_complex_ptr       = NULL;
+  cl_mem * d_lig_sum_complex_ptr   = NULL;
+  cl_mem * d_lig_sum_real_ptr      = NULL;
+
+  cl_int status;
+
+  /* ------ allocate GPU buffers (first batch only) ------ */
+
+  if (idx_batch == 1) {
+    status = CL_SUCCESS;
+    d_potential_real_ptr = new cl_mem();
+    *d_potential_real_ptr = clCreateBuffer(ctx,
+        CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
+        sizeof(float) * num_grid * idist,
+        (void *)grid_potential, &status);
+    ocl_check_status(status);
+    *d_GridPot_Fort = static_cast<void *>(d_potential_real_ptr);
+
+    status = CL_SUCCESS;
+    d_potential_complex_ptr = new cl_mem();
+    *d_potential_complex_ptr = clCreateBuffer(ctx, CL_MEM_READ_WRITE,
+        2 * sizeof(float) * num_grid * odist, NULL, &status);
+    ocl_check_status(status);
+    *d_GridPot_FFT_Fort = static_cast<void *>(d_potential_complex_ptr);
+
+    status = CL_SUCCESS;
+    d_lig_complex_ptr = new cl_mem();
+    *d_lig_complex_ptr = clCreateBuffer(ctx, CL_MEM_READ_WRITE,
+        2 * sizeof(float) * num_grid * batch_size * odist, NULL, &status);
+    ocl_check_status(status);
+    *d_LigGrid_FFT_Fort = static_cast<void *>(d_lig_complex_ptr);
+
+    status = CL_SUCCESS;
+    d_lig_sum_complex_ptr = new cl_mem();
+    *d_lig_sum_complex_ptr = clCreateBuffer(ctx, CL_MEM_READ_WRITE,
+        2 * sizeof(float) * batch_size * odist, NULL, &status);
+    ocl_check_status(status);
+    *d_LigSum_FFT_Fort = static_cast<void *>(d_lig_sum_complex_ptr);
+
+    status = CL_SUCCESS;
+    d_lig_sum_real_ptr = new cl_mem();
+    *d_lig_sum_real_ptr = clCreateBuffer(ctx, CL_MEM_READ_WRITE,
+        sizeof(float) * batch_size * idist, NULL, &status);
+    ocl_check_status(status);
+    *d_LigSum_Fort = static_cast<void *>(d_lig_sum_real_ptr);
+  } else {
+    d_potential_real_ptr    = static_cast<cl_mem *>(*d_GridPot_Fort);
+    d_potential_complex_ptr = static_cast<cl_mem *>(*d_GridPot_FFT_Fort);
+    d_lig_complex_ptr       = static_cast<cl_mem *>(*d_LigGrid_FFT_Fort);
+    d_lig_sum_complex_ptr   = static_cast<cl_mem *>(*d_LigSum_FFT_Fort);
+    d_lig_sum_real_ptr      = static_cast<cl_mem *>(*d_LigSum_Fort);
+  }
+
+  /* ------ 1. Forward R2C: potential grids ------ */
+
+  fft_forward_r2c(potential_r2c_plan, q_ptr,
+                   d_potential_real_ptr, d_potential_complex_ptr);
+
+  /* ------ 2. Forward R2C: ligand grids ------ */
+
+  cl_mem * d_lig_real_ptr = static_cast<cl_mem *>(*d_LigGrid_Fort);
+  fft_forward_r2c(lig_r2c_plan, q_ptr,
+                   d_lig_real_ptr, d_lig_complex_ptr);
+
+  status = clFinish(queue);
   ocl_check_status(status);
-  delete lig_sum_complex;
-  *d_LigSum_FFT_Fort = NULL;
+
+  /* ------ 3. Conjugate multiplication ------ */
+
+  cl_kernel conj_mult_kernel;
+  status = ocl_compile_kernel(Kernels::gpu_compat + "\n" + Kernels::conjMult,
+                              "conjMult", ctx, dev_id, conj_mult_kernel);
+  if (status != CL_SUCCESS) return;
+
+  int conj_N = batch_size * num_grid * odist;   /* complex-element count */
+  status = clSetKernelArg(conj_mult_kernel, 0, sizeof(int),    &conj_N);
+  ocl_check_status(status);
+  status = clSetKernelArg(conj_mult_kernel, 1, sizeof(cl_mem), d_potential_complex_ptr);
+  ocl_check_status(status);
+  status = clSetKernelArg(conj_mult_kernel, 2, sizeof(cl_mem), d_lig_complex_ptr);
+  ocl_check_status(status);
+  status = clSetKernelArg(conj_mult_kernel, 3, sizeof(int),    &odist);
+  ocl_check_status(status);
+  status = clSetKernelArg(conj_mult_kernel, 4, sizeof(int),    &num_grid);
+  ocl_check_status(status);
+
+  size_t localSize  = 256;
+  size_t globalSize = 1024 * localSize;
+
+  status = clEnqueueNDRangeKernel(queue, conj_mult_kernel, 1, NULL,
+                                  &globalSize, &localSize, 0, NULL, NULL);
+  ocl_check_status(status);
+
+  /* ------ 4. Sum grids across grid types ------ */
+
+  cl_kernel sum_grids_kernel;
+  status = ocl_compile_kernel(Kernels::gpu_compat + "\n" + Kernels::sumGrids,
+                              "sumGrids", ctx, dev_id, sum_grids_kernel);
+  if (status != CL_SUCCESS) return;
+
+  int sum_N = batch_size * odist;               /* complex-element count */
+  status = clSetKernelArg(sum_grids_kernel, 0, sizeof(int),    &sum_N);
+  ocl_check_status(status);
+  status = clSetKernelArg(sum_grids_kernel, 1, sizeof(cl_mem), d_lig_complex_ptr);
+  ocl_check_status(status);
+  status = clSetKernelArg(sum_grids_kernel, 2, sizeof(cl_mem), d_lig_sum_complex_ptr);
+  ocl_check_status(status);
+  status = clSetKernelArg(sum_grids_kernel, 3, sizeof(int),    &num_grid);
+  ocl_check_status(status);
+  status = clSetKernelArg(sum_grids_kernel, 4, sizeof(int),    &odist);
+  ocl_check_status(status);
+  status = clSetKernelArg(sum_grids_kernel, 5, sizeof(int),    &idist);
+  ocl_check_status(status);
+
+  status = clEnqueueNDRangeKernel(queue, sum_grids_kernel, 1, NULL,
+                                  &globalSize, &localSize, 0, NULL, NULL);
+  ocl_check_status(status);
+
+  /* ------ 5. Inverse C2R: energy grids ------ */
+
+  fft_inverse_c2r(c2r_plan, q_ptr,
+                   d_lig_sum_complex_ptr, d_lig_sum_real_ptr);
+
+  status = clFinish(queue);
+  ocl_check_status(status);
+
+  /* ------ 6. Correct energy (divide by idist) ------ */
+
+  cl_kernel correct_kernel;
+  status = ocl_compile_kernel(Kernels::gpu_compat + "\n" + Kernels::correctEnergy,
+                              "correctEnergy", ctx, dev_id, correct_kernel);
+  if (status != CL_SUCCESS) return;
+
+  int ener_N = batch_size * idist;
+  status = clSetKernelArg(correct_kernel, 0, sizeof(int),    &ener_N);
+  ocl_check_status(status);
+  status = clSetKernelArg(correct_kernel, 1, sizeof(int),    &idist);
+  ocl_check_status(status);
+  status = clSetKernelArg(correct_kernel, 2, sizeof(cl_mem), d_lig_sum_real_ptr);
+  ocl_check_status(status);
+
+  status = clEnqueueNDRangeKernel(queue, correct_kernel, 1, NULL,
+                                  &globalSize, &localSize, 0, NULL, NULL);
+  ocl_check_status(status);
+
+  status = clFinish(queue);
+  ocl_check_status(status);
+
+  /* ------ 7. Copy results back to host ------ */
+
+  status = clEnqueueReadBuffer(queue, *d_lig_sum_real_ptr, CL_TRUE, 0,
+                               sizeof(float) * ener_N,
+                               EnergyGrid, 0, NULL, NULL);
+  ocl_check_status(status);
+
+  /* release compiled kernels */
+  clReleaseKernel(conj_mult_kernel);
+  clReleaseKernel(sum_grids_kernel);
+  clReleaseKernel(correct_kernel);
+}
+
+/* ================================================================== */
+/*  GPU memory cleanup (shared by both implementations)                */
+/* ================================================================== */
+
+extern "C"
+void clean_fftdock_gpu(void ** d_LigGrid_Fort, void ** d_LigGrid_FFT_Fort,
+                       void ** d_GridPot_Fort, void ** d_GridPot_FFT_Fort,
+                       void ** d_LigSum_Fort,  void ** d_LigSum_FFT_Fort) {
+  cl_mem * buf;
+  cl_int status;
+
+  buf = static_cast<cl_mem *>(*d_LigGrid_Fort);
+  status = clReleaseMemObject(*buf); ocl_check_status(status);
+  delete buf; *d_LigGrid_Fort = NULL;
+
+  buf = static_cast<cl_mem *>(*d_LigGrid_FFT_Fort);
+  status = clReleaseMemObject(*buf); ocl_check_status(status);
+  delete buf; *d_LigGrid_FFT_Fort = NULL;
+
+  buf = static_cast<cl_mem *>(*d_GridPot_Fort);
+  status = clReleaseMemObject(*buf); ocl_check_status(status);
+  delete buf; *d_GridPot_Fort = NULL;
+
+  buf = static_cast<cl_mem *>(*d_GridPot_FFT_Fort);
+  status = clReleaseMemObject(*buf); ocl_check_status(status);
+  delete buf; *d_GridPot_FFT_Fort = NULL;
+
+  buf = static_cast<cl_mem *>(*d_LigSum_Fort);
+  status = clReleaseMemObject(*buf); ocl_check_status(status);
+  delete buf; *d_LigSum_Fort = NULL;
+
+  buf = static_cast<cl_mem *>(*d_LigSum_FFT_Fort);
+  status = clReleaseMemObject(*buf); ocl_check_status(status);
+  delete buf; *d_LigSum_FFT_Fort = NULL;
 }
 
 #endif /* HAS_OPENCL */

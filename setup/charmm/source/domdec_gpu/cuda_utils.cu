@@ -6,7 +6,14 @@
 #include <cuda.h>
 
 #if HAS_NVTX == 1
+/* NVTX moved under nvtx3/ and the old top-level header was removed in
+   CUDA 13.  Prefer the nvtx3 path where available (CUDA 10+), and fall
+   back to the old location on older toolkits. */
+#if defined(__has_include) && __has_include(<nvtx3/nvToolsExtCuda.h>)
+#include <nvtx3/nvToolsExtCuda.h>
+#else
 #include <nvToolsExtCuda.h>
+#endif
 #endif
 
 #include "gpu_utils.h"

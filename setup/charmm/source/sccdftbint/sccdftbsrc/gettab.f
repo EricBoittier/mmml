@@ -58,7 +58,17 @@
       do23002 j = 1,ntype 
 !      print *,'enter file name for sk-data of pair ',i,j
       read (4,*) skfile
-      open (3,file=skfile,status='unknown')
+!     status='old': a missing Slater-Koster file used to be created here,
+!     empty, and the read below then failed at EOF without ever naming it.
+!     Note skfile is character*64, so an over-long path arrives truncated --
+!     printing the name is what makes that visible.
+      open (3,file=skfile,status='old',iostat=ios)
+      if (ios .ne. 0) then
+        write(*,*) 'GETTAB> cannot open Slater-Koster file: ',
+     $       trim(skfile)
+        call wrndie(-5,'<GETTAB>',
+     $       'Slater-Koster file named in sccdftb.dat is not readable')
+      endif
       rewind 3
       if(i .ne. j)then
       read (3,*) dr(i,j),dim(i,j)

@@ -7742,6 +7742,7 @@ subroutine ext_bond_def(comlyn,comlen,qadd)
   use coord
   use select
   use modpsf ! CMPRIC(MARK,LSORT) to delete marked bonds
+  use stream, only: outu, prnlev
 
   implicit none
   
@@ -7966,7 +7967,9 @@ subroutine ext_bond_def(comlyn,comlen,qadd)
   call chmdealloc('extbond.src','EXTBDDEF','TMP_IB',max_bond,intg=tmp_ib)
   call chmdealloc('extbond.src','EXTBDDEF','TMP_JB',max_bond,intg=tmp_jb)
   
-  write(6,*)'XTBD> nBond=',nxtbd
+  ! Written by every rank before this guard, so the duplicates landed in
+  ! a different order in the merged output on every parallel run.
+  if (prnlev >= 2) write(outu,*)'XTBD> nBond=',nxtbd
 
   return
   
@@ -7983,6 +7986,7 @@ subroutine ext_bond_read(inuni)
   use coord
   use select
   use modpsf ! CMPRIC(MARK,LSORT) to delete marked bonds
+  use stream, only: outu, prnlev
   
   implicit none
   
@@ -8144,7 +8148,8 @@ subroutine ext_bond_read(inuni)
   call chmdealloc('extbond.src','EXTBDDEF','TMP_IB',max_bond,intg=tmp_ib)
   call chmdealloc('extbond.src','EXTBDDEF','TMP_JB',max_bond,intg=tmp_jb)
   
-  write(6,*)'XTBD> nBond=',nxtbd
+  ! See the matching guard in ext_bond_def above.
+  if (prnlev >= 2) write(outu,*)'XTBD> nBond=',nxtbd
   
   return
 

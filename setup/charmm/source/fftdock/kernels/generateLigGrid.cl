@@ -1,14 +1,14 @@
+/* gpu_compat.h is prepended at compile time */
+
 // generate ligand grid
-__kernel void generateLigGrid(int numRotamers, int NAtoms,
-                              int numGrids, __global int * d_GridNum, float DGrid,
-                              __global float * d_rotamersCoor,
-                              __global float * d_par,
-                              __global float * d_GridMinCoor,
-                              __global float * d_LigGrid) {
-  // int globalId=get_group_id(0)*get_local_size(0)+get_local_id(0);
-  int globalId = get_global_id(0);
+KERNEL void generateLigGrid(int numRotamers, int NAtoms,
+                            int numGrids, GLOBAL int * d_GridNum, float DGrid,
+                            GLOBAL float * d_rotamersCoor,
+                            GLOBAL float * d_par,
+                            GLOBAL float * d_GridMinCoor,
+                            GLOBAL float * d_LigGrid) {
+  int globalId = THREAD_ID;
   if(globalId<numRotamers){
-    //printf("GlobalId=%d NumRotamers=%d\n",globalId,numRotamers);
     float dx,dy,dz;
     int i,j,grid_idx;
     int idx_x,idx_y,idx_z, vdw_grid_idx;
@@ -17,9 +17,7 @@ __kernel void generateLigGrid(int numRotamers, int NAtoms,
     float eps,vdwr,charge;
     float energyFactor;
     unsigned int NumGridPoints = d_GridNum[0]*d_GridNum[1]*d_GridNum[2];
-    //offset used to locate the right position to write in the LigGrid for each type of grid
     unsigned int rotamerOffset,gridTypeOffset;
-    //printf("grid x=%d y=%d z=%d\n",d_GridNum[0],d_GridNum[1],d_GridNum[2]);
     xlen = d_GridNum[0];
     ylen = d_GridNum[1];
     zlen = d_GridNum[2];
@@ -32,7 +30,6 @@ __kernel void generateLigGrid(int numRotamers, int NAtoms,
       dz = d_rotamersCoor[globalId*3*NAtoms + 3*i + 2]-
         d_GridMinCoor[globalId*3 + 2];
 
-      //calculate the atomi 3-d index
       idx_x = floor(dx/DGrid);
       idx_y = floor(dy/DGrid);
       idx_z = floor(dz/DGrid);
@@ -46,18 +43,6 @@ __kernel void generateLigGrid(int numRotamers, int NAtoms,
       vdwr   = d_par[i*4+2];
       vdw_grid_idx = d_par[i*4+3];
 
-      /*
-        if(globalId == 40 or globalId==0){
-        printf("idx=%d atom%d dx=%f dy=%f dz=%f idx_x=%d idx_y=%d idx_z=%d\n",globalId,
-        i,d_rotamersCoor[globalId*3*NAtoms+3*i+0]
-        ,d_rotamersCoor[globalId*3*NAtoms+3*i+1],
-        d_rotamersCoor[globalId*3*NAtoms+3*i+2],idx_x,idx_y,idx_z);
-        //printf("charge=%f eps=%f vdwr=%f vdw_grid_idx=%d\n",charge,eps,
-        //        vdwr,vdw_grid_idx);
-        }*/
-      //vdw
-
-      //loop through elec,vdwrepl,vdwattr grids
       energyFactor = 0.0;
       for(j=0; j<numGrids; ++j){
         if(j == vdw_grid_idx){
@@ -69,16 +54,7 @@ __kernel void generateLigGrid(int numRotamers, int NAtoms,
         else{
           energyFactor = 0.0;
         }
-        /*
-          if(globalId == 38){
-          printf("atom%d energyFactor[%d]==%f vdw_grid_idx=%d\n",i,j,energyFactor,
-          vdw_grid_idx);
-          printf("offset=%d\n",rotamerOffset+gridTypeOffset);
-          }*/
         gridTypeOffset=j*NumGridPoints;
-        //if (globalId==1){
-        //printf("grid%d offset=%d numGridPoints=%d\n",j,rotamerOffset+gridTypeOffset,NumGridPoints);
-        //}
         //(0,0,0)
         d_LigGrid[rotamerOffset+gridTypeOffset+
                   (idx_x*ylen+idx_y)*zlen+idx_z]+=

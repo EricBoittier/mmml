@@ -1,0 +1,88 @@
+* Test CREAD parallel broadcast safety under -a RESIZE.
+*
+
+! Background: cread (source/io/coorio.F90:1974) broadcasts X, Y, Z,
+! WMAIN to non-master ranks with PSND8(X, NATOM) etc, without calling
+! resize_coord first.  Under -a RESIZE the coord arrays are initially
+! allocated at size i0=1 in allocate_coord_ltm.  In practice the
+! PSF-read / GENERATE pipeline grows them via resize_coord(NATOM)
+! before any "read coor card" hits cread, so the broadcast lands in
+! a properly-sized buffer.  This test confirms that contract: it
+! builds a ~300-atom system, writes a CRD, reads it back, and
+! asserts that every rank sees the right NATOM and bit-identical
+! coordinates after the broadcast.  If a future refactor lets a
+! "read coor card" hit cread with an undersized receive buffer on a
+! non-master rank, the PSND8 inside cread will write past the end of
+! X.  Under -a RESIZE + AddressSanitizer that surfaces as a
+! heap-buffer-overflow at the PSND8 call site; under a plain build
+! the corruption is silent until the next malloc, but the
+! coordinate-comparison assertions below still trip on any per-rank
+! corruption that affects the values themselves.
+
+! The broadcast-overflow risk this test guards against only exists in
+! parallel runs; PSNDC has an early return on NUMNOD==1.  We still run
+! the @testcheck assertions in serial -- they validate the CRD
+! write/read round-trip on the master, which is the precondition for
+! the parallel-broadcast assertions to mean anything.
+
+stream datadir.def
+
+read rtf card name @0top_all22_prot.rtf
+bomlev -2
+read param card name @0par_all22_prot.prm
+bomlev 0
+
+! 30 ALA -> 303 atoms (10 atoms/residue plus terminal patches).  Large
+! enough
+! that any size-1 receive buffer overflows beyond the heap chunk
+! boundary, small enough to run in a second.
+read sequ ala 30
+generate poly setup warn
+
+! Build coordinates from IC table so we have something on disk to read.
+ic param
+ic seed 1 N 1 CA 1 C
+ic build
+
+@testcheck ?natom 303 -0.5 cread_initial_natom
+
+! Sum-over-x for the whole system; used as a global fingerprint
+! across ranks below.
+coor stat sele all end
+set xsumref ?xave
+
+! Single-atom probe (atom 50 sits inside the chain, not on a terminus).
+coor stat sele bynum 50 end
+set x50 ?xave
+
+! Master writes the CRD.  Receivers are quiet here.
+open write card unit 30 name @9cread_resize.crd
+write coor card unit 30
+* CRD snapshot for cread_broadcast_resize test
+*
+close unit 30
+
+! ---- The actual cread parallel broadcast under test ----
+! Re-read the CRD we just wrote.  Inside cread the PSND8(X,NATOM)
+! family of broadcasts fires on every rank.  If X/Y/Z on a non-master
+! rank are sized < NATOM, this is where the heap overflow happens.
+open read card unit 30 name @9cread_resize.crd
+read coor card unit 30
+close unit 30
+
+! NATOM must be unchanged by the round-trip.
+@testcheck ?natom 303 -0.5 cread_post_read_natom
+
+! Atom 50 x-coordinate must round-trip identically.  ?xave is reduced
+! across MPI ranks, so any per-rank corruption desynchronises the value.
+coor stat sele bynum 50 end
+@testcheck ?xave @x50 -0.0001 cread_atom50_x_roundtrip
+
+! Sum-over-all-atoms x.  Catches any per-rank divergence in the X array
+! that a single-atom probe might miss.
+coor stat sele all end
+@testcheck ?xave @xsumref -0.0001 cread_xsum_roundtrip
+
+echo cread_broadcast_resize test failures: @testfail
+
+stop

@@ -82,13 +82,21 @@ contains
     !
     logical error
     character(len=80) iline
-    logical official
+    logical official,use_label
     !
     !++lni add for reading dynamics restart file
     integer jdum,ldyna
     real(chm_real) dum
 
     integer deci
+    !
+#if KEY_MIDSINR == 1
+    ! dummy variables and memory allocations
+    logical :: q_midsinr=.false.,q_midsinr_vinit=.false.
+    integer :: L_val=1
+    real(chm_real),pointer :: v_1ij(:,:,:)=>Null(), &
+                              v_2ij(:,:,:)=>Null()
+#endif
     !
 #if KEY_STRINGM==1 /*  VO stringm v */
     integer :: oldiol
@@ -104,6 +112,9 @@ contains
     !
     !--LNI add for reading dynamics RESTART FILE
     official = .false.
+    use_label = .false.
+    model = 0
+    modfl = 0
     call chmalloc('coorio.src','coorio','islct',natom,intg=islct)
 
     if (iomode.lt.0) then
@@ -116,6 +127,13 @@ contains
           ninput=1
        else if (indxa(comlyn,comlen,'IGNO').gt.0) then
           ninput=3
+       else if (indxa(comlyn,comlen,'MMCIF').gt.0 .or. &
+            indxa(comlyn,comlen,'PDBX').gt.0) then
+          ninput=-6
+          use_label = indxa(comlyn,comlen,'LABE').gt.0
+          if (indxa(comlyn,comlen,'AUTH').gt.0) use_label=.false.
+          model=gtrmi(comlyn,comlen,'MODE',0)
+          if (prnlev >= 2) write(outu,*) ' read mmCIF/PDBx format'
        else if (indxa(comlyn,comlen,'PDB').gt.0) then
           ninput=-1
           nchain=gtrmi(comlyn,comlen, 'NCHA',0)
@@ -242,7 +260,15 @@ contains
           IUIND  => space_pipf(0*n3uind+1 : 1*n3uind)
           IUINDO => space_pipf(1*n3uind+1 : 2*n3uind)
           IVUIND => space_pipf(2*n3uind+1 : 3*n3uind)
-#endif 
+#endif
+          ! dummy memory allocations
+#if KEY_MIDSINR == 1
+          if(associated(v_1ij)) deallocate(v_1ij)
+          if(associated(v_2ij)) deallocate(v_2ij)
+          allocate(v_1ij(3,L_val,natom))
+          allocate(v_2ij(3,L_val,natom))
+#endif
+          ! 
           IF(INDXA(COMLYN,COMLEN,'DELT').GT.0)THEN
              CALL READYN(IUNIT,NATOM, &
                   IX1,IY1,IZ1, &
@@ -261,6 +287,10 @@ contains
 #endif
                   JDUM,JDUM, &
                   JDUM,JDUM,JDUM,JDUM,DUM,DUM,JDUM,LDYNA &
+#if KEY_MIDSINR == 1
+                  ,q_midsinr,q_midsinr_vinit     &
+                  ,v_1ij,v_2ij,L_val             &
+#endif
 #if KEY_BLOCK==1
                   ,.FALSE.,.FALSE.,JDUM,IDM,IDM,IDM,JDUM &    /*ldm*/
 #endif
@@ -289,6 +319,10 @@ contains
 #endif
                   JDUM,JDUM, &
                   JDUM,JDUM,JDUM,JDUM,DUM,DUM,JDUM,LDYNA &
+#if KEY_MIDSINR == 1
+                  ,q_midsinr,q_midsinr_vinit     &
+                  ,v_1ij,v_2ij,L_val             &
+#endif
 #if KEY_BLOCK==1
                   ,.FALSE.,.FALSE.,JDUM,IDM,IDM,IDM,JDUM &   /*ldm*/
 #endif
@@ -317,6 +351,10 @@ contains
 #endif
                   JDUM,JDUM, &
                   JDUM,JDUM,JDUM,JDUM,DUM,DUM,JDUM,LDYNA &
+#if KEY_MIDSINR == 1
+                  ,q_midsinr,q_midsinr_vinit     &
+                  ,v_1ij,v_2ij,L_val             &
+#endif
 #if KEY_BLOCK==1
                   ,.FALSE.,.FALSE.,JDUM,IDM,IDM,IDM,JDUM &  /*ldm*/
 #endif
@@ -330,6 +368,12 @@ contains
           ELSE
              CALL WRNDIE(0,'<COORIO>','Unknown READ COOR DYNR option')
           ENDIF
+
+          ! deallocate memories
+#if KEY_MIDSINR == 1
+          if(associated(v_1ij)) deallocate(v_1ij)
+          if(associated(v_2ij)) deallocate(v_2ij)
+#endif
 #if KEY_STRINGM==0 /* (string)  VO stringm v */
           if(allocated(space_rl1)) &
                call chmdealloc('coorio.src','COORIO','space_rl1',7*NATOM,crl=space_rl1)
@@ -432,7 +476,8 @@ contains
           CALL CREAD(IUNIT,TITLEB,NTITLB,ICNTRL,X,Y,Z,WMAIN,NATOM, &
                NINPUT,ISLCT,IOFFS, &
                RES,NRES,ATYPE,IBASE,IFILE,IFREEA, &
-               SEGID,RESID,NICTOT,NSEG,LRSID,LFREE,ILINE,80,MODEL,OFFICIAL,NCHAIN)
+               SEGID,RESID,NICTOT,NSEG,LRSID,LFREE,ILINE,80,MODEL,OFFICIAL,NCHAIN, &
+               USE_LABEL)
        ELSE
           CALL CREADU(IUNIT,X,Y,Z,WMAIN,NATOM,ISLCT, &
                RES,NRES,ATYPE,IBASE,SEGID,RESID,NICTOT,NSEG, &
@@ -482,7 +527,11 @@ contains
        MODECW=1
        IF(INDXA(COMLYN,COMLEN,'FILE').NE.0) MODECW=1
        IF(INDXA(COMLYN,COMLEN,'CARD').NE.0) MODECW=2
-       IF(INDXA(COMLYN,COMLEN,'PDB').NE.0) THEN
+       IF(INDXA(COMLYN,COMLEN,'MMCIF').NE.0 .OR. &
+            INDXA(COMLYN,COMLEN,'PDBX').NE.0) THEN
+          MODECW=7
+          IF(PRNLEV >= 2) WRITE(OUTU,*) ' Write mmCIF/PDBx format'
+       ELSE IF(INDXA(COMLYN,COMLEN,'PDB').NE.0) THEN
           MODECW=4
           OFFICIAL = INDXA(COMLYN,COMLEN,'OFFI').GT.0
           IF(OFFICIAL .AND. PRNLEV >= 2)THEN
@@ -498,13 +547,20 @@ contains
        IOFFS=GTRMI(COMLYN,COMLEN,'OFFS',0)
        IMODE=0
        ! LNI Check if NMR model is to be written to PDB file
-       IF(MODECW.EQ.4)THEN
+       IF(MODECW.EQ.4 .OR. MODECW.EQ.7)THEN
           MODEL=GTRMI(COMLYN,COMLEN,'MODE',0)
           MODFL=0
           ! MODFL= 0 don't force header or END line writing
           !        1 force header, 2 force END, 3 force both header and END
-          IF(INDXA(COMLYN,COMLEN,'FIRS').NE.0) MODFL=1
-          IF(INDXA(COMLYN,COMLEN,'LAST').NE.0) MODFL=MODFL+2
+          IF(MODECW.EQ.7) THEN
+             IF(INDXA(COMLYN,COMLEN,'FIRS').NE.0 .OR. &
+                  INDXA(COMLYN,COMLEN,'LAST').NE.0 .OR. &
+                  INDXA(COMLYN,COMLEN,'LABE').NE.0) &
+                  CALL WRNDIE(-2,'<COORIO>','Unsupported mmCIF write option')
+          ELSE
+             IF(INDXA(COMLYN,COMLEN,'FIRS').NE.0) MODFL=1
+             IF(INDXA(COMLYN,COMLEN,'LAST').NE.0) MODFL=MODFL+2
+          ENDIF
        ENDIF
        CALL SELRPN(COMLYN,COMLEN,ISLCT,NATOM,1,IMODE, &
             .FALSE.,1,' ',0,RESID,RES,IBASE,SEGID,NICTOT,NSEG, &
@@ -591,6 +647,7 @@ contains
     !                  FIRST|LAST keyword forces writing of header|END. Oct-03 (c31a1). L.Nilsson
     !     MODE = 5 FOR DUMB CARD OUTPUT
     !     MODE = 6 FOR .XYZ OUTPUT sept 2016  rick venable
+    !     MODE = 7 FOR mmCIF/PDBx FORMAT
     !
     !     Overhauled by Bernard R. Brooks   1983
     !
@@ -605,6 +662,7 @@ contains
     use chutil,only:atomid
     use memory
     use machutil,only:die
+    use mmcifio_mod, only: mmcif_write_coor
 
     implicit none
 
@@ -836,6 +894,9 @@ contains
        IF(MODEL.EQ.0 .or. MODEL .LE. 0 .OR. MODFL.GE.2)  &
             WRITE(IUNIT,'(A)') 'END'
        !       End Procedure WRITE-PDB-FILE
+    ELSE IF (MODE.EQ.7) THEN
+       CALL MMCIF_WRITE_COOR(IUNIT,TITLE,NTITL,X,Y,Z,WMAIN,RES,ATYPE,IBASE, &
+            NRES,NATOM,ISLCT,MODEL)
     ELSE IF (MODE.EQ.5) THEN
        !       DUMB CARD OUTPUT
        DO I=1,NATOM
@@ -1180,7 +1241,7 @@ contains
   subroutine cread(iunit,title,ntitl,icntrl,x,y,z,wmain,natom, &
        ninput,islct,ioffs,res,nres,atype,ibase, &
        ifile,freeat,segid,resid,nictot,nseg,lrsid,lfree,lyn,mxlen, &
-       model,official,nchain_)
+       model,official,nchain_,use_label_)
     !-----------------------------------------------------------------------
     !     COORDINATE READING ROUTINES CARD READING SECTION MODIFIED TO
     !     MAP COORDINATES BY THE SEQUENCE NUMBER, RESIDUE TYPE, AND ATOM
@@ -1218,6 +1279,7 @@ contains
     use image
     use parallel  ! mh050712
     use chutil,only:initia,matom
+    use mmcifio_mod, only: mmcif_read_coor
 
     implicit none
     INTEGER IUNIT,NTITL
@@ -1237,9 +1299,11 @@ contains
     !
     ! VO 9/2014 :  make nchain optional for compatibility with older code
     integer, optional, intent(in) :: nchain_
+    logical, optional, intent(in) :: use_label_
     !
     INTEGER MXLEN,MODEL,NCHAIN
     LOGICAL OFFICIAL
+    LOGICAL USE_LABEL
 
     !
     CHARACTER(len=4) HDR
@@ -1267,6 +1331,7 @@ contains
     !
     ! VO 9/2014 :  make nchain optional for compatibility with older code
     if (present(nchain_)) then ; nchain=nchain_ ; else ; nchain=0 ; endif
+    if (present(use_label_)) then ; use_label=use_label_ ; else ; use_label=.false. ; endif
     !
     eof=.false.
     nslct=0
@@ -1472,6 +1537,11 @@ contains
        ENDIF
        !
        CALL TRYORO(IUNIT,'FORMATTED')
+       IF(NINPUT.EQ.-6) THEN
+          CALL MMCIF_READ_COOR(IUNIT,X,Y,Z,WMAIN,NATOM,ISLCT,IOFFS,RES,NRES, &
+               ATYPE,IBASE,SEGID,RESID,NICTOT,NSEG,LRSID,MODEL,USE_LABEL)
+          GOTO 900
+       ENDIF
        IF(NINPUT.GT.1) GOTO 90
        !
        ! READ COORDINATES FROM CARDS
@@ -1938,13 +2008,30 @@ contains
 !--     ENDIF
 !-- ##ENDIF
 #if KEY_PARALLEL==1
+    ! Precondition under -a RESIZE: every rank's X, Y, Z, WMAIN must
+    ! already be sized to at least NATOM before this point.  PSND8 is a
+    ! thin MPI_BCAST wrapper that does NOT size its receive buffer.
+    ! If the caller hands cread an undersized array (the resize-managed
+    ! globals start at size i0=1 in allocate_coord_ltm), this write
+    ! overflows on non-master ranks -- the same shape of bug fixed for
+    ! SEQRDR in psfres.F90 (commit 21477b0b9).
+    !
+    ! Current callers all satisfy this precondition because the PSF-read
+    ! / GENERATE pipeline calls resize_coord(NATOM) on every rank before
+    ! any "read coor card" reaches here.  mainio.F90's COOR-read case
+    ! also calls resize_coord defensively just before invoking coorio,
+    ! to make the contract explicit.  Other callers -- stringm, TMD,
+    ! DIMS, COMP variants -- are responsible for ensuring their own
+    ! buffer arguments are sized correctly across ranks.
+    !
+    ! Regression test: test/c51test/cread_broadcast_resize.inp.
     CALL PSND8(X, NATOM)
     CALL PSND8(Y, NATOM)
     CALL PSND8(Z, NATOM)
     CALL PSND8(WMAIN, NATOM)
     CALL PSND4(QCRYS,1)
     CALL PSND8(XTLABC,6)
-#endif 
+#endif
     IF(QCRYS .AND. XDIM.GT.0) THEN
        xucold(1:6) = xucell(1:6)
        CALL XTLLAT(XUCELL,XTLABC)
@@ -1959,4 +2046,3 @@ contains
     RETURN
   END SUBROUTINE CREAD
 end module coorio_mod
-

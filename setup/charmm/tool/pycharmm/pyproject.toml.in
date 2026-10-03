@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = 'pycharmm'
+version = '@CHARMM_VERSION_MAJOR@.@CHARMM_VERSION_MINOR@'
+readme = 'Readme.md'
+maintainers = [ { name = 'Josh Buckner', email = 'bucknerj@umich.edu' } ]
+description = 'a python library for molecular dynamics with CHARMM'
+requires-python = '>=3.4'
+dependencies = ['pandas', 'numpy', 'scipy']
+
+[project.optional-dependencies]
+# Needed only by pycharmm.ligandff, which builds CHARMM force fields for small
+# molecules from AMBER GAFF2. Kept out of `dependencies` so a normal pycharmm
+# install stays light and `import pycharmm` never requires them; install with
+# `pip install pycharmm[ligandff]`. AmberTools (antechamber/parmchk2/tleap) is a
+# separate, non-pip requirement for building (not for reading) a force field.
+ligandff = ['parmed', 'rdkit']

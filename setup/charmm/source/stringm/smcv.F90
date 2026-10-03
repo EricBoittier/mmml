@@ -41,7 +41,7 @@
       use multicom_aux; 
 #endif
       use consta
-      use mpi
+      use mpi_f08
       use cvio, only : writcv, readcv; use coorio_mod, only : cwrite, cread; use ctitla
       use cv_common ! to prevent cv from getting masked, put this last
       use parallel, only: psnd4, psnd8
@@ -112,19 +112,19 @@
 !
 #if (KEY_PARALLEL==1)
 #if (KEY_SINGLE==1)
- integer :: mpifloat=MPI_REAL 
+ TYPE(MPI_Datatype) :: mpifloat=MPI_REAL 
 #endif
 #if (KEY_SINGLE==0)
- integer :: mpifloat=MPI_REAL8 
+ TYPE(MPI_Datatype) :: mpifloat=MPI_REAL8 
 #endif
 #if (KEY_INTEGER8==0)
- integer :: mpiint=MPI_INTEGER 
+ TYPE(MPI_Datatype) :: mpiint=MPI_INTEGER 
 #endif
 #if (KEY_INTEGER8==1)
- integer :: mpiint=MPI_INTEGER8 
+ TYPE(MPI_Datatype) :: mpiint=MPI_INTEGER8 
 #endif
- integer :: mpichar=MPI_CHARACTER
- integer :: mpibool=MPI_LOGICAL
+ TYPE(MPI_Datatype) :: mpichar=MPI_CHARACTER
+ TYPE(MPI_Datatype) :: mpibool=MPI_LOGICAL
 #endif
 !
 ! interface to frames_align_string routine (needed since routine is not in a module and I use optional args
@@ -217,12 +217,17 @@
        ivv2=indxa(comlyn, comlen, 'VV2')
        iorig=indxa(comlyn, comlen, 'ORIG')
        ileap=indxa(comlyn, comlen, 'LEAP')
-       if ((ivver+ivv2+iorig).gt.0) then
-        call wrndie(0,whoami,trim('ONLY LEAP-FROG DYNAMICS ARE SUPPORTED. NOTHING DONE'))
+       !if ((ivver+ivv2+iorig).gt.0) then
+       if ((ivv2+iorig).gt.0) then
+        call wrndie(0,whoami,trim('ONLY LEAP-FROG or VELOCITY VERLET DYNAMICS ARE SUPPORTED. NOTHING DONE'))
         return
        endif
 ! force LEAP DYNAMICS
-       call joinwd(comlyn, mxcmsz, comlen, 'LEAP ', 5)
+       if(ileap > 0) then
+          call joinwd(comlyn, mxcmsz, comlen, 'LEAP ', 5)
+       else if(ivver > 0) then
+          call joinwd(comlyn, mxcmsz, comlen, 'VVER ', 5)
+       end if
 !ccccccccccccccc PARSE OTHER DYNAMICS OPTIONS
        voronoi_hist_on=(indxa(comlyn, comlen, 'VORO').gt.0)
        if (voronoi_hist_on) then
@@ -2300,7 +2305,7 @@
 #if (KEY_MULTICOM==1)
       use multicom_aux; 
 #endif
-      use mpi
+      use mpi_f08
       use number
       use param_store, only: set_param
       use parallel, only: psnd4, psnd8
@@ -2311,19 +2316,19 @@
 !
 #if (KEY_PARALLEL==1)
 #if (KEY_SINGLE==1)
- integer :: mpifloat=MPI_REAL 
+ TYPE(MPI_Datatype) :: mpifloat=MPI_REAL 
 #endif
 #if (KEY_SINGLE==0)
- integer :: mpifloat=MPI_REAL8 
+ TYPE(MPI_Datatype) :: mpifloat=MPI_REAL8 
 #endif
 #if (KEY_INTEGER8==0)
- integer :: mpiint=MPI_INTEGER 
+ TYPE(MPI_Datatype) :: mpiint=MPI_INTEGER 
 #endif
 #if (KEY_INTEGER8==1)
- integer :: mpiint=MPI_INTEGER8 
+ TYPE(MPI_Datatype) :: mpiint=MPI_INTEGER8 
 #endif
- integer :: mpichar=MPI_CHARACTER
- integer :: mpibool=MPI_LOGICAL
+ TYPE(MPI_Datatype) :: mpichar=MPI_CHARACTER
+ TYPE(MPI_Datatype) :: mpibool=MPI_LOGICAL
 #endif
 !
       integer*4 :: ierror
@@ -2525,7 +2530,7 @@
 #if (KEY_MULTICOM==1)
       use multicom_aux; 
 #endif
-      use mpi
+      use mpi_f08
       use param_store, only: set_param
 !
       implicit none
@@ -2593,7 +2598,7 @@
 #if (KEY_MULTICOM==1)
       use multicom_aux; 
 #endif
-      use mpi
+      use mpi_f08
 !cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
       implicit none
 !
@@ -2727,7 +2732,7 @@
 #if (KEY_MULTICOM==1)
       use multicom_aux; 
 #endif
-      use mpi
+      use mpi_f08
       implicit none
 !====================================================================
       CHARACTER(LEN=*) :: COMLYN
@@ -3232,7 +3237,7 @@
       use multicom_aux; 
 #endif
       use string
-      use mpi ! deal with other platforms later (never)
+      use mpi_f08 ! deal with other platforms later (never)
       use number
       use parallel, only: psnd4, psnd8
 !
@@ -3240,19 +3245,19 @@
 !
 #if (KEY_PARALLEL==1)
 #if (KEY_SINGLE==1)
- integer :: mpifloat=MPI_REAL 
+ TYPE(MPI_Datatype) :: mpifloat=MPI_REAL 
 #endif
 #if (KEY_SINGLE==0)
- integer :: mpifloat=MPI_REAL8 
+ TYPE(MPI_Datatype) :: mpifloat=MPI_REAL8 
 #endif
 #if (KEY_INTEGER8==0)
- integer :: mpiint=MPI_INTEGER 
+ TYPE(MPI_Datatype) :: mpiint=MPI_INTEGER 
 #endif
 #if (KEY_INTEGER8==1)
- integer :: mpiint=MPI_INTEGER8 
+ TYPE(MPI_Datatype) :: mpiint=MPI_INTEGER8 
 #endif
- integer :: mpichar=MPI_CHARACTER
- integer :: mpibool=MPI_LOGICAL
+ TYPE(MPI_Datatype) :: mpichar=MPI_CHARACTER
+ TYPE(MPI_Datatype) :: mpibool=MPI_LOGICAL
 #endif
 !
       integer :: ierror, i, ifile, fmt_r_len
@@ -3649,7 +3654,7 @@
 #if (KEY_MULTICOM==1)
       use multicom_aux; 
 #endif
-      use mpi
+      use mpi_f08
 !
       implicit none
  character(len=132)::info(21)=(/'','','','','','','','','','','','','','','','','','','','',''/);! output buffer

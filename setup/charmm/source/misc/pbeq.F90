@@ -136,6 +136,62 @@ module pbeq
 
 contains
 
+  !> Allocate a GSBP basis-sized array, resizing it if the basis has changed.
+  !!
+  !! PREP2 sizes these from NTPOL, but NTPOL is re-established later when
+  !! REAGD0 reads a matrix file, and the basis arrays were not resized with
+  !! it.  An array could then be shorter than the NTPOL used to index it --
+  !! which is what killed a run in SPHE_STPOL, writing COEFX(1:NTPOL) into an
+  !! array sized for a smaller basis.
+  subroutine gsbp_basis_alloc(name, n, a)
+    use memory
+    character(len=*), intent(in) :: name
+    integer, intent(in) :: n
+    real(chm_real), allocatable, intent(inout) :: a(:)
+
+    if (allocated(a)) then
+       if (size(a) == n) return
+       call chmdealloc('pbeq.src', 'gsbp_basis_alloc', name, size(a), crl=a)
+    endif
+    call chmalloc('pbeq.src', 'gsbp_basis_alloc', name, n, crl=a)
+  end subroutine gsbp_basis_alloc
+
+  !> Integer counterpart of gsbp_basis_alloc.
+  subroutine gsbp_basis_alloc_int(name, n, a)
+    use memory
+    character(len=*), intent(in) :: name
+    integer, intent(in) :: n
+    integer, allocatable, intent(inout) :: a(:)
+
+    if (allocated(a)) then
+       if (size(a) == n) return
+       call chmdealloc('pbeq.src', 'gsbp_basis_alloc', name, size(a), intg=a)
+    endif
+    call chmalloc('pbeq.src', 'gsbp_basis_alloc', name, n, intg=a)
+  end subroutine gsbp_basis_alloc_int
+
+  !> Free a basis-sized array at the length it was allocated with, rather than
+  !! at whatever NTPOL happens to be now -- which for the same reason as above
+  !! need not be the length it was allocated with.
+  subroutine gsbp_basis_free(name, a)
+    use memory
+    character(len=*), intent(in) :: name
+    real(chm_real), allocatable, intent(inout) :: a(:)
+
+    if (.not. allocated(a)) return
+    call chmdealloc('pbeq.src', 'gsbp_basis_free', name, size(a), crl=a)
+  end subroutine gsbp_basis_free
+
+  !> Integer counterpart of gsbp_basis_free.
+  subroutine gsbp_basis_free_int(name, a)
+    use memory
+    character(len=*), intent(in) :: name
+    integer, allocatable, intent(inout) :: a(:)
+
+    if (.not. allocated(a)) return
+    call chmdealloc('pbeq.src', 'gsbp_basis_free', name, size(a), intg=a)
+  end subroutine gsbp_basis_free_int
+
 #if KEY_PBEQ==0 /*pbeq_main*/
   SUBROUTINE PBEQ0
     CALL WRNDIE(-1,'<CHARMM>','PBEQ code is not compiled.')
@@ -276,7 +332,11 @@ contains
        ENDIF
 
        IF(QPBF)THEN
-          call chmdealloc('pbeq.src','PBEQ0','IPHIP',NCEL3,cr4=IPHIP)
+          !     Allocated conditionally in PREP2 (.not.QPHIX .or. .not.QMIJ),
+          !     so it need not exist here: a setup with no static external
+          !     field has none, and freeing it ended the run.
+          if (allocated(IPHIP)) &
+               call chmdealloc('pbeq.src','PBEQ0','IPHIP',NCEL3,cr4=IPHIP)
           call chmdealloc('pbeq.src','PBEQ0','RXNFX',NATOM,crl=RXNFX)
           call chmdealloc('pbeq.src','PBEQ0','RXNFY',NATOM,crl=RXNFY)
           call chmdealloc('pbeq.src','PBEQ0','RXNFZ',NATOM,crl=RXNFZ)
@@ -308,8 +368,15 @@ contains
        ENDIF
 
        IF(QGSBP) THEN
-          call chmdealloc('pbeq.src','PBEQ0','IPHIP',NCEL3,cr4=IPHIP)
-          IF(QGAB) call chmdealloc('pbeq.src','PBEQ0','IPHIX',NCEL3,cr4=IPHIX)
+          !     Allocated conditionally in PREP2 (.not.QPHIX .or. .not.QMIJ),
+          !     so it need not exist here: a setup with no static external
+          !     field has none, and freeing it ended the run.
+          if (allocated(IPHIP)) &
+               call chmdealloc('pbeq.src','PBEQ0','IPHIP',NCEL3,cr4=IPHIP)
+          !     QGAB does not match where IPHIX is allocated (REAGD0/REAGD1
+          !     allocate it whenever PHIX is read), so ask the array itself.
+          if (allocated(IPHIX)) &
+               call chmdealloc('pbeq.src','PBEQ0','IPHIX',NCEL3,cr4=IPHIX)
           call chmdealloc('pbeq.src','PBEQ0','LSTRA',NATOM,intg=LSTRA)
           call chmdealloc('pbeq.src','PBEQ0','LSTRB',NATOM,intg=LSTRB)
           call chmdealloc('pbeq.src','PBEQ0','RXNAFX',NATOM,crl=RXNAFX)
@@ -318,26 +385,27 @@ contains
           call chmdealloc('pbeq.src','PBEQ0','RXNBFX',NATOM,crl=RXNBFX)
           call chmdealloc('pbeq.src','PBEQ0','RXNBFY',NATOM,crl=RXNBFY)
           call chmdealloc('pbeq.src','PBEQ0','RXNBFZ',NATOM,crl=RXNBFZ)
-          call chmdealloc('pbeq.src','PBEQ0','MIJ',NTPOL*NTPOL,crl=MIJ)
-          call chmdealloc('pbeq.src','PBEQ0','COEF',NTPOL,crl=COEF)
-          call chmdealloc('pbeq.src','PBEQ0','BNORM',NTPOL,crl=BNORM)
-          call chmdealloc('pbeq.src','PBEQ0','LSTPOL',NTPOL,intg=LSTPOL)
+          call gsbp_basis_free('MIJ', MIJ)
+          call gsbp_basis_free('COEF', COEF)
+          call gsbp_basis_free('BNORM', BNORM)
+          call gsbp_basis_free_int('LSTPOL', LSTPOL)
 
 #if KEY_SCCDFTB==1
-          if (qmused_sccdftb) then
-            call chmdealloc('pbeq.src','PBEQ0','COEFX',NTPOL,crl=COEFX)
-            call chmdealloc('pbeq.src','PBEQ0','MQ',NTPOL*NSCCRP,crl=MQ)
-          else
-            call chmdealloc('pbeq.src','PBEQ0','MQ',NTPOL,crl=MQ)
-          end if
+          ! Freed unconditionally for the same reason it is allocated
+          ! unconditionally: whether SCC-DFTB is in use can differ between
+          ! the setup and the teardown, and keying the lifetime on it leaks
+          ! the array in one direction and frees an unallocated one in the
+          ! other.
+          call gsbp_basis_free('COEFX', COEFX)
+          call gsbp_basis_free('MQ', MQ)
 #else
-          call chmdealloc('pbeq.src','PBEQ0','MQ',NTPOL,crl=MQ)
+          call gsbp_basis_free('MQ', MQ)
 #endif 
 
           IF(QRECTBOX) THEN
-             call chmdealloc('pbeq.src','PBEQ0','LSTPX',NTPOL,intg=LSTPX)
-             call chmdealloc('pbeq.src','PBEQ0','LSTPY',NTPOL,intg=LSTPY)
-             call chmdealloc('pbeq.src','PBEQ0','LSTPZ',NTPOL,intg=LSTPZ)
+             call gsbp_basis_free_int('LSTPX', LSTPX)
+             call gsbp_basis_free_int('LSTPY', LSTPY)
+             call gsbp_basis_free_int('LSTPZ', LSTPZ)
           ELSEIF(QSPHERE) THEN
              call chmdealloc('pbeq.src','PBEQ0','LSTPL',NTPOL,intg=LSTPL)
              call chmdealloc('pbeq.src','PBEQ0','LSTPM',NTPOL,intg=LSTPM)
@@ -346,9 +414,9 @@ contains
              call chmdealloc('pbeq.src','PBEQ0','LSTPM',NTPOL,intg=LSTPM)
              call chmdealloc('pbeq.src','PBEQ0','MMIJ',NTPOL*NTPOL,crl=MMIJ)
           ELSEIF(QRFRECT) THEN
-             call chmdealloc('pbeq.src','PBEQ0','LSTPX',NTPOL,intg=LSTPX)
-             call chmdealloc('pbeq.src','PBEQ0','LSTPY',NTPOL,intg=LSTPY)
-             call chmdealloc('pbeq.src','PBEQ0','LSTPZ',NTPOL,intg=LSTPZ)
+             call gsbp_basis_free_int('LSTPX', LSTPX)
+             call gsbp_basis_free_int('LSTPY', LSTPY)
+             call gsbp_basis_free_int('LSTPZ', LSTPZ)
              call chmdealloc('pbeq.src','PBEQ0','MMIJ',NTPOL*NTPOL,crl=MMIJ)
           ELSEIF(QRFSPHE) THEN
              call chmdealloc('pbeq.src','PBEQ0','LSTPL',NTPOL,intg=LSTPL)
@@ -364,8 +432,15 @@ contains
         
 !     SMBP (JZ_UW12)
       IF(QSMBP) THEN
-          call chmdealloc('pbeq.src','PBEQ0','IPHIP',NCEL3,cr4=IPHIP)
-          IF(QGAB) call chmdealloc('pbeq.src','PBEQ0','IPHIX',NCEL3,cr4=IPHIX)
+          !     Allocated conditionally in PREP2 (.not.QPHIX .or. .not.QMIJ),
+          !     so it need not exist here: a setup with no static external
+          !     field has none, and freeing it ended the run.
+          if (allocated(IPHIP)) &
+               call chmdealloc('pbeq.src','PBEQ0','IPHIP',NCEL3,cr4=IPHIP)
+          !     QGAB does not match where IPHIX is allocated (REAGD0/REAGD1
+          !     allocate it whenever PHIX is read), so ask the array itself.
+          if (allocated(IPHIX)) &
+               call chmdealloc('pbeq.src','PBEQ0','IPHIX',NCEL3,cr4=IPHIX)
           call chmdealloc('pbeq.src','PBEQ0','LSTRA',NATOM,intg=LSTRA)
           call chmdealloc('pbeq.src','PBEQ0','LSTRB',NATOM,intg=LSTRB)
           call chmdealloc('pbeq.src','PBEQ0','RXNAFX',NATOM,crl=RXNAFX)
@@ -708,6 +783,127 @@ contains
 
   END SUBROUTINE PBEQ0
   !
+  !> Hand back a zero GSBP energy, for the paths that refuse to contribute
+  !! one.  The scalars have to go with it: a script is free to lower BOMLEV,
+  !! and one that does would otherwise read ?GSBE, ?GSBP and ?GSBC still
+  !! holding the numbers of the system GSBP was prepared for.
+  SUBROUTINE GSBP_NO_ENERGY(EGSBP)
+    use number, only: ZERO
+    use param_store, only: set_param
+    real(chm_real), intent(out) :: EGSBP
+
+    EGSBP = ZERO
+    call set_param('GSBE', ZERO)
+    call set_param('GSBP', ZERO)
+    call set_param('GSBC', ZERO)
+  END SUBROUTINE GSBP_NO_ENERGY
+
+#if KEY_SCCDFTB==1
+  !> Whether the SCC-DFTB path can safely read the static external field.
+  !!
+  !! SCCGSBP0 interpolates the potential onto each QM atom from the eight grid
+  !! points around it.  The grid arrives there as an assumed-size (*) dummy,
+  !! so it carries no bounds and nothing on the way in is checked: not that
+  !! the array exists, not that it is as long as NCLX*NCLY*NCLZ says, and not
+  !! that the atom maps inside it.  Each of those is a way to read memory that
+  !! is not the grid, and the run dies with no message of any kind.
+  !! -fcheck=bounds cannot see any of it, for the same assumed-size reason.
+  !!
+  !! Three things are asked here, cheapest first, and each is a real failure
+  !! seen in practice rather than a hypothetical:
+  !!
+  !!  1. the grid exists.  This is what bucknerj/dev#60 actually died of:
+  !!     leaving a GSBP setup in place across a change of system skips the
+  !!     allocation block in PREP2, and IPHIX is passed in unallocated.
+  !!  2. the grid is as long as its own dimensions claim, so that an index
+  !!     built from NCLX/NCLY/NCLZ lands in it.
+  !!  3. every QM atom maps inside it.  This is the precondition that
+  !!     comparing atom counts only approximates -- two systems can have the
+  !!     same number of atoms and still occupy different space.
+  !!
+  !! The cost is one comparison for the grid and a few per QM atom, against a
+  !! full SCF.  Each message names what was wrong rather than only that
+  !! something was, and flushes, because a message is worth nothing if the
+  !! next thing that happens is the segmentation fault it exists to prevent.
+  SUBROUTINE GSBP_SCC_GRID_READY(NATOM,X,Y,Z,QOK)
+    use stream, only: OUTU
+    use number, only: ZERO
+    use sccdftb, only: NSCCTC, NSCCRP, IQMLST
+    INTEGER, intent(in) :: NATOM
+    real(chm_real), intent(in) :: X(*),Y(*),Z(*)
+    LOGICAL, intent(out) :: QOK
+    INTEGER I,K,JQ,IX,IY,IZ
+
+    QOK = .FALSE.
+
+    !     A grid with no extent, or a spacing of zero, is not a grid the
+    !     interpolation can be asked about: DCEL is its divisor.  This must
+    !     be a refusal and not a reason to skip the checks below, or the
+    !     guard would stand down in the one state where it is needed most.
+    IF(NCLX < 1 .OR. NCLY < 1 .OR. NCLZ < 1 .OR. DCEL <= ZERO) THEN
+       WRITE(OUTU,'(A,3I6,A,F10.4,A)') &
+            ' GSBP> the grid is ', NCLX,NCLY,NCLZ, &
+            ' points at a spacing of ', DCEL, ' A.'
+       call flush(OUTU)
+       RETURN
+    ENDIF
+
+    IF(.NOT. allocated(IPHIX)) THEN
+       WRITE(OUTU,'(A)') &
+            ' GSBP> the static external field grid does not exist.'
+       WRITE(OUTU,'(A)') &
+            ' GSBP> SCC-DFTB with GSBP reads it for every QM atom;' // &
+            ' read PHIX in, and after a change of system reset first.'
+       call flush(OUTU)
+       RETURN
+    ENDIF
+
+    IF(size(IPHIX) < NCLX*NCLY*NCLZ) THEN
+       WRITE(OUTU,'(A,I10,A,I10,A)') &
+            ' GSBP> the static external field grid holds ', size(IPHIX), &
+            ' points, but the box it is indexed by needs ', &
+            NCLX*NCLY*NCLZ, '.'
+       call flush(OUTU)
+       RETURN
+    ENDIF
+
+    QOK = .TRUE.
+    DO K = 1,NSCCRP
+       DO I = 1,NSCCTC
+          JQ = IQMLST(I,K)
+          !     The QM list is set up once and outlives the system as readily
+          !     as the grid does, so an entry can name an atom that no longer
+          !     exists.  Reading its coordinates is already past the end of X.
+          IF(JQ < 1 .OR. JQ > NATOM) THEN
+             QOK = .FALSE.
+             WRITE(OUTU,'(A,I8,A,I8,A)') &
+                  ' GSBP> QM atom list names atom ', JQ, &
+                  ', but the system has ', NATOM, ' atoms.'
+             call flush(OUTU)
+             RETURN
+          ENDIF
+          IX = INT((X(JQ)+TRANX-XBCEN)/DCEL)+1
+          IY = INT((Y(JQ)+TRANY-YBCEN)/DCEL)+1
+          IZ = INT((Z(JQ)+TRANZ-ZBCEN)/DCEL)+1
+          !     The interpolation reads grid planes IX and IX+1, so the last
+          !     cell an atom may occupy is NCLX-1, and likewise in Y and Z.
+          IF(IX < 1 .OR. IX >= NCLX .OR. &
+             IY < 1 .OR. IY >= NCLY .OR. &
+             IZ < 1 .OR. IZ >= NCLZ) THEN
+             QOK = .FALSE.
+             WRITE(OUTU,'(A,I8,A,3F10.3)') &
+                  ' GSBP> atom ', JQ, ' is at ', X(JQ),Y(JQ),Z(JQ)
+             WRITE(OUTU,'(A,3I6,A,3I6,A)') &
+                  ' GSBP> which is grid cell ', IX,IY,IZ, &
+                  ', outside the ', NCLX,NCLY,NCLZ, ' point grid.'
+             call flush(OUTU)
+             RETURN
+          ENDIF
+       ENDDO
+    ENDDO
+  END SUBROUTINE GSBP_SCC_GRID_READY
+#endif
+  !
   ! GSBP0 and PREP2 moved here from gsbp.src to avoid circular module dependency. LNI October 2009
   SUBROUTINE GSBP0(NATOM,X,Y,Z,CG,EGSBP,DX,DY,DZ,ICALL,QPRIN &
 #if KEY_SCCDFTB==1
@@ -767,6 +963,7 @@ contains
     real(chm_real),allocatable,dimension(:,:) :: COEFB
     real(chm_real)  ESCCTB2
     INTEGER I,II,J,N 
+    LOGICAL QGRIDOK
 #endif 
     !     QC_UW04
 
@@ -784,6 +981,45 @@ contains
 #endif 
     !C      write(*,*)'GSBP0-begin>me,icall,ntpol,qlbox=',
     !C     $     mynod,icall,ntpol,qlbox
+    !
+    !     The basis functions and the matrices were built for one particular
+    !     system.  If the system has been changed since -- a stream file that
+    !     set GSBP up and returned without a RESET, then a different molecule
+    !     read in -- then continuing would evaluate a boundary potential from
+    !     the matrices of another molecule.  That used to be a segmentation fault
+    !     in SPHE_STPOL, because the basis arrays were sized for the old
+    !     system; with those arrays now resized it would instead be a quiet
+    !     wrong answer, which is worse.  Say so and stop.
+    !
+    !     The atom count is the cheap half of the question, and it is the half
+    !     that names the remedy: a system of a different size is unambiguously
+    !     a system GSBP was not prepared for.  It is not the whole question,
+    !     and neither half covers the other -- measured both ways, with each
+    !     check disabled in turn.  Without this one the reported case reaches
+    !     the grid lookup and segmentation-faults; without the one below, two
+    !     systems of equal size do.
+#if KEY_SCCDFTB==1
+    !     Equal atom counts are not the same system, and a matching count says
+    !     nothing about whether the grid the SCC-DFTB path is about to read
+    !     exists, is long enough, or has the QM atoms on it.  Ask those three
+    !     directly, since they are what that path actually depends on.
+    !
+    !     Gated on the SCC path being the one taken, and on nothing else.
+    !     QSCCTB is false on the setup call from PBEQ0 and on every call from
+    !     MC, which is what keeps this off the paths that do not read the
+    !     grid; whether the grid is fit to read is the question, so it is
+    !     asked inside rather than made a condition of asking.
+    IF(qmused_sccdftb .AND. QSCCTB .AND. NSCCTC > 0) THEN
+       CALL GSBP_SCC_GRID_READY(NATOM,X,Y,Z,QGRIDOK)
+       IF(.NOT. QGRIDOK) THEN
+          CALL WRNDIE(-5,'<GSBP0>', &
+               'GSBP cannot evaluate SCC-DFTB against this grid; use PBEQ RESET')
+          CALL GSBP_NO_ENERGY(EGSBP)
+          ESCCTB = ZERO
+          RETURN
+       ENDIF
+    ENDIF
+#endif
     !
     IF(ICALL.GT.0) GOTO 99
     !
@@ -1414,7 +1650,7 @@ contains
             MMIJ  ,COEF,COEFX,MQ,COEFB, &
             LSTPX,LSTPY,LSTPZ, &
             ALPX,ALPY,ALPZ,BNORM, &
-            LSTPOL,NCLY,NCLZ,DCEL,IPHIX, &
+            LSTPOL,NCLX,NCLY,NCLZ,DCEL,IPHIX, &
             TRANX,TRANY,TRANZ,XBCEN,YBCEN,ZBCEN,ONE, QBSPL)
        !      ELSEIF (QSPHERE.OR.QRFSPHE) THEN
     ELSEIF (QSPHERE) THEN
@@ -1766,18 +2002,26 @@ contains
        call chmalloc('pbeq.src','PREP2','RXNBFX',NATOM,crl=RXNBFX)
        call chmalloc('pbeq.src','PREP2','RXNBFY',NATOM,crl=RXNBFY)
        call chmalloc('pbeq.src','PREP2','RXNBFZ',NATOM,crl=RXNBFZ)
-       call chmalloc('pbeq.src','PREP2','BNORM',NTPOL,crl=BNORM)
-       call chmalloc('pbeq.src','PREP2','COEF',NTPOL,crl=COEF)  ! coefficients of basis functions
+       call gsbp_basis_alloc('BNORM', NTPOL, BNORM)
+       call gsbp_basis_alloc('COEF', NTPOL, COEF)  ! coefficients of basis functions
 
 #if KEY_SCCDFTB==1
-       if (qmused_sccdftb) & ! coeffs of basis funcs for excluded MM
-         call chmalloc('pbeq.src','PREP2','COEFX',NTPOL,crl=COEFX)
+       ! COEFX holds the basis-function coefficients for the MM atoms
+       ! excluded from the QM/MM interaction.  It is allocated whenever GSBP
+       ! is prepared, not only when SCC-DFTB happens to be in use at that
+       ! moment: the test for it at the point of use (SPHE_STPOL, which zeroes
+       ! COEFX(1:NTPOL)) asks whether SCC-DFTB is in use *then*.  Setting up
+       ! GSBP first and turning SCC-DFTB on afterwards is enough to reach that
+       ! line with the array never allocated, and the run dies in a write with
+       ! no message.  NTPOL is the number of basis functions, so this costs
+       ! nothing worth conditioning on.
+       call gsbp_basis_alloc('COEFX', NTPOL, COEFX)
 
        !  Haibo Yu more memory for replica
        if((.not. qmused_sccdftb) .or. nsccrp == 0) nsccrp=1
-       call chmalloc('pbeq.src','PREP2','MQ',NTPOL*NSCCRP,crl=MQ)  ! M(I,J)*Q(J)
+       call gsbp_basis_alloc('MQ', NTPOL*NSCCRP, MQ)  ! M(I,J)*Q(J)
 #else
-       call chmalloc('pbeq.src','PREP2','MQ',NTPOL,crl=MQ)   ! M(I,J)*Q(J)
+       call gsbp_basis_alloc('MQ', NTPOL, MQ)   ! M(I,J)*Q(J)
 #endif 
 
        call chmalloc('pbeq.src','PREP2','LSTPOL',NTPOL,intg=LSTPOL)  ! a list for basis functions
@@ -12458,13 +12702,7 @@ contains
     !
     DM3_rslt=M2m-M2
     !
-#if KEY_ELSE==1
-!!
-#endif
 !!!      SUBROUTINE NULL_PBEQ2
-#if KEY_ENDIF==1
-!!
-#endif
     return
   end function dm3
 
@@ -21559,9 +21797,6 @@ contains
   !-----------------------------------------------------------------------
   !QC: attach pbeqscc.src below to avoid variable transfers
   !CHARMM Element source/misc/pbeqscc.src $Revision: 1.27 $
-#if KEY_IF==1 || KEY_PBEQ==1
-  
-#endif
 #if KEY_SCCDFTB==1
   !
   !      XIAO_QC_UW0609: Subroutines needed for computing SCC-DFTB in the presence
@@ -22759,9 +22994,6 @@ contains
   end subroutine updrad
 
 #endif /* SCCDFTB*/
-#if KEY_ENDIF==1
-   /*PBEQ*/
-#endif
 
 !CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
   !---------------------------------------------------------------------

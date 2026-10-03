@@ -9,6 +9,20 @@ IF ?QCHEM .NE. 1 THEN
  STOP
 endif
 
+! ?QCHEM only confirms the interface is compiled; the run still spawns the
+! external Q-Chem executable (envi qchemexe "../bin/qchem" below) and then
+! reads its output q1.out.  When Q-Chem is not installed, that open of the
+! missing q1.out is a hard Fortran runtime error.  Self-skip house-style when
+! the executable is absent.
+bomlev -5
+open unit 98 read form name ../bin/qchem
+if ?iostat .ne. 1 then
+   echo "Test NOT performed. Q-Chem executable ../bin/qchem not found."
+   stop
+endif
+close unit 98
+bomlev 0
+
 bomlev -1
 STREam datadir.def
 

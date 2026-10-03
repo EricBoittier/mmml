@@ -76,6 +76,12 @@ real variables_calculate(char *line)
     return io_nexts(line) == io_nexts(line);
   } else if (token=="pi") {
     return M_PI;
+  } else if (token=="-f"){ // check if a file exists
+    std::string fnm = io_nexts(line);
+    FILE *file = fopen(fnm.c_str(), "r");
+    bool exists = file != NULL;
+    if (exists) fclose(file);
+    return exists;
   } else {
     // try converting to a number
     double number;
@@ -84,6 +90,7 @@ real variables_calculate(char *line)
       return (real) number;
     } else {
       fatal(__FILE__,__LINE__,"Unrecognized token (%s) in calculate statement\n",token.c_str());
+      return 0; // suppress compiler warnings
     }
   }
 }

@@ -122,6 +122,7 @@ if @i eq 3 then
       set 6 = 80  ! x-dim
       set 7 = 80  ! y-dim
       set 8 = 200  ! z-dim
+      crystal define orthorhombic @6 @7 @8 90.0 90.0 90.0
       read image card name @0/cubic.img
       image byseg select all end
 endif

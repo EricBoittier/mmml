@@ -81,6 +81,9 @@ label sphere
            force 10 droff 5.2 select segid ar end
       end
 
+      mmfp
+         geo print
+      end
       energy
       set chme = ?ener
       prnlev 0 @pnode

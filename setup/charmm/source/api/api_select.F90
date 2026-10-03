@@ -3,7 +3,6 @@ module api_select
   implicit none
 contains
 
-#if KEY_LIBRARY == 1
   !> @brief select atoms from a range of residues by res name
   !
   !> param[in] flags
@@ -236,7 +235,7 @@ contains
     use, intrinsic :: iso_c_binding, only: c_int
     use chutil, only: hydrog
     implicit none
-    integer :: i
+    integer(c_int), value :: i
     integer(c_int) :: q
     logical :: test
 
@@ -255,7 +254,7 @@ contains
     use, intrinsic :: iso_c_binding, only: c_int
     use chutil, only: lone
     implicit none
-    integer :: i
+    integer(c_int), value :: i
     integer(c_int) :: q
     logical :: test
 
@@ -276,7 +275,7 @@ contains
     use coord, only: x, y, z
     use psf, only: natom
     implicit none
-    integer :: i
+    integer(c_int), value :: i
     integer(c_int) :: q
     logical :: test
 
@@ -424,9 +423,9 @@ contains
     use, intrinsic :: iso_c_binding, only: c_char, c_int
     use memory, only: chmalloc, chmdealloc
     use selctam, only: &
-         maxsky, mnamsk, &
+         mnamsk, &
          numsky, lensky, lnamsk, &
-         namsky, ptrsky
+         namsky, ptrsky, select_ensure_cap
 
     implicit none
 
@@ -455,14 +454,7 @@ contains
        call chmdealloc('api_select.F90', 'api_select%select_store', &
             'ptrsky(i)%a', lensky(i), intgp=ptrsky(i)%a)
     else if (i .eq. 0) then  ! name not found in store
-       if (numsky .eq. maxsky) then
-          call chmdealloc('api_select.F90', 'api_select%select_store', &
-               'iptr', len_islct, intgp=iptr)
-          call wrndie(0, 'api_select%select_store', &
-               fname(1:len_fname) // ' selection not stored. ' // &
-               'Max selections already reached.')
-          return
-       end if
+       call select_ensure_cap(numsky + 1)
 
        numsky = numsky + 1
        i = numsky
@@ -574,5 +566,5 @@ contains
        call f2c_string(namsky(i), out_names(i), nchars)
     end do
   end function select_get_stored_names
-#endif /* KEY_LIBRARY */
+
 end module api_select

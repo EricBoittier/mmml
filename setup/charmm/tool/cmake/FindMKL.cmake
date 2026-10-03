@@ -91,7 +91,7 @@ find_path(MKL_ROOT_DIR
 get_filename_component(MKL_ROOT_DIR ${MKL_ROOT_DIR} REALPATH)
 
 if(MKL_FIND_REQUIRED AND NOT MKL_ROOT_DIR)
-  message(FATAL_ERROR "Could not find MKL: please set environment variable {MKLROOT}")
+  message(FATAL_ERROR "Could not find MKL: please set environment variable MKLROOT")
 elseif(NOT MKL_ROOT_DIR)
   unset(MKL_ROOT_DIR CACHE)
   return()
@@ -111,10 +111,10 @@ find_program(MKL_LINK_TOOL
   PATHS ${MKL_ROOT_DIR}
   PATH_SUFFIXES tools)
 
-if(MKL_LINK_TOOL-NOTFOUND)
+if(NOT MKL_LINK_TOOL)
   set(HAS_MLT FALSE)
 else()
-  execute_process(COMMAND "${MKL_LINK_TOOL_COMMAND} -libs"
+  execute_process(COMMAND "${MKL_LINK_TOOL} -libs"
     RESULT_VARIABLE COMMAND_WORKED
     TIMEOUT 2
     OUTPUT_QUIET
@@ -322,7 +322,7 @@ else()
     string(REGEX MATCHALL "[-/]D[^\ ]*" MKL_DEFINITIONS ${RESULT_OPTS})
 
     if (FINDMKL_DEBUG_MODE)
-        message(STATUS "Exectuted command: \n${MKL_LINK_TOOL_COMMAND}")
+        message(STATUS "Executed command: \n${MKL_LINK_TOOL_COMMAND}")
         message(STATUS "Found MKL_LIBRARIES:\n${MKL_LIBRARIES} ")
         message(STATUS "Found MKL_DEFINITIONS:\n${MKL_DEFINITIONS} ")
         message(STATUS "Found MKL_LIBRARY_DIR:\n${MKL_LIBRARY_DIR} ")

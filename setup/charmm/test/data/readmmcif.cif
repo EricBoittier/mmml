@@ -1,0 +1,40 @@
+data_readmmcif
+#
+loop_
+_pdbx_poly_seq_scheme.asym_id
+_pdbx_poly_seq_scheme.seq_id
+_pdbx_poly_seq_scheme.mon_id
+_pdbx_poly_seq_scheme.auth_seq_num
+_pdbx_poly_seq_scheme.auth_mon_id
+_pdbx_poly_seq_scheme.pdb_strand_id
+_pdbx_poly_seq_scheme.pdb_seq_num
+_pdbx_poly_seq_scheme.pdb_mon_id
+_pdbx_poly_seq_scheme.pdb_ins_code
+LABA 1 ALA 10 ALA PROA 10 ALA .
+LABA 2 GLY 11 GLY PROA 11 GLY A
+LABA 3 SER 12 SER PROA 12 SER .
+#
+loop_
+_atom_site.pdbx_PDB_model_num
+_atom_site.B_iso_or_equiv
+_atom_site.Cartn_z
+_atom_site.Cartn_y
+_atom_site.Cartn_x
+_atom_site.auth_atom_id
+_atom_site.auth_seq_id
+_atom_site.auth_asym_id
+_atom_site.auth_comp_id
+_atom_site.label_atom_id
+_atom_site.label_seq_id
+_atom_site.label_asym_id
+_atom_site.label_comp_id
+_atom_site.group_PDB
+_atom_site.id
+1 11.0 3.000 2.000 1.000 O  1 WAT1 TIP3 OH2 1 WAT1 HOH HETATM 100001
+1 12.0 3.100 2.100 1.100 H1 1 WAT1 TIP3 H1  1 WAT1 HOH HETATM 100002
+1 13.0 3.200 2.200 1.200 H2 1 WAT1 TIP3 H2  1 WAT1 HOH HETATM 100003
+1 21.0 6.000 5.000 4.000 O  2 WAT1 TIP3 OH2 2 WAT1 HOH HETATM 100004
+1 22.0 6.100 5.100 4.100 H1 2 WAT1 TIP3 H1  2 WAT1 HOH HETATM 100005
+1 23.0 6.200 5.200 4.200 H2 2 WAT1 TIP3 H2  2 WAT1 HOH HETATM 100006
+2 31.0 9.000 8.000 7.000 O  1 WAT1 TIP3 OH2 1 WAT1 HOH HETATM 100007
+#

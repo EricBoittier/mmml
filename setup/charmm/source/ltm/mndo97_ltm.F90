@@ -177,7 +177,7 @@ module  mndo97
 #endif
 !
 #if KEY_MNDO97==1
-      integer,save :: numat,num_cpus
+      integer,save :: numat !,num_cpus
 #if KEY_SQUANTM==0 /* not squantm */
       logical,save :: lqmewd   ! temporary
 #endif /* not squantm */
@@ -197,11 +197,31 @@ module  mndo97
       ! ---------------------------------------------
       ! Dispersion related [nolonger in blockscc]
       real(chm_real)      :: Edis
-      logical,save        :: dispers
-      integer, parameter  :: nndim=650,maxtyp=100
-      real(chm_real),save :: Adis,Bdis,Cdis,r0dis,rvdis
-      real(chm_real),save :: C6(NNDIM,NNDIM),Rvdw(NNDIM,NNDIM)
-      integer,save        :: izp(nndim),ntype
+      logical,save        :: dispers=.false.
+      integer, parameter  :: nndim=650  !! ,maxtyp=100
+      !!real(chm_real),save :: Adis,Bdis,Cdis,r0dis,rvdis
+      !!real(chm_real),save :: C6(NNDIM,NNDIM),Rvdw(NNDIM,NNDIM)
+      integer,save        :: ntype ! ,izp(nndim)
+
+      ! H4 related 
+      logical,save        :: q_h4corr=.false.
+
+      ! mlayered qm/mm, default(.false., i.e., do not use mlayered qm/mm)
+      logical,save        :: qmlay_main=.false.
+      logical,save        :: qmlay_mts =.false.
+      logical,save        :: qmlay_energy_updated=.true. ! .true. = energy/gradients been added to dx/dy/dz
+      integer,save        :: nmlay_nmts=1   ! step freq. to update ab-qm/mm correction
+      integer,save        :: nmlay_mdstp=0  ! md step counter
+      logical,save        :: qm_md_master=.false.        ! .true. : currently in md run
+                                                         ! .false.: currently not in md run (default)
+      logical,save        :: qmlay_do_energy=.true.      ! .true. : flag to perform energy/gradients calc.
+                                                         !          and added to dx/dy/dz.
+                                                         !          this will overwrite other conditions.
+                                                         !          (default)
+                                                         ! .false.: energy/gradients will be calculated, but
+                                                         !          gradients not added to dx/dy/dz.
+                                                         !          (this will be set to .false. 
+                                                         !           in MNDINI_MLAYer when using qmlay_mts.)
 #endif
 ! end
 !=================================================================================
@@ -209,18 +229,35 @@ module  mndo97
 contains
   subroutine mndo97_iniall()
 #if KEY_MNDO97==1
+    use qm1_info, only : mndo97_memory_init
+    use qmmmewald_module, only : qmmm_ewald_memory_init
+    use H4_mndo, only : h4_memory_init
+    implicit none
     numat = 0
     lqmewd=.false.
 !    lqmewd2=.false.
 !    maxkvq=0
 !    qsetupkq=.false.
 !    natm_old =0
-    num_cpus=4   ! number of cpus to switch in openMP/MPI routine.
+!    num_cpus=4   ! number of cpus to switch in openMP/MPI routine.
     ! Grimme's DFT-D3
     lmndod2 =.false.
     lmndod3 =.false.
 !    l_disp  =.false.
     dispers =.false.
+    q_h4corr=.false.
+    qmlay_main=.false.   ! meaning regular se-qm/mm.
+    qmlay_mts =.false.   ! do not use mts-qm/mm
+    qm_md_master=.false. ! not in md cycle.
+    qmlay_energy_updated=.true.
+    qmlay_do_energy     =.true.
+    nmlay_nmts=1         ! md step freq. to update ab-qm/mm energy/gradients
+    nmlay_mdstp=0        ! md step counter
+
+    ! assign memories and variables, assume only nrepl=1 system.
+    call mndo97_memory_init(1, .true.)
+    call qmmm_ewald_memory_init(1, .true.)
+    call h4_memory_init(1, .true.)
 #endif
     return
   end subroutine mndo97_iniall

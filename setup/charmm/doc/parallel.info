@@ -1,4 +1,5 @@
-
+CHARMM Element doc/parallel.info 1.1
+
 File: parallel.info,  Node: Top, Up: (charmm.info),  Next: (commands.info),  Prev: (changelog.info)
 
 
@@ -116,7 +117,7 @@ PVM library
 
 
 Combination 1., 8. and 10. are currently implemented in
-machdep/paral1.src so there is no need for paral2.src and paral3.src
+machdep/paral1.F90 so there is no need for paral2.F90 and paral3.F90
 files, which will eventually become unnecessary. Efficiency of
 different topologies also varies with the number of nodes.
 
@@ -562,7 +563,7 @@ be in the file with the name 1.input and for job 2 in 2.input.
 *
 
 paral conc 2 count 0 maxi 102 ! 1.input & 2.input are currently
-                              ! hardwired into paral1.src
+                              ! hardwired into paral1.F90
 
 
 
@@ -927,7 +928,7 @@ Implementation notes.
 Currently the support for parallel machines in CHARMM is implemented
 in three levels. The topmost level is the collection of subroutines
 which are called from CHARMM itself. These subroutines are implemented
-in paral1.src. They are:
+in paral1.F90. They are:
 
 VDGSUM  - vector distributed global sum [MPI_REDUCE_SCATTER]
 VDGBR   - vector distributed global broadcast [MPI_ALLGATHERV]
@@ -946,9 +947,9 @@ indicated above. Since the current status of MPI implementations is
 not efficient on most of the parallel platforms we still maintain the
 CHARMM implementation of MPI chosen by CMPI preflx keyword in pref.dat
 file. Besides the choice of standard MPI library and CMPI there are
-other choices available in paral1.src for the vendor specific
+other choices available in paral1.F90 for the vendor specific
 libraries which have similar functionality as MPI library. Currently
-these are CSPP and TERRA options. So in short paral1.src is a place
+these are CSPP and TERRA options. So in short paral1.F90 is a place
 where one decides which library will be used for global parallel
 communication, such as global sum and others. It may also decide on
 machine specific libraries if they differ from MPI, but provide the
@@ -960,13 +961,13 @@ For the users of MPI library there are always two possibilities:
    global communication as implemented in MPI.
 
 2. Specify PARALLEL PARAFULL CMPI MPI and use the efficient global
-   communication algorithms implemented the paral2.src and paral3.src,
+   communication algorithms implemented the paral2.F90 and paral3.F90,
    where only two primitive MPI calls are used: send and recieve. This
    choice is currently the preferred one on most of the systems
    especially for users of MPICH and its derivatives.
 
-Once CMPI keyword is specified the routines in paral1.src call
-another set of routines implemented in the paral2.src source file. The
+Once CMPI keyword is specified the routines in paral1.F90 call
+another set of routines implemented in the paral2.F90 source file. The
 purpose of routines in this layer is to decide on which topology will
 be chosen for a given parallel system. Possible choices are:
 
@@ -986,7 +987,7 @@ be chosen for a given parallel system. Possible choices are:
    while sending to it at the same time. If this is not supported by
    the hardware one can choose SYNCHRON keyword in pref.dat.
 
-All of the above topologies are then implemented in paral3.src file
+All of the above topologies are then implemented in paral3.F90 file
 for a variety of parallel systems.
 
 I/O requirements for the new code

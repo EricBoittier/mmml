@@ -568,7 +568,7 @@ contains
        CTREM2 = CTREM2 + 1
        SECLST(CTREM2) = FIRST
        ! sort the second list
-       CALL SORT(CTREM2,EXCH5,ORDER5,SECLST,0,0,0,0,0,0,1)
+       CALL SORT(CTREM2,EXCH5,ORDER5,SECLST,(/0/),(/0/),(/0/),(/0/),(/0/),(/0/),1)
        ! eliminate double entries to create worklist
        IF (CTREM2 >= 1) THEN
           WKLIST(1) = SECLST(1)

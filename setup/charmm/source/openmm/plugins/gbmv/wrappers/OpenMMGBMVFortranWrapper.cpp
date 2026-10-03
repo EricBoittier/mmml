@@ -144,16 +144,16 @@ void openmmgbmv_gbmvforce_setcphmdparameters_(OpenMMGBMV_GBMVForce*& target, int
 void OPENMMGBMV_GBMVFORCE_SETCPHMDPARAMETERS(OpenMMGBMV_GBMVForce*& target, int const& index, int const& titrateResID, double const& refChargeState1, double const& refChargeState2, double const& chargeState1, double const& chargeState2) {
     OpenMMGBMV_GBMVForce_setCphmdParameters(target, index, titrateResID, refChargeState1, refChargeState2, chargeState1, chargeState2);
 }
-void openmmgbmv_gbmvforce_getlambdaoutputfile_(const OpenMMGBMV_GBMVForce*& target, char*& result) {
+void openmmgbmv_gbmvforce_getlambdaoutputfile_(const OpenMMGBMV_GBMVForce*& target, const char*& result) {
     result = OpenMMGBMV_GBMVForce_getLambdaOutputFile(target);
 }
-void OPENMMGBMV_GBMVFORCE_GETLAMBDAOUTPUTFILE(const OpenMMGBMV_GBMVForce*& target, char*& result) {
+void OPENMMGBMV_GBMVFORCE_GETLAMBDAOUTPUTFILE(const OpenMMGBMV_GBMVForce*& target, const char*& result) {
     result = OpenMMGBMV_GBMVForce_getLambdaOutputFile(target);
 }
-void openmmgbmv_gbmvforce_setlambdaoutputfile_(OpenMMGBMV_GBMVForce*& target, char* tmp) {
+void openmmgbmv_gbmvforce_setlambdaoutputfile_(OpenMMGBMV_GBMVForce*& target, const char* tmp) {
     OpenMMGBMV_GBMVForce_setLambdaOutputFile(target, tmp);
 }
-void OPENMMGBMV_GBMVFORCE_SETLAMBDAOUTPUTFILE(OpenMMGBMV_GBMVForce*& target, char* tmp) {
+void OPENMMGBMV_GBMVFORCE_SETLAMBDAOUTPUTFILE(OpenMMGBMV_GBMVForce*& target, const char* tmp) {
     OpenMMGBMV_GBMVForce_setLambdaOutputFile(target, tmp);
 }
 double openmmgbmv_gbmvforce_getsystemph_(const OpenMMGBMV_GBMVForce*& target) {

@@ -5,9 +5,37 @@
 bomlev 0
 
 if ?SCCDFTB .NE. 1 then
-  echo "Test NOT Performed."
+  echo SCCDFTB_D3 TESTCASE RESULT: SKIP
   STOP
 endif
+
+stream datadir.def
+
+! SCC-DFTB needs SCCDFTB_DATA pointing at a directory holding this test's
+! parameter file.  `genv' on an unset variable is a level-0 warning, which is
+! fatal at the default BOMLEV, so lower BOMLEV across the call and self-skip
+! when the data has not been provisioned here.  The file check matters as
+! well: SCCDFTB_DATA can be set while this particular file is absent, and
+! CHARMM then dies part way through reading parameters with no termination
+! line at all.
+set sccdftbdir UNSET_SCCDFTB_DATA
+set oldbomlev ?bomlev
+bomlev -5
+genv sccdftbdir SCCDFTB_DATA
+bomlev @oldbomlev
+if @sccdftbdir eq UNSET_SCCDFTB_DATA then
+   echo SCCDFTB_D3 TESTCASE RESULT: SKIP
+   stop
+endif
+strc sccdat @sccdftbdir "/sccdftb_OH.dat"
+bomlev -5
+open unit 98 read form name @sccdat
+if ?iostat .ne. 1 then
+   echo SCCDFTB_D3 TESTCASE RESULT: SKIP
+   stop
+endif
+close unit 98
+bomlev @oldbomlev
 
 OPEN UNIT 21 NAME data/top_all22_prot_na.inp READ FORM
 READ RTF card UNIT 21
@@ -96,11 +124,37 @@ scalar WMAIN set 1.0 sele (qm) .and. type O*  end
 scalar WMAIN set 2.0 sele (qm) .and. type H*  end
 
 sccdftb remove sele qm end temp 0.0 scft 1e-14 -
-    chrg 0.0 d3rd hbon twobod
+    chrg 0.0 d3rd hbon twobod DATF @sccdat
 
 energy 
+! A self-reported result short-circuits the comparison against the
+! benchmark, so whatever is not asserted here stops being checked.
+! QMEL is read first, at the untouched geometry, so it does not depend
+! on the probes below.  It is the one captured number and is quoted for
+! the 3ob set; it earns its place because the invariants below are all
+! satisfied by an energy that is self-consistent but wrong.
+@testcheck ?qmel -5114.81920 0.000001 sccdftb_d3_qmel
+! Forces on an isolated system sum to zero (Newton's third law).
+scalar dx stat
+set fx = ?stot
+scalar dy stat
+set fy = ?stot
+scalar dz stat
+set fz = ?stot
+calc fnet = abs(@fx) + abs(@fy) + abs(@fz)
+@testcheck @fnet 0 -0.000001 sccdftb_d3_netforce
+! A rigid shift must not change the energy.  Tolerance 1e-4 because
+! ?ENER is read at print precision.
+set e0 = ?ener
+coor trans xdir 1.0 ydir 0.0 zdir 0.0 dist 3.7
+energy
+calc edrift = abs ( ?ener - @e0 )
+@testcheck @edrift 0 -0.0001 sccdftb_d3_translation
+coor trans xdir -1.0 ydir 0.0 zdir 0.0 dist 3.7
+energy
 
 test first step 0.00001 tol 0.01
+@testcheck ?nok 18 -0.5 sccdftb_d3_dfirst
 
 stop
 

@@ -5,9 +5,37 @@
 bomlev 0
 
 if ?SCCDFTB .NE. 1 then
-  echo "Test NOT Performed."
+  echo SCCDFTB_D3RD TESTCASE RESULT: SKIP
   STOP
 endif
+
+! SCC-DFTB needs SCCDFTB_DATA pointing at a directory holding this test's
+! parameter file.  `genv' on an unset variable is a level-0 warning, which is
+! fatal at the default BOMLEV, so lower BOMLEV across the call and self-skip
+! when the data has not been provisioned here.  The file check matters as
+! well: SCCDFTB_DATA can be set while this particular file is absent, and
+! CHARMM then dies part way through reading parameters with no termination
+! line at all.
+set sccdftbdir UNSET_SCCDFTB_DATA
+set oldbomlev ?bomlev
+bomlev -5
+genv sccdftbdir SCCDFTB_DATA
+bomlev @oldbomlev
+if @sccdftbdir eq UNSET_SCCDFTB_DATA then
+   echo SCCDFTB_D3RD TESTCASE RESULT: SKIP
+   stop
+endif
+strc sccdat @sccdftbdir "/sccdftb_OH.dat"
+bomlev -5
+open unit 98 read form name @sccdat
+if ?iostat .ne. 1 then
+   echo SCCDFTB_D3RD TESTCASE RESULT: SKIP
+   stop
+endif
+close unit 98
+bomlev @oldbomlev
+
+stream datadir.def
 
 OPEN UNIT 21 NAME data/top_all22_prot_na.inp READ FORM
 READ RTF card UNIT 21
@@ -95,11 +123,37 @@ define qm sele all end
 scalar WMAIN set 1.0 sele (qm) .and. type O*  end
 scalar WMAIN set 2.0 sele (qm) .and. type H*  end
 
-SCCDFTB remove SELE qm END TEMP 0.0 SCFT 1e-10 CHRG 0.0 D3RD HBON
+SCCDFTB remove SELE qm END TEMP 0.0 SCFT 1e-10 CHRG 0.0 D3RD HBON DATF @sccdat
 
-!energy 
+! Check the starting point before minimizing it away.  The electronic energy
+! anchors the parameter set; the other two hold for any parameter set at all.
+energy
+@testcheck ?qmel -5113.75796 0.000001 sccdftb_d3rd_qmel
+
+! nothing is fixed, so the forces must sum to zero
+scalar dx stat
+set fx = ?stot
+scalar dy stat
+set fy = ?stot
+scalar dz stat
+set fz = ?stot
+calc fnet = abs(@fx) + abs(@fy) + abs(@fz)
+@testcheck @fnet 0 -0.000001 sccdftb_d3rd_netforce
+
+! isolated dimer, no periodic images: rigid translation changes nothing
+set e0 = ?ener
+coor trans xdir 1.0 ydir 0.0 zdir 0.0 dist 3.7
+energy
+calc edrift = abs ( ?ener - @e0 )
+@testcheck @edrift 0 -0.0001 sccdftb_d3rd_translation
+coor trans xdir -1.0 ydir 0.0 zdir 0.0 dist 3.7
+energy
 
 mini abnr nstep 100 tolgrd 0.01 nprint 10
+
+! ABNR was asked for a gradient of 0.01; a water dimer reaches it well inside
+! 100 steps, so not reaching it means the D3RD gradient is wrong
+@testcheck ?grms 0 -0.01 sccdftb_d3rd_minimized
 !mini abnr nstep 3000 tolenr 0.001 tolgrd 0.001
 
 !open write card unit 3 name sccdftb_d3rd-opt.cor

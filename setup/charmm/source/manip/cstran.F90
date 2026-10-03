@@ -1695,7 +1695,7 @@ contains
     use cnst_fcm, only: numhsets, qcnstr, ihset, &
          kcnstr, kcexpn, &
          xhscale, yhscale, zhscale, &
-         typhset, &
+         typhset, parhset, &
          qhnort, qhnotr, &
          refx, refy, refz, &
          pcax, pcay, pcaz, numpca, &
@@ -1796,6 +1796,7 @@ contains
           yhscale(1) = one
           zhscale(1) = one
           typhset(1) = 0
+          parhset(1) = 0
           qhnort(1) = .false.
           qhnotr(1) = .false.
        end if
@@ -1834,6 +1835,7 @@ contains
        qhnotr(iset) = relative_opts%no_trans
     end if
     typhset(iset) = hrtyp
+    parhset(iset) = 0   ! only relative restraints (below) set a real partner
 
     ! Get a second set number (look for an empty set to use)
     if (hrtyp == 2) then
@@ -1852,8 +1854,13 @@ contains
        zhscale(jset) = zhscale(iset)
        qhnort(jset) = qhnort(iset)
        qhnotr(jset) = qhnotr(iset)
-       typhset(jset) = iset
-       typhset(iset) = jset
+       ! Both members of a relative pair are type 2 (typhset(iset) is already
+       ! hrtyp==2 from above); the partner index goes in parhset - previously
+       ! typhset was overloaded with the partner index, which collided with
+       ! the PCA type code 3 (see cnst_ltm).
+       typhset(jset) = 2
+       parhset(iset) = jset
+       parhset(jset) = iset
        ninsetf(jset) = 0
     end if
 
@@ -1873,7 +1880,7 @@ contains
           call wrndie(-1, '<CSTRAN>', &
                'Number of selected atoms does not match - Extras ignored')
        end if
-       ninsetf(jset) = 0
+       !ninsetf(jset) = 0     !to keep relative constrained atom number
     end if
 
     
@@ -1910,9 +1917,10 @@ contains
     end if
 
     ! count the number of restraint types 3 - only one allowed
+    if(hrtyp == 3) then
     jset = 0
     do i = 1, numhsets
-       if(typhset(iset)==3) jset = jset + 1
+       if(typhset(i)==3) jset = jset + 1
     enddo
     if (jset>1) then
        if (wrnlev > 2) write(outu, '(A)') &
@@ -1920,6 +1928,7 @@ contains
        call wrndie(-1, '<CSTRAN>', &
             'Too many Harmonic PCA restraints')
     end if
+    endif
 
     call print_harm_const(hrtyp, qhmod, qcomp, &
          force_const_opts%force_const, &
@@ -2180,7 +2189,7 @@ contains
 
   SUBROUTINE PRCNST(UNIT, &
        NCSPHI,ICS,JCS,KCS,LCS,CCSC,CCSB,CCSD,CCSW, &
-       NATOM,QCNSTR,NUMHSETS,IHSET,TYPHSET,KCNSTR, &
+       NATOM,QCNSTR,NUMHSETS,IHSET,TYPHSET,PARHSET,KCNSTR, &
        KCEXPN,LCIC,CCBIC,CCTIC,CCPIC,CCIIC, &
        QQCNST,LQMASS,KQCNST,KQEXPN)
     !
@@ -2191,13 +2200,14 @@ contains
     use stream
     use chutil,only:atomid
     use pucker_mod,only: ncspuck,print_pucker_constraints
+    use cnst_fcm, only: hset_relative_partner
     implicit none
     !
     INTEGER UNIT,NCSPHI,ICS(*),JCS(*),KCS(*),LCS(*)
     real(chm_real)  CCSC(*),CCSB(*),CCSW(*)
     INTEGER CCSD(*),NATOM
     LOGICAL QCNSTR
-    INTEGER NUMHSETS,IHSET(*),TYPHSET(*)
+    INTEGER NUMHSETS,IHSET(*),TYPHSET(*),PARHSET(*)
     real(chm_real)  KCNSTR(*)
     INTEGER KCEXPN(*)
     LOGICAL LCIC
@@ -2279,8 +2289,10 @@ contains
                 SETTYP='ABSOLUTE'
              ELSE IF(TYPHSET(ISET) == 1) THEN
                 SETTYP='BESTFIT'
-             ELSE IF(TYPHSET(ISET) > 1) THEN
+             ELSE IF(TYPHSET(ISET) == 2) THEN
                 SETTYP='RELATIVE'
+             ELSE IF(TYPHSET(ISET) == 3) THEN
+                SETTYP='PCA'
              ELSE
                 CALL WRNDIE(-4,'<PRCNST>','Bad set type:coding error')
                 RETURN
@@ -2289,8 +2301,9 @@ contains
 320          FORMAT('     Atoms of harmonic restraint set',I4,' type: ', &
                   A,', exponent:',I3)
              !
-             ! print absolute and best fit in a simple column
-             IF(TYPHSET(ISET) <= 1) THEN
+             ! print absolute, best-fit and PCA in a simple column; only
+             ! relative (type 2) sets print as matched pairs below.
+             IF(TYPHSET(ISET) /= 2) THEN
                 DO I=1,NATOM
                    IF(IHSET(I) == ISET) THEN
                       IF(KCNSTR(I) /= 0.0) THEN
@@ -2304,9 +2317,7 @@ contains
                 !
                 ! print relative as matched pairs.
              ELSE
-                JSET=TYPHSET(ISET)
-                IF(TYPHSET(JSET) /= ISET) CALL WRNDIE(-4,'<PRCNST>', &
-                     'Error in relative set types - coding error')
+                call hset_relative_partner(ISET, PARHSET, JSET)
                 IF(ISET < JSET) THEN  ! only process once (ISET<JSET)
                    NPAIR=NINSET(ISET)
                    IF(NPAIR /= NINSET(JSET)) CALL WRNDIE(-2,'<PRCNST>', &
@@ -2458,6 +2469,7 @@ contains
           call chmrealloc('cstran.src','hset_ensure_capacity','YHSCALE',newcap,crl=YHSCALE)
           call chmrealloc('cstran.src','hset_ensure_capacity','ZHSCALE',newcap,crl=ZHSCALE)
           call chmrealloc('cstran.src','hset_ensure_capacity','TYPHSET',newcap,intg=TYPHSET)
+          call chmrealloc('cstran.src','hset_ensure_capacity','PARHSET',newcap,intg=PARHSET)
           call chmrealloc('cstran.src','hset_ensure_capacity','QHNORT',newcap,log=QHNORT)
           call chmrealloc('cstran.src','hset_ensure_capacity','QHNOTR',newcap,log=QHNOTR)
        endif
@@ -2468,8 +2480,10 @@ contains
        call chmalloc('cstran.src','hset_ensure_capacity','YHSCALE',newcap,crl=YHSCALE)
        call chmalloc('cstran.src','hset_ensure_capacity','ZHSCALE',newcap,crl=ZHSCALE)
        call chmalloc('cstran.src','hset_ensure_capacity','TYPHSET',newcap,intg=TYPHSET)
+       call chmalloc('cstran.src','hset_ensure_capacity','PARHSET',newcap,intg=PARHSET)
        call chmalloc('cstran.src','hset_ensure_capacity','QHNORT',newcap,log=QHNORT)
        call chmalloc('cstran.src','hset_ensure_capacity','QHNOTR',newcap,log=QHNOTR)
+       parhset = 0
     endif
   end subroutine hset_ensure_capacity
 
@@ -2487,6 +2501,7 @@ contains
        call chmdealloc('cstran.src','hset_clear','YHSCALE',oldcap,crl=YHSCALE)
        call chmdealloc('cstran.src','hset_clear','ZHSCALE',oldcap,crl=ZHSCALE)
        call chmdealloc('cstran.src','hset_clear','TYPHSET',oldcap,intg=TYPHSET)
+       call chmdealloc('cstran.src','hset_clear','PARHSET',oldcap,intg=PARHSET)
        call chmdealloc('cstran.src','hset_clear','QHNORT',oldcap,log=QHNORT)
        call chmdealloc('cstran.src','hset_clear','QHNOTR',oldcap,log=QHNOTR)
 ! take care of pca deallocation here

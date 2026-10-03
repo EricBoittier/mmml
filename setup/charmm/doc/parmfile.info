@@ -886,26 +886,26 @@ CHARMM35 Carbohydrate Additive Parameters
 
 ! pyranose monosaccharides
 Guvench, O., Greene, S.N., Kamath, G., Brady, J.W., Venable, R.M.,
-Pastor, R.W., MacKerell, Jr., A.D. “Additive empirical force field for
-hexopyranose monosaccharides” Journal of Computational Chemistry, 29:
+Pastor, R.W., MacKerell, Jr., A.D. "Additive empirical force field for
+hexopyranose monosaccharides" Journal of Computational Chemistry, 29:
 2543-2564, 2008. PMID: 18470966
 
 ! linear sugars, sugar alcohols, and inositol
-Hatcher, E., Guvench, O., and MacKerell, Jr., A.D. “CHARMM Additive
+Hatcher, E., Guvench, O., and MacKerell, Jr., A.D. "CHARMM Additive
 All-Atom Force Field for Acyclic Polyalcohols, Acyclic Carbohydrates
-and Inositol,” Journal of Chemical Theory and Computation, 5:
+and Inositol," Journal of Chemical Theory and Computation, 5:
 1315-1327, 2009, DOI: 10.1021/ct9000608.
 
 ! hexopyranose glycosidic linkages
 Guvench, O., Hatcher, E. R., Venable, R. M., Pastor, R. W., MacKerell,
-A. D. Jr. “Additive Empirical CHARMM Force Field for glycosyl linked
-hexopyranoses,” Journal of Chemical Theory and Computation, 5,
-2353–2370, 2009, DOI: 10.1021/ct900242e
+A. D. Jr. "Additive Empirical CHARMM Force Field for glycosyl linked
+hexopyranoses," Journal of Chemical Theory and Computation, 5,
+2353-2370, 2009, DOI: 10.1021/ct900242e
 
 ! furanose monosaccharides
 Hatcher, E. R.; Guvench, O.; MacKerell, Hatcher, E., Guvench, O., and
-MacKerell, Jr., A.D. “CHARMM Additive All-Atom Force Field for
-Aldopentofuranose Carbohydrates and Fructofuranose.” Journal of
+MacKerell, Jr., A.D. "CHARMM Additive All-Atom Force Field for
+Aldopentofuranose Carbohydrates and Fructofuranose." Journal of
 Physical Chemistry B. 113:12466-76, 2009, PMID: 19694450
 
 !CHARMM GENERAL FORCE FIELD, CGenFF

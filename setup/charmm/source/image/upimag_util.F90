@@ -323,7 +323,7 @@ contains
     !
     !     SORT THE PAIR LIST.
     !
-    CALL SORT(NPAIR,EXCH5,ORDER5,IPK,JPK,0,0,0,0,0,2)
+    CALL SORT(NPAIR,EXCH5,ORDER5,IPK,JPK,(/0/),(/0/),(/0/),(/0/),(/0/),2)
     !
     !     PROCESS THE SORTED PAIR LIST TO MAKE INB. CHECK THAT THERE ARE NOT
     !     MULTIPLE ENTRIES.
@@ -725,7 +725,7 @@ END SUBROUTINE IMAUTGEN
 
 ! Sort image bonds and remove duplicate bonds
 
-      CALL SORT(NIMBON,EXCH5,ORDER5,IB(NBOND+1),JB(NBOND+1),ICBAUTO(NBOND+1),0,0,0,0,3)
+      CALL SORT(NIMBON,EXCH5,ORDER5,IB(NBOND+1),JB(NBOND+1),ICBAUTO(NBOND+1),(/0/),(/0/),(/0/),(/0/),3)
 !
 !    remove any duplicate bonds
       IPT=NBOND+1
@@ -1587,7 +1587,7 @@ END SUBROUTINE IMAUTGEN
                             NATOMT,NTRANS,IMATTR,ITRANS,TRONTR,IGMATR)
           ENDDO
         endif
-        CALL SORT(NIMANG,EXCH5,ORDER5,IT(NTHETA+1),JT(NTHETA+1),KT(NTHETA+1),0,0,0,0,3)
+        CALL SORT(NIMANG,EXCH5,ORDER5,IT(NTHETA+1),JT(NTHETA+1),KT(NTHETA+1),(/0/),(/0/),(/0/),(/0/),3)
       endif
       if(QREMDUP) then
          IPT=NTHETA+1
@@ -1644,7 +1644,7 @@ END SUBROUTINE IMAUTGEN
                             NATOMT,NTRANS,IMATTR,ITRANS,TRONTR,IGMATR)
           ENDDO
         endif
-        CALL SORT(NIMDIH,EXCH5,ORDER5,IP(NPHI+1),JP(NPHI+1),KP(NPHI+1),LP(NPHI+1),0,0,0,4)
+        CALL SORT(NIMDIH,EXCH5,ORDER5,IP(NPHI+1),JP(NPHI+1),KP(NPHI+1),LP(NPHI+1),(/0/),(/0/),(/0/),4)
       endif
       if(QREMDUP) then
          IPT=NPHI+1
@@ -1670,7 +1670,7 @@ END SUBROUTINE IMAUTGEN
 ! sort and search exclusions for duplicates (rings = type 4). Remove duplicates.
 
     IF(NIMEXCL.GT.0) THEN
-      CALL SORT(NIMEXCL,EXCH5,ORDER5,IMEXCLJ,IMEXCLI,IMEXCLT,0,0,0,0,3)
+      CALL SORT(NIMEXCL,EXCH5,ORDER5,IMEXCLJ,IMEXCLI,IMEXCLT,(/0/),(/0/),(/0/),(/0/),3)
 
 !    write(6,281) NIMEXCL,5
 !    write(6,282) 'IMEXCLI:',(IMEXCLI(I),I=1,NIMEXCL)
@@ -1711,7 +1711,7 @@ END SUBROUTINE IMAUTGEN
 !
     IF(NIMIMP.GT.0) THEN
       if(QSORT) then
-        CALL SORT(NIMIMP,EXCH5,ORDER5,IM(NIMPHI+1),JM(NIMPHI+1),KM(NIMPHI+1),LM(NIMPHI+1),0,0,0,4)
+        CALL SORT(NIMIMP,EXCH5,ORDER5,IM(NIMPHI+1),JM(NIMPHI+1),KM(NIMPHI+1),LM(NIMPHI+1),(/0/),(/0/),(/0/),4)
       endif
       if(QREMDUP) then
         IPT=NIMPHI+1

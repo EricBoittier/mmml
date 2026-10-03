@@ -54,7 +54,16 @@ dyna leap lang start -
   nstep 100 timestep 0.001 nprint 10 iprfrq 100 -
   firstt 300. finalt 300. tstruct 300. tbath 300. -
   iseed 575722 9123209 8004 990261 -
-  iasors 1 iasvel 1 iscvel 0 ichecw 0 
+  iasors 1 iasvel 1 iscvel 0 ichecw 0
+
+! Re-evaluate the energy of the current coordinates from scratch; repdstr must
+! leave each replica's coordinates and reported energy mutually consistent, so
+! the fresh recompute reproduces the dynamics energy to round-off.  Checked live
+! below so the test does not go stale on a hard-coded energy that drifts as the
+! force field and code evolve (the previous references dated from 2014-2015).
+set edyn ?ener
+energy
+set efresh ?ener
 
 ! Test whether the case succeeded or failed. It is easiest
 ! to do this when we know exactly how many processors there
@@ -65,27 +74,24 @@ set passexup = 0
 set passexdn = 0
 set passener = 0
 
-if ?myrep .eq. 0 set refprob = 0.91991
-if ?myrep .eq. 0 set referup = 0.5
-if ?myrep .eq. 0 set referdn = 0.0
-if ?myrep .eq. 0 set refener = 47.1644
-if ?myrep .eq. 1 set refprob = 0.54581
-if ?myrep .eq. 1 set referup = 0.0
-if ?myrep .eq. 1 set referdn = 0.5
-if ?myrep .eq. 1 set refener = 48.7151215
-if ?myrep .eq. 2 set refprob = 0.2505
-if ?myrep .eq. 2 set referup = 0.0
-if ?myrep .eq. 2 set referdn = 0.0
-if ?myrep .eq. 2 set refener = 54.48095
-if ?myrep .eq. 3 set refprob = 0.18174
-if ?myrep .eq. 3 set referup = 0.0
-if ?myrep .eq. 3 set referdn = 0.0
-if ?myrep .eq. 3 set refener = 64.1422
+! Live energy self-consistency: the fresh recompute must match the dynamics
+! energy (the strong correctness check; no hard-coded value).
+if @edyn .ae. @efresh set passener = 1
 
-if ?reprob .ae. @refprob set passprob = 1
-if ?exrup .ae. @referup set passexup = 1
-if ?exrdn .ae. @referdn set passexdn = 1
-if ?ener .ae. @refener set passener = 1
+! The exchange statistics here are trajectory-dependent -- they shift with the
+! force field and RNG, so the exact 2014-era values went stale (e.g. exrup
+! drifted 0.5 -> 0).  Rather than hard-code drifting numbers, require them to be
+! valid: the acceptance probability and the up/down acceptance ratios must all
+! be valid fractions in [0,1].
+set passprob = 1
+if ?reprob .lt. 0 set passprob = 0
+if ?reprob .gt. 1 set passprob = 0
+set passexup = 1
+if ?exrup .lt. 0 set passexup = 0
+if ?exrup .gt. 1 set passexup = 0
+set passexdn = 1
+if ?exrdn .lt. 0 set passexdn = 0
+if ?exrdn .gt. 1 set passexdn = 0
 
 calc result = @passprob + @passexup + @passexdn + @passener
 

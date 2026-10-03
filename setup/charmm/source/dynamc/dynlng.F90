@@ -960,6 +960,67 @@ SUBROUTINE LNGFIL2THETA(ILALDM,IPSTOP,GAMMALDTHETA &
   RETURN
 END SUBROUTINE LNGFIL2THETA
 
+SUBROUTINE LNGFIL2THETA_BLK(ILALDM,IPSTOP,GAMMATHETABLK &
+     ,TBATH,DELTA,BIBLAM,NBLOCK,BIMLAM)
+  !
+  !     Per-block version of LNGFIL2THETA.
+  !     Fills GAMMATHETABLK(4,NBLOCK) with per-block Langevin coefficients
+  !     using per-block mass BIMLAM(I) and friction BIBLAM(I).
+  !
+  !    GAMMATHETABLK(1,I) - RFD (std.dev. of random force)
+  !    GAMMATHETABLK(2,I) - BETA  ( dx scale factor)
+  !    GAMMATHETABLK(3,I) - ALPHA ( x-xold scale factor)
+  !    GAMMATHETABLK(4,I) - Velocity compute scale factor
+  !
+  use chm_kinds
+  use dimens_fcm
+  use number
+  use euler
+  use consta
+  use psf
+  use stream
+  implicit none
+  !
+  LOGICAL ILALDM
+  INTEGER IPSTOP, NBLOCK
+  real(chm_real) TBATH,DELTA
+  real(chm_real) GAMMATHETABLK(4,NBLOCK),BIBLAM(NBLOCK),BIMLAM(NBLOCK)
+  ! local
+  INTEGER I,JLANG
+  real(chm_real)  RFD,GAM,KBT
+
+  DO I = 1, NBLOCK
+     GAMMATHETABLK(1,I)=ZERO
+     GAMMATHETABLK(2,I)=DELTA/BIMLAM(I)
+     GAMMATHETABLK(3,I)=ONE
+     GAMMATHETABLK(4,I)=HALF
+  ENDDO
+
+  IF(.NOT.ILALDM) GOTO 300
+  JLANG=0
+  KBT=KBOLTZ*TBATH
+
+  DO I = 1, NBLOCK
+     IF(ABS(BIBLAM(I)) > RSMALL)THEN
+        GAM=TIMFAC*BIBLAM(I)*DELTA
+        RFD=SQRT(2.0*BIMLAM(I)*GAM*KBT)/DELTA
+        JLANG=JLANG+1
+        GAMMATHETABLK(1,I)=RFD
+        GAMMATHETABLK(2,I)=DELTA/((ONE+GAM*HALF)*BIMLAM(I))
+        GAMMATHETABLK(3,I)=(ONE-GAM*HALF)/(ONE+GAM*HALF)
+        GAMMATHETABLK(4,I)=HALF*SQRT(ONE+GAM*HALF)
+     ENDIF
+  ENDDO
+
+  IF(JLANG > 0 .AND. IPSTOP == 0 .AND. PRNLEV >= 2) THEN
+     WRITE(OUTU,8000) TBATH, DELTA, JLANG
+8000 FORMAT(' LNGFIL2THETA_BLK: TBATH = ',F12.6,'  DELTA =',F12.6,/, &
+          ' LNGFIL2THETA_BLK: Langevin dynamics setup for ',I7,' blocks',/)
+  ENDIF
+300 CONTINUE
+  !
+  RETURN
+END SUBROUTINE LNGFIL2THETA_BLK
 
 SUBROUTINE DLNGV2THETA(GAMMALDTHETA,FRAND)
   !

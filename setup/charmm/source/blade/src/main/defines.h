@@ -4,7 +4,23 @@
 #include <cuda_runtime.h>
 #include <cufft.h>
 
-#include <iostream>  // for gpuCheck
+// eemlp-begin
+#ifdef WITH_TORCH          
+#include <torch/torch.h>
+#include <torch/script.h>
+#include <ATen/cuda/CUDAContext.h>
+#include <c10/cuda/CUDAGuard.h>                
+
+#define MAX_ML_ATOMS 256
+#define TORCH_ANGSTROM_TO_BOHR ((float)1.8897261246257702)
+#define TORCH_HARTREE_TO_KCALPERMOLE ((float)627.5094740659184)
+#define TORCH_FORCE_TO_CHARMM ((float)1185.82104659254322762040617035168)
+#define TORCH_F_EV_TO_KCALMOL ((float)23.060547830619)   // double literal
+#define TORCH_E_EV_TO_KCALMOL ((float)23.060547830619)   // double literal
+#define TORCH_F_HARTREE_TO_KCALMOL ((float)627.5094740631)
+#define TORCH_E_HARTREE_TO_KCALMOL ((float)627.5094740631)
+#define EV_TO_KCALMOL ((float)23.060547830619f)
+#endif   // eemlp-end
 
 #ifndef DOUBLE
 #define USE_TEXTURE
@@ -17,20 +33,6 @@
 // Units
 // At least this is uncontroversial...
 #define DEGREES ((real)0.017453292519943)
-
-#define gpuCheck(ans) { gpuAssert((ans), __FILE__, __LINE__); }
-inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort=true)
-{
-    if (code != cudaSuccess)
-    {
-        std::cerr << "GPUassert: " << cudaGetErrorString(code)
-                  << " " << file
-                  << " " << line
-                  << std::endl;
-
-        if (abort) exit(code);
-    }
-}
 
 // If this is a CHARMM compilation
 #ifdef BLADE_IN_CHARMM

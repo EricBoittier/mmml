@@ -3,7 +3,7 @@ module domdec_bonded
 #if KEY_DOMDEC==1 /* domdec_main */
   use chm_kinds
   use dimens_fcm
-  use mpi
+  use mpi_f08
   use domdec_bonded_types,only:bondlist_t, anglelist_t, dihelist_t, list14_t, list14thole_t, &
        hyperlist_t
 #if KEY_CMAP==1
@@ -846,7 +846,7 @@ contains
 #endif
          ib, jb, it, jt, kt, ip, jp, kp, lp, im, jm, km, lm
     use parallel
-    use mpi
+    use mpi_f08
     use memory
     use stream
     use groupxfast,only:invgroup, groupcenter

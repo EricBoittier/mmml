@@ -370,9 +370,9 @@ void CudaCalcGBSWForceKernel::initialize(const System& system, const GBSWForce& 
     prefactor = -ONE_4PI_EPS0*((1.0/force.getSoluteDielectric())-(1.0/force.getSolventDielectric()));
     
     // calc whether this simulation is periodic
-    bool usePeriodic = (force.getNonbondedMethod() != GBSWForce::NoCutoff && 
+    usingPeriodic = (force.getNonbondedMethod() != GBSWForce::NoCutoff &&
         force.getNonbondedMethod() != GBSWForce::CutoffNonPeriodic);
-    
+
     //--------------------------------------------------------------------------
     // allocate memory on GPU. doing this first improves code stability
     
@@ -403,7 +403,7 @@ void CudaCalcGBSWForceKernel::initialize(const System& system, const GBSWForce& 
     // simply is the size of the box. otherwise, make an initial guess of the 
     // lookup table size based on the maximum dimensions of the molecule. in the
     // latter case allocate memory for the lookup table during the first "execute"
-    if (usePeriodic) {
+    if (usingPeriodic) {
         double4 box = cu.getPeriodicBoxSize();
         gridDimlocal[0] = ceil( box.x / deltaR );
         gridDimlocal[1] = ceil( box.y / deltaR );
@@ -660,7 +660,7 @@ double CudaCalcGBSWForceKernel::execute(ContextImpl& context, bool includeForces
         
         // to make an initial guess of the system's size, we needed atom 
         // positions to be set. now that they are, we can assess the system's size
-        if (!nb.getUsePeriodic()) {
+        if (!usingPeriodic) {
             
             double buffer = 1.0;
             int maxDim;
@@ -801,7 +801,7 @@ double CudaCalcGBSWForceKernel::execute(ContextImpl& context, bool includeForces
         map<string, string> defines;
         if (nb.getUseCutoff())
             defines["USE_CUTOFF"] = "1";
-        if (nb.getUsePeriodic())
+        if (usingPeriodic)
             defines["USE_PERIODIC"] = "1";
         if (cu.getComputeCapability() >= 3.0 && !cu.getUseDoublePrecision())
             defines["ENABLE_SHUFFLE"] = "1"; // not used in GBSW, keep for nonbonded force parts
@@ -884,7 +884,7 @@ double CudaCalcGBSWForceKernel::execute(ContextImpl& context, bool includeForces
             cu.replaceStrings(CudaGBSWKernelSources::gbsw1, replacements), defines);
         
         // now assemble the arguments for the CUDA kernels
-        if (!nb.getUsePeriodic()) {
+        if (!usingPeriodic) {
             calcSysExtremaKernel = cu.getKernel(module, "calcSysExtrema");
             sysExtremaArgs.push_back(&cu.getPosq().getDevicePointer());
             sysExtremaArgs.push_back(&params->getDevicePointer());
@@ -895,12 +895,12 @@ double CudaCalcGBSWForceKernel::execute(ContextImpl& context, bool includeForces
         fillLookupTableKernel = cu.getKernel(module, "fillLookupTable");
         fillLookupTableArgs.push_back(&cu.getPosq().getDevicePointer());
         fillLookupTableArgs.push_back(&params->getDevicePointer());
-        if (nb.getUsePeriodic())
+        if (usingPeriodic)
             fillLookupTableArgs.push_back(cu.getPeriodicBoxSizePointer());
         fillLookupTableArgs.push_back(&lookupTable->getDevicePointer());
         sortLookupTableKernel = cu.getKernel(module, "sortLookupTable");
         sortLookupTableArgs.push_back(&cu.getPosq().getDevicePointer());
-        if (nb.getUsePeriodic()) {
+        if (usingPeriodic) {
             sortLookupTableArgs.push_back(cu.getPeriodicBoxSizePointer());
             sortLookupTableArgs.push_back(cu.getInvPeriodicBoxSizePointer());
         }
@@ -913,7 +913,7 @@ double CudaCalcGBSWForceKernel::execute(ContextImpl& context, bool includeForces
         calcBornRArgs.push_back(&QuadPts->getDevicePointer());
         calcBornRArgs.push_back(&QuadPtWeights->getDevicePointer());
         calcBornRArgs.push_back(&lookupTable->getDevicePointer());
-        if (nb.getUsePeriodic()) {
+        if (usingPeriodic) {
             calcBornRArgs.push_back(cu.getPeriodicBoxSizePointer());
             calcBornRArgs.push_back(cu.getInvPeriodicBoxSizePointer());
         }
@@ -992,7 +992,7 @@ double CudaCalcGBSWForceKernel::execute(ContextImpl& context, bool includeForces
     }
     
     // extrema kernel, find system max / min, translation vector
-    if (!nb.getUsePeriodic()) {
+    if (!usingPeriodic) {
         
         // GBSW requires block and thread control to function properly
         // for the remainder of this forcefield, kernels are launched manually
@@ -1028,7 +1028,7 @@ double CudaCalcGBSWForceKernel::execute(ContextImpl& context, bool includeForces
         0, 0, &calcBornRArgs[0], NULL );
     
     // calculate the forces on each atom
-    cu.executeKernel( computeGBSWForceKernel, &computeGBSWForceArgs[0], 
+    cu.executeKernel( computeGBSWForceKernel, &computeGBSWForceArgs[0],
         nb.getNumForceThreadBlocks()*nb.getForceThreadBlockSize(), nb.getForceThreadBlockSize());
     cuLaunchKernel( reduceGBSWForceKernel, cu.getNumAtoms(), 1, 1, numThreads, 1, 1,
         0, 0, &reduceGBSWForceArgs[0], NULL );

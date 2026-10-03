@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Fast Multipole Method (FMM) for Nonbond Interactions</title>
+<link rel="stylesheet" href="charmmdoc.css">
+</head>
+<body>
+<div class="page-header">
+<h1>Fast Multipole Method (FMM) for Nonbond Interactions</h1>
+<div class="nav"><a href="index.html">Index</a><a href="charmm.html">CHARMM Home</a><a href="commands.html">Commands</a></div>
+</div>
+<pre>
+<a id="Top"></a>
+<div class="charmmdoc">
+            Fast Multipole Method (FMM) for Nonbond Interactions
+
+
+     The CHARMM is interfaced to the EXAFMM library for nonbond
+interactions, both Van der Waals and electrostatic. The FMM library is
+in active development but the CHARMM interface is part of the standard
+EXAFMM development and is more or less final, so one can optionally
+link CHARMM to the EXAFMM library obtained from github. The details of
+the EXAFMM library are explained in the following reference:
+R. Yokota, Journal of Algorithms &amp; Computational Technology, Vol 7,
+No.3, pp 301-324, 2013 (http://arxiv.org/abs/1209.3516)
+
+
+
+* <a href="#Description">Description</a> | Description of the OVERLAP commands.
+* <a href="#Usage">Usage</a> | How to use the OVERLAP method.
+* <a href="#Installation">Installation</a> | Installation of the OVERLAP method
+* <a href="#Performance">Performance</a> | Performance Issues
+
+</div>
+<a id="Description"></a>
+<div class="charmmdoc">
+<a href="#Top">Top</a>
+SYNTAX and DESCRIPTION
+======================
+
+
+The interface is based on the GRAPE interface because it uses the same
+parameter data layout for efficiency reasons. So the GRAPE interface
+provides all the necessary data to perform FMM calculations. All the
+interface code is thus in the grape.F90 file.
+
+To initialize the method use:
+
+grape 0 fmm
+
+keywords in any of the nonbond specifications: energy, dyna, nbond,
+update...
+
+</div>
+<a id="Usage"></a>
+<div class="charmmdoc">
+<a href="#Top">Top</a>
+USAGE
+=====
+
+just add the 'grape 0 fmm' to any of the non-bond specification
+
+There are no extra options to the command yet. We are still
+working on the best recommended parameters for the numerical precision
+and runtime efficiency.
+
+</div>
+<a id="Installation"></a>
+<div class="charmmdoc">
+<a href="#Top">Top</a>
+INSTALLATION
+==============
+
+    The EXAFMM library needs to be installed prior to compile CHARMM.
+In order to install the library perform the following commands in
+arbitrary directory, say cd ~/charmm/exafmm :
+
+git clone https://github.com/exafmm/exafmm.git
+
+We tested commit 5d99073a08cc7f6d11e52ec78457b768d4bb6d3f so the
+following will make it ready for CHARMM compile:
+
+git checkout 5d99073a08cc7f6d11e52ec78457b768d4bb6d3f
+
+cd exafmm
+./configure --enable-assert --enable-mpi --enable-openmp --enable-avx --with-tbb CXXFLAGS=-O3
+cd wrappers
+make charmm_mpi
+
+This is for the maximum performance. One can leave out any or all of
+the following:
+--enable-openmp --enable-avx --with-tbb
+
+then the CHARMM compile command is the following:
+
+before using the cmake to compile CHARMM with EXAFMM library the
+following is needed
+
+export EXAFMM=~/charmm/exafmm/exafmm/wrappers
+
+Standard CHARMM cmake or configure procedure to compile CHARMM.
+
+
+</div>
+<a id="Performance"></a>
+<div class="charmmdoc">
+<a href="#Top">Top</a>
+      The main purpose of the EXAFMM interface in CHARMM is the
+performance. The method is promising to scale on the future exaflops
+machines, thus the exa- in the name of the library. It can take
+advantage of the existing and future massively parallel machines
+including accelerated hardware (gpu, xeon phi, etc)
+
+</div>
+</pre>
+</body>
+</html>

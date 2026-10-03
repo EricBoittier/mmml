@@ -16,9 +16,6 @@
 ! * nx = size of the fft transpose in x-direction
 ! *
 subroutine ADD_PREC(allocate_transpose)()
-#if KEY_PARALLEL==1
-  use mpi,only:mpi_status_size  
-#endif
   use memory
   implicit none
   ! Variables
@@ -35,16 +32,12 @@ subroutine ADD_PREC(allocate_transpose)()
 
   if (.not.allocated(pe_list)) then
      call chmalloc('colfft_util.src','allocate_transpose','pe_list',numtasks,ci4=pe_list)
-     call chmalloc('colfft_util.src','allocate_transpose','recv_request',numtasks,&
-          ci4=recv_request)
+     allocate(recv_request(numtasks))
      call chmalloc('colfft_util.src','allocate_transpose','recv_offset',numtasks,lbou=0,&
           ci4=recv_offset)
-     call chmalloc('colfft_util.src','allocate_transpose','send_request',numtasks,&
-          ci4=send_request)
-     call chmalloc('colfft_util.src','allocate_transpose','recv_status',MPI_STATUS_SIZE,&
-          numtasks,ci4=recv_status)
-     call chmalloc('colfft_util.src','allocate_transpose','send_status',MPI_STATUS_SIZE,&
-          numtasks,ci4=send_status)
+     allocate(send_request(numtasks))
+     allocate(recv_status(numtasks))
+     allocate(send_status(numtasks))
   endif
 #endif 
 
@@ -1181,14 +1174,11 @@ end subroutine ADD_PREC(z_fft)
 subroutine ADD_PREC(transpose)(data, from_partition, transposed_data, &
      to_partition, comm_group, recv_buffer, send_buffer)
   use parallel
-#if KEY_PARALLEL==1
-  use mpi              
+#if KEY_DOMDEC_GPU==1
+  !    use domdec_util_gpu_mod,only:range_start, range_stop
 #endif
 #if KEY_DOMDEC_GPU==1
-  !    use domdec_util_gpu_mod,only:range_start, range_stop  
-#endif
-#if KEY_DOMDEC_GPU==1
-  !    use domdec_common,only:q_gpu                       
+  !    use domdec_common,only:q_gpu
 #endif
   implicit none
   ! Input / Output
@@ -1208,11 +1198,11 @@ subroutine ADD_PREC(transpose)(data, from_partition, transposed_data, &
 #if KEY_PARALLEL==1
   integer,parameter :: int_mpi = 4
 #if DOUBLEP == 1
-  integer,parameter :: mpi_real_type = mpi_real8
+  TYPE(MPI_Datatype),parameter :: mpi_real_type = mpi_real8
 #elif SINGLEP == 1
-  integer,parameter :: mpi_real_type = mpi_real4
-#endif 
-#endif 
+  TYPE(MPI_Datatype),parameter :: mpi_real_type = mpi_real4
+#endif
+#endif
   ! Variables
   integer alt_c
   integer alt_from_min,alt_from_max,alt_from_len
@@ -1608,14 +1598,11 @@ end subroutine ADD_PREC(transpose_yzx)
 subroutine ADD_PREC(ftranspose)(data, from_partition, transposed_data, &
      to_partition, comm_group, recv_buffer, send_buffer)
   use parallel
-#if KEY_PARALLEL==1
-  use mpi       
+#if KEY_DOMDEC_GPU==1
+  !    use domdec_util_gpu_mod,only:range_start, range_stop
 #endif
 #if KEY_DOMDEC_GPU==1
-  !    use domdec_util_gpu_mod,only:range_start, range_stop  
-#endif
-#if KEY_DOMDEC_GPU==1
-  !    use domdec_common,only:q_gpu                       
+  !    use domdec_common,only:q_gpu
 #endif
   implicit none
   ! Input / Output
@@ -1634,11 +1621,11 @@ subroutine ADD_PREC(ftranspose)(data, from_partition, transposed_data, &
   integer,parameter :: int_mpi = 4
 #if KEY_PARALLEL==1
 #if DOUBLEP == 1
-  integer,parameter :: mpi_real_type = mpi_real8
+  TYPE(MPI_Datatype),parameter :: mpi_real_type = mpi_real8
 #elif SINGLEP == 1
-  integer,parameter :: mpi_real_type = mpi_real4
-#endif 
-#endif 
+  TYPE(MPI_Datatype),parameter :: mpi_real_type = mpi_real4
+#endif
+#endif
   ! Variables
   integer alt_c
   integer alt_from_min, alt_from_max, alt_from_len

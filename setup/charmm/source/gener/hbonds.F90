@@ -316,7 +316,7 @@ SUBROUTINE HBEDIT(UNIT,X,Y,Z,IMOVE,NATOM,IHB,JHB,KHB,LHB, &
   INTEGER, parameter :: MARK = -99999999
   !
   !     sort-hbond-list
-  CALL SORT(NHB,EXCH5,ORDER5,IHB,KHB,JHB,LHB,ICH,0,0,5)
+  CALL SORT(NHB,EXCH5,ORDER5,IHB,KHB,JHB,LHB,ICH,(/0/),(/0/),(/5/))
   !
   DUPLEX=0
   FIXDEX=0
@@ -403,9 +403,10 @@ SUBROUTINE HBEDIT(UNIT,X,Y,Z,IMOVE,NATOM,IHB,JHB,KHB,LHB, &
   IF (BEST) THEN
      !        evaluate-energy-for-hbond-list
      CALL EHBOND(TOTERG,IHB,JHB,KHB,LHB,ICH,NHB,CHBA,CHBB, &
-          0,0,0,X,Y,Z,.FALSE.,0,3,ENERGY,0,0, &
+          (/0.0d0/),(/0.0d0/),(/0.0d0/),X,Y,Z,.FALSE.,(/0.0d0/), &
+          3,ENERGY,0,(/0/), &
           CTONHB,CTOFHB,CTONHA,CTOFHA,HBEXPN, &
-          0,0,.FALSE.)
+          (/0.0d0/),(/0/),.FALSE.)
      !
      I=1
      DO WHILE (I.LE.NHB)
@@ -717,7 +718,7 @@ SUBROUTINE HBWRIT(IUNIT,LPRINT,LCARD,TITLE,NTITL,ICNTRL,IHB, &
   INTEGER   HBEXPN(*)
   real(chm_real) X(*),Y(*),Z(*)
   !
-  real(chm_real)      DIST, ANGLE, ENERGY, ANTEAN
+  real(chm_real)      DIST(1), ANGLE(1), ENERGY(1), ANTEAN(1)
   real(chm_real)      EHB
   INTEGER     I, NSLCT
   INTEGER     ANTE, DONOR, HYDRO, ACCE
@@ -797,22 +798,26 @@ SUBROUTINE HBWRIT(IUNIT,LPRINT,LCARD,TITLE,NTITL,ICNTRL,IHB, &
            ! now get the data energy, A-D distance, A-H-D angle, H-A-AA angle
            !
            CALL EHBOND(EHB,IHB(I),JHB(I),KHB(I),LHB(I),ICH(I),1, &
-                CHBA,CHBB,0,0,0,X,Y,Z,.FALSE.,0,3,ENERGY,0,0, &
+                CHBA,CHBB,(/0.0d0/),(/0.0d0/),(/0.0d0/),X,Y,Z, &
+                .FALSE.,(/0.0d0/),3,ENERGY,0,(/0/), &
                 CTONHB,CTOFHB,CTONHA,CTOFHA,HBEXPN, &
-                0,0,.FALSE.)
+                (/0.0d0/),(/0/),.FALSE.)
            CALL EHBOND(EHB,IHB(I),JHB(I),KHB(I),LHB(I),ICH(I),1, &
-                CHBA,CHBB,0,0,0,X,Y,Z,.FALSE.,0,1,DIST,0,0, &
+                CHBA,CHBB,(/0.0d0/),(/0.0d0/),(/0.0d0/),X,Y,Z, &
+                .FALSE.,(/0.0d0/),1,DIST,0,(/0/), &
                 CTONHB,CTOFHB,CTONHA,CTOFHA,HBEXPN, &
-                0,0,.FALSE.)
+                (/0.0d0/),(/0/),.FALSE.)
            IF (KHB(I).GT.0) THEN
               CALL EHBOND(EHB,IHB(I),JHB(I),KHB(I),LHB(I),ICH(I),1, &
-                   CHBA,CHBB,0,0,0,X,Y,Z,.FALSE.,0,2, &
-                   ANGLE,0,0,CTONHB,CTOFHB,CTONHA,CTOFHA, &
-                   HBEXPN,0,0,.FALSE.)
+                   CHBA,CHBB,(/0.0d0/),(/0.0d0/),(/0.0d0/),X,Y,Z, &
+                   .FALSE.,(/0.0d0/),2, &
+                   ANGLE,0,(/0/),CTONHB,CTOFHB,CTONHA,CTOFHA, &
+                   HBEXPN,(/0.0d0/),(/0/),.FALSE.)
               CALL EHBOND(EHB,IHB(I),JHB(I),KHB(I),LHB(I),ICH(I),1, &
-                   CHBA,CHBB,0,0,0,X,Y,Z,.FALSE.,0,4, &
-                   ANTEAN,0,0,CTONHB,CTOFHB,CTONHA,CTOFHA, &
-                   HBEXPN,0,0,.FALSE.)
+                   CHBA,CHBB,(/0.0d0/),(/0.0d0/),(/0.0d0/),X,Y,Z, &
+                   .FALSE.,(/0.0d0/),4, &
+                   ANTEAN,0,(/0/),CTONHB,CTOFHB,CTONHA,CTOFHA, &
+                   HBEXPN,(/0.0d0/),(/0/),.FALSE.)
            ENDIF
            !
            !     finally write everthing on IUNIT
@@ -821,12 +826,12 @@ SUBROUTINE HBWRIT(IUNIT,LPRINT,LCARD,TITLE,NTITL,ICNTRL,IHB, &
               WRITE(IUNIT,1030) I,SIDDN(1:idleng),RIDDN(1:idleng), &
                    DN(1:idleng),KN(1:idleng), &
                    AC(1:idleng),LN(1:idleng),RIDAC(1:idleng), &
-                   SIDAC(1:idleng),ENERGY,DIST,ANGLE,ANTEAN
+                   SIDAC(1:idleng),ENERGY(1),DIST(1),ANGLE(1),ANTEAN(1)
            ELSE
               WRITE(IUNIT,1030) I,SIDDN(1:idleng),RIDDN(1:idleng), &
                    DN(1:idleng),KN(1:idleng), &
                    AC(1:idleng),LN(1:idleng),RIDAC(1:idleng), &
-                   SIDAC(1:idleng),ENERGY,DIST
+                   SIDAC(1:idleng),ENERGY(1),DIST(1)
            ENDIF
         ENDIF
      ENDDO
@@ -1062,7 +1067,7 @@ SUBROUTINE HBTRIM
   implicit none
   !
   !
-  real(chm_real)      DIST, ANGLE, ENERGY, ANTEAN, ECUT
+  real(chm_real)      DIST(1), ANGLE(1), ENERGY(1), ANTEAN(1), ECUT
   real(chm_real)      EHB
   INTEGER     I, II, NSLCT
   INTEGER     ANTE, DONOR, HYDRO, ACCE
@@ -1114,24 +1119,28 @@ SUBROUTINE HBTRIM
         !     now get the data energy, A-D distance, A-H-D angle, H-A-AA angle
         !
         CALL EHBOND(EHB,IHB(I),JHB(I),KHB(I),LHB(I),ICH(I),1,CHBA, &
-             CHBB,0,0,0,X,Y,Z,.FALSE.,0,3,ENERGY,0,0, &
+             CHBB,(/0.0d0/),(/0.0d0/),(/0.0d0/),X,Y,Z, &
+             .FALSE.,(/0.0d0/),3,ENERGY,0,(/0/), &
              CTONHB,CTOFHB,CTONHA,CTOFHA,HBEXPN, &
-             0,0,.FALSE.)
-        !        
+             (/0.0d0/),(/0/),.FALSE.)
+        !
         IF(EHB.LE.ECUT) THEN
            CALL EHBOND(EHB,IHB(I),JHB(I),KHB(I),LHB(I),ICH(I),1, &
-                CHBA,CHBB,0,0,0,X,Y,Z,.FALSE.,0,1,DIST,0,0, &
+                CHBA,CHBB,(/0.0d0/),(/0.0d0/),(/0.0d0/),X,Y,Z, &
+                .FALSE.,(/0.0d0/),1,DIST,0,(/0/), &
                 CTONHB,CTOFHB,CTONHA,CTOFHA,HBEXPN, &
-                0,0,.FALSE.)
+                (/0.0d0/),(/0/),.FALSE.)
            IF(KHB(I).GT.0) THEN
               CALL EHBOND(EHB,IHB(I),JHB(I),KHB(I),LHB(I),ICH(I),1, &
-                   CHBA,CHBB,0,0,0,X,Y,Z,.FALSE.,0,2, &
-                   ANGLE,0,0,CTONHB,CTOFHB,CTONHA,CTOFHA, &
-                   HBEXPN,0,0,.FALSE.)
+                   CHBA,CHBB,(/0.0d0/),(/0.0d0/),(/0.0d0/),X,Y,Z, &
+                   .FALSE.,(/0.0d0/),2, &
+                   ANGLE,0,(/0/),CTONHB,CTOFHB,CTONHA,CTOFHA, &
+                   HBEXPN,(/0.0d0/),(/0/),.FALSE.)
               CALL EHBOND(EHB,IHB(I),JHB(I),KHB(I),LHB(I),ICH(I),1, &
-                   CHBA,CHBB,0,0,0,X,Y,Z,.FALSE.,0,4, &
-                   ANTEAN,0,0,CTONHB,CTOFHB,CTONHA,CTOFHA, &
-                   HBEXPN,0,0,.FALSE.)
+                   CHBA,CHBB,(/0.0d0/),(/0.0d0/),(/0.0d0/),X,Y,Z, &
+                   .FALSE.,(/0.0d0/),4, &
+                   ANTEAN,0,(/0/),CTONHB,CTOFHB,CTONHA,CTOFHA, &
+                   HBEXPN,(/0.0d0/),(/0/),.FALSE.)
            ENDIF
            !
            ! finally write everthing on OUTU
@@ -1141,12 +1150,12 @@ SUBROUTINE HBTRIM
                  WRITE(OUTU,1030) I,SIDDN(1:idleng), &
                       RIDDN(1:idleng),DN(1:idleng),KN(1:idleng), &
                       AC(1:idleng),LN(1:idleng),RIDAC(1:idleng), &
-                      SIDAC(1:idleng),ENERGY,DIST,ANGLE,ANTEAN
+                      SIDAC(1:idleng),ENERGY(1),DIST(1),ANGLE(1),ANTEAN(1)
               ELSE
                  WRITE(OUTU,1030) I,SIDDN(1:idleng), &
                       RIDDN(1:idleng),DN(1:idleng),KN(1:idleng), &
                       AC(1:idleng),LN(1:idleng),RIDAC(1:idleng), &
-                      SIDAC(1:idleng),ENERGY,DIST
+                      SIDAC(1:idleng),ENERGY(1),DIST(1)
               ENDIF
            ENDIF
            !             
@@ -1215,6 +1224,26 @@ SUBROUTINE EDHBATOMS(COMLYN,COMLEN,OPER)
 
   call chmalloc('hbonds.src','EDHBATOMS','ISLCT',NATOM,intg=ISLCT)
   CALL SELCTA(COMLYN,COMLEN,ISLCT,X,Y,Z,WMAIN,.TRUE.)
+
+  ! EDHBATOM2's ADD/SET path appends to the donor/acceptor arrays and
+  ! guards only against the MAXPAD capacity.  In the RESIZE build these
+  ! arrays are allocated tight to the current NDON/NACC (not MAXPAD), so
+  ! 'donor add' / 'acceptor add' would write past the heap allocation
+  ! (caught by ASan as a heap-buffer-overflow in EDHBATOM2, and by glibc
+  ! as heap corruption later).  Grow them to MAXPAD here so the append
+  ! is in-bounds.  In the non-RESIZE build they are already MAXPAD, so
+  ! the SIZE() check makes this a no-op.
+  IF(QDONO) THEN
+     IF(SIZE(IDON) < MAXPAD) THEN
+        call chmrealloc('hbonds.src','EDHBATOMS','IDON',MAXPAD,intg=IDON)
+        call chmrealloc('hbonds.src','EDHBATOMS','IHD1',MAXPAD,intg=IHD1)
+     ENDIF
+  ELSE
+     IF(SIZE(IACC) < MAXPAD) THEN
+        call chmrealloc('hbonds.src','EDHBATOMS','IACC',MAXPAD,intg=IACC)
+        call chmrealloc('hbonds.src','EDHBATOMS','IAC1',MAXPAD,intg=IAC1)
+     ENDIF
+  ENDIF
 
   QANTI = INDXA(COMLYN, COMLEN, 'NOAN') .EQ. 0
 
@@ -1332,7 +1361,7 @@ SUBROUTINE EDHBATOM2(ISLCT,QANTI,WRD,IARR,JARR,NARR)
   !
   ! Now sort the final list
   IF(WRD.EQ.'ADD') THEN
-     CALL SORT(NARR,EXCH5,ORDER5,IARR,JARR,0,0,0,0,0,2)
+     CALL SORT(NARR,EXCH5,ORDER5,IARR,JARR,(/0/),(/0/),(/0/),(/0/),(/0/),(/2/))
      IF(PRNLEV.GE.2) WRITE(OUTU,65) NARR-NOLD
 65   FORMAT(' EDHBATOMS:  A total of',I8,' entries were added')
   ELSE

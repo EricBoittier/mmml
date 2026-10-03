@@ -5530,7 +5530,8 @@ contains
     integer i,j,NATOMQ,NCLUSQ,ILENEP,ILENET,ivers,itadvers,NSEGQ
     character(len=1) BIT
     character(len=4) HDR
-    character(len=128) LINE
+    ! Must be >= LENENT (energym.F90); see dynio.F90(READYN).
+    character(len=256) LINE
     logical MISMAT,QET
     !
     IF(IOLEV < 0.or.U <= 0) RETURN
@@ -5707,8 +5708,9 @@ contains
     ! write current flags, energies and statistics
     ! XXX duplicates dynio
     WRITE(U,'(/A)') ' !ENERGIES and STATISTICS'
-    WRITE(U,'(128L1)') (QEPROP(I), I = 1,LENENP)
-    WRITE(U,'(128L1)') (QETERM(I), I = 1,LENENT)
+    ! Repeat count must be >= LENENT (energym.F90); see dynio.F90(WRIDYN).
+    WRITE(U,'(256L1)') (QEPROP(I), I = 1,LENENP)
+    WRITE(U,'(256L1)') (QETERM(I), I = 1,LENENT)
     WRITE(U,'(I8,3D22.15)') ISTPSA,FITA,FITP,AVETEM
     WRITE(U,'(3D22.15)') (EPROP(I),EPRPP(I),EPRP2P(I),I=1,LENENP)
     WRITE(U,'(2D22.15)') (EPRPA(I),EPRP2A(I),I=1,LENENP)

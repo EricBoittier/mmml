@@ -32,9 +32,9 @@ File: Grid, Node: Implementation, Up: (doc/commands.info), Next: Syntax
     Grid-based potentials:  Description and Discussion
 
 
-CHARMM modules involved: misc/grid.src, fcm/grid.fcm, fcm/energy.fcm
-energy/energy.src, energy/eutil.src, energy/intere.src,
-energy/printe.src, charmm/iniall.src, charmm/charmm_main.src
+CHARMM modules involved: misc/grid_dock.F90, fcm/grid.fcm, fcm/energy.fcm
+energy/energy.F90, energy/eutil.F90, energy/intere.F90,
+energy/printe.F90, charmm/iniall.F90, charmm/charmm_main.F90
 
 This module provides code to 1) generate a set of van der Waals and
 electrostatic grid-based potentials and to 2) use these potentials in

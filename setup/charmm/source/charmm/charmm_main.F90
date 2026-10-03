@@ -3,11 +3,11 @@ PROGRAM CHARMM
   !      Chemistry at HARvard Macromolecular Mechanics
   !      -            ---     -              -
   !
-  !      Version 48 - Developmental Version (c48b1) - August 15, 2023
+  !      Version 52 - Developmental Version (c52a1) - August 15, 2026
   !
   !CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
   !                                                                      C
-  !      COPYRIGHT(c) 1984-2023                                          C
+  !      COPYRIGHT(c) 1984-2026                                          C
   !      President and Fellows of Harvard College                        C
   !                                                                      C
   !      All rights reserved                                             C
@@ -144,7 +144,7 @@ PROGRAM CHARMM
   use new_timer,only:init_timers,timer_start,t_total              
   use parallel
 #ifdef KEY_MPI
-  use mpi
+  use mpi_f08
 #endif
   use repdstr
 #if KEY_REPDSTR==1

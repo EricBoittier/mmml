@@ -115,7 +115,9 @@ QUANtum [atom-selection] [GLNK atom-selection] [LEPS int1 int2 int3]
       ewald-spec::=  { [ KMAX integer ]                        } KSQMAX integer
                      { KMXX integer KMXY integer KMXZ integer  }
 
-MULLiken
+MULLiken { save } ! Calculates the Mulliken charges on QM atoms, if save is on the command line
+                  ! these charges are written to the charge array, CG, and can be accessed through
+		  ! CHARMM scalar commands. This is included to enable CM1A-BCC charge model
 
 ADDLinkatom  link-atom-name  atom-spec  atom-spec
 

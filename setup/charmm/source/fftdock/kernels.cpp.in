@@ -1,5 +1,8 @@
 #include "kernels.h"
 
+const std::string Kernels::${gpu_compat_var} =
+  "${gpu_compat_str}";
+
 const std::string Kernels::${conj_mult_var} =
   "${conj_mult_str}";
 

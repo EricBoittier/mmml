@@ -43,7 +43,7 @@ File: RISM, Node: Syntax, Up: Top, Next: Commands, Previous: Top
 
 
    Invoke of the RISM command in the main charmm input file
-   calls the subroutine RISM() (in rism.src). Once control has 
+   calls the subroutine RISM() (in rism.F90). Once control has 
    been transferred to this  subroutine the subsequent commands
    are interpreted using a  parser similar to the CHARMM
    parser. 
@@ -282,7 +282,7 @@ File: RISM, Node: Commands, Up: Syntax, Next: Theory, Previous: Syntax
 
 
 	These commands are similar to the ones recognised by the 
- miscom.src routine (see note* (doc/miscom.info)Syntax ). We will
+ miscom.F90 routine (see note* (doc/miscom.info)Syntax ). We will
  only mention the following differences:
 
 
@@ -705,7 +705,7 @@ A(1,2) A(2,2)  A(3,2) ... A(NPOINT,2)
 	This is the command that starts the iteration cycle that
  solves the RISM integral equations (see *note (doc/rism.info)Theory
  Sections 1 and 2). Invoke of the command ITERate transfers control
- to the subroutine cycles (cycles.src), which parses the command 
+ to the subroutine cycles (cycles.F90), which parses the command 
  line and calls the appropriate routines. All keywords that follow
  the word ITERate should be included in the same line (lines are
  appended if they end with a hyphen, as usual). The keywords used

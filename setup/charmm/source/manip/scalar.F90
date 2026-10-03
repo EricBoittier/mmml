@@ -56,6 +56,7 @@ SUBROUTINE SCALAR
   implicit none
   real(chm_real),allocatable,dimension(:) :: iw,jw
   integer,allocatable,dimension(:) :: FLAGS,iwork
+  integer i
 #if KEY_PERT==1 /*pert0*/
   INTEGER IPSF
 #endif /* (pert0)*/
@@ -382,6 +383,7 @@ SUBROUTINE SCAFIL(WRD,WORK,DX,DY,DZ,X,Y,Z,WMAIN, &
   !
   use chm_kinds
   use cnst_fcm, only: fbeta, allocate_cnst
+  use inbnd, only: e14fac, qe14ff, e14ff, allocate_inbnd
   use stream
   use number
   use fourdm
@@ -391,10 +393,16 @@ SUBROUTINE SCAFIL(WRD,WORK,DX,DY,DZ,X,Y,Z,WMAIN, &
   use varcutm
 #if KEY_MNDO97==1 || KEY_GAMESS==1 || KEY_GAMESSUK==1 || KEY_QCHEM==1 || KEY_QTURBO==1 || KEY_G09==1
   use dimens_fcm
-    use mndo97
+  use mndo97
 #if KEY_MNDO97==1
-    use qm1_info, only : qm_control_r
+  use qm1_info, only : qm_control_c
 #endif
+#endif
+#if KEY_OPENMM==1
+    use omm_main, only: teardown_openmm
+#endif
+#if KEY_BLADE==1
+  use blade_main, only: system_dirty
 #endif 
   !
   implicit none
@@ -472,18 +480,43 @@ SUBROUTINE SCAFIL(WRD,WORK,DX,DY,DZ,X,Y,Z,WMAIN, &
   ELSE IF (WRD == 'VARC') THEN
      call get_varcut(WORK, NATOM)
   ELSE IF (WRD == 'CQMM') THEN
-#if KEY_GAMESSUK==1 || KEY_GAMESS==1 || KEY_QCHEM==1 || KEY_QTURBO==1 || KEY_G09==1
+#if KEY_MNDO97==1
+     if(associated(qm_control_c)) then
+        if(allocated(qm_control_c%CGQMMM)) then
+           DO I=1,NATOM
+              WORK(I)=qm_control_c%CGQMMM(I)
+           ENDDO
+        end if
+     end if
+#elif KEY_GAMESSUK==1 || KEY_GAMESS==1 || KEY_QCHEM==1 || KEY_QTURBO==1 || KEY_G09==1
      DO I=1,NATOM
         WORK(I)=CGQMMM(I)
-     ENDDO
-#elif KEY_MNDO97==1
-     DO I=1,NATOM
-        WORK(I)=qm_control_r%CGQMMM(I)
      ENDDO
 #endif
   else if (wrd == 'FBET') then
      call allocate_cnst(NATOM)  ! special case for Langevin dynamics
      call copy_dyn(work, fbeta, 'FBETA')
+
+  else if (wrd == 'E14F') then
+     if ( .not. allocated(e14ff) ) then
+        if(prnlev>=5) then
+           write(outu,*)'<SCAFIL> E14FF not yet allocated, allocating now'
+        endif
+        call allocate_inbnd(natom)
+     else
+        if(size(e14ff) /= natom) call allocate_inbnd(natom)
+     endif
+     work(1:natom) = e14ff(1:natom)
+     qe14ff = .true.
+     if(prnlev>2) then
+        write(outu,'(a)')' <SCAFIL> Variable atom based e14fac is set-up: Does not work outside of OpenMM and BLaDE'
+     endif
+#if KEY_OPENMM==1
+     call teardown_openmm()
+#endif
+#if KEY_BLADE==1
+     system_dirty = .true.
+#endif
   ELSE IF (WRD == 'X   ') THEN
      DO I=1,NATOM
         WORK(I)=X(I)
@@ -912,9 +945,16 @@ SUBROUTINE SCARET(WRD,WORK,DX,DY,DZ,X,Y,Z,WMAIN, &
   use varcutm
 #if KEY_MNDO97==1
   use mndo97
-  use qm1_info, only : qm_control_r
+  use qm1_info, only : qm_control_c
 #endif 
   use cnst_fcm, only: fbeta, allocate_cnst
+  use inbnd, only: e14fac, qe14ff, e14ff, allocate_inbnd
+#if KEY_OPENMM==1
+  use omm_main, only: teardown_openmm
+#endif
+#if KEY_BLADE==1
+  use blade_main, only: system_dirty
+#endif
   implicit none
   CHARACTER(len=4) WRD
   real(chm_real) DX(*),DY(*),DZ(*),WORK(:)
@@ -1006,12 +1046,16 @@ SUBROUTINE SCARET(WRD,WORK,DX,DY,DZ,X,Y,Z,WMAIN, &
      CGTOT=QTOT
   ELSE IF (WRD == 'CQMM') THEN
 #if KEY_MNDO97==1
-     QTOT=0.0
-     DO I=1,NATOM
-        qm_control_r%CGQMMM(I)=WORK(I)
-        QTOT=QTOT+qm_control_r%CGQMMM(I)
-        if (prnlev >= 2) WRITE(OUTU,435) I, CG(I), qm_control_r%CGQMMM(I)
-     ENDDO
+     QTOT=0.0d0
+     if(associated(qm_control_c)) then
+        if(allocated(qm_control_c%CGQMMM)) then
+           DO I=1,NATOM
+              qm_control_c%CGQMMM(I)=WORK(I)
+              QTOT=QTOT+qm_control_c%CGQMMM(I)
+              if (prnlev >= 2) WRITE(OUTU,435) I, CG(I), qm_control_c%CGQMMM(I)
+           ENDDO
+        end if
+     end if
 435  FORMAT(/,'<SCARET> Charge for atom # (',i8,') changed from (', &
           F12.6,') to (',F12.6,') ',/)
      IF(ABS(ANINT(QTOT)-QTOT) > PT0001) THEN
@@ -1025,6 +1069,26 @@ SUBROUTINE SCARET(WRD,WORK,DX,DY,DZ,X,Y,Z,WMAIN, &
   else if (wrd == 'FBET') then
      if(size(fbeta) /= natom) call allocate_cnst(natom)
      fbeta(1:natom)=work(1:natom)
+
+  else if (wrd == 'E14F') then
+     if ( .not. allocated(e14ff) ) then
+        if(prnlev>=5) then
+           write(outu,*) '<SCARET> E14FF not yet allocated, allocating now'
+        endif
+        call allocate_inbnd(natom)
+     endif
+     if(size(e14ff) /= natom) call allocate_inbnd(natom)
+     e14ff(1:natom)=work(1:natom)
+     qe14ff = .true.
+     if(prnlev>2) then
+        write(outu,'(a)')' <SCARET> Variable atom based e14fac is set-up: Does not work outside of OpenMM and BLaDE'
+     endif
+#if KEY_OPENMM==1
+     call teardown_openmm()
+#endif
+#if KEY_BLADE==1
+     system_dirty = .true.
+#endif
   ELSE IF (WRD == 'X   ') THEN
      DO I=1,NATOM
         X(I)=WORK(I)

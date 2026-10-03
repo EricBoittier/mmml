@@ -85,12 +85,11 @@ void OpenMMGBSW_GBSWForce_getCphmdParameters(const OpenMMGBSW_GBSWForce* target,
 void OpenMMGBSW_GBSWForce_setCphmdParameters(OpenMMGBSW_GBSWForce* target, int index, int titrateResID, double refChargeState1, double refChargeState2, double chargeState1, double chargeState2) {
     reinterpret_cast<OpenMMGBSW::GBSWForce*>(target)->setCphmdParameters(index, titrateResID, refChargeState1, refChargeState2, chargeState1, chargeState2);
 }
-char* OpenMMGBSW_GBSWForce_getLambdaOutputFile(const OpenMMGBSW_GBSWForce* target) {
-    char * result = reinterpret_cast<const OpenMMGBSW::GBSWForce*>(target)->getLambdaOutputFile();
-    return reinterpret_cast<char*>(result);
+const char* OpenMMGBSW_GBSWForce_getLambdaOutputFile(const OpenMMGBSW_GBSWForce* target) {
+    return reinterpret_cast<const OpenMMGBSW::GBSWForce*>(target)->getLambdaOutputFile();
 }
-void OpenMMGBSW_GBSWForce_setLambdaOutputFile(OpenMMGBSW_GBSWForce* target, char* tmp) {
-    reinterpret_cast<OpenMMGBSW::GBSWForce*>(target)->setLambdaOutputFile(reinterpret_cast<char *>(tmp));
+void OpenMMGBSW_GBSWForce_setLambdaOutputFile(OpenMMGBSW_GBSWForce* target, const char* tmp) {
+    reinterpret_cast<OpenMMGBSW::GBSWForce*>(target)->setLambdaOutputFile(tmp);
 }
 double OpenMMGBSW_GBSWForce_getSystemPH(const OpenMMGBSW_GBSWForce* target) {
     double result = reinterpret_cast<const OpenMMGBSW::GBSWForce*>(target)->getSystemPH();

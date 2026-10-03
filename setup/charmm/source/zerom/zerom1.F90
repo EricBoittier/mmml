@@ -56,6 +56,9 @@ SUBROUTINE ZEROM
   use zstruc,only: CSR,CSW
   use nbndcc_utilb,only: parstoperr
   !  use cpustruc,only: NUMNODH,IMYKEYP,HOODCOM
+#if KEY_PARALLEL==1
+  use mpi_f08
+#endif
 
   implicit none
   !
@@ -123,7 +126,6 @@ SUBROUTINE ZEROM
   integer :: ZFILTWU !write unit for filtered conformers
 
 #if KEY_PARALLEL==1
- include 'mpif.h'
  integer,parameter :: NDATA=10
  integer,dimension(NDATA) :: IDATA
  integer(chm_int4) :: IERR, NODE0

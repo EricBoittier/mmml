@@ -9,6 +9,15 @@ if ?hqbm .ne. 1 then
  stop
 endif
 
+! HQBM (Hamiltonian-quenched biased MD) is serial-only: the biased reaction-
+! coordinate energy deadlocks under MPI (the run hangs at the first ENERGY
+! call across ranks).  Skip cleanly when launched with more than one process.
+if ?numnode .gt. 1 then
+ echo "hqbm.inp> HQBM is serial-only; not run under MPI."
+ echo hqbm TESTCASE RESULT: SKIP
+ stop
+endif
+
 SET ProtName  1aps     ! Name of the protein/domain
 SET Bias      5.0      ! Strenght of the bias 
 SET ActualRun hqbm

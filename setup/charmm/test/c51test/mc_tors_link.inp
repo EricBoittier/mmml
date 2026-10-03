@@ -1,0 +1,130 @@
+* Monte Carlo torsion moves with move linking and deletion loop
+* Tests repeated MOVE ADD / MOVE LINK / MC / unlink / MOVE DELETE cycle
+* for a CGenFF ligand with linked torsion rotations.
+*
+
+if ?NUMNODE .gt. 1 then
+    echo "Test NOT performed."
+    stop
+endif
+
+if ?mc .ne. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+
+stream datadir.def
+set testfail 0
+
+! Read CGenFF topology and parameters
+read rtf card name @0/top_all36_cgenff.rtf
+
+bomlev -2
+read param card flex name @0/par_all36_cgenff.prm
+bomlev 0
+
+! Read ligand-specific stream (topology + parameters)
+set seg ligand_8
+stream @0/@seg.str
+
+READ SEQUence CARD
+* Ligand
+*
+   1
+LIG
+
+GENErate @seg SETUP
+
+open read card unit 4 name @0/@seg.pdb
+read coor pdb unit 4
+close unit 4
+
+! Use atom-based non-bonded (group-based has a known MC heap corruption issue)
+ENERgy INBFRQ 1 IHBFRQ 1 ATOM VATOM SWITCH VSWITCH -
+       CUTNB 10.0 CTOFNB 7.5 CTONNB 6.5  EPS 1.0
+
+! Initial total energy guards setup regressions.  ?ENER is the sum of
+! the component terms, so the single total check catches any per-component
+! miss without redundancy.
+@testcheck ?ener 0.48848 0.0001 mc_tors_init_ener
+
+! Loop: add torsion moves, link them, run MC, unlink, delete
+set i
+
+label mc_loop
+
+move add mvtp tors weight 1.00 dmax 180.0 label tr2 fewer 0 -
+     sele atom @seg 1  C3  show end sele atom @seg 1  C4  show end
+move add mvtp tors weight 1.00 dmax 180.0 label tr3 fewer 0 -
+     sele atom @seg 1  C4  show end sele atom @seg 1  C5  show end
+move add mvtp tors weight 1.00 dmax 180.0 label tr4 fewer 0 -
+     sele atom @seg 1  C5  show end sele atom @seg 1  C6  show end
+move add mvtp tors weight 1.00 dmax 180.0 label tr5 fewer 0 -
+     sele atom @seg 1  C7  show end sele atom @seg 1  C8  show end
+move add mvtp tors weight 1.00 dmax 180.0 label tr6 fewer 0 -
+     sele atom @seg 1  C8  show end sele atom @seg 1  C9  show end
+move add mvtp tors weight 1.00 dmax 180.0 label tr7 fewer 0 -
+     sele atom @seg 1  C9  show end sele atom @seg 1  C10 show end
+move add mvtp tors weight 1.00 dmax 180.0 label tr8 fewer 0 -
+     sele atom @seg 1  C11 show end sele atom @seg 1  C12 show end
+move add mvtp tors weight 1.00 dmax 180.0 label tr9 fewer 0 -
+     sele atom @seg 1  C12 show end sele atom @seg 1  C13 show end
+move add mvtp tors weight 1.00 dmax 180.0 label tr10 fewer 0 -
+     sele atom @seg 1  C13 show end sele atom @seg 1  C14 show end
+
+! Link all torsion moves into a single chain
+move link lab1 tr2 lab2 tr3
+move link lab1 tr3 lab2 tr4
+move link lab1 tr4 lab2 tr5
+move link lab1 tr5 lab2 tr6
+move link lab1 tr6 lab2 tr7
+move link lab1 tr7 lab2 tr8
+move link lab1 tr8 lab2 tr9
+move link lab1 tr9 lab2 tr10
+
+! Run MC with linked torsion moves
+MC TEMPerature 300.00 NSTEps 1000 ISEEd 518282 -
+   IDOMcfrq 20 INBFrq 100 IMGFrq 100 IECHeck 100
+
+! Unlink in reverse order
+move link lab1 tr9
+move link lab1 tr8
+move link lab1 tr7
+move link lab1 tr6
+move link lab1 tr5
+move link lab1 tr4
+move link lab1 tr3
+move link lab1 tr2
+
+! Delete all moves
+move dele label tr2
+move dele label tr3
+move dele label tr4
+move dele label tr5
+move dele label tr6
+move dele label tr7
+move dele label tr8
+move dele label tr9
+move dele label tr10
+
+incr i
+
+if i .le. 10 goto mc_loop
+
+! After 10 full cycles of MOVE ADD / MOVE LINK / MC / unlink / MOVE DELETE
+! the move table is empty again.  Re-evaluating ENERGY here is the assertion
+! that exercises the bug this test was written to guard: the LNBDLS segfault
+! (source/mc/moveln.F90, commit 3f64c7b83) when MOVE LINK joins TORS moves
+! that lack bond/angle/improper bonded-term types.  A regression that breaks
+! LNBDLS bookkeeping or move-table teardown would either crash inside the
+! loop, or leave the system in a state where this ENERGY call gives a wrong
+! or non-finite result.  Reference: with seed 518282 and dmax 180 on each
+! linked torsion, MC accepts ~0/1000 moves per inner run (random rotations
+! generate high-energy conformations that fail Metropolis at 300K), so the
+! post-loop energy equals the initial energy to within numerical noise.
+ENERgy
+@testcheck ?ener 0.488477234 0.0001 mc_tors_post_loop_ener
+
+echo mc_tors_link test failures: @testfail
+
+stop

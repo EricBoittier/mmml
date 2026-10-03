@@ -761,7 +761,7 @@ void CudaPMEDirectForce<AT, CT>::calc_14_force(const float4 *xyzq,
 #endif
   }
 
-  int nthread = 512;
+  int nthread = nthread14;
   int nin14block = (nin14list + nthread - 1)/nthread;
   int nex14block = (nex14list + nthread - 1)/nthread;
   int nblock = nin14block + nex14block;

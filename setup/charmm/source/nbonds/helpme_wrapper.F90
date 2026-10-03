@@ -394,14 +394,14 @@ module helpme_wrapper
                if ( current_type .eq. 'D' ) call helpme_destroy(pme)
                if (.not. c_associated(pme)) pme = helpme_createF()
                call helpme_setup_parallelF(pme, rPower, REAL(kappa, chm_real4), splineOrder, aDim, bDim, cDim,&
-                                           REAL(scaleFactor, chm_real4), nThreads, COMM_CHARMM, ZYX, 1, ny_box, nz_box )
+                                           REAL(scaleFactor, chm_real4), nThreads, COMM_CHARMM%MPI_VAL, ZYX, 1, ny_box, nz_box )
                current_type = 'F'
            else
 #endif /* DOMDEC */
                if ( current_type .eq. 'F' ) call helpme_destroy(pme)
                if (.not. c_associated(pme)) pme = helpme_createD()
                call helpme_setup_parallelD(pme, rPower, kappa, splineOrder, aDim, bDim, cDim, scaleFactor, nThreads,&
-                                           COMM_CHARMM, ZYX, 1, ny_box, nz_box )
+                                           COMM_CHARMM%MPI_VAL, ZYX, 1, ny_box, nz_box )
                current_type = 'D'
 #if KEY_DOMDEC==1
            endif
@@ -431,7 +431,7 @@ module helpme_wrapper
                call helpme_setup_compressed_parallelF(pme, rPower, REAL(kappa, chm_real4), splineOrder,&
                                                       aDim, bDim, cDim, maxKA, maxKB, maxKC,&
                                                       REAL(scaleFactor, chm_real4), nThreads,&
-                                                      COMM_CHARMM, ZYX, 1, ny_box, nz_box )
+                                                      COMM_CHARMM%MPI_VAL, ZYX, 1, ny_box, nz_box )
                current_type = 'F'
            else
 #endif /* DOMDEC */
@@ -439,7 +439,7 @@ module helpme_wrapper
                if (.not. c_associated(pme)) pme = helpme_createD()
                call helpme_setup_compressed_parallelD(pme, rPower, kappa, splineOrder,&
                                                       aDim, bDim, cDim, maxKA, maxKB, maxKC,&
-                                                      scaleFactor, nThreads, COMM_CHARMM, ZYX,&
+                                                      scaleFactor, nThreads, COMM_CHARMM%MPI_VAL, ZYX,&
                                                       1, ny_box, nz_box )
                current_type = 'D'
 #if KEY_DOMDEC==1
@@ -538,6 +538,6 @@ module helpme_wrapper
            current_type = ' '
        endif
    end subroutine helpme_destroy
-#endif /* KEY_LJMPE */
+#endif /* KEY_LJPME */
 
  end module helpme_wrapper

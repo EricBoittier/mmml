@@ -2383,7 +2383,7 @@ SUBROUTINE RDC_XPLOR(URDC,NRDC,NSET,Nrdcmp,RDCaLIS,RDCbLIS,REXP, &
    use chm_types
 #if KEY_ENSEMBLE==1
    use ensemble
-   use mpi
+   use mpi_f08
    use memory
 #endif
 #if KEY_PARALLEL==1
@@ -2465,7 +2465,13 @@ SUBROUTINE RDC_XPLOR(URDC,NRDC,NSET,Nrdcmp,RDCaLIS,RDCbLIS,REXP, &
          KK=KK+1
       ENDDO
 
-      if (mynod == 0) then
+      ! Cross-replica averaging over comm_master only makes sense in a genuine
+      ! multi-replica ensemble.  In a plain domain-decomposition run the RDC
+      ! energy is evaluated on the master rank alone, so the other ranks never
+      ! reach this barrier -- guarding on mynod==0 (or lmasternode) left the
+      ! master waiting on a comm_master barrier no one else entered, and it
+      ! deadlocked (test hung until SIGXCPU).  Skip unless a real ensemble is up.
+      if (lensactive .and. lmasternode) then
          call chmalloc('rdc.src','DCALBUF','DCALBUF',(nrdce-nrdcs+1)*nensem,crl=dcalbuf)
          call mpi_barrier(comm_master,ierror)
          call mpi_allgather( &
@@ -2973,7 +2979,7 @@ SUBROUTINE RDC_XPLOR(URDC,NRDC,NSET,Nrdcmp,RDCaLIS,RDCbLIS,REXP, &
    use chutil,only:atomid
 #if KEY_ENSEMBLE==1
    use ensemble
-   use mpi
+   use mpi_f08
    use memory
 #endif
 #if KEY_PARALLEL==1
@@ -3116,7 +3122,13 @@ SUBROUTINE RDC_XPLOR(URDC,NRDC,NSET,Nrdcmp,RDCaLIS,RDCbLIS,REXP, &
          KK=KK+1
       ENDDO
 
-      if (mynod == 0) then
+      ! Cross-replica averaging over comm_master only makes sense in a genuine
+      ! multi-replica ensemble.  In a plain domain-decomposition run the RDC
+      ! energy is evaluated on the master rank alone, so the other ranks never
+      ! reach this barrier -- guarding on mynod==0 (or lmasternode) left the
+      ! master waiting on a comm_master barrier no one else entered, and it
+      ! deadlocked (test hung until SIGXCPU).  Skip unless a real ensemble is up.
+      if (lensactive .and. lmasternode) then
          call chmalloc('rdc.src','DCALBUF','DCALBUF',(nrdce-nrdcs+1)*nensem,crl=dcalbuf)
          call mpi_barrier(comm_master,ierror)
          call mpi_allgather( &

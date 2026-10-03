@@ -16,6 +16,8 @@ source/blade/src/holonomic/virtual.cu
 source/blade/src/holonomic/virtual.h
 source/blade/src/holonomic/rectify.cu
 source/blade/src/holonomic/rectify.h
+source/blade/src/mlp/mlp.h
+source/blade/src/mlp/tani.cu
 source/blade/src/msld/msld.cu
 source/blade/src/msld/msld.h
 source/blade/src/nbdirect/nbdirect.cu
@@ -28,6 +30,9 @@ source/blade/src/rng/rng_gpu.cu
 source/blade/src/rng/rng_gpu.h
 source/blade/src/run/run.cu
 source/blade/src/run/run.h
+source/blade/src/update/lbfgs.cu
+source/blade/src/update/lbfgs.h
+source/blade/src/update/minimize.cu
 source/blade/src/update/pressure.cu
 source/blade/src/update/pressure.h
 source/blade/src/update/update.cu

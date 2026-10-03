@@ -3023,8 +3023,9 @@ SUBROUTINE EIICT2(EINICP,X,Y,Z,DX,DY,DZ,BNBND,ISLCT,JSLCT,ISKIP, &
   !     K. Kuczera, Mar-97
   !
 #if KEY_FLUCQ==1
-  use flucqm,only:fqcfor           
+  use flucqm,only:fqcfor
 #endif
+  use ecnstr_mod, only: ecnstr
   use chm_kinds
   use chm_types
   use dimens_fcm
@@ -3250,10 +3251,10 @@ SUBROUTINE EIICT2(EINICP,X,Y,Z,DX,DY,DZ,BNBND,ISLCT,JSLCT,ISKIP, &
      !
      CALL ECNSTR(ETERM(CHARM),QCNSTR,REFX,REFY,REFZ,RTEMP,NATOM, &
           KCEXPN,XHSCALE,YHSCALE,ZHSCALE,1, &
-          NUMHSETS,TYPHSET,IHSET,QHNORT,QHNOTR, &
+          NUMHSETS,TYPHSET,PARHSET,IHSET,QHNORT,QHNOTR, &
           X,Y,Z,DX,DY,DZ, &
           .FALSE., (/ ZERO /), (/ ZERO /), (/ 0 /), .FALSE. &
-          ,(/0/),(/0,0/),(/0,0/),(/0,0/) &
+          ,numpca,pcax,pcay,pcaz &
           )
 
      !
@@ -3269,7 +3270,7 @@ SUBROUTINE EIICT2(EINICP,X,Y,Z,DX,DY,DZ,BNBND,ISLCT,JSLCT,ISKIP, &
      !
      CALL ECNSTR(ETERM(PCHARM),QCNSTR,REFX,REFY,REFZ,RTEMP,NATOM, &
           KCEXPN,XHSCALE,YHSCALE,ZHSCALE,2, &
-          NUMHSETS,TYPHSET,IHSET,QHNORT,QHNOTR, &
+          NUMHSETS,TYPHSET,PARHSET,IHSET,QHNORT,QHNOTR, &
           X,Y,Z,DX,DY,DZ, &
           .FALSE., (/ ZERO /), (/ ZERO /), (/ 0 /), .FALSE. &
           ,numpca,pcax,pcay,pcaz &

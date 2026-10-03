@@ -266,7 +266,7 @@ pseudo-fortran code:
 		take unconstrained dynamics step
 		call SHAKEA	* satisfy shake and i.c. cons.
 		...
-		call DYNICP	* do pert. and get int. EÕs;
+		call DYNICP	* do pert. and get int. E's;
 		...
 	end do
 
@@ -328,7 +328,7 @@ code shows how these tasks are dispatched:
 			get icval(2,i)	* get perturbed i.c. values
 		end do
 		restore coords. from temp. arrays
-		call mvicp	* move atoms by Ðscale*dz
+		call mvicp	* move atoms by -scale*dz
 		call eiicp	* get E for reverse pert. (esbrp)
 		do i = 1,nicp
 			get icval(3,i)	* get perturbed i.c. values

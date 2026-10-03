@@ -1,0 +1,83 @@
+* Test MC with GROUP-based non-bonded lists
+*
+
+if ?NUMNODE .gt. 1 then
+    echo "Test NOT performed."
+    stop
+endif
+
+if ?mc .ne. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+
+stream datadir.def
+set testfail 0
+
+! Read CGenFF topology and parameters
+read rtf card name @0/top_all36_cgenff.rtf
+
+bomlev -2
+read param card flex name @0/par_all36_cgenff.prm
+bomlev 0
+
+! Read ligand-specific stream (topology + parameters)
+set seg ligand_8
+stream @0/@seg.str
+
+READ SEQUence CARD
+* Ligand
+*
+   1
+LIG
+
+GENErate @seg SETUP
+
+open read card unit 4 name @0/@seg.pdb
+read coor pdb unit 4
+close unit 4
+
+! GROUP-based non-bonded lists for MC
+ENERgy INBFRQ 1 IHBFRQ 1 GROUP VGROUP SWITCH VSWITCH -
+       CUTNB 10.0 CTOFNB 7.5 CTONNB 6.5  EPS 1.0
+
+! Initial total energy guards setup regressions (wrong RTF/params/coords).
+! ?ENER is the sum of bond/angle/dihe/vdw/elec components, so checking all
+! 6 was redundant — the sum alone catches any component miss.
+@testcheck ?ener 3.59099 0.0001 mc_group_init_ener
+
+! Single torsion move -- simplest possible MC
+move add mvtp tors weight 1.00 dmax 180.0 label tr2 fewer 0 -
+     sele atom @seg 1 C3 show end sele atom @seg 1 C4 show end
+
+MC TEMPerature 300.00 NSTEps 10 ISEEd 518282 INBFrq 0 IMGFrq 0 IECHeck 0
+
+! Re-evaluate energy at the post-MC coordinates.  This is the assertion
+! that exercises the bug this test was written to guard: the INB14 sizing
+! fix in mcener.F90 (STUP14_REQSZ helper, commit e1ff1f5ac).  STUP14
+! rebuilds INB14 from the symmetric MCA14 list every time energy is
+! evaluated under GROUP-VGROUP MC; a regression that re-introduces the
+! undersize bug would either crash or corrupt the heap on this call.
+!
+! Reference value is captured on the CI host (morrison, Rocky Linux 9
+! x86_64, conda-forge gcc 12 + openmm 8.5.1).  MC trajectories with a
+! fixed ISEED are deterministic on a given platform but can diverge
+! across platforms because fp non-associativity in the energy
+! reduction shifts the accept/reject boundary on a borderline move.
+! Reference captured at commit 86d5994ab on macOS produced 4.40961
+! (1 of 10 accepted, energy rises); on morrison the same seed gives
+! 3.57433 (0 of 10 accepted, energy unchanged within fp noise).
+! What this assertion validates is that morrison reproduces *its own*
+! MC trajectory bit-stably -- the heap-corruption regression would
+! either crash or perturb that value -- not that the number agrees
+! across platforms.
+!
+! POLICY: refresh this reference only by running the test on CI
+! (morrison's install-bisect tree or equivalent) and reading
+! ?ener from the new output.  Do NOT copy-paste from a local Mac run.
+ENERgy
+@testcheck ?ener 3.57432719 0.0001 mc_group_post_mc_ener
+
+echo mc_group_nbond test failures: @testfail
+
+stop

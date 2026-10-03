@@ -149,6 +149,7 @@
 #endif /* (repmain)  REPLICA*/
         !------------------------------------------------------------------
         !          QC: UW_031205: fix for QM groups
+#if KEY_MNDO97==0 && KEY_SQUANTM==0
 #if KEY_GAMESS==1 || KEY_QUANTUM==1 || KEY_CADPAC==1 || KEY_SCCDFTB==1 || KEY_QCHEM==1 || KEY_QTURBO==1 || KEY_G09==1
         IF (QETERM(QMEL).and.qmused) THEN
            !          skip this pair if both are QM
@@ -160,6 +161,7 @@
            ENDIF
         ENDIF
 #endif 
+#endif
         !
         IF(ISDISP >= 0) THEN
            ! find distances between group centers

@@ -230,6 +230,12 @@ module blade_coords_module
         type(c_ptr), value :: system
       end subroutine blade_send_state
 
+      subroutine blade_send_coordinates(system) bind(c)
+        use, intrinsic :: iso_c_binding, only: c_ptr
+        implicit none
+        type(c_ptr), value :: system
+      end subroutine blade_send_coordinates
+
       subroutine blade_recv_position(system) bind(c)
         use, intrinsic :: iso_c_binding, only: c_ptr
         implicit none
@@ -417,7 +423,7 @@ contains
     implicit none
 
     type(c_ptr) :: system
-    real(chm_real), intent(inout) :: vx(:), vy(:), vz(:)
+    real(chm_real), intent(inout) :: vx(*), vy(*), vz(*)
 
     real(c_double), allocatable :: blade_vel(:)
     integer :: i, n, nelts, err
@@ -522,6 +528,7 @@ contains
        call wrndie(-5, 'copy_theta_c2b', &
             'memory allocation error')
     end if
+    blade_the = 0.0_c_double
 
     if (n .ne. nblock) then
        call wrndie(-5, 'copy_theta_c2b', &
@@ -692,11 +699,20 @@ contains
     eterm(ewksum)=blade_energy(9) ! eenbrecip
     eterm(ewself)=blade_energy(10) ! eenbrecipself
     eterm(ewexcl)=blade_energy(11) ! eenbrecipexcl
-    ! eelambda - missing - msld biasing potentials
-    ! eebias - missing - BLOCK CATS restraints and total charge restraints
-    eprop(epot)=blade_energy(14) ! eepotential
-    eprop(totke)=blade_energy(15) ! eekinetic
-    eprop(tote)=blade_energy(16) ! eetotal
+    eterm(ldbv)=blade_energy(12) ! eelambda - msld biasing potentials
+    eterm(thbv)=blade_energy(13) ! eetheta - msld theta biases
+    eterm(cats)=blade_energy(14) ! eecats - BLOCK CATS restraints
+    eterm(noe)=blade_energy(15) ! eenoe
+    eterm(charm)=blade_energy(16) ! eeharmonic
+    eterm(geo)=blade_energy(17) ! eemmfp (also holds cons dihe)
+    eterm(resd)=blade_energy(18) ! eeresd
+#if KEY_MLMM==1 && KEY_MLPTORCH==1
+    eterm(mlps)=blade_energy(19) ! eemlp
+#endif
+    ! 20 eebias - misc biases, and total charge restraints
+    eprop(epot)=blade_energy(21) ! eepotential
+    eprop(totke)=blade_energy(22) ! eekinetic
+    eprop(tote)=blade_energy(23) ! eetotal
 
     deallocate(blade_energy, stat=err)
     if (err .ne. 0) then
@@ -797,7 +813,7 @@ contains
     implicit none
 
     type(c_ptr) :: system
-    real(chm_real), intent(inout) :: vx(:), vy(:), vz(:)
+    real(chm_real), intent(inout) :: vx(*), vy(*), vz(*)
 
     call copy_box_c2b(system)
     call copy_coords_c2b(system)
@@ -834,6 +850,7 @@ contains
     call blade_recv_theta(system)
     if (qmld) call copy_theta_b2c(system)
   end subroutine copy_alchemical_b2c
+
 #endif /* KEY_BLADE */
 
 end module blade_coords_module

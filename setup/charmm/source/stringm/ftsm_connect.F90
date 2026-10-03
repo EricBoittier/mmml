@@ -14,6 +14,7 @@
       use ftsm_var
       use tsp
       use multicom_aux;
+      use mpi_f08
       use consta
       use stream
       implicit none
@@ -210,7 +211,7 @@
        end subroutine ftsm_reconnect_init
 !=================================================================================
        subroutine ftsm_reconnect(itime)
-       use mpi
+       use mpi_f08
        use bestfit, only : eig3s, RMSBestFit, rmsd, norm3, veccross3
        use clcg_mod, only: random; use reawri, only: iseed
        use parallel, only: psnd4, psnd8
@@ -228,25 +229,25 @@
        real(chm_real) :: d
 !
        integer*4 :: ierror
-       integer*4, dimension(0:2*nstring-1) :: srequest, rrequest
-       integer*4 :: stat(MPI_STATUS_SIZE)
+       TYPE(MPI_Request), dimension(0:2*nstring-1) :: srequest, rrequest
+       TYPE(MPI_Status) :: stat
        real*8 :: path_len(2) ! for determining nore index of optimap path
 !
 #if (KEY_PARALLEL==1)
 #if (KEY_SINGLE==1)
- integer :: mpifloat=MPI_REAL 
+ TYPE(MPI_Datatype) :: mpifloat=MPI_REAL 
 #endif
 #if (KEY_SINGLE==0)
- integer :: mpifloat=MPI_REAL8 
+ TYPE(MPI_Datatype) :: mpifloat=MPI_REAL8 
 #endif
 #if (KEY_INTEGER8==0)
- integer :: mpiint=MPI_INTEGER 
+ TYPE(MPI_Datatype) :: mpiint=MPI_INTEGER 
 #endif
 #if (KEY_INTEGER8==1)
- integer :: mpiint=MPI_INTEGER8 
+ TYPE(MPI_Datatype) :: mpiint=MPI_INTEGER8 
 #endif
- integer :: mpichar=MPI_CHARACTER
- integer :: mpibool=MPI_LOGICAL
+ TYPE(MPI_Datatype) :: mpichar=MPI_CHARACTER
+ TYPE(MPI_Datatype) :: mpibool=MPI_LOGICAL
 #endif
        character(len=len("FTSM_RECONNECT>") ),parameter::whoami="FTSM_RECONNECT>";!macro
 !
@@ -495,24 +496,24 @@
        subroutine ftsm_reconnect_read_map(iunit)
       use stream
       use multicom_aux;
-      use mpi
+      use mpi_f08
       use parallel, only: psnd4, psnd8
 !
 #if (KEY_PARALLEL==1)
 #if (KEY_SINGLE==1)
- integer :: mpifloat=MPI_REAL 
+ TYPE(MPI_Datatype) :: mpifloat=MPI_REAL 
 #endif
 #if (KEY_SINGLE==0)
- integer :: mpifloat=MPI_REAL8 
+ TYPE(MPI_Datatype) :: mpifloat=MPI_REAL8 
 #endif
 #if (KEY_INTEGER8==0)
- integer :: mpiint=MPI_INTEGER 
+ TYPE(MPI_Datatype) :: mpiint=MPI_INTEGER 
 #endif
 #if (KEY_INTEGER8==1)
- integer :: mpiint=MPI_INTEGER8 
+ TYPE(MPI_Datatype) :: mpiint=MPI_INTEGER8 
 #endif
- integer :: mpichar=MPI_CHARACTER
- integer :: mpibool=MPI_LOGICAL
+ TYPE(MPI_Datatype) :: mpichar=MPI_CHARACTER
+ TYPE(MPI_Datatype) :: mpibool=MPI_LOGICAL
 #endif
 !
        integer :: iunit, ierror

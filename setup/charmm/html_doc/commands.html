@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>CHARMM commands</title>
+<link rel="stylesheet" href="charmmdoc.css">
+</head>
+<body>
+<div class="page-header">
+<h1>CHARMM commands</h1>
+<div class="nav"><a href="index.html">Index</a><a href="charmm.html">CHARMM Home</a><a href="commands.html">Commands</a></div>
+</div>
+<pre>
+<a id="Top"></a>
+<div class="charmmdoc">
+                             CHARMM commands
+
+        The commands available for use in CHARMM are classified in
+several groups.
+
+
+* <a href="abpo.html">abpo</a>: Adaptively Biased Path Optimization
+* <a href="ace.html">ace</a>: Analytical Continuum Electrostatics
+* <a href="adumb.html">adumb</a>: ADaptive UMBrella sampling simulation
+* <a href="afm.html">afm</a>: Atomic Force Microscopy Simulation
+* <a href="analys.html">analys</a>: Analysis facility
+* <a href="apbs.html">apbs</a>: Adaptive Poisson-Boltzmann Solver
+* <a href="aspenr.html">aspenr</a>: Atomic Solvation Parameter Based Energy
+* <a href="aspenrmb.html">aspenrmb</a>: ASP Model with Implicit Membrane
+* <a href="axd.html">axd</a>: Accelerated Dynamics module
+* <a href="blade.html">blade</a>: BLaDE GPU Basic Lambda Dynamics Engine module
+* <a href="block.html">block</a>: BLOCK free energy simulation
+* <a href="cca.html">cca</a>: Common Component Architecture
+* <a href="cff.html">cff</a>: Consistent Force Field (CFF)
+* <a href="cheq.html">cheq</a>: CHarge EQuilibration Methods
+* <a href="cons.html">cons</a>: Harmonic and other constraints or SHAKE
+* <a href="charmmrate.html">charmmrate</a>: CHARMM-POLYRATE Interface
+* <a href="corman.html">corman</a>: Commands to manipulate coordinates
+* <a href="correl.html">correl</a>: Time series and correlation functions
+* <a href="corsol.html">corsol</a>: Solvent Correlation Functions
+* <a href="cross.html">cross</a>: Reactive MD with Surface Crossing
+* <a href="crystl.html">crystl</a>: Crystal facility
+* <a href="csa.html">csa</a>: Conformational Space Annealing
+* <a href="dimens.html">dimens</a>: Set maximum dimension parameters for this charmm run.
+* <a href="dims.html">dims</a>: Dynamic IMportance Sampling
+* <a href="drude.html">drude</a>: Drude oscillator commands
+* <a href="dynamc.html">dynamc</a>: Dynamics commands
+* <a href="diesel.html">diesel</a>: QM/MM method interface to DIESEL(GAMESS)
+* <a href="domdec.html">domdec</a>: Domain Decomposition Code
+* <a href="eef1.html">eef1</a>: Effective Energy Function 1
+* <a href="emap.html">emap</a>: The MAP Object Manipulation Commands
+* <a href="energy.html">energy</a>: Energy evaluation
+* <a href="ensemble.html">ensemble</a>: Run communicating copies of CHARMM
+* <a href="epmf.html">epmf</a>: Distance and angle based energy terms
+* <a href="ewald.html">ewald</a>: Ewald summation
+* <a href="extbond.html">extbond</a>: Additional bond potential forms (EXTBOND)
+* <a href="facts.html">facts</a>: Fast Analytical Continuum Solvation Model
+* <a href="fitcharge.html">fitcharge</a>: Charge and Drude Polarizability Fitting
+* <a href="fitparam.html">fitparam</a>: Parameter Fitting Procedure
+* <a href="flucq.html">flucq</a>: QM/MM Fluctuating Charge Potential
+* <a href="fmm.html">fmm</a>: Fast Multipole Method for Nonbond Interactions
+* <a href="fullkern.html">fullkern</a>: RKHS kernel potentials for small molecules
+* <a href="g09.html">g09</a>: QM/MM Based on Gaussian09
+* <a href="gamus.html">gamus</a>: Gaussian Mixture Adaptive Umbrella Sampling
+* <a href="genborn.html">genborn</a>: Generalized Born Solvation Energy
+* <a href="gbim.html">gbim</a>: Generalized Born with Implicit Membrane
+* <a href="gbmv.html">gbmv</a>: Generalized Born Using Molecular Volume
+* <a href="gbsw.html">gbsw</a>: Generalized Born with a simple SWitching
+* <a href="galgor.html">galgor</a>: The genetic algorithm commands
+* <a href="gnn.html">gnn</a>: Genetic Neural Network
+* <a href="graphx.html">graphx</a>: The graphics subsection for workstations
+* <a href="hbonds.html">hbonds</a>: Generation of hydrogen bonds
+* <a href="hbuild.html">hbuild</a>: Construction of hydrogen positions
+* <a href="hqbm.html">hqbm</a>: Biased Molecular Dyanmics
+* <a href="images.html">images</a>: Use of periodic or crystal environment
+* <a href="intcor.html">intcor</a>: Manipulation of internal coordinates
+* <a href="io.html">io</a>: I/O of data structures and files
+* <a href="kernn.html">kernn</a>: Kernel + Neural Network intramolecular potential
+* <a href="lonepair.html">lonepair</a>: Lone-Pair Facility
+* <a href="lupopt.html">lupopt</a>: Low Energy Path OPTimization
+* <a href="mc.html">mc</a>: Monte Carlo simulation program
+* <a href="mcma.html">mcma</a>: Monte Carlo Minimization / Annealing
+* <a href="minimiz.html">minimiz</a>: Description of the minimization methods
+* <a href="miscom.html">miscom</a>: Miscellaneous commands
+* <a href="mlmm.html">mlmm</a>: Machine Learning Potential/MM 
+* <a href="mlpot.html">mlpot</a>: Machine Learning Potential (pyCHARMM)
+* <a href="mmff.html">mmff</a>: Merck Molecular Force Field
+* <a href="mmfp.html">mmfp</a>: Miscelaneous Mean Field Potential
+* <a href="mmpt.html">mmpt</a>: Molecular Mechanics with Proton Transfer
+* MNDO97       (doc/mndo97.info  ). QM/MM method based on MNDO97
+* <a href="mobhy.html">mobhy</a>: Molecular dynamics with mobile protons
+* <a href="molvib.html">molvib</a>: Molecular vibrational analysis facility
+* <a href="mrmd.html">mrmd</a>: Multi-Surface Adiabatic Reactive MD
+* <a href="ms-evb.html">ms-evb</a>: Multi-State Empirical Valence Bond
+* <a href="mscale.html">mscale</a>: Multi Scale Command: MSCALE
+* <a href="mtp.html">mtp</a>: Distributed Multipole facility
+* <a href="nmr.html">nmr</a>: NMR analysis facility
+* <a href="nbonds.html">nbonds</a>: Generation of the non-bonded interaction
+* <a href="overlap.html">overlap</a>: Overlap of Molecular Similarity
+* <a href="parmfile.html">parmfile</a>: CHARMM energy parameters
+* <a href="pbeq.html">pbeq</a>: Poisson-Boltzmann Equation Solver
+* <a href="pert.html">pert</a>: Free energy perturbation simulations
+* <a href="phmd.html">phmd</a>: Continuous constant pH Molecular Dynamics
+* <a href="pipf.html">pipf</a>: Polarizable Intermolecular Pot Functions
+* <a href="pnm.html">pnm</a>: Plastic network mode commands
+* <a href="pressure.html">pressure</a>: Pressure calculation and usage
+* <a href="primo.html">primo</a>: PRIMO potential terms
+* <a href="proto.html">proto</a>: Prototype commands
+* <a href="qchem.html">qchem</a>: QMMM method using Q-CHEM interface
+* <a href="qturbo.html">qturbo</a>: QMMM method using TURBOMOL interface
+* <a href="qmmm.html">qmmm</a>: Quantum and Molecular Mechanical FF
+* <a href="qub.html">qub</a>: Quantized Classical Path Sampling
+* <a href="rdc.html">rdc</a>: Residual Dipolar coupling (RDC) module
+* <a href="rdfsol.html">rdfsol</a>: Radial correlation functions
+* <a href="repdstr.html">repdstr</a>: The Parallel Distributed Replica
+* <a href="replica.html">replica</a>: REPLICA: molecular system replication
+* <a href="restraints.html">restraints</a>: Restraint support across energy engines
+* <a href="rism.html">rism</a>: Reference Interaction Site Model
+* <a href="rush.html">rush</a>: A simple implicit solvent force field
+* <a href="rxncons.html">rxncons</a>: Reaction coordinate constraints
+* <a href="sasa.html">sasa</a>: The SASA implicit solvation model
+* <a href="sbound.html">sbound</a>: Stoichastic boundary
+* <a href="scalar.html">scalar</a>: Scalar command for atom properties
+* <a href="sccdftb.html">sccdftb</a>: QM/MM method interface to SCCDFTB
+* <a href="scpism.html">scpism</a>: SCP Implicit Solvent Model
+* <a href="select.html">select</a>: Use of the atom selection facility
+* <a href="shell.html">shell</a>: Shell decomposition
+* <a href="sgld.html">sgld</a>: Self-Guided Langevin Dynamics
+* <a href="ssnmr.html">ssnmr</a>: Solid State NMR (SSNMR) Energy Functions
+* <a href="stap.html">stap</a>: Statistical torsion angle potential (STAP)
+* <a href="stringm.html">stringm</a>: 0-K String Method
+* <a href="struct.html">struct</a>: Structure manipulation (PSF generation)
+* <a href="subst.html">subst</a>: Command line substitution parameters
+* <a href="tamd.html">tamd</a>: Torsion Angle Molecular Dynamics
+* <a href="test.html">test</a>: Commands to test various things
+* <a href="tmd.html">tmd</a>: Targeted Molecular Dynamics
+* <a href="rtop.html">rtop</a>: Residue Topology File
+* <a href="torque.html">torque</a>: Manipulate torques
+* <a href="tpcntrl.html">tpcntrl</a>: Temperature and pressure control
+* <a href="tps.html">tps</a>: Transition Path Sampling
+* <a href="triakern.html">triakern</a>: Kernel potentials for triatomic systems
+* <a href="trek.html">trek</a>: Reaction coordinate refinement command
+* <a href="perturb.html">perturb</a>: Thermodynamic Simulation Method
+* <a href="umbrel.html">umbrel</a>: Umbrella Sampling
+* <a href="valbond.html">valbond</a>: VALBOND-trans force field
+* <a href="vibran.html">vibran</a>: Vibrational analysis facility
+* <a href="zerom.html">zerom</a>: Zero-Order Minimization
+</div>
+</pre>
+</body>
+</html>

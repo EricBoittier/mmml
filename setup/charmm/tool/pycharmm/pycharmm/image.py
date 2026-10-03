@@ -41,7 +41,7 @@ Set box center at the origin and center by residue for water TIP3
 """
 
 import ctypes
-import pycharmm.lib as lib
+from pycharmm.loader import lib
 
 
 def setup_residue(center_x, center_y, center_z, resname):
@@ -67,7 +67,7 @@ def setup_residue(center_x, center_y, center_z, resname):
     y = ctypes.c_double(center_y)
     z = ctypes.c_double(center_z)
     c_name = ctypes.c_char_p(resname.encode('utf-8'))
-    success = lib.charmm.image_setup_residue(ctypes.byref(x),
+    success = lib.image_setup_residue(ctypes.byref(x),
                                              ctypes.byref(y),
                                              ctypes.byref(z),
                                              c_name)
@@ -97,7 +97,7 @@ def setup_segment(center_x, center_y, center_z, segid):
     y = ctypes.c_double(center_y)
     z = ctypes.c_double(center_z)
     c_name = ctypes.c_char_p(segid.encode('utf-8'))
-    success = lib.charmm.image_setup_segment(ctypes.byref(x),
+    success = lib.image_setup_segment(ctypes.byref(x),
                                              ctypes.byref(y),
                                              ctypes.byref(z),
                                              c_name)
@@ -127,7 +127,7 @@ def setup_selection(center_x, center_y, center_z, selection):
     y = ctypes.c_double(center_y)
     z = ctypes.c_double(center_z)
     sel_c = selection.as_ctypes()
-    success = lib.charmm.image_setup_selection(ctypes.byref(x),
+    success = lib.image_setup_selection(ctypes.byref(x),
                                                ctypes.byref(y),
                                                ctypes.byref(z),
                                                sel_c)
@@ -145,7 +145,7 @@ def get_ucell():
     """
     
     ucell = (ctypes.c_double * 6)(0)
-    status = lib.charmm.image_get_ucell(ucell)
+    status = lib.image_get_ucell(ucell)
     qstatus = bool(status)
     if not qstatus:
         raise RuntimeError('There was a problem fetching unit cell data.')
@@ -163,7 +163,7 @@ def get_ntrans():
     """
     
     ntrans = (ctypes.c_int * 1)()
-    status = lib.charmm.image_get_ntrans(ntrans)
+    status = lib.image_get_ntrans(ntrans)
     qstatus = bool(status)
     if not qstatus:
         raise RuntimeError('There was a problem fetching NTRANS.')
@@ -175,7 +175,7 @@ def update_bimag():
     """Update image - primary atoms non-bonded exclusion list
     """
     
-    lib.charmm.image_update_bimag()
+    lib.image_update_bimag()
     
     return
 

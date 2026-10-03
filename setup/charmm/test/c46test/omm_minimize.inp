@@ -99,9 +99,9 @@ coor rms
 if ?rms gt 2e-2 set passed3 = 0
 if diff gt 2e-3 set passed3 = 0
 if @passed3 eq 1 then
-   echo testcase omm_minimize TEST2: pass
+   echo testcase omm_minimize TEST3: pass
 else
-   echo testcase omm_minimize TEST2: fail  @diff ?rms
+   echo testcase omm_minimize TEST3: fail  @diff ?rms
 endif
 
 calc passed = @passed1 * @passed2 * @passed3

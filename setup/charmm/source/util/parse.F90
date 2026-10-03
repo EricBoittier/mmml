@@ -1,44 +1,59 @@
-!
-!     THIS GROUP OF STRING COMMANDS DEALS WITH I/O
-!
-SUBROUTINE RDCMND(COMLYN,MXCMS2,COMLEN,UNIT,EOF, &
-     QCMPRS,QPRINT,ECHOST)
-  !-----------------------------------------------------------------------
-  !     This routine reads a command in from UNIT. The command
-  !     field on a line may extend to column 100 or may be terminated by
-  !     an exclamation mark anywhere on the line. A command is one command
-  !     field of information unless the last nonblank character in that
-  !     field is a hyphen. In that case, the command field on the next
-  !     record is appended to the characters preceding the hyphen.
-  !     Trailing blanks are removed from all command fields, and lowercase
-  !     letters are converted to uppercase. If an end of file is seen
-  !     while reading a command, EOF is turned on. If EOF is turned on
-  !     when called, the routine returns immediately. If QPRINT is on,
-  !     the records are printed on unit OUTU as they are read. Each line
-  !     printed on output device is prefixed by the ECHOST so that it will
-  !     be easier to find it when scanning the output.
-  !
-  !     36 parameters can be specified by the syntax @n where n is a
-  !     alphanumeric characher {0-9,a-z,A-Z}.  The specified parameter
-  !     string n (stored in CMDPAR.FMC) will be substituted for @n.
-  !
-  !     The flag QCMPRS tells whether to compress the string to remove
-  !     extra blanks.  This should only be done from standard parsing
-  !     sections.  For the parallel versions, this flag is used to control
-  !     communication broadcasting (e.g. the string is broadcast only if
-  !     this flag is set). - BRB
-  !
-  !      Authors: Robert Bruccoleri
-  !               David States
-  !               Bernie Brooks
-  !               Youngdo Won
-  !      Victor Anisimov, 2004
-  !         Disable HYPEN mechanism when RDCMND is invoked from G94INP module,
-  !         which creates Gaussian input file.
-  !
-  !      Modified by Rick Lapp  5 Aug 99 to turn off upper case conversion
-  !        while reading CFF forcefield.
-  !
+!> @file parse.F90
+!> @brief CHARMM command-line tokenizer and parameter substitution.
+!>
+!> Provides the routines that turn one logical CHARMM command (read
+!> from a stream, possibly spanning multiple lines via hyphen
+!> continuation) into a single uppercased command line, with @-style
+!> parameters and ?-style energy/value tokens substituted in.
+!>
+!> Public routines:
+!>   - rdcmnd   read and assemble one command
+!>   - subenr   substitute one ?name energy/value token
+!>   - xtrane   warn about extraneous characters in a residual string
+!>
+!> Private helper:
+!>   - eof_cleanup   shared EOF-handling tail used by rdcmnd
+
+!> @brief Read one logical CHARMM command from a unit.
+!>
+!> Reads input lines from @c unit and assembles them into a single
+!> command stored in @c comlyn / @c comlen. Multiple input lines are
+!> joined into one command when the trailing non-blank character is a
+!> hyphen (continuation). Comments (everything from a `!` to end-of-
+!> line) are stripped. Lowercase letters are converted to uppercase.
+!>
+!> Output also has @-style parameters expanded (via @c parse1) and
+!> ?-style energy/value tokens substituted (via @c subenr).
+!>
+!> @c qprint controls whether read records are echoed to @c outu, with
+!> each echoed line prefixed by @c echost so it is easy to locate when
+!> scanning the output.
+!>
+!> @c qcmprs controls whitespace compression (CHARMM-standard parsing).
+!> On parallel builds it also gates broadcasting of the assembled
+!> command to peer ranks.
+!>
+!> Special cases:
+!>   - If @c eof is .true. on entry, returns immediately.
+!>   - If @c unit is negative, returns immediately with @c eof set.
+!>   - For G94INP> input, the hyphen-continuation mechanism is
+!>     disabled so Gaussian input files pass through unchanged.
+!>
+!> @param[inout] comlyn  Assembled command line (uppercased, trimmed)
+!> @param[in]    mxcms2  Maximum length of comlyn buffer
+!> @param[out]   comlen  Length of the assembled command (in chars)
+!> @param[in]    unit    Fortran unit number to read from
+!> @param[inout] eof     End-of-file flag; set to .true. when the
+!>                       input stream is exhausted
+!> @param[in]    qcmprs  If .true., compress whitespace and broadcast
+!> @param[in]    qprint  If .true., echo each read record to outu
+!> @param[in]    echost  Echo prefix string for the output log
+!>
+!> @author Robert Bruccoleri, David States, Bernard Brooks, Youngdo Won
+!> @author Victor Anisimov  (2004) — disable HYPHEN for G94INP input
+!> @author Rick Lapp        (1999) — disable case conversion for CFF
+subroutine rdcmnd(comlyn,mxcms2,comlen,unit,eof, &
+     qcmprs,qprint,echost)
 #if KEY_REPDSTR==1
   use repdstrmod
 #endif
@@ -51,21 +66,21 @@ SUBROUTINE RDCMND(COMLYN,MXCMS2,COMLEN,UNIT,EOF, &
   use parallel
   use repdstr
 #if KEY_PARALLEL==1
-  use mpi       
+  use mpi_f08
 #endif
   ! VO begin
 #if KEY_MULTICOM==1
-  use mpi                                 
-  use multicom_aux                        
+  use mpi_f08
+  use multicom_aux
   use ifstack
 #endif
   ! VO end
 #if KEY_ENSEMBLE==1
-  use ensemble,only:ensprint     
+  use ensemble,only:ensprint
 #endif
 #if KEY_CFF==1
   use rtf,only:ucase
-#endif 
+#endif
   implicit none
   !
   integer mxcms2,comlen,unit
@@ -75,29 +90,28 @@ SUBROUTINE RDCMND(COMLYN,MXCMS2,COMLEN,UNIT,EOF, &
   integer enrlen
   integer,parameter :: enrmax=20, mxcard=200
   character(len=enrmax) enrst
-  integer cardln,ierror
+  integer cardln
   character(len=mxcard) card
-  integer wdlen,iend,ipar,i,j
+  integer wdlen,iend,ipar,j
   logical eof,qprint,qcmprs,usehyp
   character(len=*) echost
   character(len=80) chint
+  integer reason       ! iostat from card-reading reads (used by both
+                       ! REPDSTR and non-REPDSTR branches)
 #if KEY_REPDSTR==1
   logical repd_print
-  integer reason
 #endif
   logical qmonoscript
-  character(len=1) :: HYPHEN='-', EXCLMK='!', ATMARK='@', SDBLQ='"', &
-       SQUES='?',stemp
+  character(len=1) :: hyphen='-', exclmk='!', atmark='@', sdblq='"', &
+       sques='?'
   !
 #if KEY_ENSEMBLE==1
-  write(chint,*)qcmprs,iolev                       
+  write(chint,*)qcmprs,iolev
 #endif
 #if KEY_ENSEMBLE==1
-  call ensprint("RDCMND>>> qcmprs,iolev",chint)    
+  call ensprint("RDCMND>>> qcmprs,iolev",chint)
 #endif
 #if KEY_PARALLEL==1
-  !write(100+mynodg,'(3(a,l2))') 'DBG: Entering parse. qrepdstr= ', qrepdstr, ' qcmprs= ', qcmprs, ' qrdqtt= ', qrdqtt
-  !flush(100+mynodg)
   if (.not.qrepdstr) then
      if(.not.qcmprs .and. iolev < 0) then
         comlen=0
@@ -114,7 +128,7 @@ SUBROUTINE RDCMND(COMLYN,MXCMS2,COMLEN,UNIT,EOF, &
      usehyp=.true.
   endif
 # if KEY_REPDSTR==1
-  if (repd_inside_if_block.gt.0.and.repd_if_block_stat(repd_inside_if_block).lt.1) then
+  if (repd_inside_if_block > 0 .and. repd_if_block_stat(repd_inside_if_block) < 1) then
     ! Inside if block but not executing. Be silent
     repd_print = .false.
   else
@@ -124,21 +138,22 @@ SUBROUTINE RDCMND(COMLYN,MXCMS2,COMLEN,UNIT,EOF, &
   !--- Clean up the previous command line in case of something left
   comlyn=' '
   comlen=0
-  if(unit < 0) goto 9
+  if (unit < 0) then
+     call eof_cleanup(eof, card, cardln, qcmprs)
+     return
+  end if
 # if KEY_REPDSTR==1
-  if(repd_print .and. prnlev >= 3) write(outu, 201)
+  if (repd_print .and. prnlev >= 3) write(outu, '(2x)')
 # else
-  if(qprint .and. prnlev >= 3) write(outu,201)
+  if (qprint .and. prnlev >= 3) write(outu, '(2x)')
 # endif
-201 format('  ')
 
-
-
-1 continue
+read_card: do
   !
   card(1:mxcard)=' '
+  reason=0
   !     In case of distributed I/O we read from "every" node
-#if KEY_REPDSTR==1 
+#if KEY_REPDSTR==1
   ! Possible cases for reading input in parallel:
   !   1. If no repdstr, only threads with iolev > 0 read.
   !   2. If using repdstr and we are reading main input,
@@ -150,7 +165,7 @@ SUBROUTINE RDCMND(COMLYN,MXCMS2,COMLEN,UNIT,EOF, &
   qmonoscript = .false.
   if (qrepdstr) then
     qmonoscript = .true.
-    if (qrdqtt .or. unit.ne.5) qmonoscript = .false.
+    if (qrdqtt .or. unit /= 5) qmonoscript = .false.
   endif
 
   !! The next two lines completely break subcommand parsing. I have
@@ -158,9 +173,6 @@ SUBROUTINE RDCMND(COMLYN,MXCMS2,COMLEN,UNIT,EOF, &
 
   qmonoscript=qmonoscript.and.(echost == 'CHARMM>' .or. echost == 'MSCALE> ' &
               .or. echost == 'BLOCK> ')
-  reason=0
-  !write(100+mynodg,'(a,l2)') 'DBG: qmonoscript= ', qmonoscript
-  !flush(100+mynodg)
   if (qmonoscript) then
      ! one input CHARMM script only for all independent groups:
      ! each mynod=0 has iolev>0, so we need the test on mynodg here!
@@ -175,16 +187,22 @@ SUBROUTINE RDCMND(COMLYN,MXCMS2,COMLEN,UNIT,EOF, &
   !endif
 #else /**/
 #if KEY_MULTICOM==1 /*  VO string v */
-  if (MPI_COMM_PARSER.eq.MPI_COMM_NULL) return ! should not be necessary, but added for clarity
-  if ((ME_PARSER.eq.0).or.(iolev.gt.0)) then   ! can do without this by setting iolev>=0 where MPI_PARSER=0, but kept for clarity
+  if (mpi_comm_parser == mpi_comm_null) return ! should not be necessary, but added for clarity
+  if (me_parser == 0 .or. iolev > 0) then      ! can do without this by setting iolev>=0 where MPI_PARSER=0, but kept for clarity
 #else /*  VO string end ^ */
-!if(echost .eq. 'TReK> ')write(*,*)'inside of rdcmnd, iolev=',iolev
   if(iolev > 0) then
 #endif
-! THIS IS A PROBLEM SINCE WE GET STUCK WAITING TO READ FROM UNIT 5
-! I expect this is a problem in other places as well
-!if(echost .eq. 'TReK> ')write(*,*)'inside of rdcmnd, waiting to read unit',unit
-   read(unit,'(a)',end=9) card
+   ! Use iostat-based EOF detection (matching the REPDSTR branch above).
+   ! With `end=9`, gfortran refuses subsequent reads on a unit already
+   ! past EOF and aborts with "Sequential READ or WRITE not allowed
+   ! after EOF marker". This bites pycharmm's eval_charmm_script,
+   ! which can call rdcmnd repeatedly on a SCRATCH unit after the
+   ! script's last line has been consumed.
+   read(unit,'(a)',iostat=reason) card
+   if (reason /= 0) then
+      call eof_cleanup(eof, card, cardln, qcmprs)
+      return
+   end if
   endif
 #endif /* KEY_REPDSTR */
   cardln=len_trim(card)
@@ -195,10 +213,8 @@ SUBROUTINE RDCMND(COMLYN,MXCMS2,COMLEN,UNIT,EOF, &
   if (qmonoscript) then
     ! Only the world master read input. Broadcast io result.
     if (qrepmaster) then
-      !write(100+mynodg,'(a)') 'DBG: comm_rep_master bcast reason and card'
-      !flush(100+mynodg)
-      call mpi_bcast(reason, 1,         MPI_INTEGER, 0, comm_rep_master, j)
-      call mpi_bcast(card,   len(card), MPI_CHAR,    0, comm_rep_master, j)
+      call mpi_bcast(reason, 1,         mpi_integer, 0, comm_rep_master, j)
+      call mpi_bcast(card,   len(card), mpi_char,    0, comm_rep_master, j)
     endif
   endif
 # endif
@@ -206,187 +222,260 @@ SUBROUTINE RDCMND(COMLYN,MXCMS2,COMLEN,UNIT,EOF, &
 #if KEY_PARALLEL==1
   if(qcmprs) then
 #if KEY_ENSEMBLE==1
-     call ensprint("RDCMND broadcast"," ")          
+     call ensprint("RDCMND broadcast"," ")
 #endif
 #    if KEY_REPDSTR==1
      ! Send the read result to the rest of comm_charmm to see if EOF was reached
-     !write(100+mynodg,'(a)') 'DBG: comm_charm reason bcast'
-     !flush(100+mynodg)
-     call mpi_bcast(reason, 1, MPI_INTEGER, 0, COMM_CHARMM, J)
-     if (reason .ne. 0) then
+     call mpi_bcast(reason, 1, mpi_integer, 0, comm_charmm, j)
+     if (reason /= 0) then
        ! EOF encountered during read.
-       !write(100+mynodg,'(a)') 'DBG: I AM AT END-OF-FILE'
        card='END-OF-FILE'
        cardln = len_trim(card)
-       EOF=.true.
+       eof=.true.
        return
      endif
 #    endif
      ! VO string v
 #if KEY_MULTICOM==1
-     CALL MPI_BCAST(CARD,MXCARD,MPI_BYTE,0,MPI_COMM_PARSER,J) 
+#    if KEY_REPDSTR==1
+     ! Under repdstr, distribute the assembled command within the local
+     ! replica group (comm_charmm) rather than over the global stringm
+     ! parser communicator (mpi_comm_parser).
+     !
+     ! mpi_comm_parser spans every replica, so broadcasting the command on
+     ! it couples all replicas into one collective for each read.  That is
+     ! fatal to a per-replica stream excursion such as
+     !     if ?myrep .eq. 0 stream <file>
+     ! where only some replicas descend into a nested stream: the replica(s)
+     ! inside the stream issue their excursion reads on mpi_comm_parser while
+     ! the replicas that stayed on the main input issue their next-command
+     ! reads on the same communicator.  The mismatched broadcasts overwrite
+     ! the command buffer on the replicas that stayed behind (observed as a
+     ! garbled command like "C" -> "Unrecognized command").
+     !
+     ! Keeping the distribution replica-local matches the non-stringm
+     ! (KEY_MULTICOM==0) build, which handles this case correctly, and is
+     ! the natural choice for repdstr where each replica is an independent
+     ! parser group.  Cross-replica delivery of shared main-input commands
+     ! is already handled by the comm_rep_master broadcast above (the
+     ! qmonoscript path).
+     if (qrepdstr) then
+        call mpi_bcast(card,mxcard,mpi_byte,0,comm_charmm,j)
+     else
+        call mpi_bcast(card,mxcard,mpi_byte,0,mpi_comm_parser,j)
+     endif
+#    else /* KEY_REPDSTR */
+     call mpi_bcast(card,mxcard,mpi_byte,0,mpi_comm_parser,j)
+#    endif /* KEY_REPDSTR */
 #else
-     CALL PSNDC(CARD,1)                                       
+     call psndc(card,1)
 #endif
      ! VO string ^
 #if KEY_ENSEMBLE==1
-     call ensprint("RDCMND command",card)           
+     call ensprint("RDCMND command",card)
 #endif
      if(card == 'END-OF-FILE') then
         eof=.true.
         return
      endif
 # if KEY_REPDSTR
-  else if (.not.qrepdstr.and.reason.ne.0) then ! qcmprs
+  else if (.not. qrepdstr .and. reason /= 0) then ! qcmprs
     ! No REPD and EOF/error - bail out.
-    goto 9
+    call eof_cleanup(eof, card, cardln, qcmprs)
+    return
 # endif /* KEY_REPDSTR */
   endif ! qcmprs
-#endif 
-  !write(100+mynodg,'(a,a)') 'DBG: card= ', trim(card)
-  !flush(100+mynodg)
+#endif
 
   cardln=mxcard
   call trime(card,cardln)
   if(cardln == 0) cardln=1
   if(qprint.and.prnlev >= 3 &
 #if KEY_MULTICOM==1 /*  VO stringm : conditional evaluation in parallel */
- &          .and. peek_if() & 
+ &          .and. peek_if() &
 #endif
 #if KEY_REPDSTR==1
  &          .and. repd_print &
 #endif
- &                          ) write(outu,200) echost,card(1:cardln)
-200 format(1x,a8,3x,a)
+ &                          ) write(outu, '(1x,a8,3x,a)') echost, card(1:cardln)
 
   iend = index(card(1:cardln), exclmk(1:1))
-  if (iend == 1) goto 1
+  if (iend == 1) cycle read_card        ! whole line is a comment
   if (iend /= 0) then
      cardln=iend-1
      call trime(card,cardln)
   endif
 
 #if KEY_CFF==1
-  if (ucase) &     
+  if (ucase) &
 #endif
        call cnvtuc(card,cardln)
   if(qcmprs) call cmprst(card,cardln)
-  if(cardln == 0) goto 2
+  if (cardln == 0) exit read_card       ! empty after compress; ADDST below
   if(card(cardln:cardln) == hyphen.and.usehyp) then
-     if(cardln == 1) goto 1
+     if (cardln == 1) cycle read_card   ! only a hyphen; get next line
      if(comlen+cardln-1 > mxcms2) then
-        CALL WRNDIE(-1,'<RDCMND>','Command line too long: truncated.')
-     ENDIF
-     CALL ADDST(COMLYN,MXCMS2,COMLEN,CARD,CARDLN-1)
-     GOTO 1
-  ENDIF
+        call wrndie(-1,'<RDCMND>','Command line too long: truncated.')
+     endif
+     call addst(comlyn,mxcms2,comlen,card,cardln-1)
+     cycle read_card                    ! continuation; get next line
+  endif
+  exit read_card                        ! complete command, no continuation
+end do read_card
   !
-2 CONTINUE
-  IF(COMLEN+CARDLN > MXCMS2) THEN
-     CALL WRNDIE(-1,'<RDCMND>','Command line too long: truncated.')
-  ENDIF
-  CALL ADDST(COMLYN,MXCMS2,COMLEN,CARD,CARDLN)
+  if(comlen+cardln > mxcms2) then
+     call wrndie(-1,'<RDCMND>','Command line too long: truncated.')
+  endif
+  call addst(comlyn,mxcms2,comlen,card,cardln)
   !
   !     Before returning the string make any parameter
   !     substitutions that may be required.
   !
-  ! 2000 FORMAT(' ****  WARNING  **** RDCMND Invalid',
-  !     $       ' parameter subsitution. Command ignored.')
-  ! 2010 FORMAT(' RDCMND substituted parameter ',I2,
-  !     $       ' (',A1,') : "',80A1)
-  !
-  IF(QCMPRS) FFOUR=COMLYN(1:4)
+  if(qcmprs) ffour=comlyn(1:4)
 # if KEY_REPDSTR==1
-  if (repd_inside_if_block.gt.0.and.repd_if_block_stat(repd_inside_if_block).lt.1) then
-    ! We are inside a REPD if block but do not need to execute this command.
-    ! No substitutions needed.
-    goto 500
+  if (repd_inside_if_block > 0 .and. &
+      repd_if_block_stat(repd_inside_if_block) < 1) then
+     ! Inside a REPD if-block with this branch disabled — skip parsing
+     ! and substitutions, go straight to cleanup.
+     call trima(comlyn, comlen)
+     return
   endif
 # endif /* KEY_REPDSTR */
 
 #if KEY_MULTICOM==1 /* VO stringm conditional execution in parallel */
-  if (peek_if()) & 
+  if (peek_if()) &
 #endif
-  CALL PARSE1(COMLYN,MXCMS2,COMLEN,QPRINT)
-  IF(COMLEN == 0)RETURN
+  call parse1(comlyn,mxcms2,comlen,qprint)
+  if(comlen == 0)return
   !
   !     Before returning the string make any energy
   !     substitutions that may be required.
   !
-2020 FORMAT(' RDCMND substituted energy or value "',80A1)
-2030 FORMAT(' RDCMND: can not substitute energy "',80A1)
-
   ipar = index(comlyn(1:(comlen - 1)), sques(1:1))
-  IF (IPAR > 0 &
 #if KEY_MULTICOM==1 /*  VO stringm : conditional evaluation in parallel */
-&     .and. peek_if() & 
+  ! Skip the substitution loop when this rank is sitting out the conditional.
+  if (.not. peek_if()) ipar = 0
 #endif
-&              ) THEN
-400  CONTINUE
-     CALL COPSUB(ENRST,ENRMAX,ENRLEN,COMLYN,IPAR+1, &
-          MIN(COMLEN,ENRMAX+IPAR))
-     CALL SUBENR(WDLEN,ENRLEN,ENRST,ENRMAX)
-     IF (ENRLEN > 0) THEN
-        IF (QPRINT .AND. PRNLEV >= 3) THEN
-           WRITE(OUTU,2020) (COMLYN(J:J),J=IPAR,IPAR+WDLEN),SDBLQ, &
-                ' ','t','o',' ',SDBLQ,(ENRST(J:J),J=1,ENRLEN),SDBLQ
-        ENDIF
-        CALL COPSUB(SCRTCH,SCRMAX,SCRLEN,COMLYN,IPAR+WDLEN+1,COMLEN)
-        COMLEN=IPAR-1
-        CALL ADDST(COMLYN,MXCMS2,COMLEN,ENRST,ENRLEN)
-        CALL ADDST(COMLYN,MXCMS2,COMLEN,SCRTCH,SCRLEN)
+  do while (ipar > 0)
+     call copsub(enrst,enrmax,enrlen,comlyn,ipar+1, &
+          min(comlen,enrmax+ipar))
+     call subenr(wdlen,enrlen,enrst,enrmax)
+     if (enrlen > 0) then
+        if (qprint .and. prnlev >= 3) then
+           write(outu, "(' RDCMND substituted energy or value ""',80A1)") &
+                (comlyn(j:j),j=ipar,ipar+wdlen),sdblq, &
+                ' ','t','o',' ',sdblq,(enrst(j:j),j=1,enrlen),sdblq
+        endif
+        call copsub(scrtch,scrmax,scrlen,comlyn,ipar+wdlen+1,comlen)
+        comlen=ipar-1
+        call addst(comlyn,mxcms2,comlen,enrst,enrlen)
+        call addst(comlyn,mxcms2,comlen,scrtch,scrlen)
         ipar = index(comlyn(1:(comlen - 1)), sques(1:1))
-     ELSE
+     else
         !  WE WANT THE WHOLE PARAMETER NAME
-        IF(WRNLEV >= 2) WRITE(OUTU,2030) &
-             (COMLYN(J:J),J=IPAR,IPAR+WDLEN),SDBLQ
-        IPAR=0
-     ENDIF
-     IF (IPAR > 0) GOTO 400
-  ENDIF
-500 continue
-  CALL TRIMA(COMLYN,COMLEN)
-  RETURN
-9 EOF=.TRUE.
+        if(wrnlev >= 2) write(outu, "(' RDCMND: can not substitute energy ""',80A1)") &
+             (comlyn(j:j),j=ipar,ipar+wdlen),sdblq
+        ipar=0
+     endif
+  end do
+  call trima(comlyn,comlen)
+  return
+end subroutine rdcmnd
 
+!> @brief Shared EOF-handling tail for rdcmnd.
+!>
+!> Called from each of the three places in @c rdcmnd that detect
+!> end-of-input (a negative unit, a non-zero iostat from the card read,
+!> or the REPDSTR no-broadcast bail-out). On parallel/qcmprs builds the
+!> string @c 'END-OF-FILE' is broadcast to peer ranks via @c psndc or
+!> @c mpi_bcast so they can also exit the read loop.
+!>
+!> @param[inout] eof     Set to .true. on return
+!> @param[inout] card    If broadcasting, set to 'END-OF-FILE' (for the
+!>                       transmitted message). Otherwise left as-is.
+!> @param[out]   cardln  Trimmed length of @c card (only meaningful if
+!>                       qcmprs and KEY_PARALLEL=1).
+!> @param[in]    qcmprs  Input flag from rdcmnd; gates broadcasting
+subroutine eof_cleanup(eof, card, cardln, qcmprs)
 #if KEY_PARALLEL==1
-  IF(QCMPRS) THEN
-     CARD='END-OF-FILE'
-#if KEY_REPDSTR==1 
-     IF(QREPDSTR.AND.(.NOT.QRDQTT))CALL PSETGLOB    
+#if KEY_REPDSTR==1
+  use repdstr,    only: qrepdstr, qrdqtt, psetglob, psetloc
+#endif
+#if KEY_MULTICOM==1
+  use mpi_f08,         only: mpi_bcast, mpi_byte
+  use multicom_aux,    only: mpi_comm_parser
+#endif
+#if KEY_ENSEMBLE==1
+  use ensemble,   only: ensprint
+#endif
+#endif
+  implicit none
+  logical,            intent(inout) :: eof
+  character(len=*),   intent(inout) :: card
+  integer,            intent(out)   :: cardln
+  logical,            intent(in)    :: qcmprs
+#if KEY_PARALLEL==1 && KEY_MULTICOM==1
+  integer :: ierr
+#endif
+
+  eof = .true.
+#if KEY_PARALLEL==1
+  if (qcmprs) then
+     card = 'END-OF-FILE'
+#if KEY_REPDSTR==1
+     if (qrepdstr .and. .not. qrdqtt) call psetglob
 #endif
      cardln = len_trim(card)
 #if KEY_ENSEMBLE==1
-     call ensprint("RDCMND broadcast"," ")     
+     call ensprint("RDCMND broadcast", " ")
 #endif
-     ! VO string v
 #if KEY_MULTICOM==0
-     CALL PSNDC(CARD,1)                                       
+     call psndc(card, 1)
 #endif
 #if KEY_MULTICOM==1
-     CALL MPI_BCAST(CARD,MXCARD,MPI_BYTE,0,MPI_COMM_PARSER,J) 
+     call mpi_bcast(card, len(card), mpi_byte, 0, mpi_comm_parser, ierr)
 #endif
-     ! VO string ^
 #if KEY_ENSEMBLE==1
-     call ensprint("RDCMND command",card)     
+     call ensprint("RDCMND command", card)
 #endif
-#if KEY_REPDSTR==1 
-     IF(QREPDSTR.AND.(.NOT.QRDQTT))CALL PSETLOC     
+#if KEY_REPDSTR==1
+     if (qrepdstr .and. .not. qrdqtt) call psetloc
 #endif
-  ENDIF
-#endif 
-  !
-  RETURN
-END SUBROUTINE RDCMND
+  end if
+#endif
+end subroutine eof_cleanup
 
-SUBROUTINE SUBENR(WDLEN,ENRLEN,ENRST,ENRMAX)
-  !-----------------------------------------------------------------------
-  !     THIS ROUTINE GENERATES AN ENERGY STRING SUBSTITUTION
-  !
-  !     This routine is to remain internal to STRING.FLX  - BRB
-  !
-  !      Bernard R. Brooks   9/9/83
-  !
+!> @brief Substitute one ?-style energy/value token in a CHARMM command.
+!>
+!> Looks at the first whitespace-delimited word in @c enrst (parsed via
+!> @c nexta8) and produces a textual replacement when the word matches:
+!>
+!>   - an energy property  (CEPROP[i]  → EPROP[i])
+!>   - an energy term      (CETERM[i]  → ETERM[i])
+!>   - a virial component  (CEPRSS[i]  → EPRESS[i])
+!>   - 'RAND' / 'RANDOM'   → next call to @c ranumb()
+!>   - 'ISEE' / 'ISEED'    → current @c irndsd integer
+!>   - any miscellaneous parameter registered via @c find_param,
+!>     attempted in the order: real, integer, character.
+!>
+!> If no match is found, @c enrlen is left at 0 to signal failure to
+!> the caller (rdcmnd's substitution loop, which then prints a warning).
+!>
+!> Intended to remain internal to the parser; not part of the public
+!> CHARMM API.
+!>
+!> @param[out]   wdlen   Length of the recognized substitution token in
+!>                       @c enrst (input form), used by the caller to
+!>                       know how many characters to overwrite.
+!> @param[inout] enrlen  On entry: length of the input candidate string.
+!>                       On exit: length of the substituted text, or 0
+!>                       if no substitution was produced.
+!> @param[inout] enrst   On entry: candidate token. On exit: substituted
+!>                       text (when a match is found).
+!> @param[in]    enrmax  Maximum length of @c enrst.
+!>
+!> @author Bernard R. Brooks (1983)
+subroutine subenr(wdlen,enrlen,enrst,enrmax)
   use chm_kinds
   use exfunc
   use energym
@@ -397,110 +486,121 @@ SUBROUTINE SUBENR(WDLEN,ENRLEN,ENRST,ENRMAX)
   !
   implicit none
   !
-  INTEGER WDLEN,ENRLEN,ENRMAX
-  character(len=*) ENRST
-  character(len=8) WRD
-  INTEGER I
+  integer wdlen,enrlen,enrmax
+  character(len=*) enrst
+  character(len=8) wrd
+  integer i
   !
-  real(chm_real) R
-  INTEGER IVAL
+  real(chm_real) r
+  integer ival
   logical :: found
   found = .false.
   !
-  WRD=NEXTA8(ENRST,ENRLEN)
-  IF(WRD == ' ') RETURN
-  WDLEN=8
-  CALL TRIME(WRD,WDLEN)
+  wrd=nexta8(enrst,enrlen)
+  if(wrd == ' ') return
+  wdlen=8
+  call trime(wrd,wdlen)
   !
   !     Do energy value substitutions
-  ENRLEN=0
-  DO I=1,LENENP
-     IF(WRD == CEPROP(I)) THEN
-        R=EPROP(I)
-        CALL ENCODF(R,ENRST,ENRMAX,ENRLEN)
-        RETURN
-     ENDIF
-  ENDDO
-  DO I=1,LENENT
-     IF(WRD == CETERM(I)) THEN
-        R=ETERM(I)
-        CALL ENCODF(R,ENRST,ENRMAX,ENRLEN)
-        RETURN
-     ENDIF
-  ENDDO
-  DO I=1,LENENV
-     IF(WRD == CEPRSS(I)) THEN
-        R=EPRESS(I)
-        CALL ENCODF(R,ENRST,ENRMAX,ENRLEN)
-        RETURN
-     ENDIF
-  ENDDO
+  enrlen=0
+  do i=1,lenenp
+     if(wrd == ceprop(i)) then
+        r=eprop(i)
+        call encodf(r,enrst,enrmax,enrlen)
+        return
+     endif
+  enddo
+  do i=1,lenent
+     if(wrd == ceterm(i)) then
+        r=eterm(i)
+        call encodf(r,enrst,enrmax,enrlen)
+        return
+     endif
+  enddo
+  do i=1,lenenv
+     if(wrd == ceprss(i)) then
+        r=epress(i)
+        call encodf(r,enrst,enrmax,enrlen)
+        return
+     endif
+  enddo
 
   !     Do random number substitution
-  IF(WRD == 'RAND' .OR. WRD.EQ.'RANDOM') THEN
-     R=RANUMB()
-     CALL ENCODF(R,ENRST,ENRMAX,ENRLEN)
-     RETURN
-  ENDIF
+  if(wrd == 'RAND' .or. wrd == 'RANDOM') then
+     r=ranumb()
+     call encodf(r,enrst,enrmax,enrlen)
+     return
+  endif
 
   !     Do random number substitution
-  IF(WRD == 'ISEE' .OR. WRD.EQ.'ISEED') THEN
-     IVAL = IRNDSD
-     CALL ENCODI(IVAL,ENRST,ENRMAX,ENRLEN)
-     RETURN
-  ENDIF
+  if(wrd == 'ISEE' .or. wrd == 'ISEED') then
+     ival = irndsd
+     call encodi(ival,enrst,enrmax,enrlen)
+     return
+  endif
 
   !     Do miscellaneous real substitutions
-  call find_param(wrd, R, found)
-  IF (found) THEN
-    CALL ENCODF(R,ENRST,ENRMAX,ENRLEN)
-    RETURN
-  END IF
+  call find_param(wrd, r, found)
+  if (found) then
+    call encodf(r,enrst,enrmax,enrlen)
+    return
+  end if
 
   !     Do miscellaneous integer substitutions
   call find_param(wrd, ival, found)
-  IF (found) THEN
-    CALL ENCODI(ival, ENRST, ENRMAX, ENRLEN)
-    RETURN
-  END IF
+  if (found) then
+    call encodi(ival, enrst, enrmax, enrlen)
+    return
+  end if
 
   !     Do miscellaneous character substitutions
   call find_param(wrd, enrst, found)
   if (found) then
-    ENRLEN = 8
-    CALL TRIME(ENRST, ENRLEN)
-    RETURN
+    enrlen = 8
+    call trime(enrst, enrlen)
+    return
   end if
 
-  RETURN
-END SUBROUTINE SUBENR
+  return
+end subroutine subenr
 
-SUBROUTINE XTRANE(ST,STLEN,IDST)
-  !-----------------------------------------------------------------------
-  !     Checks to see if ST contains extraneous characters, ie. sees if it
-  !     non-blank and prints a message including the character string,
-  !     IDST, if it does.
-  !
-  !      Author: Robert Bruccoleri
-  !
+!> @brief Warn if a residual command string contains extraneous text.
+!>
+!> After a CHARMM command parser has consumed the tokens it understood,
+!> any remaining non-blank content in @c st is an indication of a typo
+!> or unrecognized option. This routine trims @c st, and if anything
+!> non-blank remains it prints a warning identifying which command
+!> the leftover came from (via @c idst). On exit @c stlen is reset to
+!> 0 so the same residue is not re-reported by a later caller.
+!>
+!> The warning is gated on @c wrnlev >= 2 and @c prnlev >= 2.
+!>
+!> @param[inout] st     Command-line residue to inspect; reset to "" on
+!>                      exit if anything was reported.
+!> @param[inout] stlen  Length of @c st on entry; 0 on exit.
+!> @param[in]    idst   Identifier for the calling command, used in the
+!>                      warning message.
+!>
+!> @author Robert Bruccoleri
+subroutine xtrane(st,stlen,idst)
   use chm_kinds
   use stream
   use string
   implicit none
-  character(len=*) ST
-  INTEGER STLEN
-  character(len=*) IDST
+  character(len=*) st
+  integer stlen
+  character(len=*) idst
   !
-  CALL TRIMA(ST,STLEN)
-  IF(STLEN > 0) THEN
-     IF(WRNLEV >= 2) THEN
-        if (prnlev >= 2) WRITE(OUTU,90) IDST
-        if (prnlev >= 2) CALL PRNTST(OUTU,ST,STLEN,1,80)
-     ENDIF
-     STLEN=0
-  ENDIF
-90 FORMAT(' **** Warning ****  The following extraneous characters', &
-       /,' were found while command processing in ',A)
+  call trima(st,stlen)
+  if(stlen > 0) then
+     if(wrnlev >= 2) then
+        if (prnlev >= 2) write(outu, &
+             '(" **** Warning ****  The following extraneous characters",&
+             &/," were found while command processing in ",A)') idst
+        if (prnlev >= 2) call prntst(outu,st,stlen,1,80)
+     endif
+     stlen=0
+  endif
   !
-  RETURN
-END SUBROUTINE XTRANE
+  return
+end subroutine xtrane

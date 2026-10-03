@@ -105,15 +105,11 @@ ENERGY
 
 set refener 10.21496
 
-calc diff = abs(?ener - @refener)
-if diff gt 0.001 then
-   echo "Test failed, incorrect total energy"
-   stop
-endif
+! Absolute check: |?ener - refener| <= 0.001  (negative tol in
+! test.str => absolute comparison vs |tol|).
+@testcheck ?ener @refener -0.001 KMDCM_WATER_ENER
 
 coor force comp
 
 TEST FIRST
-
-echo "TEST SUCCESSFUL"
 

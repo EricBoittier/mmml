@@ -294,8 +294,15 @@ free energy cost. To include this term add the keyword EPOR, for example:
 
 eef1 setup ... rcyl 10 epor
 
-It is also possible to use a different value for NSMTH in the radial direction
-than in the z direction by using the keyword NSMP.
+	It is also possible to use a different value for NSMTH in the radial direction
+than in the z direction by using the keyword NSMP. This is necessary for large
+radii because the thickness of the interface changes significantly with radius
+(see Rahaman & Lazaridis, BBA Biomembranes 1838:98 (2014)).
+
+	The parabolic pore code has been co-opted to model a bicelle. To model a
+bicelle simply replace the keyword rprb with rbic. E.g., "rbic 60 aprb 10 nsmp 44"
+models a bicelle of radius 60 Ang with an added 10 Ang at the midplane. The large
+nsmp value is such that the interface thickness remains ~6 Ang.
 
 	For pores in anionic membranes the Gouy-Chapman analytical equations
 do not apply. It is possible, however, to obtain the potential by numerical

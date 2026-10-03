@@ -123,8 +123,8 @@ SUBROUTINE HBUIL1(UNIT,HFLAGS,WATACC,NWATAC,X,Y,Z, &
   !
   !     the PSF donor and acceptor lists are sorted
   !
-  CALL SORT(NDON,EXCH5,ORDER5,IDON,IHD1,0,0,0,0,0,2)
-  CALL SORT(NACC,EXCH5,ORDER5,IACC,IAC1,0,0,0,0,0,2)
+  CALL SORT(NDON,EXCH5,ORDER5,IDON,IHD1,(/0/),(/0/),(/0/),(/0/),(/0/),2)
+  CALL SORT(NACC,EXCH5,ORDER5,IACC,IAC1,(/0/),(/0/),(/0/),(/0/),(/0/),2)
 
   CALL HBUIL2(UNIT,HFLAGS,WATACC,NWATAC, &
        X,Y,Z,BNBND,PHISTP,CUTWAT,QPRINT, &
@@ -166,12 +166,16 @@ SUBROUTINE HBUIL2(UNIT,HFLAGS,WATACC,NWATAC, &
   LOGICAL   QPRINT
   INTEGER   MAXDIH
 
-  integer :: HHCODE(NATOM), NATBON(NATOM), IATBON(IATBMX,NATOM)
+  integer :: HHCODE(NATOM), NATBON(NATOM)
   real(chm_real) :: WATPRT(NATOM)
   integer :: WATPER(NATOM)
   integer :: FREEAT(IATBMX), FIXDAT(IATBMX)
-  real(chm_real) :: FREEBD(IATBMX), FRFXAN(IATBMX,IATBMX)
-  real(chm_real) :: FRFRAN(IATBMX,IATBMX)
+  real(chm_real) :: FREEBD(IATBMX)
+  ! IATBON is IATBMX*NATOM and FRFXAN/FRFRAN are IATBMX*IATBMX; heap-allocate
+  ! so a large DIMENS IATBMX does not put big automatic arrays on the stack
+  ! (local allocatables are auto-freed on return)
+  integer,allocatable :: IATBON(:,:)
+  real(chm_real),allocatable :: FRFXAN(:,:), FRFRAN(:,:)
   integer :: IDIHDL(MAXDIH)
   integer :: IWORK(NACC+NST2)
   real(chm_real) :: RWORK(NACC+NST2)
@@ -221,6 +225,8 @@ SUBROUTINE HBUIL2(UNIT,HFLAGS,WATACC,NWATAC, &
   !     Note: the IDON, IHD1 and IACC, IAC1 listings should be sorted.
   !
   RAD=PI/ONE8TY
+  !
+  allocate(IATBON(IATBMX,NATOM), FRFXAN(IATBMX,IATBMX), FRFRAN(IATBMX,IATBMX))
   !
   !     MAKE BOND LIST
   !     First make a list of all bonds
@@ -1234,8 +1240,8 @@ SUBROUTINE FXFRATM(UNIT,NFREAT,NFIXAT,DONOR,NATBON,IATBON,HFLAGS, &
   !
   !     finally, sort the fixed and the free listing.
   !
-  CALL SORT(NFREAT,EXCH,ORDER,FREEAT,1,0,0,0,0,0,0)
-  CALL SORT(NFIXAT,EXCH,ORDER,FIXDAT,1,0,0,0,0,0,0)
+  CALL SORT(NFREAT,EXCH,ORDER,FREEAT,(/1/),(/0/),(/0/),(/0/),(/0/),(/0/),0)
+  CALL SORT(NFIXAT,EXCH,ORDER,FIXDAT,(/1/),(/0/),(/0/),(/0/),(/0/),(/0/),0)
 
   RETURN
 END SUBROUTINE FXFRATM

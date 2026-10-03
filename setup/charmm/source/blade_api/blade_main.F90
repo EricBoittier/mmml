@@ -1,4 +1,5 @@
 module blade_main
+  use, intrinsic :: iso_c_binding, only: c_associated, c_double, c_int
   use chm_kinds
   use blade_module, only: system
   use stream
@@ -8,10 +9,11 @@ module blade_main
   integer, parameter :: DYN_UNINIT = 0, DYN_RESTART = 1, &
        DYN_SETVEL = 2,  DYN_CONTINUE = 3
 
-  integer :: dynamics_mode, ngpus = 0
+  integer :: dynamics_mode = DYN_UNINIT, ngpus = 0
   integer, dimension(:), allocatable :: gpus
   logical, save :: blade_initialized = .false.
   logical, save :: system_dirty = .false.
+  integer, save :: blade_verbose_level = 0
 
   integer, save :: navestps
 
@@ -42,11 +44,12 @@ module blade_main
         type(c_ptr), value :: system
       end subroutine blade_rectify_holonomic
 
-      subroutine blade_get_force(system, report_energy) bind(c)
+      subroutine blade_get_force(system, report_energy, refill_random) bind(c)
         use, intrinsic :: iso_c_binding, only: c_ptr, c_int
         implicit none
         type(c_ptr), value :: system
         integer(c_int), value :: report_energy
+        integer(c_int), value :: refill_random
       end subroutine blade_get_force
 
       subroutine blade_update(system) bind(c)
@@ -73,6 +76,14 @@ module blade_main
         type(c_ptr), value :: system
       end subroutine blade_dynamics_initialize
 
+      integer(c_int) function blade_minimizer(system,nsteps,mintype,steplen) bind(c)
+        use, intrinsic :: iso_c_binding, only: c_ptr, c_double, c_int
+        implicit none
+        type(c_ptr), value :: system
+        integer(c_int), value :: nsteps, mintype
+        real(c_double), value :: steplen
+      end function blade_minimizer
+
       subroutine blade_range_begin(message) bind(c)
         use, intrinsic :: iso_c_binding, only: c_ptr, c_char
         implicit none
@@ -86,6 +97,73 @@ module blade_main
 
  contains
 
+#if KEY_BLADE == 1
+   !> Push a new pH-dependent BIELAM vector into a clean live BLaDE MSLD
+   !> system. A system that has not been initialized yet is a successful
+   !> no-op: its normal setup path will read the new CHARMM bias values.
+   integer(c_int) function blade_sync_ph_bias_from_values(biases, count)
+     use blade_block_module, only: blade_sync_msld_bias
+     use lambdam, only: qmld, nblock
+
+     implicit none
+     real(c_double), dimension(*), intent(in) :: biases
+     integer(c_int), intent(in) :: count
+     integer(c_int) :: sync_status
+
+     blade_sync_ph_bias_from_values = 1_c_int
+     if (.not. blade_initialized .or. .not. c_associated(system)) return
+     if (system_dirty .or. .not. qmld .or. count /= nblock .or. count < 1) then
+       blade_sync_ph_bias_from_values = 0_c_int
+       return
+     endif
+
+     sync_status = blade_sync_msld_bias(system, biases, count)
+     if (sync_status == 0_c_int) then
+       blade_sync_ph_bias_from_values = 0_c_int
+       return
+     endif
+   end function blade_sync_ph_bias_from_values
+#endif
+
+   !> Set the BLaDE verbose level
+   subroutine blade_set_verbose_level(level)
+     implicit none
+     integer, intent(in) :: level
+     blade_verbose_level = level
+   end subroutine blade_set_verbose_level
+
+! UNUSED
+!    !> Get the BLaDE verbose level
+!    integer function blade_get_verbose_level()
+!      implicit none
+!      blade_get_verbose_level = blade_verbose_level
+!    end function blade_get_verbose_level
+
+   !> blade_log - main logging function called by BLaDE core
+   !> Converts C string to Fortran and writes to CHARMM output stream
+   subroutine blade_log(message) bind(c, name='blade_log')
+     use, intrinsic :: iso_c_binding, only: c_char, c_null_char
+     use stream, only: OUTU
+     implicit none
+     character(kind=c_char), intent(in) :: message(*)
+
+     character(len=1024) :: fortran_string
+     integer :: i, string_length
+
+     ! Convert C string to Fortran string
+     string_length = 0
+     do i = 1, 1024  ! Use fixed upper bound instead of size()
+        if (message(i) == c_null_char) exit
+        string_length = string_length + 1
+        fortran_string(i:i) = message(i)
+     end do
+
+     ! Write to CHARMM output
+     if (string_length > 0) then
+        write(OUTU, '(a)', advance='no') fortran_string(1:string_length)
+     end if
+   end subroutine blade_log
+
 !    subroutine omm_dynamics(optarg, vx_t, vy_t, vz_t, vx_pre, vy_pre, vz_pre, &
 !          jhtemp, gamm, ndegf, igvopt, npriv, istart, istop, &
 !          iprfrq, isvfrq, ntrfrq, openmm_ran)
@@ -93,6 +171,10 @@ module blade_main
         jhtemp, gamm, ndegf, igvopt, npriv, istart, istop, &
         iprfrq, isvfrq)
      use blade_dynopts, only: blade_dynopts_t
+     use contrl, only: irest
+#if KEY_BLOCK == 1
+     use lambdam, only: qmld, nsitemld, nsubmld, thetamld, thetavmld
+#endif
      ! use, intrinsic :: iso_c_binding, only: c_char, c_null_char
      ! use blade_module, only: blade_range_begin, blade_range_end
 
@@ -105,6 +187,20 @@ module blade_main
      real(chm_real), intent(in) :: gamm(:)
      integer, intent(in) :: ndegf, igvopt, istart, istop, iprfrq, isvfrq
      integer, intent(inout) :: npriv
+#if KEY_BLOCK == 1
+     integer :: i
+#endif
+
+#if KEY_BLOCK == 1
+     if (irest > 0 .and. qmld) then
+        do i = 2, nsitemld
+           if (any(.not. (abs(thetamld(i,1:nsubmld(i))) <= huge(thetamld(i,1)))) .or. &
+                any(.not. (abs(thetavmld(i,1:nsubmld(i))) <= huge(thetavmld(i,1))))) &
+                call wrndie(-5, 'BLaDE restart', &
+                     'non-finite MSLD theta or theta velocity')
+        enddo
+     endif
+#endif
 
      ! call blade_range_begin('BLaDE omp parallel' // c_null_char)
      !$omp parallel
@@ -149,6 +245,7 @@ module blade_main
 
    subroutine dynamics_initial_conditions(vx_t,vy_t,vz_t,vx_pre,vy_pre,vz_pre,gamm,igvopt)
      use contrl, only: irest
+     use coord, only: x, y, z
      use blade_coords_module, only: copy_state_c2b
      use psf, only: natom
 
@@ -169,7 +266,7 @@ module blade_main
         dynamics_mode = DYN_RESTART
         !$omp end master
         !$omp barrier
-     else if (IGVOPT < 3) then
+     else if (IGVOPT < 3 .and. dynamics_mode /= DYN_CONTINUE) then
         !$omp barrier
         !$omp master
         dynamics_mode = DYN_SETVEL
@@ -190,6 +287,15 @@ module blade_main
               vy_pre(i)=vy_pre(i)*wtf(i)
               vz_pre(i)=vz_pre(i)*wtf(i)
            enddo
+           if (any(.not. (abs(x(1:natom)) <= huge(x(1)))) .or. &
+                any(.not. (abs(y(1:natom)) <= huge(y(1)))) .or. &
+                any(.not. (abs(z(1:natom)) <= huge(z(1)))) .or. &
+                any(.not. (abs(vx_pre(1:natom)) <= huge(vx_pre(1)))) .or. &
+                any(.not. (abs(vy_pre(1:natom)) <= huge(vy_pre(1)))) .or. &
+                any(.not. (abs(vz_pre(1:natom)) <= huge(vz_pre(1))))) then
+              call wrndie(-5, 'BLaDE restart', &
+                   'non-finite restart coordinates or velocities')
+           endif
         else if (dynamics_mode == DYN_SETVEL) then
            if (PRNLEV >= 2) write (OUTU, '(a)') 'BLaDE: Velocities scaled or randomized'
            ! Open MM backs it up by half a time step. Blade doesn't easily have that capacity
@@ -263,6 +369,7 @@ module blade_main
 
    subroutine dynamics(optarg, jhtemp, ndegf, npriv, istart, istop, iprfrq, isvfrq)
      use blade_dynopts, only: blade_dynopts_t
+     use blade_module, only: blade_check_interrupt
 
       implicit none
 
@@ -270,29 +377,48 @@ module blade_main
       real(chm_real), intent(inout) :: jhtemp
       integer, intent(in) :: ndegf, istart, istop, iprfrq, isvfrq
       integer, intent(inout) :: npriv
-      integer,save :: istep
+      integer, save :: istep = 0, blade_step = 0, continuation_npriv = 0
+      logical :: interrupted
+      logical :: reuse_pending_random
 
       !$omp barrier
       !$omp master
-      if (istart <= 1) istep = 0
+      if (istart <= 1) then
+         istep = 0
+         if (dynamics_mode == DYN_CONTINUE) then
+            npriv = continuation_npriv
+         else
+            blade_step = 0
+            continuation_npriv = npriv
+         endif
+      endif
 
       call initialize_output(optarg, jhtemp, istart, iprfrq)
       !$omp end master
       !$omp barrier
 
+      reuse_pending_random = dynamics_mode == DYN_CONTINUE
       do
-         call blade_set_step(system, istep)
+         call blade_set_step(system, blade_step)
          call blade_update_domdec(system)
-         call blade_get_force(system,merge(1,0,report_energy(istep,istop,isvfrq)))
+         call blade_get_force(system, &
+              merge(1,0,report_energy(istep,istop,isvfrq)), &
+              merge(0,1,reuse_pending_random))
+         reuse_pending_random = .false.
 
          call print_output(optarg,jhtemp,ndegf,istep,istart,istop,npriv,isvfrq)
-         if (istep >= istop) exit
+         !$omp single
+         interrupted = blade_check_interrupt() /= 0
+         !$omp end single copyprivate(interrupted)
+         if (interrupted .or. istep >= istop) exit
 
          call blade_update(system)
          !$omp barrier
          !$omp master
          istep = istep + 1
+         blade_step = blade_step + 1
          npriv = npriv + 1
+         continuation_npriv = npriv
          dynamics_mode = DYN_CONTINUE
          !$omp end master
          !$omp barrier
@@ -338,10 +464,8 @@ module blade_main
 #if KEY_BLOCK == 1
       use block_ltm, only: nblock
       use lambdam, only: nsavl, iunldm, msld_writld
-#if KEY_LIBRARY == 1
       use api_msldata, only: fill_msldata, msldata_init, &
            msldata_set_names, msldata_add_rows
-#endif /* KEY_LIBRARY */
 #endif /* KEY_BLOCK */
 
       implicit none
@@ -391,7 +515,7 @@ module blade_main
       endif
 
       if (dynamics_mode == DYN_CONTINUE) then
-         if (iuncrd > 0 .and. todo_now(nsavc,istep)) then
+         if (istep >= istart .and. iuncrd > 0 .and. todo_now(nsavc,istep)) then
             !$omp barrier
             !$omp master
             call copy_spatial_b2c(system)
@@ -407,12 +531,12 @@ module blade_main
             !$omp barrier
          endif
 
-         if (iunvel > 0 .and. todo_now(nsavv,istep)) then
+         if (istep >= istart .and. iunvel > 0 .and. todo_now(nsavv,istep)) then
             call wrndie(-5,'<blade_main>', 'nsavv greater than zero is not supported with blade')
          endif
 
 #if KEY_BLOCK == 1
-         if (iunldm > 0 .and. todo_now(nsavl,istep)) then
+         if (istep >= istart .and. iunldm > 0 .and. todo_now(nsavl,istep)) then
             !$omp barrier
             !$omp master
             call copy_alchemical_b2c(system)
@@ -424,13 +548,11 @@ module blade_main
             !$omp barrier
          endif
 
-#if KEY_LIBRARY == 1
      if (fill_msldata .and. (istep .eq. istop)) then
         call msldata_init(1)
         call msldata_set_names()
         call msldata_add_rows(istep, npriv * timest)
      end if
-#endif /* KEY_LIBRARY */
 #endif /* KEY_BLOCK */
       endif
    end subroutine print_output
@@ -457,6 +579,7 @@ module blade_main
      use blade_module, only: system, &
           blade_init_system, &
           blade_set_device, &
+          blade_set_seed, &
           blade_set_verbose, &
           export_psf_to_blade, &
           export_param_to_blade, &
@@ -468,18 +591,13 @@ module blade_main
      use blade_module, only: &
           blade_interpretter, blade_fn_use, blade_fn_len, blade_fname
      use new_timer, only: T_blade, timer_start, timer_stop
+     use parallel, only: mynodg
+     use rndnum, only: rngseeds
      ! use omm_restraint, only: setup_restraints
-     ! use rndnum, only : rngseeds
 
       implicit none
 
       logical :: init
-      ! integer*4 :: ommseed
-
-      ! ommseed = rngseeds(1)
-
-      ! if(prnlev>5) write(outu,'(a,i16)') &
-      !      'CHARMM> OpenMM using random seed ',ommseed
 
       call timer_start(T_blade)
 
@@ -498,9 +616,10 @@ module blade_main
       end if
 
       call blade_set_device(system)
-      call blade_set_verbose(system,0)
+      call blade_set_verbose(system,blade_verbose_level)
 
       if (.not. blade_initialized) then
+         call blade_set_seed(system,rngseeds(1),mynodg)
          call export_psf_to_blade()
          call export_param_to_blade()
          call export_coords_to_blade()
@@ -583,19 +702,32 @@ module blade_main
      ! blade_initialized = .true.
    end subroutine setup_blade
 
-   subroutine blade_repd_energy(x, y, z)
+   subroutine blade_repd_energy(x, y, z, vx, vy, vz)
      use new_timer, only: T_energy, timer_start, timer_stop
-     use blade_coords_module, only: copy_energy_b2c, copy_force_b2c, &
-           blade_recv_force, blade_recv_energy
+     use blade_coords_module, only: copy_box_c2b, copy_coords_c2b, &
+           copy_theta_c2b, copy_state_c2b, blade_send_coordinates, &
+           blade_init_lambda_from_theta, copy_energy_b2c, blade_recv_energy
+     use lambdam, only: qmld
 
      implicit none
 
      real(chm_real), intent(in) :: x(:), y(:), z(:)
+     real(chm_real), intent(inout), optional :: vx(*), vy(*), vz(*)
 
      !$omp parallel
      call timer_start(T_energy) ! OMPWARNING
-     call energy_initial_conditions(.false.) ! don't rectify shake
-     call blade_get_force(system,1)
+     if (present(vx)) then
+        call copy_state_c2b(system, vx, vy, vz)
+     else
+        call copy_box_c2b(system)
+        call copy_coords_c2b(system)
+        if (qmld) call copy_theta_c2b(system)
+        call blade_send_coordinates(system)
+        if (qmld) call blade_init_lambda_from_theta(system)
+     endif
+     call blade_set_step(system, 0)
+     call blade_update_domdec(system)
+     call blade_get_force(system,1,0)
      !$omp barrier
      !$omp master
      call blade_recv_energy(system) ! this call also covered by blade_run_energy
@@ -611,8 +743,8 @@ module blade_main
    !> Sets CHARMM energies and forces for the given coordinates.
    subroutine blade_energy(x, y, z)
      ! use omm_ecomp, only : omm_assign_eterms
-     use deriv  ! XXX writes
-     use energym  ! XXX writes
+     ! use deriv  ! XXX writes
+     ! use energym  ! XXX writes
      use new_timer, only: T_energy, timer_start, timer_stop
      use blade_coords_module, only: copy_energy_b2c, copy_force_b2c, &
            blade_recv_force, blade_recv_energy
@@ -648,8 +780,9 @@ module blade_main
      ! Call it the slow way instead:
      if (dynamics_mode == DYN_UNINIT) & ! False if BladeIsNotDirty was called
         call blade_dynamics_initialize(system) ! only relevant piece from dynamics_setup
-     call energy_initial_conditions(.true.) ! rectify shake constraints
-     call blade_get_force(system,1)
+     if (dynamics_mode /= DYN_CONTINUE) &
+        call energy_initial_conditions(.true.) ! rectify shake constraints
+     call blade_get_force(system,1,merge(0,1,dynamics_mode == DYN_CONTINUE))
      ! end slow way
 
      !$omp barrier
@@ -672,12 +805,74 @@ module blade_main
 
    end subroutine blade_energy
 
+   subroutine blade_minimize(x, y, z, nsteps, mintype, steplen, status)
+     ! use, intrinsic::iso_c_binding, only: c_null_ptr
+     use, intrinsic :: iso_c_binding, only: c_int
+     use blade_coords_module, only: copy_energy_b2c, copy_force_b2c, &
+           blade_recv_force, blade_recv_energy, &
+           copy_state_b2c
+     use psf, only: natom
+     ! use omm_ecomp, only : omm_assign_eterms
+     ! use energym  ! XXX writes
+     ! use new_timer
+
+     implicit none
+
+     real(chm_real), intent(inout) :: x(:), y(:), z(:)
+     real(chm_real), intent(in) :: steplen
+     integer*4, intent(in) :: nsteps
+     integer*4, intent(in) :: mintype
+     integer*4, intent(out), optional :: status
+     real(chm_real) :: vx(natom), vy(natom), vz(natom)
+     integer(c_int) :: status_local, status_thread
+     ! real(chm_real) :: Epterm
+     ! type(OpenMM_State) :: state
+     ! real*8 :: pos(3, NATOM)
+     ! integer*4 :: data_wanted
+     ! integer*4 :: enforce_periodic
+     ! integer*4 :: itype, group
+
+     status_local = 0
+
+     !$omp parallel private(status_thread)
+
+     call setup_blade()
+
+     call blade_dynamics_initialize(system)
+     call energy_initial_conditions(.true.) ! rectify shake constraints
+
+     status_thread = blade_minimizer(system,nsteps,mintype,steplen)
+     !$omp critical(blade_min_status)
+     status_local = max(status_local, status_thread)
+     !$omp end critical(blade_min_status)
+
+     !$omp barrier
+     !$omp master
+     if (status_local == 0) then
+        call blade_recv_energy(system)
+        call copy_energy_b2c(system)
+        call blade_recv_force(system)
+        call copy_force_b2c(system)
+     endif
+     call copy_state_b2c(system,vx,vy,vz)
+     !$omp end master
+     !$omp barrier
+
+     !$omp end parallel
+
+     if (present(status)) status = status_local
+
+   end subroutine blade_minimize
+
     !> Returns an array indicating whether we can use Blade
     !> for each energy term.
     function blade_eterm_mask()
       use energym, only: lenent, &
            bond, angle, dihe, imdihe, cmap, elec, vdw, imelec, imvdw, &
            ewksum, ewself, ewexcl, epot, totke, tote
+#if KEY_MLMM==1 && KEY_MLPTORCH==1
+      use energym, only: mlps ! eemlp
+#endif
       implicit none
 
       logical :: blade_eterm_mask(lenent)
@@ -692,6 +887,9 @@ module blade_main
       do i = 1, size(my_eterms)
          blade_eterm_mask(my_eterms(i)) = .true.
       enddo
+#if KEY_MLMM==1 && KEY_MLPTORCH==1
+      blade_eterm_mask(mlps) = .true. ! eemlp
+#endif
 #endif /* KEY_BLADE */
     end function blade_eterm_mask
 

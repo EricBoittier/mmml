@@ -9,6 +9,15 @@ if ?hqbm .ne. 1 then
     stop
 endif
 
+! HQBM here uses the old (non-parallel) integrator and deadlocks under MPI.
+! Skip early -- the existing "?numnode .gt. 1" guard lower in this file sits
+! after the setup/ENERGY that hangs, so it never gets the chance to fire.
+if ?numnode .gt. 1 then
+    echo "hqbm_single.inp> HQBM is serial-only; not run under MPI."
+    echo "Test NOT performed"
+    stop
+endif
+
 
 set prot 1ypa
 set t 300.0

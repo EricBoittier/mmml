@@ -11,7 +11,7 @@ IF ?SCCDFTB .NE. 1 THEN
  STOP
 endif
 
-IF ?GSBP .NE. 1 THEN
+IF ?QGSBP .NE. 1 THEN
  echo "c32test/sccgsbp1_2cba> GSBP Test NOT performed."
  STOP
 endif
@@ -21,105 +21,54 @@ bomb -5
 ! variables
 stream datadir.def
 
-set j 2cba
-set k 2cba_gsbp
+! SCC-DFTB needs SCCDFTB_DATA pointing at a directory holding this test's
+! parameter file.  `genv' on an unset variable is a level-0 warning, which is
+! fatal at the default BOMLEV, so lower BOMLEV across the call and self-skip
+! when the data has not been provisioned here.  The file check matters as
+! well: SCCDFTB_DATA can be set while this particular file is absent, and
+! CHARMM then dies part way through reading parameters with no termination
+! line at all.
+set sccdftbdir UNSET_SCCDFTB_DATA
+set oldbomlev ?bomlev
+bomlev -5
+genv sccdftbdir SCCDFTB_DATA
+bomlev @oldbomlev
+if @sccdftbdir eq UNSET_SCCDFTB_DATA then
+   echo SCCGSBP1_2CBA TESTCASE RESULT: SKIP
+   stop
+endif
+strc sccdat @sccdftbdir "/sccdftb_ONCH.dat"
+bomlev -5
+open unit 98 read form name @sccdat
+if ?iostat .ne. 1 then
+   echo SCCGSBP1_2CBA TESTCASE RESULT: SKIP
+   stop
+endif
+close unit 98
+bomlev @oldbomlev
+stream @0sccgsbp_matrices.str
 
-! read topology and parameter files that have been modified for CA 
-OPEN UNIT 21 NAME @0top_ca.inp READ FORM
-READ RTF card UNIT 21
-CLOSE UNIT 21
-
-OPEN UNIT 22 NAME @0par_ca.inp READ FORM
-READ PARA card UNIT 22
-CLOSE UNIT 22
-
-! CA has previously been solvated in a 25A water sphere 
-! which we perform short minimizations on in order to relax the water configuration    
-! the resulting psf and crd files are used here
-OPEN UNIT 3 NAME @0@j.psf READ  FORM
-READ  PSF CARD UNIT 3
-CLOSE UNIT 3
-
-OPEN UNIT 3 NAME @0@j.crd READ FORM
-READ  COOR CARD UNIT 3
-CLOSE UNIT 3
-
-! DELETE all water molecules for purposes of generating the M and PHIX matrices
-delete atom sele .byres. type OH2 end
-
-! -------------------------------------------------------------
-
-! active site centered (approx) on the Zn atom
-! caution should be taken if putting any atom exactly at the origin, and subsequently 
-! centering the active site there.  Here, we put Zn near, but not exactly at the origin
-set xcen  0.0
-set ycen  0.0
-set zcen  0.0
-coor stat
-
-PBEQ
-
-prnlev 0
-! Set optimized set of atomic radii for solvation of proteins
-stream @0radius.str
-prnlev 5
-
-PRNLEV 8   ! print contributions of individual basis functions
-TIMER  2
-
-!MIJ MATRIX
-!
-GSBP G_ii SPHERE -
-     NMPOL     1  CGSCAL    1.0 NOSORT -
-     SRDIST 20.0  RRXCEN  @xcen RRYCEN @ycen RRZCEN @zcen -
-     -
-     EPSW   80.0 EPSP    1.0 NCEL    111 DCEL   0.4 INTBP -
-     XBCEN @xcen YBCEN @ycen ZBCEN @zcen - 
-     LBOX  FOCUS LNCEL   111 LDCEL   1.2 LXBCEN 0.0 LYBCEN 0.0 LZBCEN 0.0
-
-TIMER  0
-
-OPEN WRITE FILE UNIT 50 NAME @9@k_MIJ1.dat
-WRITE MIJ UNIT 50
-CLOSE UNIT 50
-
-RESET                 ! use reset before using GSBP each time
-stream @0radius.str   ! optimized atomic radii
-
-! PHIX (Static External Field)
-!
-GSBP G_io  SPHERE -
-     SRDIST 20.0 RRXCEN @xcen RRYCEN @ycen RRZCEN @zcen -
-     -
-     EPSW   80.0 EPSP    1.0 NCEL    111 DCEL   0.4 INTBP -
-     XBCEN @xcen YBCEN @ycen ZBCEN @zcen -
-     LBOX  FOCUS LNCEL   111 LDCEL   1.2 LXBCEN 0.0 LYBCEN 0.0 LZBCEN 0.0
-
-OPEN WRITE FILE UNIT 50 NAME @9@k_phix.dat
-WRITE PHIX UNIT 50
-CLOSE UNIT 50
-
-RESET                 ! use reset before using GSBP each time
-stream @0radius.str   ! optimized atomic radii
-
-
-! Illustrate MIJ matrix calculation restart
-! Use to calculate reaction field term with more basis functions.
-
-OPEN READ FILE UNIT 50 NAME @9@k_MIJ1.dat
-READ MIJ UNIT 50
-CLOSE UNIT 50
-
-GSBP SPHERE -
-     NMPOL  2    -
-     SRDIST 20.0 RRXCEN @xcen RRYCEN @ycen RRZCEN @zcen -
-     -
-     EPSW   80.0 EPSP    1.0 NCEL    111 DCEL   0.4 INTBP -
-     XBCEN @xcen YBCEN @ycen ZBCEN @zcen -
-     LBOX  FOCUS LNCEL   111 LDCEL   1.2 LXBCEN 0.0 LYBCEN 0.0 LZBCEN 0.0
-
-OPEN WRITE FILE UNIT 50 NAME @9@k_MIJ2.dat
-WRITE MIJ UNIT 50
-CLOSE UNIT 50
+! What this testcase produces is three files, so check they are there and
+! readable rather than trusting that the run said nothing.
+set nmissing 0
+bomlev -5
+open unit 50 read file name @9@k_MIJ1.dat
+if ?iostat .ne. 1 then
+   incr nmissing by 1
+endif
+close unit 50
+open unit 50 read file name @9@k_MIJ2.dat
+if ?iostat .ne. 1 then
+   incr nmissing by 1
+endif
+close unit 50
+open unit 50 read file name @9@k_phix.dat
+if ?iostat .ne. 1 then
+   incr nmissing by 1
+endif
+close unit 50
+bomlev @oldbomlev
+@testcheck @nmissing 0 -0.5 sccgsbp1_2cba_matrices_written
 
 STOP
+

@@ -30,6 +30,7 @@ int ommGetPlatformByName(const char * name, OpenMM_Platform *& platform) {
     if (OpenMM::Platform::getPlatform(i).getName() == platformName) {
       result = &OpenMM::Platform::getPlatform(i);
       success = 1;
+      break;
     }
   }
 

@@ -1,0 +1,223 @@
+* Python socket communicator test with BLOCK scaling ML-ML forcefield interactions
+* --with-mlmm config
+* Require python (3.9 - 3.13) and numpy
+* Single atom Harmonic restraint
+* E = 1/2 k sum_i |r_i - r_i^(0)|^2
+* dE/dr_i = k_ref (r_i - r_i^(0))
+* Mass   = 1
+* ForceK = 1 ! or ! envi MLPS_DUMMY_K "1"
+* CHARMM ForceK  =  0.5 * ForceK 
+
+!if ?mlmm .ne. 1  then stop
+
+!! rtf
+read rtf card
+* Two dummy atoms 
+*
+    36  1
+MASS     1 H      1.00000
+
+RESI DUM          0.00
+GROUP
+ATOM A    H   0.00
+ATOM B    H   0.00
+PATCHING FIRST NONE LAST NONE
+
+end
+
+!! prm
+read param card
+* dummy atom
+*
+
+BONDS
+
+ANGLES
+
+DIHEDRALS
+
+IMPROPER
+
+NONBONDED nbxmod  5 atom cdiel shift vatom vdistance vswitch -
+cutnb 13.0 ctofnb 12.0 ctonnb 10.0 eps 1.0 e14fac 1.0 wmin 1.5
+H      0.000000   0.000000     1.000000
+
+end
+
+!! seq-gen
+read sequence card
+*...
+*
+    1
+DUM
+generate HETA setup warn first none last none
+
+
+!! crd
+read coor card
+* initial coordinates
+*
+    2
+    1    1 DUM  A      0.00000   0.00000   0.00000 HETA 1      0.00000
+    2    1 DUM  B      0.00000   0.00000   1.50000 HETA 1      0.00000
+
+!! psf-gen
+print psf
+test psf
+
+
+!=========================================================================
+! CONS HARM sets harmonic ref-coordinates  corresponding
+! to the COMP coordinates
+! CHARMM don't have a 0.5 prefactor. So k_force = 0.5 * k_ref
+!--------------------------------------------------------------
+
+SCALar XCOMp SET 0.0 SELECT ATOM HETA 1 A SHOW END
+SCALar YCOMp SET 0.0 SELECT ATOM HETA 1 A SHOW END
+SCALar ZCOMp SET 0.0 SELECT ATOM HETA 1 A SHOW END
+SCALar XCOMp SET 0.0 SELECT ATOM HETA 1 B SHOW END
+SCALar YCOMp SET 0.0 SELECT ATOM HETA 1 B SHOW END
+SCALar ZCOMp SET 1.5 SELECT ATOM HETA 1 B SHOW END
+
+SCALar X SET 0.0 SELECT ATOM HETA 1 A SHOW END
+SCALar Y SET 0.0 SELECT ATOM HETA 1 A SHOW END
+SCALar Z SET 0.2 SELECT ATOM HETA 1 A SHOW END
+SCALar X SET 0.0 SELECT ATOM HETA 1 B SHOW END
+SCALar Y SET 0.0 SELECT ATOM HETA 1 B SHOW END
+SCALar Z SET 1.2 SELECT ATOM HETA 1 B SHOW END
+
+
+CONS HARM SELECT SEGI HETA SHOW END force 0.5 COMP
+
+energy
+set e11 ?ener
+
+write title unit 6
+* Force on SEGI HETA with CONS HARM restraints
+*
+
+FRCDump UNIT 6
+
+CONS HARM CLEAR
+
+!=========================================================================
+! MLMM TEST sets harmonic ref-coordinates  corresponding
+! to the coords sent for first energy call in the ACTIVE CHARMM MLMM session
+!--------------------------------------------------------------
+
+MLMM TEST PYTH MLSL SELECT SEGI HETA SHOW END
+
+! MLMM TEST Harmonic potential ref coordinates, first energy call in MLMM
+SCALar X SET 0.0 SELECT ATOM HETA 1 A SHOW END
+SCALar Y SET 0.0 SELECT ATOM HETA 1 A SHOW END
+SCALar Z SET 0.0 SELECT ATOM HETA 1 A SHOW END
+SCALar X SET 0.0 SELECT ATOM HETA 1 B SHOW END
+SCALar Y SET 0.0 SELECT ATOM HETA 1 B SHOW END
+SCALar Z SET 1.5 SELECT ATOM HETA 1 B SHOW END
+
+energy
+set e20 ?ener
+
+SCALar X SET 0.0 SELECT ATOM HETA 1 A SHOW END
+SCALar Y SET 0.0 SELECT ATOM HETA 1 A SHOW END
+SCALar Z SET 0.2 SELECT ATOM HETA 1 A SHOW END
+SCALar X SET 0.0 SELECT ATOM HETA 1 B SHOW END
+SCALar Y SET 0.0 SELECT ATOM HETA 1 B SHOW END
+SCALar Z SET 1.2 SELECT ATOM HETA 1 B SHOW END
+
+
+energy
+set e21 ?ener
+
+write title unit 6
+* Force on SEGI HETA with MLMM TEST PYTH harmonic restraints
+*
+
+FRCDump UNIT 6
+
+MLMM OFF  ! or MLMM CLEAR
+
+!=========================================================================
+! MLMM TEST sets harmonic ref-coordinates  corresponding
+! to the coords sent for first energy call in the ACTIVE CHARMM MLMM session
+! CHARGE Added for electrostatics But Scaled to zero with BLOCK
+!--------------------------------------------------------------
+
+MLMM TEST PYTH MLSL SELECT SEGI HETA SHOW END
+
+! MLMM TEST Harmonic potential ref coordinates, first energy call in MLMM
+SCALar X SET 0.0 SELECT ATOM HETA 1 A SHOW END
+SCALar Y SET 0.0 SELECT ATOM HETA 1 A SHOW END
+SCALar Z SET 0.0 SELECT ATOM HETA 1 A SHOW END
+SCALar X SET 0.0 SELECT ATOM HETA 1 B SHOW END
+SCALar Y SET 0.0 SELECT ATOM HETA 1 B SHOW END
+SCALar Z SET 1.5 SELECT ATOM HETA 1 B SHOW END
+SCALar CHARge SET -0.05 SELECT ATOM HETA 1 A SHOW END
+SCALar CHARge SET  0.15 SELECT ATOM HETA 1 B SHOW END
+
+energy
+set e30 ?ener
+
+SCALar X SET 0.0 SELECT ATOM HETA 1 A SHOW END
+SCALar Y SET 0.0 SELECT ATOM HETA 1 A SHOW END
+SCALar Z SET 0.2 SELECT ATOM HETA 1 A SHOW END
+SCALar X SET 0.0 SELECT ATOM HETA 1 B SHOW END
+SCALar Y SET 0.0 SELECT ATOM HETA 1 B SHOW END
+SCALar Z SET 1.2 SELECT ATOM HETA 1 B SHOW END
+
+BLOCK 2
+    CALL 2 SELECT SEGI HETA SHOW END
+    COEFF 2 2 0.0
+END
+
+
+energy
+set e31 ?ener
+
+write title unit 6
+* Force on SEGI HETA with MLMM TEST PYTH harmonic restraints. ELEC scaled to zero with BLOCK
+*
+
+FRCDump UNIT 6
+
+MLMM OFF  ! or MLMM CLEAR
+
+!=========================================================================
+
+calc ediff12 = @e11 - @e21
+calc ediff23 = @e21 - @e31
+calc ediff31 = @e31 - @e11
+echo @ediff12 @ediff23 @ediff31 
+
+
+!--- self-check: MLMM (E21) and MLMM+BLOCK-with-ELEC-scaled-to-0 (E31) must
+!    match native CONS HARM (E11); the pre-BLOCK energy carrying the ML-MM
+!    electrostatics (E30) must DIFFER from E11, confirming BLOCK actually
+!    removed the ML-region electrostatics (i.e. the scaling is not a no-op).
+set status fail
+calc a21 = abs ( @e21 - @e11 )
+calc a31 = abs ( @e31 - @e11 )
+calc a30 = abs ( @e30 - @e11 )
+if @a21 .le. 0.0001 then
+ if @a31 .le. 0.0001 then
+  if @a30 .gt. 0.0001 then
+   set status pass
+  endif
+ endif
+endif
+echo testcase result: @status
+
+format (F9.5)
+write title unit 6
+* Energy: CHARMM CONS HARMM                           : E11=@e11
+* Energy: MLMM PYTH CONS                              : E21=@e21
+* Energy: MLMM PYTH CONS (BLOCK: ELEC scaled to 0)    : E31=@e31
+* Diff Energy should be zero: E11 - E21 = @ediff12
+* Diff Energy should be zero: E21 - E31 = @ediff23
+* Diff Energy should be zero: E31 - E11 = @ediff31
+
+print coor
+stop
+
+
+

@@ -1,0 +1,1660 @@
+---------------------------------------------------------------------------
+CHARMM22.0.b  Release           April     22, 1991
+CHARMM22.0.b1 Release           September 30, 1991
+CHARMM22      Release           January    1, 1992
+     c22g1    Release           February  15, 1992
+     c22g2    Release           July       7, 1992
+
+CHARMM23.0
+     c23a1    Developmental     August    15, 1992
+     c23a2    Developmental     October   25, 1992
+     c23f     Developmental     March      1, 1993
+     c23f1    Developmental     March     15, 1993
+     c23f2    Developmental     August    15, 1993
+     c23f3    Release           February   1, 1994
+     c23f4    Release           August    15, 1994
+     c23f5    Release           March     15, 1995
+
+CHARMM 24.0
+     c24a1    Developmental     February  15, 1994
+     c24x1    Evaluation        February  15, 1994
+     c24a2    Developmental     August    15, 1994
+     c24a3    Developmental     March     15, 1995
+     c24b1    Release           August    15, 1995
+     c24b2    Release           February  15, 1996
+     c24g1    Release           August    15, 1996
+     c24g2    Release           February  15, 1997
+
+CHARMM 25.0
+     c25a0    Developmental     August    15, 1995
+     c25a1    Developmental     February  15, 1996
+     c25a2    Developmental     August    15, 1996
+     c25a3    Developmental     February  15, 1997
+     c25b1    Release           August    15, 1997
+     c25b2    Release           February  15, 1998
+
+CHARMM 26.0
+     c26a1    Developmental     August    15, 1997
+     c26a2    Developmental     February  15, 1998
+     c26b1    Release           September 30, 1998
+     c26b2    Release           February  15, 1999
+
+CHARMM 27.0
+     c27a1    Developmental     September 30, 1998
+     c27a2    Developmental     February  15, 1999
+     c27b1    Release           August    15, 1999
+     c27b2    Release           February  15, 2000
+     c27b3    Release           August    15, 2000
+     c27b4    Release           February  15, 2001
+
+CHARMM 28.0
+     c28a1    Developmental     August    15, 1999
+     c28a2    Developmental     February  15, 2000
+     c28a3    Developmental     August    15, 2000
+     c28a4    Developmental     February  15, 2001
+     c28b1    Release           August    15, 2001
+     c28b2    Release           February  15, 2002
+
+CHARMM 29.0
+     c29a1    Developmental     August    15, 2001
+     c29a2    Developmental     April     15, 2002
+     c29b1    Release           August    15, 2002
+     c29b2    Release           February  15, 2003
+
+CHARMM 30.0
+     c30a1    Developmental     August    15, 2002
+     c30a2    Developmental     February  15, 2003
+     c30a2x   Evaluation        February  15, 2003
+     c30b1    Release           August    15, 2003
+     c30b2    Release           February  15, 2004
+
+CHARMM 31.0
+     c31a1    Developmental     August    15, 2003
+     c31a2    Developmental     February  15, 2004
+     c31b1    Release           August    15, 2004
+     c31b2    Release           February  15, 2005
+
+CHARMM 32.0
+     c32a1    Developmental     August    15, 2004
+     c32a2    Developmental     February  15, 2005
+     c32b1    Release           August    15, 2005
+     c32b2    Release           February  15, 2006
+
+CHARMM 33.0
+     c33a1    Developmental     August    15, 2005
+     c33a2    Developmental     February  15, 2006
+     c33b1    Release           August    15, 2006
+     c33b2    Release           February  15, 2007
+
+CHARMM 34.0
+     c34a1    Developmental     August    15, 2006
+     c34a2    Developmental     February  15, 2007
+     c34b1    Release           August    15, 2007
+     c34b2    Release           February  15, 2008
+
+CHARMM 35.0
+     c35a1    Developmental     August    15, 2007
+     c35a2    Developmental     February  15, 2008
+     c35b1    Release           August    15, 2008
+     c35b2    Release           February  15, 2009
+     c35b3    Release           August    15, 2009
+     c35b4    Release           February  15, 2010
+     c35b5    Release           August    15, 2010
+     c35b6    Release           February  15, 2011
+
+CHARMM 36.0
+     c36a1    Developmental     August    15, 2008
+     c36a2    Developmental     February  15, 2009
+     c36a3    Developmental     August    15, 2009
+     c36a4    Developmental     February  15, 2010
+     c36a4r1  Developmental     May        1, 2010
+     c36a5    Developmental     August    15, 2010
+     c36a6    Developmental     February  15, 2011
+     c36b1    Release           August    15, 2011
+     c36b2    Release           February  15, 2012
+
+CHARMM 37.0
+     c37a1    Developmental     August    15, 2011
+     c37a2    Developmental     February  15, 2012
+     c37b1    Release           September 30, 2012
+     c37b2    Release           February  15, 2013
+
+CHARMM 38.0
+     c38a1    Developmental     September 30, 2012
+     c38a2    Developmental     February  15, 2013
+     c38b1    Release           August    15, 2013
+     c38b2    Release           February  15, 2014
+
+CHARMM 39.0
+     c39a1    Developmental     August    15, 2013
+     c39a2    Developmental     February  15, 2014
+     c39b1    Release           August    15, 2014
+     c39b2    Release           February  15, 2015
+
+CHARMM 40.0
+     c40a1    Developmental     August    15, 2014
+     c40a2    Developmental     February  15, 2015
+     c40b1    Release           August    15, 2015
+     c40b2    Release           February  15, 2016
+
+CHARMM 41.0
+     c41a1    Developmental     August    15, 2015
+     c41a2    Developmental     February  15, 2016
+     c41b1    Release           August    15, 2016
+     c41b2    Release           February  15, 2017
+
+CHARMM 42.0
+     c42a1    Developmental     August    15, 2016
+     c42a2    Developmental     February  15, 2017
+     c42b1    Release           August    15, 2017
+     c42b2    Release           February  15, 2018
+
+CHARMM 43.0
+     c43a1    Developmental     August    15, 2017
+     c43a2    Developmental     February  15, 2018
+     c43b1    Release           August    15, 2018
+     c43b2    Release           February  15, 2019
+
+CHARMM 44.0
+     c44a1    Developmental     August    15, 2018
+     c44a2    Developmental     February  15, 2019
+     c44b1    Release           August    15, 2019
+     c44b2    Release           February  15, 2020
+
+CHARMM 45.0
+     c45a1    Developmental     August    15, 2019
+     c45a2    Developmental     February  15, 2020
+     c45b1    Release           August    15, 2020
+     c45b2    Release           February  15, 2021
+
+CHARMM 46.0
+     c46a1    Developmental     August    15, 2020
+     c46a2    Developmental     February  15, 2021
+     c46b1    Release           August    15, 2021
+     c46b2    Release           February  15, 2022
+
+CHARMM 47.0
+     c47a1    Developmental     August    15, 2021
+     c47a2    Developmental     February  15, 2022
+     c47b1    Release           August    15, 2022
+     c47b2    Release           March      1, 2023
+
+CHARMM 48.0
+     c48a1    Developmental     August    15, 2022
+     c48a2    Developmental     March      1, 2023
+     c48b1    Release           August    15, 2023
+     c48b2    Release           February  15, 2024
+
+CHARMM 49.0
+     c49a1    Developmental     August    15, 2023
+     c49a2    Developmental     February  15, 2024
+     c49b1    Release           August    15, 2024
+     c49b2    Release           February  15, 2025
+
+CHARMM 50.0
+     c50a1    Developmental     August    15, 2024
+     c50a2    Developmental     February  15, 2025
+     c50b1    Release           August    15, 2025
+     c50b2    Release           February  15, 2026
+
+CHARMM 51.0
+     c51a1    Developmental     August    15, 2025
+     c51a2    Developmental     February  15, 2026
+     c51b1    Release           August    15, 2026
+
+CHARMM 52.0
+     c52a1    Developmental     August    15, 2026
+---------------------------------------------------------------------------
+
+[0] About CHARMM52 Development
+
+     At the 2026 CHARMM developers meeting we decided to release CHARMM
+c52a1 incorporating enhancements and fixes from the development versions
+c51a1 and c51a2.
+
+The c52a1 release includes the enhancements and fixes to the development
+version c51a2 during the period of August 15, 2025 through August 15, 2026.
+
+==============================================================================
+
+[1] c52a1 Change Log
+
+     At the 2026 CHARMM developers meeting we decided to release CHARMM
+c51b1 incorporating enhancements and fixes from the developmental c51a1
+and c51a2 versions into the stable version.
+
+The c52a1 release includes the following enhancements and fixes from the
+developmental versions c51a1 and c51a2 during the development period of
+August 15, 2025 through August 15, 2026. A selection of these have been
+added to the stable version c50b2 to create the stable version c51b1.
+
+------------------------------------------------------------------------------
+
+1.1 February 2026 update to the C36 force field and CGenFF
+    Developer: Justin Lemkul
+    Institution: Virginia Tech
+    Date: 18 February 2026
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/305
+Git commit: 176ff720
+
+Description:
+Updates the C36 force field and adds the general force field version 5.0 as the default while keeping version 4.6 available for compatibility.
+
+------------------------------------------------------------------------------
+
+1.2 Corrections to perturbation automatic mode and slow growth free energy
+    Developer: Stefan Boresch
+    Institution: University of Vienna
+    Date: 20 February 2026
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/306
+Git commit: fa6367a4
+
+Description:
+Repairs the perturbation automatic mode and the slow growth free energy calculation, both broken by earlier changes.
+
+------------------------------------------------------------------------------
+
+1.3 Shared docking kernels for graphics processors
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 6 March 2026
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/307
+Git commit: 134b9d6e
+
+Description:
+Unifies the fast Fourier transform docking computations so they run on both major graphics processor programming systems.
+
+------------------------------------------------------------------------------
+
+1.4 Unified pyCHARMM interface to the OpenMM custom force types
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 6 March 2026
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/308
+Git commit: 9273275a
+
+Description:
+Adds a single consistent pyCHARMM interface for creating and managing all twelve OpenMM custom force types.
+
+------------------------------------------------------------------------------
+
+1.5 OpenMM version compatibility and duplicate registration fixes
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 9 March 2026
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/309
+Git commit: cde361e1
+
+Description:
+Fixes a compilation failure against older OpenMM and a duplicate platform registration.
+
+------------------------------------------------------------------------------
+
+1.6 Resolve compiler warnings in C and C plus plus
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 9 March 2026
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/310
+Git commit: 3cc8e92e
+
+Description:
+Fixes latent bugs surfaced by enabling the full compiler warning set.
+
+------------------------------------------------------------------------------
+
+1.7 Flush the energy output file after OpenMM dynamics
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 9 March 2026
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/311
+Git commit: b1b5973a
+
+Description:
+Writes the energy history to disk after OpenMM dynamics so a later step sees complete data.
+
+------------------------------------------------------------------------------
+
+1.8 Correct data types in the programmatic interface
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 9 March 2026
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/312
+Git commit: fb69cdcd
+
+Description:
+Uses interoperable data types in the interface procedures so the compiler accepts them cleanly.
+
+------------------------------------------------------------------------------
+
+1.9 Preserve the OpenMM neural network energy in pyCHARMM
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 9 March 2026
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/313
+Git commit: 31e34b3c
+
+Description:
+Stops a pyCHARMM energy query from discarding the OpenMM context and losing the neural network potential contribution.
+
+------------------------------------------------------------------------------
+
+1.10 Repair the documentation files and rewrite the documentation generator
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 10 March 2026
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/314
+Git commit: 24011adf
+
+Description:
+Fixes broken cross references and formatting in the documentation and rewrites the page generator.
+
+------------------------------------------------------------------------------
+
+1.11 Correct the generalized Born surface area graphics processor plugin
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 12 March 2026
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/315
+Git commit: 6eb34512
+
+Description:
+Fixes large energy and force errors in the generalized Born surface area plugin under periodic boundaries.
+
+------------------------------------------------------------------------------
+
+1.12 Native OpenMM constant pressure algorithms
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 12 March 2026
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/316
+Git commit: cba475d9
+
+Description:
+Replaces the custom constant pressure add on with OpenMM native anisotropic and membrane barostats.
+
+------------------------------------------------------------------------------
+
+1.13 Modernize the parallel message passing interface
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 16 March 2026
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/317
+Git commit: 62405f27
+
+Description:
+Moves all Fortran sources to the modern parallel message passing interface and clears the resulting warnings.
+
+------------------------------------------------------------------------------
+
+1.14 Follow up fixes to the parallel interface migration
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 16 March 2026
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/318
+Git commit: a7c06cfb
+
+Description:
+Guards communicator declarations in serial builds and adds missing interface imports.
+
+------------------------------------------------------------------------------
+
+1.15 Portable host name lookup
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 16 March 2026
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/319
+Git commit: 6e74c978
+
+Description:
+Adds a portable routine that returns the fully qualified host name of the machine.
+
+------------------------------------------------------------------------------
+
+1.16 Intel compiler compatibility for the parallel interface
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 16 March 2026
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/320
+Git commit: 86c8436b
+
+Description:
+Fixes parallel interface type mismatches that broke the build with the Intel compiler.
+
+------------------------------------------------------------------------------
+
+1.17 Serialize package installs during concurrent builds
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 16 March 2026
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/321
+Git commit: eb9374fa
+
+Description:
+Prevents concurrent builds that share one environment from racing during the Python package install.
+
+------------------------------------------------------------------------------
+
+1.18 Correct the multiscale parallel calls and finalization
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 17 March 2026
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/322
+Git commit: ed525abd
+
+Description:
+Fixes the multiscale module parallel calls and its process spawn and finalization handling.
+
+------------------------------------------------------------------------------
+
+1.19 Restore relative harmonic restraints
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 20 March 2026
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/323
+Git commit: 54ac9a0e
+
+Description:
+Fixes a typo that made the relative harmonic restraint command fail.
+
+------------------------------------------------------------------------------
+
+1.20 pyCHARMM trajectory time series analysis
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 24 March 2026
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/324
+Git commit: 0118b401
+
+Description:
+Adds a pyCHARMM module for trajectory analysis that uses the CHARMM topology and energy function.
+
+------------------------------------------------------------------------------
+
+1.21 Bug fixes and test validation across four subsystems
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 25 March 2026
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/325
+Git commit: ca84e155
+
+Description:
+Fixes bugs in the fluctuating charge, OpenMM dynamics, docking, and Monte Carlo subsystems and adds pass or fail checks to their tests.
+
+------------------------------------------------------------------------------
+
+1.22 Parameter file keyword and helper commands for tight binding density functional theory
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 25 March 2026
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/326
+Git commit: be4bf20a
+
+Description:
+Adds a keyword to locate the tight binding parameter files together with helper commands for environment settings and file handling.
+
+------------------------------------------------------------------------------
+
+1.23 Linker fix and pyCHARMM corrections
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 28 March 2026
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/327
+Git commit: 01e85f9f
+
+Description:
+Fixes a macOS link failure and several pyCHARMM issues.
+
+------------------------------------------------------------------------------
+
+1.24 Build portability for shared machines and graphics drivers
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 30 March 2026
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/328
+Git commit: cc053092
+
+Description:
+Makes the package install lock work on shared machines and loads the graphics driver at run time for portable executables.
+
+------------------------------------------------------------------------------
+
+1.25 Build portability and OpenMM force corrections
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 30 March 2026
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/329
+Git commit: 5f1e2e8c
+
+Description:
+Several fixes spanning build portability, OpenMM run time correctness, and new force types.
+
+------------------------------------------------------------------------------
+
+1.26 Graphics processor engine consolidation, pyCHARMM hardening, and bug fixes
+    Developer: Stanislav Cherepanov
+    Institution: University of Michigan
+    Date: 6 April 2026
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/330
+Git commit: 2a05f37a
+
+Description:
+Consolidates the graphics processor engine work, hardens the pyCHARMM package, and fixes several subsystems.
+
+------------------------------------------------------------------------------
+
+1.27 Guard graphics processor symbols in replica exchange builds
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 7 April 2026
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/331
+Git commit: ce13318f
+
+Description:
+Guards graphics processor specific symbols so replica exchange builds without that support compile.
+
+------------------------------------------------------------------------------
+
+1.28 Fix a documentation build crash from early library initialization
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 9 April 2026
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/332
+Git commit: 9cbf2cf5
+
+Description:
+Defers the CHARMM library initialization so the documentation build no longer crashes.
+
+------------------------------------------------------------------------------
+
+1.29 Further documentation build crash fixes
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 10 April 2026
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/333
+Git commit: d5028f07
+
+Description:
+Fixes a documentation build crash caused by eager library initialization.
+
+------------------------------------------------------------------------------
+
+1.30 Fix a crash when a pyCHARMM script runs more than once
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 27 April 2026
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/334
+Git commit: d2bf320f
+
+Description:
+Fixes a run time crash when a pyCHARMM script is evaluated more than once in a session.
+
+------------------------------------------------------------------------------
+
+1.31 Apple Metal graphics backend for docking
+    Developer: Yujin Wu
+    Institution: University of California, San Francisco
+    Date: 27 April 2026
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/335
+Git commit: fd69a6b9
+
+Description:
+Adds an Apple Metal graphics backend for the fast Fourier transform docking pipeline.
+
+------------------------------------------------------------------------------
+
+1.32 pyCHARMM test migration and build fixes
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 28 April 2026
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/336
+Git commit: 8d574885
+
+Description:
+Migrates pyCHARMM tests to a standard framework and fixes an atom selector and a Metal backend build issue.
+
+------------------------------------------------------------------------------
+
+1.33 Implicit bicelle membrane model
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 29 April 2026
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/337
+Git commit: cb012f52
+
+Description:
+Adds a bicelle implicit membrane model to the effective energy function solvation model.
+
+------------------------------------------------------------------------------
+
+1.34 pyCHARMM test migration and language level fixes
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 30 April 2026
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/338
+Git commit: 879c5808
+
+Description:
+Migrates the pyCHARMM test suite and fixes several Fortran and C issues found along the way.
+
+------------------------------------------------------------------------------
+
+1.35 Continuous integration pipeline for pyCHARMM
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 30 April 2026
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/339
+Git commit: be58ed92
+
+Description:
+Adds a working continuous integration pipeline for pyCHARMM checks and tests.
+
+------------------------------------------------------------------------------
+
+1.36 Build system modernization
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 30 April 2026
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/340
+Git commit: 98615c2b
+
+Description:
+A focused cleanup of the build infrastructure with no change to program behavior.
+
+------------------------------------------------------------------------------
+
+1.37 Separate energy reporting for each custom force
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 4 May 2026
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/341
+Git commit: 0bfbc570
+
+Description:
+Reports each OpenMM custom force in its own energy bucket instead of a single shared term.
+
+------------------------------------------------------------------------------
+
+1.38 Default to an optimized build when the build type is unset
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 11 May 2026
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/342
+Git commit: 3983e67b
+
+Description:
+Chooses an optimized build type by default so certain plugins compile correctly.
+
+------------------------------------------------------------------------------
+
+1.39 Skip the documentation install when Python is absent
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 11 May 2026
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/343
+Git commit: 2b4836b7
+
+Description:
+Skips the documentation install step in minimal builds that lack Python.
+
+------------------------------------------------------------------------------
+
+1.40 Four fixes surfaced by an automated build
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 12 May 2026
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/344
+Git commit: a7fcd141
+
+Description:
+Fixes a header leak, a silent test crash, missing OpenMM feature guards, and a stochastic dynamics integrator reset.
+
+------------------------------------------------------------------------------
+
+1.41 Source fixes for bonded, Monte Carlo, and charge model code
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 19 May 2026
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/345
+Git commit: db926e91
+
+Description:
+Fixes three source issues in the bonded, Monte Carlo, and distributed charge code and hardens a set of tests.
+
+------------------------------------------------------------------------------
+
+1.42 Dynamic resizing overflow fix and test hardening
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 22 May 2026
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/346
+Git commit: a9b4076d
+
+Description:
+Fixes a memory overflow in the dynamic array resizing build and hardens several tests.
+
+------------------------------------------------------------------------------
+
+1.43 Parallel correctness fixes and optional run time error checking
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 22 May 2026
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/347
+Git commit: 0f322f03
+
+Description:
+Fixes parallel correctness issues in three modules and adds optional run time error checking build options.
+
+------------------------------------------------------------------------------
+
+1.44 Memory and correctness fixes with test self validation
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 3 June 2026
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/348
+Git commit: f3c9dcf7
+
+Description:
+Resolves memory and correctness issues across several modules and moves many tests to self validation.
+
+------------------------------------------------------------------------------
+
+1.45 Clean configuration summary
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 15 June 2026
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/349
+Git commit: 3566841b
+
+Description:
+Presents a clear summary of the detected compilers, parallel support, and libraries after configuration.
+
+------------------------------------------------------------------------------
+
+1.46 Remove invalid build keywords
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 15 June 2026
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/350
+Git commit: 93afba88
+
+Description:
+Removes mangled or misspelled build keywords found by scanning against the canonical list.
+
+------------------------------------------------------------------------------
+
+1.47 Enable the adaptively biased path optimization build option
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 15 June 2026
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/351
+Git commit: a2325751
+
+Description:
+Fixes the build wiring so the adaptively biased path optimization option actually compiles that code.
+
+------------------------------------------------------------------------------
+
+1.48 Query of loaded residues and atom types
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 15 June 2026
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/352
+Git commit: 22fa18a8
+
+Description:
+Adds a pyCHARMM query for the currently loaded residue topologies and atom types.
+
+------------------------------------------------------------------------------
+
+1.49 Correct solvation map output to electron microscopy files
+    Developer: Wonmuk Hwang
+    Institution: Texas A&M University
+    Date: 25 June 2026
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/353
+Git commit: baf10f59
+
+Description:
+Fixes the voxel center coordinates when writing solvation map data to electron microscopy format files.
+
+------------------------------------------------------------------------------
+
+1.50 Register the domain decomposition module and trace interface calls
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 30 June 2026
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/354
+Git commit: 5952b644
+
+Description:
+Registers the domain decomposition module for pyCHARMM and can echo direct interface calls to the output.
+
+------------------------------------------------------------------------------
+
+1.51 Restore the relative harmonic constraint
+    Developer: Xiongwu Wu
+    Institution: National Institutes of Health (NHLBI)
+    Date: 6 July 2026
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/355
+Git commit: c0958e91
+
+Description:
+Fixes a long standing failure of the relative harmonic constraint.
+
+------------------------------------------------------------------------------
+
+1.52 Multisite lambda dynamics and graphics engine features
+    Developer: Ryan Hayes
+    Institution: University of California, Irvine
+    Date: 6 July 2026
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/356
+Git commit: d933900f
+
+Description:
+Adds piecewise implicit constraints for multisite lambda dynamics and mean field potential support in the graphics processor engine.
+
+------------------------------------------------------------------------------
+
+1.53 Profiling portability and documentation build fix
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 6 July 2026
+
+Merge request: <none>
+Git commit: (merge
+
+Description:
+Makes the profiling option build across graphics toolkit versions and fixes the pyCHARMM documentation build.
+
+------------------------------------------------------------------------------
+
+1.54 Dedicated energy terms for the machine learning potential
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 4 August 2026
+
+Merge request: <none>
+Git commit: (merge
+
+Description:
+Gives the machine learning potential its own energy and electrostatic terms instead of borrowing existing ones.
+
+------------------------------------------------------------------------------
+
+1.55 Increase the energy term and property table capacity
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 4 August 2026
+
+Merge request: <none>
+Git commit: (merge
+
+Description:
+Raises the limits on the number of energy terms and energy properties.
+
+------------------------------------------------------------------------------
+
+1.56 Correct the pyCHARMM energy property constants
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 4 August 2026
+
+Merge request: <none>
+Git commit: (merge
+
+Description:
+Fixes transposed energy property index constants in pyCHARMM.
+
+------------------------------------------------------------------------------
+
+1.57 Portability and documentation build fixes
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 6 July 2026
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/357
+Git commit: 1f3aa01b
+
+Description:
+Starts the CHARMM 52 change log, makes the graphics performance instrumentation portable across graphics computing toolkit versions, and fixes the documentation build.
+
+------------------------------------------------------------------------------
+
+1.58 Restrict the CATS restraint to builds with the block module
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 9 July 2026
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/358
+Git commit: 2d0f087b
+
+Description:
+Evaluates the collective atomic restraint only when the block energy module is present, so other builds are unaffected.
+
+------------------------------------------------------------------------------
+
+1.59 Report the real graphics processor error
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 9 July 2026
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/359
+Git commit: bd4364e7
+
+Description:
+When the graphics processor cannot be queried, reports the underlying error rather than a meaningless device count.
+
+------------------------------------------------------------------------------
+
+1.60 Correct relative harmonic restraints
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 10 July 2026
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/360
+Git commit: 0a310d3a
+
+Description:
+Keeps the partner atom index of a relative restraint separate from its type code so relative restraints are applied correctly.
+
+------------------------------------------------------------------------------
+
+1.61 Fix a graphics processor memory leak in particle mesh Ewald
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 13 July 2026
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/361
+Git commit: a0ea319c
+
+Description:
+Releases the particle mesh Ewald interpolation grid after each run so repeated runs on the graphics processor do not exhaust device memory.
+
+------------------------------------------------------------------------------
+
+1.62 Fix the pyCHARMM trajectory reader
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 14 July 2026
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/362
+Git commit: c7043486
+
+Description:
+Corrects the pyCHARMM trajectory reader so coordinate trajectory files are read correctly.
+
+------------------------------------------------------------------------------
+
+1.63 BLaDE neighbour search and additional features
+    Developer: Ryan L. Hayes
+    Institution: University of California, Irvine
+    Date: 14 July 2026
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/363
+Git commit: 478ac94f
+
+Description:
+Adds a neighbour search exclusion optimization and further features to the graphics processor engine.
+
+------------------------------------------------------------------------------
+
+1.64 Check graphics processor errors on memory operations and kernel launches
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 14 July 2026
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/364
+Git commit: ee706e32
+
+Description:
+Checks for graphics processor errors after memory operations and computation launches so failures are reported clearly.
+
+------------------------------------------------------------------------------
+
+1.65 Fix a pyCHARMM and mpi4py hang
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 14 July 2026
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/365
+Git commit: 25d7ca63
+
+Description:
+Resolves a hang when pyCHARMM runs inside a Python program that manages parallel execution with mpi4py.
+
+------------------------------------------------------------------------------
+
+1.66 Fix per replica stream commands in replica exchange
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 15 July 2026
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/366
+Git commit: c0a1c989
+
+Description:
+Stops a replica exchange run from aborting on the per replica stream commands in string method builds.
+
+------------------------------------------------------------------------------
+
+1.67 Make the pyCHARMM documentation build tolerate stale modules
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 15 July 2026
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/367
+Git commit: d365a18e
+
+Description:
+Prevents leftover documentation modules from aborting the install step.
+
+------------------------------------------------------------------------------
+
+1.68 Fix crystal build interoperability and pyCHARMM imports
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 15 July 2026
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/368
+Git commit: 7e86c248
+
+Description:
+Fixes a regression in the crystal build interface between Python and CHARMM and tidies the pyCHARMM submodule imports, with regression tests.
+
+------------------------------------------------------------------------------
+
+1.69 Graphics processor fixes for domain decomposition and OpenMM
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 16 July 2026
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/369
+Git commit: be5873ff
+
+Description:
+Fixes a domain decomposition computation launch failure and OpenMM graphics processor usage on the cluster.
+
+------------------------------------------------------------------------------
+
+1.70 Fix the pyCHARMM trajectory reader for charge equilibration data
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 15 July 2026
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/370
+Git commit: fba2d198
+
+Description:
+Corrects the pyCHARMM trajectory reader so it reads charge equilibration trajectories correctly.
+
+------------------------------------------------------------------------------
+
+1.71 Make the pyCHARMM documentation build non fatal
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 16 July 2026
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/371
+Git commit: 6c8237e2
+
+Description:
+Prevents a failure of the pyCHARMM documentation build from aborting the whole install.
+
+------------------------------------------------------------------------------
+
+1.72 Host supplied communicator for pyCHARMM
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 16 July 2026
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/372
+Git commit: ff79b6c2
+
+Description:
+Lets an embedding program hand CHARMM a base parallel communicator so many groups of ranks can each run their own CHARMM calculation.
+
+------------------------------------------------------------------------------
+
+1.73 Fix a string method replica exchange deadlock at the last step
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 16 July 2026
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/373
+Git commit: da3d8904
+
+Description:
+Fixes a Hamiltonian replica exchange deadlock at the final step of a finite temperature string method run with one processor per replica.
+
+------------------------------------------------------------------------------
+
+1.74 Restore the per replica communicator in the string method
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 21 July 2026
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/374
+Git commit: 5b568b31
+
+Description:
+Restores the per replica communicator so multi replica string method runs no longer deadlock, guards a null communicator query, and adds process count guards to two tests.
+
+------------------------------------------------------------------------------
+
+1.75 PIPF extended Lagrangian dipole dynamics stability
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 21 July 2026
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/375
+Git commit: 0c69dbd2
+
+Description:
+Fixes thermostat non convergence and a first step constraint blow up in polarizable dipole dynamics, and adds an initial dipole temperature control.
+
+------------------------------------------------------------------------------
+
+1.76 Test case robustness fixes
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 21 July 2026
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/376
+Git commit: ce8346a6
+
+Description:
+Skips a biasing test that only runs serially and widens an energy tolerance to absorb cross platform floating point spread.
+
+------------------------------------------------------------------------------
+
+1.77 Fix double counting of reciprocal space energy under threading
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 23 July 2026
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/377
+Git commit: 8dc804cc
+
+Description:
+Corrects an over count of the particle mesh Ewald reciprocal space energy under threading in builds without domain decomposition.
+
+------------------------------------------------------------------------------
+
+1.78 Adjustable parameter and bond dimensions
+    Developer: Ryan L. Hayes
+    Institution: University of California, Irvine
+    Date: 23 July 2026
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/378
+Git commit: dd8e7159
+
+Description:
+Makes the maximum number of parameters and the atom bond capacity adjustable through the dimensions command.
+
+------------------------------------------------------------------------------
+
+1.79 Charge biases in lambda dynamics with BLaDE
+    Developer: Ryan L. Hayes
+    Institution: University of California, Irvine
+    Date: 23 July 2026
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/379
+Git commit: 84d4efc7
+
+Description:
+Adds net charge biases to multisite lambda dynamics on the graphics processor engine.
+
+------------------------------------------------------------------------------
+
+1.80 Machine learning molecular mechanics module and semiempirical interface
+    Developer: Kwangho Nam and colleagues
+    Institution: University of Texas at Arlington
+    Date: 28 July 2026
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/380
+Git commit: 816ae55a
+
+Description:
+Adds a combined machine learning and molecular mechanics module together with an interface to the MNDO97 semiempirical program for machine learning potentials.
+
+------------------------------------------------------------------------------
+
+1.81 Fix pyCHARMM stored selections
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 28 July 2026
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/381
+Git commit: dbe74f62
+
+Description:
+Reuses stored atom selections instead of rebuilding and re storing them on every call, which previously overflowed the selection table.
+
+------------------------------------------------------------------------------
+
+1.82 Auto disable the default fast Fourier transform for MNDO97
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 28 July 2026
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/382
+Git commit: 04590df9
+
+Description:
+Automatically disables the incompatible default column fast Fourier transform when building the MNDO97 interface rather than failing configuration.
+
+------------------------------------------------------------------------------
+
+1.83 Restore energy conservation in the BLaDE neighbour search
+    Developer: Ryan L. Hayes
+    Institution: University of California, Irvine
+    Date: 28 July 2026
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/383
+Git commit: f9dbcfad
+
+Description:
+Restores energy conservation after the block exclusion neighbour search optimization on the graphics processor engine.
+
+------------------------------------------------------------------------------
+
+1.84 Dedicated energy terms for machine learning potentials
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 4 August 2026
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/384
+Git commit: d7c97e77
+
+Description:
+Gives machine learning potentials their own energy and electrostatic terms and raises the number of available energy terms and property slots.
+
+------------------------------------------------------------------------------
+
+1.85 Correct four pre existing defects
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 4 August 2026
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/385
+Git commit: cc9f1bca
+
+Description:
+Fixes an energy term status truncation, a leaked energy term mask, and two unreachable code paths in the pyCHARMM grid support.
+
+------------------------------------------------------------------------------
+
+1.86 Test for variable one to four electrostatic scaling
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 5 August 2026
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/386
+Git commit: 98aea708
+
+Description:
+Adds a test for the variable per atom scaling of electrostatic interactions between atoms separated by three bonds.
+
+------------------------------------------------------------------------------
+
+1.87 Graphics processor engine test for variable electrostatic scaling
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 5 August 2026
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/387
+Git commit: 5f94ea97
+
+Description:
+Adds a companion graphics processor engine test for the variable per atom electrostatic scaling.
+
+------------------------------------------------------------------------------
+
+1.88 Regression test for the implicit bicelle membrane model
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 5 August 2026
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/388
+Git commit: ff616301
+
+Description:
+Adds a derivative check regression test for the implicit bicelle membrane model.
+
+------------------------------------------------------------------------------
+
+1.89 Guard the machine learning force interface against a null pointer
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 5 August 2026
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/389
+Git commit: a096e598
+
+Description:
+Guards the machine learning force interface against a null force pointer that could cause a crash.
+
+------------------------------------------------------------------------------
+
+1.90 Correct the dimensions command and its pyCHARMM support
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 6 August 2026
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/390
+Git commit: 53edacda
+
+Description:
+Makes per dimension size changes take effect and updates the pyCHARMM dimensions support accordingly.
+
+------------------------------------------------------------------------------
+
+1.91 Use a physically correct sampling count for the bicelle test
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 6 August 2026
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/391
+Git commit: 507331b4
+
+Description:
+Uses a physically correct number of sampling points for the implicit bicelle membrane test.
+
+------------------------------------------------------------------------------
+
+1.92 Fast pre build static checks
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 6 August 2026
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/392
+Git commit: 720a2e79
+
+Description:
+Adds fast static checks that run before a build across the Fortran, C, C plus plus, graphics processor, and Python sources.
+
+------------------------------------------------------------------------------
+
+1.93 Terminate compiled keyword strings correctly
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 7 August 2026
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/393
+Git commit: 1863714c
+
+Description:
+Correctly terminates the compiled keyword strings used by the programmatic interface.
+
+------------------------------------------------------------------------------
+
+1.94 AMBER ff19SB protein force field
+    Developer: Charles L. Brooks III
+    Institution: University of Michigan
+    Date: 6 August 2026
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/394
+Git commit: c2341cd1
+
+Description:
+Adds the AMBER ff19SB protein force field to the non CHARMM topology and parameter collection.
+
+------------------------------------------------------------------------------
+
+1.95 Fix single atom selections
+    Developer: Stanislav Cherepanov
+    Institution: University of Michigan
+    Date: 7 August 2026
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/395
+Git commit: b24b78dc
+
+Description:
+Corrects selection of a single atom in the pyCHARMM atom selection helper.
+
+------------------------------------------------------------------------------
+
+1.96 Guard domain decomposition against unsupported cells
+    Developer: Stanislav Cherepanov
+    Institution: University of Michigan
+    Date: 7 August 2026
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/396
+Git commit: 8324baff
+
+Description:
+Guards the pyCHARMM domain decomposition path against unsupported crystal cell shapes.
+
+------------------------------------------------------------------------------
+
+1.97 Native mmCIF and PDBx input and output
+    Developer: Stanislav Cherepanov
+    Institution: University of Michigan
+    Date: 7 August 2026
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/397
+Git commit: 707d99d9
+
+Description:
+Adds native reading and writing of sequence and coordinate data in the mmCIF and PDBx formats.
+
+------------------------------------------------------------------------------
+
+1.98 Fix a pyCHARMM command deadlock on worker ranks
+    Developer: Stanislav Cherepanov
+    Institution: University of Michigan
+    Date: 7 August 2026
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/398
+Git commit: 75b2d914
+
+Description:
+Fixes a deadlock in which pyCHARMM commands hung on the worker ranks of a parallel run.
+
+------------------------------------------------------------------------------
+
+1.99 Unified pyCHARMM replica exchange interface
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 7 August 2026
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/399
+Git commit: f3354aa6
+
+Description:
+Adds a unified pyCHARMM interface for setting up and running replica exchange simulations.
+
+------------------------------------------------------------------------------
+
+1.100 Lambda output for multisite lambda dynamics
+    Developer: Stanislav Cherepanov
+    Institution: University of Michigan
+    Date: 7 August 2026
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/400
+Git commit: d4f935f1
+
+Description:
+Adds columnar lambda output for multisite lambda dynamics free energy simulations.
+
+------------------------------------------------------------------------------
+
+1.101 Read the graphics processor engine interrupt flag each step
+    Developer: Stanislav Cherepanov
+    Institution: University of Michigan
+    Date: 7 August 2026
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/401
+Git commit: d640ddde
+
+Description:
+Reads the graphics processor engine interrupt flag before each dynamics update so an interrupt is honoured promptly.
+
+------------------------------------------------------------------------------
+
+1.102 Reject non finite restart values on the graphics processor engine
+    Developer: Stanislav Cherepanov
+    Institution: University of Michigan
+    Date: 7 August 2026
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/402
+Git commit: 51ebd494
+
+Description:
+Rejects non finite restart coordinates and velocities before they are copied to the graphics processor.
+
+------------------------------------------------------------------------------
+
+1.103 Guarded steepest descent minimization on the graphics processor engine
+    Developer: Stanislav Cherepanov
+    Institution: University of Michigan
+    Date: 7 August 2026
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/403
+Git commit: e4c07c19
+
+Description:
+Adds a guarded steepest descent minimization to the graphics processor engine.
+
+------------------------------------------------------------------------------
+
+1.104 Preserve OpenMM state across restart writes
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 7 August 2026
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/404
+Git commit: e4705b06
+
+Description:
+Stops OpenMM from rebuilding its context and reassigning velocities on every restart write, so a run continues smoothly.
+
+------------------------------------------------------------------------------
+
+1.105 Skip Gaussian tests gracefully when the program is absent
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 11 August 2026
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/405
+Git commit: 1dfb36bd
+
+Description:
+Skips the Gaussian quantum mechanics tests cleanly when the external Gaussian program is not installed.
+
+------------------------------------------------------------------------------
+
+1.106 pyCHARMM test suite standardization
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 13 August 2026
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/406
+Git commit: 8aa674df
+
+Description:
+Standardizes the pyCHARMM test suite for consistent running and reporting.
+
+------------------------------------------------------------------------------
+
+1.107 Portable string method reduction and free energy tolerance
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 13 August 2026
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/407
+Git commit: 0b5991a4
+
+Description:
+Fixes a string method abort on strict parallel libraries by using a portable reduction, and widens the string method free energy test tolerance to absorb cross platform variation.
+
+------------------------------------------------------------------------------
+
+1.108 Live checks in the replica exchange tests
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 13 August 2026
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/408
+Git commit: 8c2fc44f
+
+Description:
+Replaces outdated stored reference values in the replica exchange tests with a live self consistency check and physical range checks.
+
+------------------------------------------------------------------------------
+
+1.109 Automatic macOS system library selection
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 13 August 2026
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/409
+Git commit: 5d79e438
+
+Description:
+Automatically selects a compatible macOS system library set the compiler can link, enabling the build on macOS.
+
+------------------------------------------------------------------------------
+
+1.110 Guard the interface broadcast for serial builds
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 14 August 2026
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/410
+Git commit: 0a4cbfc8
+
+Description:
+Guards a broadcast in the programmatic interface so serial builds without a parallel library link and run.
+------------------------------------------------------------------------------

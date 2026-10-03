@@ -76,9 +76,6 @@ module ace_module
        FISCAL,FSSCAL,FVSCAL
   !!
   LOGICAL       LACE,LIDEAL,LACE2,LACE3,LQGAUS
-#if KEY_ENDIF==1
-  
-#endif
 #else /* (ace_fcm)*/
   logical,parameter :: LACE = .false.
 #endif /* (ace_fcm)*/

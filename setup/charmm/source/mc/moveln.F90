@@ -90,6 +90,10 @@ contains
 #if KEY_GCMC==1
     !       ARD 01-05-21 Grand canonical
     IF (INDXA(COMLYN, COMLEN, 'GCMC') .GT. 0) THEN
+       IF (IM1.EQ.0 .OR. IM2.EQ.0) THEN
+          CALL WRNDIE(-5,'<MOVELN>','GCMC LINK requires both LAB1 and LAB2')
+          RETURN
+       ENDIF
        IF (MVTYPE(IM1).EQ.8) THEN
           IGCMVG(IM2)         = IM1
           IGCMVG(IROOTG(IM2)) = IM1
@@ -342,8 +346,24 @@ contains
           ENDDO
        ENDIF
 
-       CALL UNQBND(TERMP(I), NBNEW(I), IBP1, IBP2)
-       NTOT = NTOT + NBNEW(I)
+       IF (QBND1(I) .AND. QBND2(I)) THEN
+          CALL UNQBND(TERMP(I), NBNEW(I), IBP1, IBP2)
+          NTOT = NTOT + NBNEW(I)
+       ELSEIF (QBND1(I)) THEN
+          NBNEW(I) = NB1
+          call chmalloc('moveln.src','LNBDLS','TERMP(I)', &
+               NB1+1,intgp=TERMP(I)%A)
+          TERMP(I)%A(1:NB1+1) = IBP1(1:NB1+1)
+          NTOT = NTOT + NBNEW(I)
+       ELSEIF (QBND2(I)) THEN
+          NBNEW(I) = NB2
+          call chmalloc('moveln.src','LNBDLS','TERMP(I)', &
+               NB2+1,intgp=TERMP(I)%A)
+          TERMP(I)%A(1:NB2+1) = IBP2(1:NB2+1)
+          NTOT = NTOT + NBNEW(I)
+       ELSE
+          NBNEW(I) = 0
+       ENDIF
 
        IF (QBND2(I)) call chmdealloc('moveln.src','LNBDLS','IBP2',NB2+1,intg=IBP2)
        IF (QBND1(I)) call chmdealloc('moveln.src','LNBDLS','IBP1',NB1+1,intg=IBP1)

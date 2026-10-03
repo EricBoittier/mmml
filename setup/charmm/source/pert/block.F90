@@ -382,6 +382,10 @@ contains
              !        applies a bias to theta
              call ldm_thetabiaspot(comlyn,comlen)
 
+          ELSE IF (WRD  ==  'CGBV') then
+             !        applies a bias to net charge
+             call ldm_chargebiaspot(nblock,iblckp,comlyn,comlen)
+
           ELSE IF (WRD  ==  'RSTP') THEN
              !        reads in functional form of restraining potentials
              call ldm_rstp(nblock,comlyn,comlen)
@@ -425,7 +429,8 @@ contains
              call msld_setup_assign_site(nblock,comlyn,comlen)
 
           ELSE IF (WRD .EQ. 'MSMA') THEN
-             call msld_matrix(nblock, ninter, blcoep)
+             call msld_matrix(nblock, ninter, blcoep,&
+                  blcoeb,qnobo,blcoea,qnoan,blcoed,qnoph)
 
           ELSE IF (WRD .EQ. 'PHMD') THEN    !GG
              call msld_phmd(comlyn,comlen)  !GG
@@ -2141,6 +2146,8 @@ contains
        KTEMP=IBLOCK(KT(I))
        IF (ITEMP  /=  JTEMP) THEN
           IF (ITEMP  /=  KTEMP .AND. JTEMP  /=  KTEMP)  THEN
+             write(*,*)' Angle involves Blocks',itemp,jtemp,ktemp
+             write(*,*)' Atoms:',it(i),jt(i),kt(i)
              CALL WRNDIE(-3,'<BLCHEK>','ILLEGAL BLOCKING.')
           ENDIF
        ENDIF
@@ -2170,6 +2177,7 @@ contains
           JTEMP=KTEMP
        ELSE
           IF (ITEMP  /=  KTEMP .AND. JTEMP  /=  KTEMP)  THEN
+             write(*,*)' Dihedral_1 involves atoms',itemp,jtemp,ktemp
              CALL WRNDIE(-3,'<BLCHEK>','ILLEGAL BLOCKING.')
           ENDIF
        ENDIF
@@ -2178,6 +2186,7 @@ contains
           JTEMP=KTEMP
        ELSE
           IF (ITEMP  /=  KTEMP .AND. JTEMP  /=  KTEMP)  THEN
+             write(*,*)' AngleDihedral_2 involves atoms',itemp,jtemp,jtemp
              CALL WRNDIE(-3,'<BLCHEK>','ILLEGAL BLOCKING.')
           ENDIF
        ENDIF

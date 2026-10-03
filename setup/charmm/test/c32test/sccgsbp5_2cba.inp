@@ -1,0 +1,214 @@
+* CHARMM 32 testcase sccgsbp5_2cba.inp
+* .Test that GSBP refuses a setup that no longer matches where the atoms are,
+* .for a system of exactly the same size.  Reported as bucknerj/dev#60.
+* .Same carbonic anhydrase system as sccgsbp4_2cba.inp, no dynamics.
+* .Author: Josh Buckner, 2026
+*
+
+IF ?SCCDFTB .NE. 1 THEN
+ echo "c32test/sccgsbp5_2cba> SCCDFTB Test NOT performed."
+ STOP
+endif
+
+IF ?QGSBP .NE. 1 THEN
+ echo "c32test/sccgsbp5_2cba> GSBP Test NOT performed."
+ STOP
+endif
+
+bomb -5
+
+! variables
+stream datadir.def
+
+! SCC-DFTB needs SCCDFTB_DATA pointing at a directory holding this test's
+! parameter file.  `genv' on an unset variable is a level-0 warning, which is
+! fatal at the default BOMLEV, so lower BOMLEV across the call and self-skip
+! when the data has not been provisioned here.  The file check matters as
+! well: SCCDFTB_DATA can be set while this particular file is absent, and
+! CHARMM then dies part way through reading parameters with no termination
+! line at all.
+set sccdftbdir UNSET_SCCDFTB_DATA
+set oldbomlev ?bomlev
+bomlev -5
+genv sccdftbdir SCCDFTB_DATA
+bomlev @oldbomlev
+if @sccdftbdir eq UNSET_SCCDFTB_DATA then
+   echo SCCGSBP5_2CBA TESTCASE RESULT: SKIP
+   stop
+endif
+strc sccdat @sccdftbdir "/sccdftb_ONCHZN.dat"
+bomlev -5
+open unit 98 read form name @sccdat
+if ?iostat .ne. 1 then
+   echo SCCGSBP5_2CBA TESTCASE RESULT: SKIP
+   stop
+endif
+close unit 98
+bomlev @oldbomlev
+
+set j    2cba
+set k    2cba_gsbp
+! Build what this testcase reads.  The scratch directory is cleared before
+! every testcase, so nothing another testcase wrote is here.
+stream @0sccgsbp_matrices.str
+stream @0sccgsbp_system.str
+stream @0sccgsbp_cons.str
+
+OPEN UNIT 21 NAME @0top_ca.inp READ FORM
+READ RTF card UNIT 21
+CLOSE UNIT 21
+
+OPEN UNIT 22 NAME @0par_ca.inp READ FORM
+READ PARA card UNIT 22
+CLOSE UNIT 22
+
+OPEN UNIT 3 NAME @9@k_sb.psf READ  FORM
+READ  PSF CARD UNIT 3
+CLOSE UNIT 3
+
+OPEN UNIT 3 NAME @9@k_sb.crd READ FORM
+READ  COOR CARD UNIT 3
+CLOSE UNIT 3
+
+NBONDS  GROUP  SWITCH CDIE  VDW VSWI  EXTEND GRAD QUAD -
+        CUTNB 13.0  CTOFNB 12.0 CTONNB 8.0  WMIN 1.5  EPS 1.0 -
+        inbfrq -1
+
+set rsphere 20.0              ! radius of the spherical region of interest
+
+! center of active site (at zinc atom)
+set xcen   0.0
+set ycen   0.0
+set zcen   0.0
+
+define INNER   sele POINT @xcen @ycen @zcen CUT @rsphere end
+
+! We don't need to consider the bare Coulombic interactions between IR and OR
+! because it is already incorporated into PHIX.
+SCALAR CHARGE SET 0.0 sele .not. INNER end
+
+! -------------- SCC section ----------------
+define qm sele (segid 2CBA .and. -
+! imidazole groups from nearby histidine residues
+       (resid 94 .or. resid 92 .or. resid 117) .and. .not. -
+       (type CA .or. type C .or. type N .or. type O -
+        .or. type HN .or. type HA)) -
+! link atoms
+       .or. (segid 2CBA .and. type QQ*) .or. -
+! Zn and Zn-bound water
+       (segid SOLV .and. resid 1) .or. (segid ZNAT .and. type ZN) SHOW end
+
+scalar WMAIN set 1.0 sele (qm) .and. type O*  SHOW end
+scalar WMAIN set 2.0 sele (qm) .and. type N*  SHOW end
+scalar WMAIN set 3.0 sele (qm) .and. type C*  SHOW end
+scalar WMAIN set 4.0 sele (qm) .and. type H*  SHOW end
+scalar WMAIN set 4.0 sele (qm) .and. type QQ*  SHOW end
+scalar WMAIN set 5.0 sele (qm) .and. type ZN*  SHOW end
+
+SCCDFTB remove CHRG +2 SELE qm END TEMP 0.00 SCFT 0.00000001 mull DATF @sccdat
+
+! Single point energy must be performed in order to use sorting with SCCGSBP.
+energy
+
+!Now setup the Generalized Solvent Boundary Potential (GSBP)
+PBEQ
+
+OPEN READ FILE UNIT 50 NAME @9@k_MIJ2.dat
+READ MIJ UNIT 50
+CLOSE UNIT 50
+
+OPEN READ FILE UNIT 50 NAME @9@k_PHIX.dat
+READ PHIX UNIT 50
+CLOSE UNIT 50
+
+GSBP SPHERE -
+     NMPOL  2        MAXNPOL 4     -
+     SRDIST @rsphere RRXCEN  @xcen RRYCEN @ycen RRZCEN @zcen
+END
+
+! =====================================================================
+! What this testcase is about.
+!
+! GSBP is now prepared for this system: the reaction-field matrices, the
+! basis functions and the grid the static external field was solved on all
+! belong to the atoms as they sit at this moment.  Nothing below changes the
+! system -- same psf, same atom count, same internal geometry, so every
+! distance-based energy term is untouched.  What changes is where the atoms
+! sit relative to the grid, which is fixed in the laboratory frame.
+!
+! An atom count cannot see that, which is the point.  GSBP already refuses a
+! system with a different number of atoms, and that is worth keeping because
+! it names the remedy, but two systems of the same size defeat it and reach
+! the interpolation in SCCGSBP0, where the potential is read from the eight
+! grid points around each QM atom.  PHI1 arrives there as an assumed-size
+! dummy carrying no bounds, so an atom off the grid reads past the end of it
+! and the run used to die with no message of any kind.
+! =====================================================================
+
+SKIP All Excl QMEL ELEC GSBP
+
+ENER
+set egood ?gsbp
+
+! A GSBP energy of zero here would make the check below vacuous.
+set c1 = FAIL
+if @egood .ne. 0.0 then set c1 = PASS
+echo SCCGSBP5_2CBA_PREPARED TESTCASE RESULT: @c1
+
+! Move the QM atoms clear of the grid.  The box is NCEL 111 at DCEL 0.4
+! centred on the origin, so it reaches 22 A, and the QM region sits within a
+! few A of the zinc at the origin: 30 A carries all of it past the edge.
+!
+! The distance is chosen deliberately, and moving the system further would
+! make this testcase worse rather than better.  GSBP sums its energy over the
+! atoms inside the spherical region of interest, so a system pushed clear of
+! that as well returns zero whether or not anything refused -- the check
+! below would then pass on a build with no check in it at all.  30 A leaves
+! the far side of the protein inside the sphere and on the grid, so the only
+! thing that can make the GSBP energy zero is the refusal.
+coor trans xdir 1.0 ydir 0.0 zdir 0.0 dist 30.0
+
+! Say so rather than assuming it: if nothing is left in the region of
+! interest, the test below proves nothing.
+define STILLIN sele POINT @xcen @ycen @zcen CUT @rsphere end
+set c2 = FAIL
+if ?nsel gt 0 then set c2 = PASS
+echo SCCGSBP5_2CBA_CHECK_IS_REAL TESTCASE RESULT: @c2
+
+! Demote the refusal so the run survives it and this testcase can say what it
+! did.  This is also the case the refusal has to be written for: a guard that
+! only called WRNDIE would be demoted here too and carry straight on into the
+! out-of-bounds read it exists to prevent.
+bomlev -6
+ENER
+bomlev @oldbomlev
+
+! Refused means refused: no boundary potential from a grid these atoms are
+! not on, even though there are atoms inside the region of interest that
+! would otherwise contribute one.  Absolute tolerance -- the expected value
+! is exactly zero.
+@testcheck ?gsbp 0.0 -0.000001 sccgsbp5_2cba_refused
+
+! And the refusal leaves nothing behind.  Put the atoms back where the setup
+! belongs and the same boundary energy returns.
+coor trans xdir -1.0 ydir 0.0 zdir 0.0 dist 30.0
+ENER
+@testcheck ?gsbp @egood 0.000001 sccgsbp5_2cba_restored
+
+SKIP NONE
+
+! The other way to reach the same interpolation with nothing to read is
+! sccgsbp6_2cba.inp, which sets GSBP up without a static external field at
+! all.  It is a separate run because a PBEQ RESET cannot be issued here.
+
+! Reaching this line at all is half the result: before the fix the second
+! energy above ended the run with a segmentation fault.
+set cfinal = FAIL
+if @testfail eq 0 then
+   if @c1 eq PASS then
+      if @c2 eq PASS then set cfinal = PASS
+   endif
+endif
+echo SCCGSBP5_2CBA TESTCASE RESULT: @cfinal
+
+STOP

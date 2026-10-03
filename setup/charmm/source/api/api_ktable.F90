@@ -3,7 +3,6 @@ module api_ktable
   use api_dataframe, only: t_dataframe
   implicit none
 
-#if KEY_LIBRARY == 1
   logical :: fill_ktable = .false.
   type(t_dataframe) :: ktable
 
@@ -223,5 +222,5 @@ contains
 
     call dataframe_add_row(ktable, new_row)
   end subroutine ktable_add_row
-#endif /* KEY_LIBRARY */
+
 end module api_ktable

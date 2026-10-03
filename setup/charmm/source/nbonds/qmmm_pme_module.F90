@@ -18,7 +18,6 @@ module qmmmpme_module
   ! Calculate K space PME gradient at QM and MM atom position
   !
   use qm1_constant
-  use qm1_info, only: qm_control_r
   use mndo97, only: lqmewd
 
 #if KEY_PARALLEL==1
@@ -29,7 +28,7 @@ module qmmmpme_module
   !
   use dimens_fcm
   use exfunc
-  use number
+  !!use number
   use inbnd
   use image
   use stream
@@ -41,10 +40,10 @@ module qmmmpme_module
   integer, intent(in)    :: natom,nquant
   integer, intent(in)    :: iqmatoms(nquant)
 
-  real(chm_real),intent(in)    :: x(*),y(*),z(*),d_ewald_mm(3,*),cg(*)
-  real(chm_real),intent(in)    :: kappa
-  real(chm_real),intent(in)    :: scf_mchg_2(nquant),recip_vec(6),volume
-  real(chm_real),intent(inout) :: ewvirial(9)
+  real(chm_real),intent(in)   :: x(*),y(*),z(*),d_ewald_mm(3,*),cg(*)
+  real(chm_real),intent(in)   :: kappa
+  real(chm_real),intent(in)   :: scf_mchg_2(nquant),recip_vec(6),volume
+  real(chm_real),intent(inout):: ewvirial(9)
 
   ! Local variables
   integer        :: i,j,latm
@@ -55,86 +54,74 @@ module qmmmpme_module
 
   logical        :: ok
 
-  if(qm_control_r%q_do_cpmd_pme) then
-     ! these are deallocated in do_pme_ksp_qm_mm_grad.
-     nattot=natom*xnsymm
-     latm=nattot
-     if(allocated(tmpy) ) deallocate(tmpy)
-     if(allocated(alpha)) deallocate(alpha)
-     if(allocated(beta) ) deallocate(beta)
-     call chmdealloc('mndo97_pme_module.src','qm_pme_mm_grad','lmy_ks',latm,intg=lmy_ks)
-     call chmdealloc('mndo97_pme_module.src','qm_pme_mm_grad','lmy_ks_inv',nattot,intg=lmy_ks_inv)
+  RECIP(1,1) = recip_vec(1)
+  RECIP(2,2) = recip_vec(3)
+  RECIP(3,3) = recip_vec(6)
+  RECIP(1,2) = recip_vec(2)
+  RECIP(2,1) = recip_vec(2)
+  RECIP(1,3) = recip_vec(4)
+  RECIP(3,1) = recip_vec(4)
+  RECIP(2,3) = recip_vec(5)
+  RECIP(3,2) = recip_vec(5)
 
-  else
-     RECIP(1,1) = recip_vec(1)
-     RECIP(2,2) = recip_vec(3)
-     RECIP(3,3) = recip_vec(6)
-     RECIP(1,2) = recip_vec(2)
-     RECIP(2,1) = recip_vec(2)
-     RECIP(1,3) = recip_vec(4)
-     RECIP(3,1) = recip_vec(4)
-     RECIP(2,3) = recip_vec(5)
-     RECIP(3,2) = recip_vec(5)
-
-     !-------------------------------------------------------------------
-     ! INPUT
-     !      NFFT1,NFFT2,NFFT3 are the (integer) dimensions of the charge grid array
-     !      NATOM is number of atoms
-     !      FORDER is the order of B-spline interpolation
-     !      x,y,z:   atomic coords
-     !      CG  atomic charges
-     !      recip_vec: array of reciprocal unit cell vectors
-     !      VOLUME: the volume of the unit cell
-     !      KAPPA=ewald_coeff:   ewald convergence parameter
-     ! OUTPUT
-     !      siz_Q=3d charge grid array
-     !      sizfftab is permanent 3d fft table storage
-     !      sizffwrk is temporary 3d fft work storage
-     !      siztheta is size of arrays theta1-3 dtheta1-3
-     !      d_ewald_mm: forces incremented by k-space sum
-     !      EWVIRIAL=virial:  virial due to k-space sum (valid for atomic scaling;
-     !                rigid molecule virial needs a correction term not
-     !                computed here
-     !
-     call get_fftdims(nfftdim1,nfftdim2,nfftdim3,i,j)
-     siztheta  = natom*xnsymm*forder
-     sizdtheta = (natom+1)*forder
-     nattot=natom*xnsymm
+  !-------------------------------------------------------------------
+  ! INPUT
+  !      NFFT1,NFFT2,NFFT3 are the (integer) dimensions of the charge grid array
+  !      NATOM is number of atoms
+  !      FORDER is the order of B-spline interpolation
+  !      x,y,z:   atomic coords
+  !      CG  atomic charges
+  !      recip_vec: array of reciprocal unit cell vectors
+  !      VOLUME: the volume of the unit cell
+  !      KAPPA=ewald_coeff:   ewald convergence parameter
+  ! OUTPUT
+  !      siz_Q=3d charge grid array
+  !      sizfftab is permanent 3d fft table storage
+  !      sizffwrk is temporary 3d fft work storage
+  !      siztheta is size of arrays theta1-3 dtheta1-3
+  !      d_ewald_mm: forces incremented by k-space sum
+  !      EWVIRIAL=virial:  virial due to k-space sum (valid for atomic scaling;
+  !                rigid molecule virial needs a correction term not
+  !                computed here
+  !
+  call get_fftdims(nfftdim1,nfftdim2,nfftdim3,i,j)
+  siztheta  = natom*xnsymm*forder
+  sizdtheta = (natom+1)*forder
+  nattot=natom*xnsymm
 #if KEY_PARALLEL==1
-     SIZ_Q = max(2*NFFTDIM1*NFFTDIM2*mxyslabs,2*NFFTDIM1*NFFTDIM3*mxzslabs)
+  SIZ_Q = max(2*NFFTDIM1*NFFTDIM2*mxyslabs,2*NFFTDIM1*NFFTDIM3*mxzslabs)
 #else
-     SIZ_Q = 2*NFFTDIM1*NFFTDIM2*NFFTDIM3
+  SIZ_Q = 2*NFFTDIM1*NFFTDIM2*NFFTDIM3
 #endif
-     !
+  !
 
-     !==================QM-MM interactions==============================
+  !==================QM-MM interactions==============================
 #if KEY_COLFFT==1 /*colfft*/
-     !==================COLUMN FFT METHOD ==============================
+  !==================COLUMN FFT METHOD ==============================
 #if KEY_QUANTUM==1 || KEY_MNDO97==1 || KEY_SQUANTM==1 || KEY_GAMESS==1 || \
     KEY_GAMESSUK==1 || KEY_QCHEM==1 || KEY_QTURBO==1 || KEY_G09==1
-     if(LQMEWD) call wrndie(-5,'<PME_QMMM>','QM/MM-PME do not support COLFFT.')
+  if(LQMEWD) call wrndie(-5,'<PME_QMMM>','QM/MM-PME do not support COLFFT.')
 #endif
 #else /*      (colfft)*/
 
-     call do_pme_ksp_qm_mm_grad(natom,nquant,iqmatoms,forder,volume,kappa, &
-                                recip,virial,x,y,z,d_ewald_mm,cg,cg1, &
-                                qm_atm_grad_comp,scf_mchg_2, &
-                                sizfftab,sizffwrk,siztheta,siz_q,xnsymm,maxsym,xsymop)
+  call do_pme_ksp_qm_mm_grad(natom,nquant,iqmatoms,forder,volume,kappa, &
+                             recip,virial,x,y,z,d_ewald_mm,cg,cg1, &
+                             qm_atm_grad_comp,scf_mchg_2, &
+                             sizfftab,sizffwrk,siztheta,siz_q,xnsymm,maxsym,xsymop)
 #endif /*        (colfft)*/
 
-     !     for the virial contribution.
-     cfact=CCELEC/(xnsymm**2)
-     ewvirial(1) = ewvirial(1) - virial(1)*cfact
-     ewvirial(2) = ewvirial(2) - virial(2)*cfact
-     ewvirial(3) = ewvirial(3) - virial(3)*cfact
-     ewvirial(4) = ewvirial(4) - virial(2)*cfact
-     ewvirial(5) = ewvirial(5) - virial(4)*cfact
-     ewvirial(6) = ewvirial(6) - virial(5)*cfact
-     ewvirial(7) = ewvirial(7) - virial(3)*cfact
-     ewvirial(8) = ewvirial(8) - virial(5)*cfact
-     ewvirial(9) = ewvirial(9) - virial(6)*cfact
-     !
-  end if
+  !     for the virial contribution.
+  cfact=CCELEC/(xnsymm**2)
+  ewvirial(1) = ewvirial(1) - virial(1)*cfact
+  ewvirial(2) = ewvirial(2) - virial(2)*cfact
+  ewvirial(3) = ewvirial(3) - virial(3)*cfact
+  ewvirial(4) = ewvirial(4) - virial(2)*cfact
+  ewvirial(5) = ewvirial(5) - virial(4)*cfact
+  ewvirial(6) = ewvirial(6) - virial(5)*cfact
+  ewvirial(7) = ewvirial(7) - virial(3)*cfact
+  ewvirial(8) = ewvirial(8) - virial(5)*cfact
+  ewvirial(9) = ewvirial(9) - virial(6)*cfact
+  !
 
   deallocate(fr1,fr2,fr3,cg1,stat=alloc_err)
   if(alloc_err /= 0 ) write(0,*)"unable to deallocate fr1,2,3"
@@ -175,8 +162,8 @@ module qmmmpme_module
 !!  use block_fcm 
 !!#endif
   use memory
-  use qm1_info, only : qm_control_r
-  use gamess_fcm, only : IGMSEL
+  use qm1_info, only  : qm_control_c
+  use gamess_fcm, only: IGMSEL
 
   implicit none
 
@@ -199,7 +186,7 @@ module qmmmpme_module
   integer :: nfftdim1,nfftdim2,nfftdim3,nfftable,nffwork
   integer :: latm
   integer :: kbot, ktop, i0, igood
-  logical :: q_grad_and_pot,q_cpmd_local
+  logical :: q_grad_and_pot
 
   nattot=natom*xnsymm
 
@@ -224,11 +211,10 @@ module qmmmpme_module
 
   ! Fill charge-grid array relevant for qm atoms only.
   q_grad_and_pot=.false.       ! for gradient calculation
-  q_cpmd_local  =.false.
-  call fill_ch_grid_qm_mm(kbot, ktop,nquant,scf_mchg_2, &
-                          x,y,z,recip,natom,xnsymm, &
-                          nfftdim1,nfftdim2,mxyslabs, &
-                          lmy_ks_inv,latm,qm_control_r%qminb,q_grad_and_pot,q_cpmd_local)
+  call fill_ch_grid_qm_mm(kbot,ktop,nquant,scf_mchg_2, &
+                          x,y,z,recip,natom,xnsymm,    &
+                          nfftdim1,nfftdim2,mxyslabs,  &
+                          lmy_ks_inv,latm,qm_control_c%qminb,q_grad_and_pot)
 
   if(.not.allocated(tmpy))  allocate(tmpy(2*nfftdim1))
   if(.not.allocated(alpha)) allocate(alpha(nfft1))
@@ -245,16 +231,14 @@ module qmmmpme_module
 !!!      qarray_2=Qarray
   call convol_fr_space_qm_mm(qfinit,rewcut,ewald_coeff,volume,recip, &
                              nfftdim1,nfftdim2,nfftdim3, &
-                             Qarray,Qarray_mm,virial,q_grad_and_pot, &
-                             q_cpmd_local)
+                             Qarray,Qarray_mm,virial,q_grad_and_pot)
 
 !!!      ! qm-qm:  if you want to use qm-qm virial only from pme calculation,
 !!!      !         use the following routines.
 !!!      vir_2=zero
 !!!      call convol_fr_space_qm_mm(qfinit,rewcut,ewald_coeff,volume,recip, &
 !!!                                 nfftdim1,nfftdim2,nfftdim3, &
-!!!                                 Qarray_2,Qarray_2,vir_2,q_grad_and_pot, &
-!!!                                 q_cpmd_local)
+!!!                                 Qarray_2,Qarray_2,vir_2,q_grad_and_pot)
 !!!      virial(1:6)=virial(1:6)+half*vir_2(1:6)
 !!!      deallocate(qarray_2)
 
@@ -342,7 +326,7 @@ module qmmmpme_module
 
      ! only loop over mm atoms.
      ! probably, this is safer.
-     if((igmsel_local(n).ne.1) .and. (igmsel_local(n).ne.2)) then
+     if((igmsel_local(n) /= 1) .and. (igmsel_local(n) /= 2)) then
         K_keep = INT(FR3(igoo)) - ORDR + 1 + NFFT3
         J_keep = INT(FR2(igoo)) - ORDR + 1 + NFFT2
         I_keep = INT(FR1(igoo)) - ORDR + 1 + NFFT1
@@ -402,7 +386,7 @@ module qmmmpme_module
   !***********************************************************************
   subroutine convol_fr_space_qm_mm(qfinit_local,rewcut_local,ewaldcof,volume,recip, &
                         nfftdim1,nfftdim2,nfftdim3, &
-                        Qarray_local,Qarray_mm_local,vir,q_grad_and_pot,q_cpmd)
+                        Qarray_local,Qarray_mm_local,vir,q_grad_and_pot)
 
   use pme_module
   use pmeutil,only:mxzslabs,mxzstart, &
@@ -452,7 +436,6 @@ module qmmmpme_module
   real(chm_real) :: vir(6)
   logical, intent(in) :: q_grad_and_pot             ! =.true., when computing potential.
                                                     ! =.false., when computing gradient.
-  logical, intent(in) :: q_cpmd
 
 
   real(chm_real) :: FAC,ETERM,VTERM
@@ -468,7 +451,7 @@ module qmmmpme_module
 
   FAC = PI**2/EWALDCOF**2
   MCUT= TWO*PI*REWCUT_local
-  QFIN=QFINIT_local
+  QFIN= QFINIT_local
 
   NF1 = NFFT1/2
   IF(2*NF1 < NFFT1) NF1 = NF1+1
@@ -483,8 +466,7 @@ module qmmmpme_module
 #if KEY_PARALLEL==1
   if(mynod == 0)then
 #endif
-     qarray_local(1:2)   =zero
-     if(q_cpmd) qarray_mm_local(1:2)=zero
+     qarray_local(1:2) = zero
 #if KEY_PARALLEL==1
   endif
 #endif
@@ -535,12 +517,6 @@ module qmmmpme_module
               !
               Qarray_local(IPT3)   = ETERM * Qarray_local(IPT3)
               Qarray_local(IPT3+1) = ETERM * Qarray_local(IPT3+1)
-
-              if(q_cpmd) then
-                 ! this is for the qm-mm only component, whereas Qarray_local has all.
-                 Qarray_mm_local(IPT3)   = ETERM * Qarray_mm_local(IPT3)
-                 Qarray_mm_local(IPT3+1) = ETERM * Qarray_mm_local(IPT3+1)
-              end if
               !
               IPT3=IPT3+2
            end do

@@ -853,6 +853,50 @@ ATOM HB1  HA2     0.09
 ATOM HB2  HA2     0.09
 ATOM SG   SS     -0.80
 
+
+
+
+PRES TRSU        -0.18 ! patch for S-trisulfidation Cys--S--S-H (SSS), gy
+                       ! use in a patch statement
+                       ! follow with AUTOgenerate ANGLes DIHEdrals command
+GROUP
+ATOM CB  CT2     -0.04 !
+ATOM SG  SM      -0.10 !
+ATOM SD  SM      -0.06 ! -CB--SG--SD--SE-HE
+ATOM SE  S       -0.14 !
+ATOM HE  HS       0.16 !
+DELETE ATOM HG1
+BOND SG SD
+BOND SD SE
+BOND SE HE
+IC CA  CB  SG  SD    1.5493  113.76   66.54  103.84   2.0300
+IC CB  SG  SD  SE    1.8161  103.33   79.41  107.38   2.0683
+IC SG  SD  SE  HE    2.0281  107.38  -87.12   99.12   1.3246
+
+
+
+PRES TESU        -0.18 ! patch for S-tetrasulfidation  Cys--S--S--S-H (SSSS) , gy
+                       ! use in a patch statement
+                       ! follow with AUTOgenerate ANGLes DIHEdrals command
+GROUP
+ATOM CB  CT2     -0.04 !
+ATOM SG  SM      -0.10 !
+ATOM SD  SM      -0.04 ! -CB--SG--SD--SE--SK-HK
+ATOM SE  SM      -0.02 !
+ATOM SK  S       -0.14 !
+ATOM HK  HS       0.16 !
+
+DELETE ATOM HG1
+BOND SG SD
+BOND SD SE
+BOND SE SK
+BOND SK HK
+IC CA   CB   SG   SD    1.5493  113.76   66.54  103.84   2.0300
+IC CB   SG   SD   SE    1.8151  103.12   78.60  107.17   2.0279
+IC SG   SD   SE   SK    2.0282  107.17   72.35  107.13   2.0691
+IC SD   SE   SK   HK    2.0279  107.13  -84.01   98.97   1.3242
+
+
 !S-Zn distances in SIRT3 xtal: 2.37, 2.32, 2.31, 2.21
 PRES ZN_C         0.00 ! patch to covalently link anionic Cys to Zn
                        ! Patch is 1-Cys and 2-Zn
@@ -3477,6 +3521,115 @@ IC SG   CA   *CB  HB1   1.8235  113.76 -123.49  109.59   1.1122
 IC HB1  CA   *CB  HB2   1.1122  109.59 -115.93  107.77   1.1124
 IC CA   CB   SG   SD    1.5493  113.76   66.54  103.84   2.0300
 IC CB   SG   SD   HD    1.8235  103.84  -86.95   95.97   1.3248
+
+
+
+
+
+RESI CSSS              0.000  ! S-mercaptocysteine (SSS) , gy
+GROUP
+ATOM N       NH1      -0.470  !     |
+ATOM HN      H         0.310  !  HN-N
+ATOM CA      CT1       0.070  !     |   HB1
+ATOM HA      HB1       0.090  !     |   |
+GROUP                         !  HA-CA--CB--SG--SD--SE-HE
+ATOM CB      CG321    -0.040  !     |   |
+ATOM HB1     HGA2      0.090  !     |   HB2
+ATOM HB2     HGA2      0.090  !   O=C
+ATOM SG      SG301    -0.100  !     |
+ATOM SD      SG301    -0.058  !
+ATOM SE      SG311    -0.142  !
+ATOM HE      HGP3      0.160
+GROUP
+ATOM C       C         0.510
+ATOM O       O        -0.510
+
+BOND        N      CA       C      CA
+BOND        C      +N      CA      HA
+BOND       CA      CB       N      HN
+BOND       CB     HB1      CB     HB2      CB      SG
+BOND       SG      SD
+BOND       SD      SE
+BOND       SE      HE
+DOUBLE      O       C
+IMPR        N      -C      CA      HN       C      CA      +N       O
+
+CMAP       -C       N      CA       C       N      CA       C      +N
+DONOR      HN       N
+ACCEPTOR    O       C
+
+IC -C   CA   *N   HN    1.3477  123.93  180.00  114.45   0.9984
+IC -C   N    CA   C     1.3477  123.93  180.00  106.57   1.5180
+IC N    CA   C    +N    1.4506  106.57  180.00  117.72   1.3463
+IC +N   CA   *C   O     1.3463  117.72  180.00  120.59   1.2291
+IC CA   C    +N   +CA   1.5180  117.72  180.00  124.35   1.4461
+IC N    C    *CA  CB    1.4481  105.39  121.93  109.00   1.5562
+IC N    C    *CA  HA    1.4481  105.39 -118.15  107.60   1.0826
+IC N    CA   CB   SG    1.4508  113.48 -177.95  113.76   1.8235
+IC SG   CA   *CB  HB1   1.8235  113.76 -123.49  109.59   1.1122
+IC HB1  CA   *CB  HB2   1.1122  109.59 -115.93  107.77   1.1124
+IC CA   CB   SG   SD    1.5493  113.76   66.54  103.84   2.0300
+IC CB   SG   SD   SE    1.8161  103.33   79.41  107.38   2.0683
+IC SG   SD   SE   HE    2.0281  107.38  -87.12   99.12   1.3246
+
+
+
+
+RESI CS4              0.000  ! S-mercaptocysteine (SSSS) , gy
+GROUP
+ATOM N       NH1      -0.470  !     |
+ATOM HN      H         0.310  !  HN-N
+ATOM CA      CT1       0.070  !     |   HB1
+ATOM HA      HB1       0.090  !     |   |
+GROUP                         !  HA-CA--CB--SG--SD--SE--SK-HK
+ATOM CB      CG321    -0.040  !     |   |
+ATOM HB1     HGA2      0.090  !     |   HB2
+ATOM HB2     HGA2      0.090  !   O=C
+ATOM SG      SG301    -0.100  !     |
+ATOM SD      SG301    -0.038  !
+ATOM SE      SG301    -0.020  !
+ATOM SK      SG311    -0.142  !
+ATOM HK      HGP3      0.160
+GROUP
+ATOM C       C         0.510
+ATOM O       O        -0.510
+
+BOND        N      CA       C      CA
+BOND        C      +N      CA      HA
+BOND       CA      CB       N      HN
+BOND       CB     HB1      CB     HB2      CB      SG
+BOND       SG      SD
+BOND       SD      SE
+BOND       SE      SK
+BOND       SK      HK
+DOUBLE      O       C
+IMPR        N      -C      CA      HN       C      CA      +N       O
+
+CMAP       -C       N      CA       C       N      CA       C      +N
+DONOR      HN       N
+ACCEPTOR    O       C
+
+
+
+IC -C   CA   *N   HN    1.3477  123.93  180.00  114.45   0.9984
+IC -C   N    CA   C     1.3477  123.93  180.00  106.57   1.5180
+IC N    CA   C    +N    1.4506  106.57  180.00  117.72   1.3463
+IC +N   CA   *C   O     1.3463  117.72  180.00  120.59   1.2291
+IC CA   C    +N   +CA   1.5180  117.72  180.00  124.35   1.4461
+IC N    C    *CA  CB    1.4481  105.39  121.93  109.00   1.5562
+IC N    C    *CA  HA    1.4481  105.39 -118.15  107.60   1.0826
+IC N    CA   CB   SG    1.4508  113.48 -177.95  113.76   1.8235
+IC SG   CA   *CB  HB1   1.8235  113.76 -123.49  109.59   1.1122
+IC HB1  CA   *CB  HB2   1.1122  109.59 -115.93  107.77   1.1124
+IC CA   CB   SG   SD    1.5493  113.76   66.54  103.84   2.0300
+IC CB   SG   SD   SE    1.8151  103.12   78.60  107.17   2.0279
+IC SG   SD   SE   SK    2.0282  107.17   72.35  107.13   2.0691
+IC SD   SE   SK   HK    2.0279  107.13  -84.01   98.97   1.3242
+
+
+
+
+
 
 RESI CSU              -1.000  ! cysteine-S-sulfonic acid
 GROUP   
@@ -31237,6 +31390,49 @@ IC +N   CA   *C   O     1.3352  117.50  179.86  119.92   1.2321
 IC CA   C    +N   +CA   1.5208  117.50 -176.52  126.50   1.4325
 IC +CA  C    *+N  +HN   1.4325  126.50  173.09  125.14   1.0035
 
+RESI MAL               0.000  ! N-methyl-L-alanine
+GROUP
+ATOM N       N        -0.35  !           HM1
+ATOM CA      CT1       0.08  !          /
+ATOM HA      HB1       0.09  !        CM--HM2
+ATOM CB      CT3      -0.27  !     | /  \
+ATOM HB1     HA3       0.09  !     |/    HM3
+ATOM HB2     HA3       0.09  !     N
+ATOM HB3     HA3       0.09  !     |
+ATOM CM      CT3      -0.09  !     |
+ATOM HM1     HA3       0.09  !  HA-CA    HB1
+ATOM HM2     HA3       0.09  !     | \  /
+ATOM HM3     HA3       0.09  !     |  CB--HB2
+ATOM C       C         0.51  !   O=C    \
+ATOM O       O        -0.51  !     |     HB3
+
+BOND       -C       N
+BOND        N      CA       N      CM
+BOND       CA      HA      CA      CB      CA       C
+BOND       CB     HB1      CB     HB2      CB     HB3
+BOND       CM     HM1      CM     HM2      CM     HM3
+BOND        C      +N
+DOUBLE      C       O
+IMPR        C      CA      +N       O
+IMPR        N      -C      CA      CM
+CMAP -C  N  CA  C   N  CA  C  +N
+
+IC -C   CA   *N   CM    1.3551 126.49  180.00 115.42  1.5000
+IC -C   N    CA   C     1.3551 126.49  180.00 114.44  1.5390
+IC CY   CA   *N   CM    1.3551 126.49  180.00 115.42  1.5000
+IC CY   N    CA   C     1.3551 126.49  180.00 114.44  1.5390
+IC N    CA   C    +N    1.4592 114.44  180.00 116.84  1.3558
+IC +N   CA   *C   O     1.3558 116.84  180.00 122.52  1.2297
+IC CA   C    +N   +CA   1.5390 116.84  180.00 126.77  1.4613
+IC N    C    *CA  CB    1.4592 114.44  123.23 111.09  1.5461
+IC N    C    *CA  HA    1.4592 114.44 -120.45 106.39  1.0840
+IC C    CA   CB   HB1   1.5390 111.09  177.25 109.60  1.1109
+IC HB1  CA   *CB  HB2   1.1109 109.60  119.13 111.05  1.1119
+IC HB1  CA   *CB  HB3   1.1109 109.60 -119.58 111.61  1.1114
+IC CA   N    CM   HM1   1.4812 117.36  127.59 107.68  1.0812
+IC HM1  N    *CM  HM2   1.1132 107.84  119.01 108.12  1.1116
+IC HM1  N    *CM  HM3   1.1132 107.84 -121.76 110.00  1.1100
+
 RESI MDO               0.000  ! [2-((1S)-1-aminoethyl)-4-methylidene-5-oxo-4,5-dihydro-1H-imidazol-1-yl]acetic acid
 GROUP
 ATOM N       NG2S1    -0.470  !                      HB21
@@ -34668,6 +34864,14 @@ CTD1   CG322  170.00 1.5200 ! from CG322 CG331, PENALTY= 10 FVAL
 CTD1   CG324  222.50 1.5300 ! FLAVOP PIP1,2,3 DPP DNP GDPR        
 CG2O1  N      260.00 1.3000 ! from N C, ALLOW PEP POL ARO PRO  
 
+! RESI CS3 and CS4, C36 atom types
+S    SM     196.02     2.0694 ! copy from SG301   SG311 of CSS by ac_aa , gy 
+
+!! n-methylalanine, C36 atom types
+CT1    CT3   222.50     1.5380 ! MAL, jihyeon
+CT1    N     320.00     1.4300 ! MAL, jihyeon
+
+
 ANGLE
 CT1  CT2  C      52.000   108.0000 ! DKAM, from CT1  CT2  CC , kevo
 SS   ZN   SS    100.000   111.7700 ! Anionic Cys-Zn bond, equilibrium value based on PDB survey data
@@ -34988,6 +35192,21 @@ CG2O1  N      CP3     60.00 117.00               ! from CP3 N C, ALLOW PRO
 CG2O1  NH1    CT2     50.00 120.00               ! from CT2 NH1 C, ALLOW ALI PEP POL ARO
 NH3    CT1    CG321   67.70 110.00               ! from NH3  CT1  CT2, ALLOW   ALI POL
 CG321  CT1    CC      52.00 108.00               ! from CT2  CT1  CC,   ALLOW   ALI PEP POL ARO
+! RESI CSSS CS4 , CGenFF atom types
+SG301   SG301  SG311      52.50    107.50   ! CSSS , gy
+SG301   SG301  SG301      52.50    107.50   ! CS4  , gy
+!PRES TRSU and TESU, C36 atom types
+CT2  SM   S      72.50    103.30   ! from CG321 SG301 SG301, penalty= 2 CSS
+SM   S    HS     60.74    99.09    ! from SG301 SG311 HGP3 of CSS  by ac_aa, gy
+SM   SM   S      52.50    107.50   ! CSSS , gy
+SM   SM   SM     52.50    107.50   ! CS4  , gy
+!! n-methylalanine, C36 atom types
+N    CT1  HB1  48.00    108.00 ! MAL, jihyeon 
+CT3  CT1  N    70.00    113.50 ! MAL, jihyeon 
+C    CT1  N    50.00    105.43 ! MAL, jihyeon 
+C    N    CT1  42.00    110.73 ! MAL, jihyeon 
+CT1  N    CT3  45.00    119.74 ! MAL, jihyeon
+
 
 DIHE
 CT1  CT2  C    NH1      0.0500  6   180.00 ! DKAM, from CT2 CT2 CC NH2 , kevo
@@ -36471,6 +36690,69 @@ NH3    CT1    CG321  CG321   0.2000 3    0.00 ! from X    CT1  CT2  X
 HGA2   CG321  CT1    CC      0.2000 3    0.00 ! from X    CT1  CT2  X 
 CG321  CG321  CT1    CC      0.2000 3    0.00 ! from X    CT1  CT2  X 
 
+
+! RESI CSSS and CS4, CGenFF atom types
+CG321  SG301  SG301  SG311       0.5469 1    0.00 ! CSSS , gy
+CG321  SG301  SG301  SG311       2.6401 2    0.00 ! CSSS , gy
+CG321  SG301  SG301  SG311       0.9936 3    0.00 ! CSSS , gy
+SG301  SG301  SG311  HGP3        0.7164 1    0.00 ! CSSS , gy
+SG301  SG301  SG311  HGP3        2.9646 2    0.00 ! CSSS , gy
+SG301  SG301  SG311  HGP3        0.5025 3    0.00 ! CSSS , gy
+CG321  SG301  SG301  SG301       0.5469 1    0.00 ! CS4, gy
+CG321  SG301  SG301  SG301       2.6401 2    0.00 ! CS4, gy
+CG321  SG301  SG301  SG301       0.9936 3    0.00 ! CS4, gy
+SG301  SG301  SG301  SG311       0.6091 1  180.00 ! CS4, gy
+SG301  SG301  SG301  SG311       0.8595 2    0.00 ! CS4, gy
+SG301  SG301  SG301  SG311       0.2144 3    0.00 ! CS4, gy
+
+! PRES TRSU and TESU, C36 atom types
+CT1    CT2    SM     S       0.3100 3    0.00 ! from CG331 CG321 SG301 SG301, penalty= 2 CSS
+HA2    CT2    SM     S       0.1580 3    0.00 ! from HGA2 CG321 SG301 SG301, penalty= 2 CSS
+CT2    SM     S      HS      0.9995 1    0.00 ! from CG321 SG301 SG311 HGP3 of CSS by ac_aa gy
+CT2    SM     S      HS      3.5763 2    0.00 ! from CG321 SG301 SG311 HGP3 of CSS by ac_aa gy
+CT2    SM     S      HS      0.6531 3    0.00 ! from CG321 SG301 SG311 HGP3 of CSS by ac_aa gy
+CT2    SM     SM     S       0.5469 1    0.00 ! CSSS , gy
+CT2    SM     SM     S       2.6401 2    0.00 ! CSSS , gy
+CT2    SM     SM     S       0.9936 3    0.00 ! CSSS , gy
+SM     SM     S      HS      0.7164 1    0.00 ! CSSS , gy
+SM     SM     S      HS      2.9646 2    0.00 ! CSSS , gy
+SM     SM     S      HS      0.5025 3    0.00 ! CSSS , gy
+CT2    SM     SM     SM      0.5469 1    0.00 ! CS4, gy
+CT2    SM     SM     SM      2.6401 2    0.00 ! CS4, gy
+CT2    SM     SM     SM      0.9936 3    0.00 ! CS4, gy
+SM     SM     SM     S       0.6091 1  180.00 ! CS4, gy
+SM     SM     SM     S       0.8595 2    0.00 ! CS4, gy
+SM     SM     SM     S       0.2144 3    0.00 ! CS4, gy
+
+!! n-methylalanine, C36 atom types
+HB1    CT1    N      CT3     0.4200 3    0.00 ! MAL, jihyeon 
+CT3    CT1    N      CT3     3.0612 1    0.00 ! MAL, jihyeon 
+CT3    CT1    N      CT3     0.1118 2  180.00 ! MAL, jihyeon 
+HA3    CT3    N      CT1     0.4200 3    0.00 ! MAL, jihyeon 
+O      C      CT1    N       0.0000 1    0.00 ! MAL, jihyeon 
+CT3    C      N      CT1     2.6000 2  180.00 ! MAL, jihyeon 
+C      N      CT1    HB1     0.0000 1    0.00 ! MAL, jihyeon 
+C      N      CT1    CT3     1.8000 1    0.00 ! MAL, jihyeon 
+O      C      N      CT1     2.6000 2  180.00 ! MAL, jihyeon 
+N      CT1    CT3    HA3     0.2000 3    0.00 ! MAL, jihyeon 
+HB1    CT1    CT3    HA3     0.1950 3    0.00 ! MAL, jihyeon 
+C      CT1    CT3    HA3     0.2000 3    0.00 ! MAL, jihyeon 
+C      CT1    N      CT3     1.0553 1    0.00 ! MAL, jihyeon 
+C      CT1    N      CT3     0.6456 2  180.00 ! MAL, jihyeon 
+C      CT1    N      CT3     1.8435 3    0.00 ! MAL, jihyeon 
+C      CT1    N      C       1.8054 1  180.00 ! MAL, jihyeon 
+C      CT1    N      C       1.2309 2  180.00 ! MAL, jihyeon 
+C      CT1    N      C       0.0668 3  180.00 ! MAL, jihyeon 
+NH1    C      CT1    N       0.9678 1  180.00 ! MAL, jihyeon 
+NH1    C      CT1    N       0.9722 2  180.00 ! MAL, jihyeon 
+NH1    C      CT1    N       0.9646 3    0.00 ! MAL, jihyeon 
+CT1    C      N      CT1     1.6000 1    0.00 ! MAL, jihyeon 
+CT1    C      N      CT1     2.5000 2  180.00 ! MAL, jihyeon 
+CT1    C      N      CT3     2.6000 2  180.00 ! MAL, jihyeon 
+
+
+
+
 IMPROPERS
 !! for NMGLY
 C    CT3  N    O       71.0000  0     0.00 ! DMA, Dimethylacetamide, xxwy
@@ -36503,6 +36785,7 @@ NG2S1    C        CG3C51   HGP1  20.0000 0    0.00 ! from NH1 X X H, ALLOW PEP P
 
 NG2S0    C        CG321    CG321  0.0000 0    0.00 ! I4G
 NG2S0    C        CG311    CG331  0.0000 0    0.00 ! MAA
+N        C        CT1      CT3    0.0000 0    0.00 ! MAL, jihyeon
 
 CMAP
 
@@ -38910,6 +39193,178 @@ C    NH1  CT2  C    NH1  CT2  C    NG2D1   24
      0.688500      1.683900      2.188200      2.046200      1.392400 
      0.620800      0.014200     -0.269700     -0.203800 
 
-end
+!! for MAL
+! n-methylalanine map, jihyeon
+! mp2/6-311G(d,p) map
+C    N  CT1  C    N  CT1  C    NH1   24
 
+! -180
+    0.41    -0.27    -0.75    -0.94    -0.70
+    0.23     2.13     3.10     2.87     1.61
+   -0.25    -2.04    -3.12    -4.57    -3.69
+   -2.44    -1.88    -2.05    -2.67    -3.29
+   -3.62    -3.39    -2.29    -0.39
+
+! -165
+    0.59     0.74     0.45     0.21     0.25
+    0.84     2.04     2.85     2.83     1.46
+    1.43     2.61    -3.60    -3.26    -2.16
+   -1.08    -0.49    -0.62    -1.35    -1.98
+   -2.30    -1.98    -0.94     0.23
+
+! -150
+    0.99     1.20     1.11     0.62     0.74
+    1.39     2.69     4.12     4.28     3.36
+    0.79    -2.07    -2.69    -2.26    -1.24
+   -0.19     0.23    -0.04    -0.91    -1.74
+   -2.06    -1.69    -0.72     0.33
+
+! -135
+    1.16     1.51     1.45     0.71     1.42
+    2.18     3.38     4.08     4.19     3.49
+   -0.07    -1.64    -2.10    -1.65    -0.71
+    0.18     0.45    -0.23    -1.29    -2.15
+   -2.41    -1.95    -0.89     0.31
+
+! -120
+    1.18     1.52     0.97     0.52     0.50
+    1.96     3.09     4.20     3.95     2.56
+   -0.03    -1.24    -1.58    -1.16    -0.30
+    0.42     0.32    -0.70    -1.81    -2.55
+   -2.65    -2.07    -0.95     0.29
+
+! -105
+    1.25     1.27     0.71     0.17     0.14
+    1.78     2.90     3.99     4.58     2.11
+    0.20    -0.80    -1.12    -0.81    -0.19
+    0.03    -0.33    -1.40    -2.48    -2.93
+   -2.77    -2.03    -0.85     0.39
+
+! -90
+    1.08     0.82     0.11    -0.39    -0.24
+    0.69     2.11     3.19     3.95     1.68
+    0.17    -0.73    -1.12    -1.02    -1.06
+   -1.02    -1.13    -2.02    -3.09    -3.44
+   -3.08    -2.19    -0.95     0.29
+
+! -75
+   -0.33    -0.61    -1.16    -1.23    -0.58
+    0.56     1.74     2.56     2.69     0.40
+   -0.61    -1.49    -1.89    -2.23    -2.27
+   -1.64    -1.39    -2.16    -3.48    -4.23
+   -4.07    -3.26    -2.02    -0.84
+
+! -60
+   -2.78    -2.66    -2.50    -1.77    -0.59
+    0.38     1.03     1.21    -0.53    -1.53
+   -2.49    -2.03    -3.17    -3.46    -2.74
+   -1.64    -1.24    -2.08    -3.81    -5.26
+   -5.83    -5.54    -4.54    -3.41
+
+! -45
+   -4.53    -3.39    -2.21    -0.97     0.22
+    1.93     2.72     1.26    -0.10    -0.55
+   -0.00     0.25    -0.93    -1.11    -0.54
+    0.20     0.14    -1.12    -3.08    -5.04
+   -6.63    -7.13    -6.41    -5.27
+
+! -30
+    0.39     1.92     3.05     1.77     2.40
+    2.24     1.80     1.32     1.22     2.03
+    2.42     1.67     1.45     1.89     2.77
+    3.53     3.45     2.32    -0.12    -3.20
+   -5.09    -4.98    -3.47    -1.42
+
+! -15
+    4.70     7.46    -0.33     3.72     1.12
+    1.09     1.63     2.37     3.53     4.12
+    2.94     1.93     1.46     1.57     2.23
+    4.29     4.07     1.82    -0.40    -1.95
+   -4.11    -3.15    -0.96     1.77
+
+! 0
+    4.68     3.06     1.61     0.46    -0.10
+    0.50     2.08     4.67     5.51     4.16
+    2.74     1.73     1.19     1.19     1.78
+    2.31     1.59    -0.09    -1.17    -2.92
+   -2.64    -1.21     0.94     3.54
+
+! 15
+    3.21     1.56     0.07    -1.00    -1.02
+    0.57     3.47     4.56     5.27     3.90
+    2.79     1.64     0.84     0.57     0.86
+    1.07    -0.34    -1.44    -2.12    -2.02
+   -1.30    -0.13     3.54     4.02
+
+! 30
+    0.18    -0.93    -1.97    -2.53    -1.73
+    0.52     3.85     4.90     4.00     3.38
+    2.18     0.83    -0.20    -0.52    -0.21
+   -1.05    -1.94    -2.24    -1.87    -0.63
+   -0.32     0.31     0.96     1.00
+
+! 45
+   -1.93    -2.46    -3.08    -3.16    -2.13
+   -0.19     1.62     2.80     3.08     2.39
+    1.02    -0.46    -1.44    -1.43    -1.85
+   -2.86    -3.13    -2.58    -2.09    -2.01
+   -2.32    -1.93    -1.68    -1.61
+
+! 60
+   -0.94    -1.02    -1.30    -1.35    -0.76
+    0.35     1.65     2.79     3.08     2.13
+    0.44    -1.18    -2.12    -2.74    -3.42
+   -3.84    -4.04    -2.93    -2.24    -2.62
+   -2.59    -2.39    -1.86    -1.25
+
+! 75
+    0.60     0.74     0.55     0.31     0.46
+    0.90     1.68     2.64     2.96     2.09
+    0.62    -0.68    -1.54    -2.72    -3.52
+   -3.69    -2.51    -1.36    -1.97    -2.52
+   -2.67    -2.23    -1.20    -0.07
+
+! 90
+    1.32     1.30     1.06     0.86     0.91
+    1.17     1.62     2.36     2.82     2.19
+    1.11     0.04    -1.20    -2.20    -2.58
+   -2.30    -1.19    -1.03    -1.93    -2.63
+   -2.85    -2.17    -0.79     0.57
+
+! 105
+    1.19     1.07     0.84     0.71     0.81
+    1.25     1.90     2.74     3.24     2.82
+    1.65     0.08    -1.33    -2.20    -2.32
+   -1.72    -0.40    -0.94    -1.87    -2.41
+   -2.41    -2.41    -0.91     0.74
+
+! 120
+    0.86     0.91     0.58     0.50     0.72
+    1.31     2.20     3.44     3.71     2.91
+    1.32    -0.43    -1.88    -2.66    -2.51
+   -1.48     0.23    -0.85    -1.76    -2.46
+   -2.65    -2.01    -0.80     0.37
+
+! 135
+    0.88     0.79     0.44     0.59     1.00
+    1.73     2.73     3.38     2.98     2.31
+    0.64    -1.16    -2.68    -3.41    -2.95
+   -0.12    -0.12    -0.12    -1.12    -2.18
+   -3.64    -3.12    -1.83     0.08
+
+! 150
+    0.27     0.97     1.08     1.61     2.09
+    2.70     3.40     3.62     2.74     1.46
+   -0.23    -2.12    -3.68    -4.05    -2.09
+    0.60     0.80     0.10    -1.92    -3.15
+   -3.73    -3.35    -2.22    -0.77
+
+! 165
+    0.57     1.87     1.28     0.53     0.92
+    2.00     2.68     3.06     2.59     1.09
+   -0.58    -2.28    -3.45    -2.44    -4.06
+   -3.71    -3.22    -3.63    -3.48    -3.68
+   -3.76    -3.32    -2.24    -0.79
+
+end
 return

@@ -8,6 +8,21 @@ if ?blade .ne. 1 then
    stop
 endif
 
+! BLaDE needs a GPU of its own for every OpenMP thread in every rank, and
+! all ranks on one node see the same devices -- so N ranks x T threads want
+! N*T GPUs.  ?NGPU honours CUDA_VISIBLE_DEVICES; ?NTHREAD is the OpenMP
+! team size.  Across several nodes this is conservative, each node bringing
+! its own GPUs, so it can skip a run that would in fact work -- a needless
+! skip beats aborting inside BLaDE, which is what happens when the counts
+! do not add up.  Reported as an explicit SKIP because the grader matches
+! "TESTCASE RESULT: SKIP" but not the mixed-case "Test NOT performed" this
+! guard printed before.
+calc bladegpu = ?numnode * ?nthread
+if ?ngpu .lt. @bladegpu then
+   echo BLADE_SWITCH TESTCASE RESULT: SKIP
+   stop
+endif
+
 stream datadir.def
 
 open unit 1 read form name @{0}top_all22_prot.inp
@@ -42,7 +57,6 @@ crystal build cutoff 11 noper 0
 image byseg xcen 0.0 ycen 0.0 zcen 0.0 select segid 5dfr end
 image byres xcen 0.0 ycen 0.0 zcen 0.0 select segid wat end
 
-set pass = 1
 set test = 1
 
 ! Remove electrostatic and bonded forces - just vdW
@@ -78,30 +92,15 @@ label dotest
 
    calc Edev = abs ( @blade - @charmm ) / sqrt ( @blade * @charmm )
 
-   if @Edev le 1e-3 then
-      calc pass = @pass * 1
-      echo test@test energy passed with @switch
-   else
-      calc pass = @pass * 0
-      echo test@test energy failed with @switch
-   endif
-
-   if @FDot le 1e-3 then
-      calc pass = @pass * 1
-      echo test@test forces passed with @switch
-   else
-      calc pass = @pass * 0
-      echo test@test forces failed with @switch
-   endif
+   ! Edev (relative energy deviation BLaDE-vs-CHARMM) and FDot
+   ! (1 - normalized force dot product) are both deviation metrics
+   ! that should be ~0; check each <= 1e-3 (ref=0 => absolute test
+   ! vs |tol| in test.str).
+   @testcheck @Edev 0 1e-3 BLADE_SWITCH_ENERGY_@test
+   @testcheck @FDot 0 1e-3 BLADE_SWITCH_FORCE_@test
 
    incr test by 1
 if test le 2 goto dotest
-
-if @pass eq 1 then
-   echo testcase passed
-else
-   echo testcase failed
-endif
 
 stop
       

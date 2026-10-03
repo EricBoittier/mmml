@@ -16,6 +16,12 @@
 
 """Functions to configure fix constraints
 
+.. deprecated::
+    This module is deprecated. Use :mod:`pycharmm.restraints` instead:
+
+    - ``cons_fix.setup()`` → ``restraints.atoms.fix()``
+    - ``cons_fix.turn_off()`` → ``restraints.atoms.fix_turn_off()``
+
 Corresponds to CHARMM command `CONS FIX`
 
 See CHARMM documentation [CONS FIX](<https://academiccharmm.org/documentation/version/c47b1/cons#FixedAtom>)
@@ -35,18 +41,20 @@ Fix all atoms in a segment named PROT
 
 """
 
-import ctypes
+import warnings
 
-import pycharmm.lib as lib
-from .select_atoms import SelectAtoms
+from pycharmm import restraints
 
 
 def turn_off(comparison=False):
     """Turn off and clear settings for fix constraints
 
+    .. deprecated::
+        Use ``restraints.atoms.fix_turn_off()`` instead.
+
     Parameters
     ----------
-    comparison : bool 
+    comparison : bool
          if true, turn off fix contraints on the comparison set
 
     Returns
@@ -56,32 +64,38 @@ def turn_off(comparison=False):
 
 
     """
-    none_selected = SelectAtoms()
-    status = setup(none_selected, comparison)
-    return status
+    warnings.warn(
+        "cons_fix.turn_off() is deprecated, use restraints.atoms.fix_turn_off()",
+        DeprecationWarning,
+        stacklevel=2
+    )
+    return restraints.atoms.fix_turn_off(comparison=comparison)
 
 
 def setup(selection, comparison=False, purge=False,
           bond=False, angle=False, phi=False, imp=False, cmap=False):
     """Configure and turn on fix constraints for the selected atoms
 
+    .. deprecated::
+        Use ``restraints.atoms.fix()`` instead.
+
     Parameters
     ----------
-    selection : SelectAtoms  
+    selection : pycharmm.SelectAtoms
                 selection[i] == 1 <=> apply constraints to atom i
     comparison : bool
                 if true, do constraints on comparison set instead of main set
-    purge : bool 
+    purge : bool
                 if true, use the purge option which modified the PSF irrevocably
-    bond : bool 
+    bond : bool
                 if true, use the bond option
-    angle: bool 
+    angle: bool
                 if true, use the angle option
-    phi: bool 
+    phi: bool
                 if true, use the phi option
-    imp: bool 
+    imp: bool
                 if true, use the imp option
-    cmap: bool 
+    cmap: bool
                 if true, use the cmap option
 
     Returns
@@ -90,23 +104,18 @@ def setup(selection, comparison=False, purge=False,
                 True <==> success
 
     """
-    c_sel = selection.as_ctypes()
-
-    c_comp = ctypes.c_int(comparison)
-    c_purge = ctypes.c_int(purge)
-    c_bond = ctypes.c_int(bond)
-    c_angle = ctypes.c_int(angle)
-    c_phi = ctypes.c_int(phi)
-    c_imp = ctypes.c_int(imp)
-    c_cmap = ctypes.c_int(cmap)
-
-    status = lib.charmm.cons_fix_setup(c_sel,
-                                       ctypes.byref(c_comp),
-                                       ctypes.byref(c_purge),
-                                       ctypes.byref(c_bond),
-                                       ctypes.byref(c_angle),
-                                       ctypes.byref(c_phi),
-                                       ctypes.byref(c_imp),
-                                       ctypes.byref(c_cmap))
-    status = bool(status)
-    return status
+    warnings.warn(
+        "cons_fix.setup() is deprecated, use restraints.atoms.fix()",
+        DeprecationWarning,
+        stacklevel=2
+    )
+    return restraints.atoms.fix(
+        selection=selection,
+        comparison=comparison,
+        purge=purge,
+        bond=bond,
+        angle=angle,
+        phi=phi,
+        imp=imp,
+        cmap=cmap
+    )

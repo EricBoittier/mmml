@@ -5,6 +5,124 @@ module api_scalar
 
 contains
 
+  !> @brief get the QM density matrix from quantum calculation for the atoms
+  !
+  !> @param[out] out_density vector of density elements for the atoms
+  !> @return success
+  !>         1 <=> success
+  function scalar_get_norbs(out_n1st, out_nlast) &
+       bind(c) result(success)
+    use, intrinsic :: iso_c_binding, only: c_int
+    use api_util, only: f2c_logical
+    use psf, only: natom
+#if KEY_QUANTUM==1 /*quantm_only*/
+    use quantm, only: natqm, n1st, nlast
+
+    implicit none
+
+    ! args
+    integer(c_int) :: out_n1st(*),out_nlast(*)
+
+    ! locals
+    logical :: qsuccess
+
+    ! result
+    integer(c_int) :: success
+
+
+    if (natqm /= natom) then
+       call wrndie(-1, '<scalar_get_density>', &
+            'NATMQ does not match NATOM')
+    endif
+    
+
+    qsuccess = .false.
+
+    out_n1st(1:natqm) = n1st(1:natqm)
+    out_nlast(1:natqm) = nlast(1:natqm)
+
+    qsuccess = .true.
+    success = f2c_logical(qsuccess)
+#else /*quantm_only*/
+    implicit none
+
+    ! args
+    integer(c_int) :: out_n1st(*),out_nlast(*)
+
+    ! locals
+    logical :: qsuccess
+
+    ! result
+    integer(c_int) :: success
+
+    qsuccess = .false.
+    success = f2c_logical(qsuccess)
+#endif /*quantm_only*/
+  end function scalar_get_norbs
+
+  !> @brief get the QM density matrix from quantum calculation for the atoms
+  !
+  !> @param[out] out_density vector of density elements for the atoms
+  !> @return success
+  !>         1 <=> success
+  function scalar_get_pdens(out_pdens) &
+       bind(c) result(success)
+    use, intrinsic :: iso_c_binding, only: c_int, c_double
+    use api_util, only: f2c_logical
+    use psf, only: natom
+#if KEY_QUANTUM==1 /*quantm_only*/
+    use quantm, only: natqm, n1st, nlast
+    use scfblk, only: pdens
+
+    implicit none
+
+    ! args
+    real(c_double) :: out_pdens(*)
+
+    ! locals
+    logical :: qsuccess
+    integer :: npdens, i, j
+
+    ! result
+    integer(c_int) :: success
+
+
+    npdens = 0
+    do i = 1, natqm
+       do j = n1st(i), nlast(i)
+          npdens = npdens + 1
+       enddo
+    enddo
+
+    npdens = npdens*(npdens+1)/2
+
+    if (natqm /= natom) then
+       call wrndie(-1, '<scalar_get_density>', &
+            'NATMQ does not match NATOM')
+    endif
+    
+    qsuccess = .false.
+
+    out_pdens(1:npdens) = pdens(1:npdens)
+
+    qsuccess = .true.
+    success = f2c_logical(qsuccess)
+#else /*quantm_only*/
+    implicit none
+
+    real(c_double) :: out_pdens(*)
+
+    ! locals
+    logical :: qsuccess
+
+    ! result
+    integer(c_int) :: success
+
+    qsuccess = .false.
+    success = f2c_logical(qsuccess)
+#endif /*quantm_only*/
+  end function scalar_get_pdens
+  
   !> @brief get the charges for the atoms
   !
   !> @param[out] out_charges vector of charges for the atoms

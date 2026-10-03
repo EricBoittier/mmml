@@ -1,0 +1,17 @@
+module config_mod
+  implicit none
+contains
+
+  subroutine print_config() bind(c)
+    use stream, only: outu
+    implicit none
+    character(len=*), parameter :: &
+         configure_args = "${CONFIGURE_ARGS}", &
+         cmake_args = "${CONFIGURE_CMAKE_ARGS}", &
+         original_source_dir = "${CMAKE_SOURCE_DIR}"
+
+    write(outu, *) "configure command line arguments ->", configure_args, "<-"
+    write(outu, *) "cmake command line arguments ->", cmake_args, "<-"
+    write(outu, *) "original source dir ->", original_source_dir, "<-"
+  end subroutine print_config
+end module config_mod

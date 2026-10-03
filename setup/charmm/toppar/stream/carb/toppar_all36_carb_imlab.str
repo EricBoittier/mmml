@@ -5,6 +5,145 @@ read rtf card append
 
 AUTO ANGLE DIHE
 
+RESI 2AGLC0         0.000  ! 2-amino-2-deoxy-D-gluco-hexopyranose: neutral, Chitosan, 2025_3
+                           ! 
+GROU                       !
+ATOM C1   CC3162    0.340  !                  O6-HO6
+ATOM H1   HCA1      0.090  !                  |
+ATOM O1   OC311    -0.650  !              H61-C6-H62
+ATOM HO1  HCP1      0.420  !                  |
+ATOM C5   CC3163    0.110  !               H5-C5---O5
+ATOM H5   HCA1      0.090  !            H4   /       \    O1-HO1
+ATOM O5   OC3C61   -0.400  !              \ / HO3     \  /
+GROU                       !               C4 |        C1
+ATOM C2   CC3161    0.20   !              / \ O3   H2 /  \
+ATOM H2   HCA1      0.09   !        HO4-O4   \|    | /    H1
+ATOM N    NG321    -0.99   !                  C3---C2
+ATOM HN1  HGPAM2    0.35   !                  |    |
+ATOM HN2  HGPAM2    0.35   !                  |    |      
+GROU                       !                  H3   N-HN1
+ATOM C3   CC3161    0.140  !                      /
+ATOM H3   HCA1      0.090  !                     HN2 
+ATOM O3   OC311    -0.650  !
+ATOM HO3  HCP1      0.420  !
+GROU                       !
+ATOM C4   CC3161    0.140  !
+ATOM H4   HCA1      0.090
+ATOM O4   OC311    -0.650
+ATOM HO4  HCP1      0.420
+GROU
+ATOM C6   CC321     0.050
+ATOM H61  HCA2      0.090
+ATOM H62  HCA2      0.090
+ATOM O6   OC311    -0.650
+ATOM HO6  HCP1      0.420
+!
+BOND C1   O1        C1   H1        O1   HO1       C1   O5        C1   C2
+BOND C2   H2        C2   N         C2   C3        C3   H3
+BOND C3   O3        O3   HO3       C3   C4        C4   H4        C4   O4
+BOND O4   HO4       C4   C5        C5   H5        C5   C6        C6   H61
+BOND C6   H62       C6   O6        O6   HO6       C5   O5        
+BOND N    HN1       N    HN2   ! new bond 
+!    I    J    K    L      R(IK)   T(IKJ)    PHI   T(JKL)   R(KL)
+IC   O1   C2  *C1   H1     1.3899  110.90  120.10  104.58   1.0836 !from BGLC
+IC   O1   O5  *C1   C2     1.3899  108.62  122.10  110.88   1.5316 !from BGLC
+IC   N    C3  *C2   H2     1.4190  110.99 -116.97  108.77   1.0892
+IC   N    C1  *C2   C3     1.4190  111.74 -123.77  110.04   1.5167
+IC   O3   C4  *C3   H3     1.4198  107.51  119.38  108.28   1.0957
+IC   O3   C2  *C3   C4     1.4198  111.19  119.03  110.08   1.5102
+IC   O4   C5  *C4   H4     1.4163  107.94 -120.61  109.07   1.0972
+IC   O4   C3  *C4   C5     1.4163  111.43 -118.91  108.83   1.5171
+IC   C6   O5  *C5   H5     1.5099  105.42  117.88  109.66   1.0926
+IC   C6   C4  *C5   O5     1.5099  112.84  117.26  109.77   1.4384
+IC   O6  H62  *C6  H61     1.4163  111.41 -118.10  108.62   1.0873
+IC   O6   C5  *C6  H62     1.4163  111.44 -123.18  108.72   1.0943
+IC   O5   C1   C2   C3     1.4059  111.32   53.56  110.04   1.5167
+IC   C1   C2   C3   C4     1.5218  110.04  -54.55  110.08   1.5102
+IC   C2   C3   C4   C5     1.5167  110.08   57.15  108.83   1.5171
+IC   C3   C4   C5   O5     1.5102  108.83  -58.25  109.77   1.4384
+IC   C4   C5   O5   C1     1.5171  109.77   59.83  114.27   1.4059
+IC   C5   O5   C1   C2     1.4384  114.27  -57.30  111.32   1.5218
+IC   C4   C5   C6   O6     1.5171  112.84 -179.74  111.44   1.4163
+IC   O5   C1   O1  HO1     1.4059  113.00   67.18  108.04   0.9634
+IC   C1   C2   N   HN1     1.5218  111.74  -44.11  105.37   0.9665 ! HN to HN1
+IC   C2   C3   O3  HO3     1.5167  111.19  -51.80  106.26   0.9641
+IC   C3   C4   O4  HO4     1.5102  111.43   47.58  105.89   0.9645
+IC   C5   C6   O6  HO6     1.5099  111.44  -54.79  105.51   0.9630
+IC   HN2  N    C2   C3     1.0000  120.00  -60.00  120.00   1.0000 ! C to HN2
+IC   HN2  C2   *N  HN1     1.0000  120.00  180.00  120.00   1.0000 ! C to HN2, HN to HN1
+PATC FIRS NONE LAST NONE
+
+RESI 2AGLC1         1.000  ! 2-amino-2-deoxy-D-gluco-hexopyranose: charged, Chitosan, 2025_3
+                           ! 
+GROU                       !
+ATOM C1   CC3162    0.340  !                  O6-HO6
+ATOM H1   HCA1      0.090  !                  |
+ATOM O1   OC311    -0.650  !              H61-C6-H62
+ATOM HO1  HCP1      0.420  !                  |
+ATOM C5   CC3163    0.110  !               H5-C5---O5
+ATOM H5   HCA1      0.090  !            H4   /       \    O1-HO1
+ATOM O5   OC3C61   -0.400  !              \ / HO3     \  /
+GROU                       !               C4 |        C1
+ATOM C2   CC3161    0.33   !              / \ O3   H2 /  \
+ATOM H2   HCA1      0.09   !        HO4-O4   \|    | /    H1
+ATOM N    NG3P3    -0.32   !                  C3---C2
+ATOM HN1  HGP2      0.30   !                  |    |
+ATOM HN2  HGP2      0.30   ! add HN2          |    |      check the charge please!
+ATOM HN3  HGP2      0.30   ! add HN3          |    |
+GROU                       !                  H3   N-HN1
+ATOM C3   CC3161    0.140  !                      / \
+ATOM H3   HCA1      0.090  !                     HN2 HN3
+ATOM O3   OC311    -0.650  !
+ATOM HO3  HCP1      0.420  !
+GROU                       !
+ATOM C4   CC3161    0.140  !
+ATOM H4   HCA1      0.090
+ATOM O4   OC311    -0.650
+ATOM HO4  HCP1      0.420
+GROU
+ATOM C6   CC321     0.050
+ATOM H61  HCA2      0.090
+ATOM H62  HCA2      0.090
+ATOM O6   OC311    -0.650
+ATOM HO6  HCP1      0.420
+!
+BOND C1   O1        C1   H1        O1   HO1       C1   O5        C1   C2
+BOND C2   H2        C2   N         C2   C3        C3   H3
+BOND C3   O3        O3   HO3       C3   C4        C4   H4        C4   O4
+BOND O4   HO4       C4   C5        C5   H5        C5   C6        C6   H61
+BOND C6   H62       C6   O6        O6   HO6       C5   O5        
+BOND N    HN1       N    HN2       N    HN3 ! new bond 
+!    I    J    K    L      R(IK)   T(IKJ)    PHI   T(JKL)   R(KL)
+IC   O1   C2  *C1   H1     1.3899  110.90  120.10  104.58   1.0836 !from BGLC
+IC   O1   O5  *C1   C2     1.3899  108.62  122.10  110.88   1.5316 !from BGLC
+IC   N    C3  *C2   H2     1.4190  110.99 -116.97  108.77   1.0892
+IC   N    C1  *C2   C3     1.4190  111.74 -123.77  110.04   1.5167
+IC   O3   C4  *C3   H3     1.4198  107.51  119.38  108.28   1.0957
+IC   O3   C2  *C3   C4     1.4198  111.19  119.03  110.08   1.5102
+IC   O4   C5  *C4   H4     1.4163  107.94 -120.61  109.07   1.0972
+IC   O4   C3  *C4   C5     1.4163  111.43 -118.91  108.83   1.5171
+IC   C6   O5  *C5   H5     1.5099  105.42  117.88  109.66   1.0926
+IC   C6   C4  *C5   O5     1.5099  112.84  117.26  109.77   1.4384
+IC   O6  H62  *C6  H61     1.4163  111.41 -118.10  108.62   1.0873
+IC   O6   C5  *C6  H62     1.4163  111.44 -123.18  108.72   1.0943
+IC   O5   C1   C2   C3     1.4059  111.32   53.56  110.04   1.5167
+IC   C1   C2   C3   C4     1.5218  110.04  -54.55  110.08   1.5102
+IC   C2   C3   C4   C5     1.5167  110.08   57.15  108.83   1.5171
+IC   C3   C4   C5   O5     1.5102  108.83  -58.25  109.77   1.4384
+IC   C4   C5   O5   C1     1.5171  109.77   59.83  114.27   1.4059
+IC   C5   O5   C1   C2     1.4384  114.27  -57.30  111.32   1.5218
+IC   C4   C5   C6   O6     1.5171  112.84 -179.74  111.44   1.4163
+IC   O5   C1   O1  HO1     1.4059  113.00   67.18  108.04   0.9634
+IC   C1   C2   N   HN1     1.5218  111.74  -44.11  105.37   0.9665 ! HN to HN1
+IC   C2   C3   O3  HO3     1.5167  111.19  -51.80  106.26   0.9641
+IC   C3   C4   O4  HO4     1.5102  111.43   47.58  105.89   0.9645
+IC   C5   C6   O6  HO6     1.5099  111.44  -54.79  105.51   0.9630
+IC   HN2  N    C2   C3     1.0000  120.00  -60.00  120.00   1.0000 ! C to HN2
+IC   HN2  C2   *N  HN1     1.0000  120.00  120.00  120.00   1.0000 ! C to HN2, HN to HN1
+IC   HN3  N    C2   C3     1.0000  120.00   60.00  120.00   1.0000 ! C to HN2
+IC   HN3  C2   *N  HN1     1.0000  120.00 -120.00  120.00   1.0000 ! C to HN2, HN to HN1
+PATC FIRS NONE LAST NONE
+
 RESI ANE5GC        -1.000  !  alpha-Neu5Gc (N-glycolyl-alpha-D-neuraminic acid)
 GROU                       !
 ATOM C1   CC2O2     0.300  !
@@ -25429,6 +25568,9 @@ read param card flex append
 
 BONDS
 
+!Chitosan, 2025_3
+CC3161  NG321   320.00      1.4300 ! NC2D1 CC3161 320.00      1.4300 ! par22 NH1 CT1
+!
 ! HH17A patch
 !CC322   OC301   360.00  1.415   ! CC321 OC301 ; all36 carb
 ! PPETN
@@ -25567,6 +25709,12 @@ ANGLES
 !!transferred from toppar_all36_carb_lps.str
 !
 ! KDOA
+!
+!Chitosan, 2025_3
+CC3162  CC3161   NG321  70.00    113.50                  ! CC3162  CC3161  NC2D1    70.00   113.50  ! par22 NH1  CT1  CT1
+HCA1    CC3161   NG321  48.00    108.00                  ! NC2D1   CC3161  HCA1     48.00   108.00  ! par22 NH1  CT1  HB
+NG321   CC3161   CC3161 70.00    113.50                  ! CC3161  CC3161  NC2D1    70.00   113.50  ! par22 NH1  CT1  CT1
+CC3161  NG321    HGPAM2 41.00    112.10                  ! CG3C51  NG321   HGPAM2   41.00   112.10  ! AMINE aliphatic amines
 !
 CC3163  CC312   CC322    53.350  111.00    8.00   2.56100  ! CT2 CT1 CT1  ; all22 prot
 ! KD24E patch
@@ -26065,6 +26213,19 @@ CC3152   OC301    CC322  95.00   111.00  ! from CC3152  OC301   CC321
 
 ! ******** V(dihedral) = Kchi(1 + cos(n(chi) - delta))
 DIHEDRALS
+!Chitosan, 2025_3
+CC3162  CC3161  NG321   HGPAM2    0.2000   3     0.0   ! AR_2025
+CC3161  CC3161  NG321   HGPAM2    0.5000   3     0.0   ! AR_2025
+HCA1    CC3161  NG321   HGPAM2    0.0100   3   180.0   ! AR_2025
+HCA1    CC3162  CC3161  NG321     0.2000   3     0.0   ! HCA1   CC3162 CC3161 NC2D1    0.20  3     0.0  ! par27 X CTL1 CTL1 X
+OC311   CC3162  CC3161  NG321     0.2000   3     0.0   ! OC311  CC3162 CC3161 NC2D1    0.20  3     0.0  ! par27 X CTL1 CTL1 X
+OC301   CC3162  CC3161  NG321     0.2000   3     0.0   ! OC311  CC3162 CC3161 NC2D1    0.20  3     0.0  ! par27 X CTL1 CTL1 X
+OC3C61  CC3162  CC3161  NG321     0.2000   3     0.0   ! OC3C61 CC3162 CC3161 NC2D1    0.20  3     0.0  ! par27 X CTL1 CTL1 X
+HCA1    CC3161  CC3161  NG321     0.2000   3     0.0   ! HCA1   CC3161 CC3161 NC2D1    0.20  3     0.0  ! par27 X CTL1 CTL1 X
+OC311   CC3161  CC3161  NG321     0.2000   3     0.0   ! OC311  CC3161 CC3161 NC2D1    0.20  3     0.0  ! par27 X CTL1 CTL1 X
+CC3161  CC3161  CC3161  NG321     0.2000   3     0.0   ! NC2D1  CC3161 CC3161 CC3261   0.20  3     0.0  ! par27 X CTL1 CTL1 X
+!
+
 ! KDOA
 HCA2     CC322     CC312     CC3163   0.20    3     0.0    ! X CTL1 CTL2 X             ; all36 lipid
 CC3163   CC312     CC322     OC311    0.20    3     0.0    ! X CTL1 CTL2 X
@@ -27737,6 +27898,7 @@ IMPROPER
 !psi0: degrees
 !
 !atom types                     Kpsi         psi0
+!
 ! monosaccharides
 NG2S1    C        CG321    HGP1     20.00   0   0.00 ! par22 NH1  X    X    H, !gpi-link
 CC2O1    CT1      NC2D1    OC2D1   120.00   0   0.00 ! par22 O    X    X    C, !from toppar_all36_carb_lps.str

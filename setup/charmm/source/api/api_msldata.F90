@@ -3,7 +3,7 @@ module api_msldata
   use api_dataframe, only: t_dataframe
   implicit none
 
-#if KEY_LIBRARY == 1 && KEY_BLOCK == 1
+#if KEY_BLOCK == 1
   logical :: &
        fill_msldata = .false., &  ! requesting dynamics to collect msld data?
        is_active = .false.  ! have the msld data structures been initialized?
@@ -55,6 +55,17 @@ contains
     integer(c_int) :: ncols
     ncols = step_cols
   end function msldata_step_get_ncols
+
+  !> @brief get the number of rows in the bias dataframe
+  !
+  !> @return the number of rows (nbiasv * nsteps)
+  function msldata_bias_get_nrows() bind(c) result(nrows)
+    use, intrinsic :: iso_c_binding, only: c_int
+    use api_dataframe, only: dataframe_get_nrows
+    implicit none
+    integer(c_int) :: nrows
+    nrows = dataframe_get_nrows(bias_data)
+  end function msldata_bias_get_nrows
 
   !> @brief get the max number of cols allocated for bias data
   !
@@ -338,5 +349,5 @@ contains
        call dataframe_add_row(nsubs_data, new_row)
     end if
   end subroutine msldata_add_rows
-#endif /* KEY_LIBRARY */
+#endif /* KEY_BLOCK */
 end module api_msldata

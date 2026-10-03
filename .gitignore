@@ -374,3 +374,4 @@ benchmarks/env/
 # are rebuilt by every `asv run`.
 benchmarks/results/benchmarks.json
 benchmarks/results/*/machine.json
+charmm.tar

@@ -2,7 +2,7 @@ module surfacmod
 
 #if KEY_MPI==1
   use parallel
-  use mpi
+  use mpi_f08
 #else
   INTEGER, PRIVATE :: MYNOD=0, NUMNOD=1
 #endif

@@ -26,7 +26,7 @@
 #if (KEY_MULTICOM==1)
       use multicom_aux; 
 #endif
-      use mpi
+      use mpi_f08
 !=============================================================
       character(len=len("FTSM_STAT_INIT>") ),parameter::whoami="FTSM_STAT_INIT>";!macro
       CHARACTER(LEN=*) :: COMLYN
@@ -526,7 +526,7 @@
       use multicom_aux; 
 #endif
       use string
-      use mpi
+      use mpi_f08
       use number
       use bestfit, only : eig3s, RMSBestFit, rmsd, norm3, veccross3
       use parallel, only: psnd4, psnd8
@@ -539,19 +539,19 @@
 !
 #if (KEY_PARALLEL==1)
 #if (KEY_SINGLE==1)
- integer :: mpifloat=MPI_REAL 
+ TYPE(MPI_Datatype) :: mpifloat=MPI_REAL 
 #endif
 #if (KEY_SINGLE==0)
- integer :: mpifloat=MPI_REAL8 
+ TYPE(MPI_Datatype) :: mpifloat=MPI_REAL8 
 #endif
 #if (KEY_INTEGER8==0)
- integer :: mpiint=MPI_INTEGER 
+ TYPE(MPI_Datatype) :: mpiint=MPI_INTEGER 
 #endif
 #if (KEY_INTEGER8==1)
- integer :: mpiint=MPI_INTEGER8 
+ TYPE(MPI_Datatype) :: mpiint=MPI_INTEGER8 
 #endif
- integer :: mpichar=MPI_CHARACTER
- integer :: mpibool=MPI_LOGICAL
+ TYPE(MPI_Datatype) :: mpichar=MPI_CHARACTER
+ TYPE(MPI_Datatype) :: mpibool=MPI_LOGICAL
 #endif
 !
       character(len=80) :: fmt_real, fmt_int, fmt

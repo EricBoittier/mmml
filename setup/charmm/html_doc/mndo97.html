@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Combined Quantum Mechanical and Molecular Mechanics Method</title>
+<link rel="stylesheet" href="charmmdoc.css">
+</head>
+<body>
+<div class="page-header">
+<h1>Combined Quantum Mechanical and Molecular Mechanics Method</h1>
+<div class="nav"><a href="index.html">Index</a><a href="charmm.html">CHARMM Home</a><a href="commands.html">Commands</a></div>
+</div>
+<pre>
+<a id="Top"></a>
+<div class="charmmdoc">
+      Combined Quantum Mechanical and Molecular Mechanics Method
+                       Based on MNDO97 in CHARMM
+
+                     by Paul Bash (pabash@nwu.edu)
+
+                       Additional modifications
+             Kwangho Nam(nam@chem.umn.edu) and Darrin York
+
+
+
+* <a href="#Description">Description</a> | Description and Syntax of the MNDO97 commands
+* <a href="#NEWD">NEWD</a> | NEWD Command for QM/MM-Ewald method
+* <a href="#Multilayer">Multilayer</a> | MLAY Command for Multilayer QM/MM method
+* <a href="#Multilayer-MLP">Multilayer-MLP</a> | MLAY MLPMode Command for MLP/deltaMLP QM/MM method
+* <a href="#Installation">Installation</a> | How to install MNDO97 in CHARMM environment
+
+</div>
+<a id="Description"></a>
+<div class="charmmdoc">
+<a href="#Top">Top</a>
+    The MNDO97 QM potential is initialized with the MNDO97 command.
+
+
+[SYNTAX MNDO97]
+
+MNDO97   [REMOve] [EXGRoup] (atom selection) 
+         [GLNK atom-selection]
+         [AM1|PM3|MNDO|MNDD|AMDD] [PHOT] [CHARge int]
+         [SWITched]
+
+         [DXLBomd] [NORDder int] [NSTEpscf int]
+
+         [D3BJ] [D3PARAM] [S6VA real] [S8VA real] [A1VA real] [A2VA real]
+
+         [H4CO] [PRED] [POHO real] [POHN real] [PNHO real] [PNHN real]
+                       [MWHO real] [MNH4 real] [MCOO real]
+                       [REPK real] [REPE real] [REPR real]
+
+         [NEWD int] ewald-spec [NOPMewald]
+
+         [NUQM int]
+         [MLAY] mlayer-spec (atom selection) mlayer-mlp-spec 
+
+    ewald-spec     ::=  { [ KMAX integer ]                        } KSQMAX integer
+                        { KMXX integer KMXY integer KMXZ integer  }
+
+    mlayer-spec    ::= { [IREPL int] [KHARge real] [NSTE int] [LAMB real] [QCHE OMP] }
+    mlayer-mlp-spec::= { [PYTHon|DPMM] [MLPMode int ONLY] [PGPUid int] }
+
+REMOve:  Classical energies within QM atoms are removed.
+
+EXGRoup: QM/MM Electrostatics for link host groups removed.
+
+GLNK:    GHO method implementation (refer qmmm.info).
+
+AM1:     The AM1 method is to be used. (default)
+PM3:     The PM3 method is to be used.
+MNDO:    The MNDO method to be used.
+MNDD:    The MNDO/d method to be used.
+AMDD:    The AM1/d method to be used. (This method has very limited number of atoms 
+         supported. Specifically, use in combination with PHOT keyword.)
+PHOT:    For the AM1/d method, PHOT use the AM1/d-PhoT method (Nam, JCTC, 2007).
+         Also, for Mg atom, it uses AM1 parameters.
+
+CHARge:  Total charge of QM region. (At present, it only supports RHF options.)
+
+SWITched: Use the (group-based) switching function for the QM-MM interactions.
+          See below, if this option is used together with QM/MM-Ewald or QM/MM-PME
+          method.
+
+
+DXLBomd: This uses the Niklasson JCP (2009) 130:214109 and Zheng JCT (2011) 135:044122,
+         in which the quess QM density is propagated using Dissipated Lagrandian MD.
+         The dissipation requires user to provide two variables. They are provided
+         using
+
+NORDder : The maximum order to sum the dissipation terms. At present, only terms
+          between 3 and 9 are supported. See Niklasson JCP (2009) 130:214109.
+NSTEpscf: The number of SCF cycle. Mostly, 7 or larger is safe. Also, in many cases
+          smaller than 7 SCF cycles provides stable MD simulations.
+
+         For details of the method, please refer Niklasson JCP (2009) 130:214109 and
+         Zheng JCT (2011) 135:044122. 
+
+D3BJ:    Use Grimme's D3 dispersion method. The default is the two-body dispersion 
+         correciton with Becky and Johsnson's damping function 
+         (Grimme, JCC (2011) 32:1456)
+D3PARAM: Use the user supplied D3-BJ parameters. Use the below to read user 
+         provided parameters: S6VA, S8VA, A1VA, and A2VA
+S6VA:    s6 parameter. The scaling factor for the R^-6 term.
+         The default is 1.0 and it is advised not to change this value.
+S8VA:    s8 parameter. The scaling factor for the R^-8 term.
+A1VA:    a1 parameter. a1 and a2 are the two dampling parameters introducted by BJ.
+A2VA:    a2 parameter.
+
+H4CO:    Use of the H4 correction (Rezac, J Chem Theory Comput (2021) 8:141). 
+         When it is used, it is recommended to use together with D3BJ correction.
+         Refer the reference for the default paramesters for AM1 and PM3 methods.
+PRED:    Use the user supplied H4 correction parameters:
+POHO:    C_OO parameter.
+POHN:    C_ON parameter.
+PNHO:    C_NO parameter.
+PNHN:    C_NN parameter.
+MWHO:    C_wat parameter.
+MNH4:    C_S,NHR3+ parameter.
+MCOO:    C_S,COO- parameter.
+REPK:    S_HH repulsion parameter in unit of kcal/mol. 
+         See eq. (11) of the reference.
+REPE:    e_HH repulsion parameter.
+REPR:    r_0,HH repulsion parameter in unit of Angstrom.
+
+NUQM:    number of QM regions to specify. (default 1) This option is used to
+         setup multi-layered qm/mm method. see below for details.
+
+Current implementation has a limit in choosing non-bonded options. All
+atom based cutoffs methods is not fully supported for a certain boundary
+conditions such as periodic boundary condition. In any case, the QM-MM
+non-bond generation routine will only generate the non-bond list based
+on group-group separation scheme. Especially to use any periodic boundary
+conditions, use group based cutoff scheme.
+
+
+</div>
+<a id="NEWD"></a>
+<div class="charmmdoc">
+<a href="#Top">Top</a>
+                        Description of the NEWD Command
+
+[ NEWD int ] ewald-spec [NOPMewald]
+
+   ewald-spec::=  { [ KMAX integer ]                        } KSQMAX integer
+                  { KMXX integer KMXY integer KMXZ integer  }
+
+A simple Ewald sum method is implemented into the QM/MM potential. A full
+description of theory is described in J. Chem. Theory. Comput. (2005) 1, 2
+and Nam. JCTC (2014). 
+
+With NOPMewald, the regaular Ewald sum method is used for the QM/MM calculation.
+So, this option is denoted as QM/MM-Ewald method. Without NOPMewald, if
+the MM use PME method, the QM/MM part is also QM/MM-PME method. (see <a href="ewald.html">ewald</a>).
+
+The defaults for the QM/MM-Ewald calculations are set internally and are
+currently set to NEWD 1, KMAX=5, KSQMax=27, where the KMAX keyword is the
+number of kvectors (or images of the primary unit cell) that will be summed
+in any direction.  It is the radius of the Ewald summation. For orthorombic
+cells, the value of kmax may be independently specified in the x, y, and z
+directions with the keywords KMXX, KMXY, and KMXZ.  But, different from
+regular Ewald in CHARMM, it has no limitation on the shape of box, and can be
+used with PMEwald in MM part.
+
+The KSQMax key word should be chosen between  KMAX squared and 3 times
+KMAX squared, and KAPPA value share the exact same number you use in Nonbond
+options.
+
+When QM/MM-Ewald or QM/MM-PME method is used together with the SWITched option. 
+The total energy is expressed as
+
+E_total =  Sw(r)*E_qm/mm(real space) + dE_qm/mm(periodic correction) + E_mm
+
+E_qm/mm(real space): The regular QM/MM interaction, in which MM point charges
+                     interact with the entire QM (electron) density.
+dE_qm/mm(periodic correction) 
+         = (1-Sw(r))*dE_qm/mm (real space part) + dE_qm/mm(reciprocal space part)
+         where d= Dela. 
+
+For each term, refer Nam JCTC (2005) 1, 2, and Nam JCTC (2014) 10, 4175.
+
+When this is used with the SWITched option, the real space is switched off at the
+cutoff distance, and dE_qm/mm (real space part) is turned on slowly between the
+cut on and cut off distances. This makes the transition from the full QM/MM real
+space potential to the dE_qm/mm (real space part) correction smoothly and thus
+generate more stable MD trajectory.
+
+
+</div>
+<a id="Multilayer"></a>
+<div class="charmmdoc">
+<a href="#Top">Top</a>
+                        Description of the MLAY Command
+
+[MLAY] mlayer-spec (atom selection)
+
+   mlayer-spec::= { [IREPL int] [KHARge real] [NSTE int] [LAMB real] [QCHE OMP] }
+
+A multilayer qm/mm method is implemented in the MNDO97 module with QChem
+as the high-level QM package. The method is described in J. Chem. Theory Comput.
+(2014) 10, 4175, to allow the multiple time step qm/mm simulations. 
+
+When the multilayer qm/mm method is used, the total qm/mm energy is 
+
+E_qm/mm (total) = E_low-level qm/mm (PBC) + lamdba * dE_corr (high-level)
+
+where dE_corr = [ E_high-level qm/mm (cutoff) - E_low-level qm/mm (cutoff) ].
+The high-level correction term, i.e., dE_corr, can also be applied via the
+multiple time step (MTS) approach.
+
+MLAYer: Specifies whether to use/turn on the multilayer qm/mm method.
+IREPL:  The QM region specified for the high-level QM definition. Normally, 
+        is 2, i.e., IREPl 2 (see below for usage).
+KHARge: Charge of the high-level QM region.
+NSTEp:  The number of MD steps to update the high-level QM/MM energy correction.
+        This option is effective only with velocity Verlet MD simulations. Otherwise, it is
+        ignored.
+LAMBda: The Lambda scaling value for the dE correction. See the equation above, where
+        the lambda value is between 0 and 1.
+QCHEm:  Use the QChem package for the high-level QM/MM calculation. The OMP option tells
+        to use the multi-threaded parallel version. see <a href="qchem.html">qchem</a> for details.
+
+
+Usage:
+To use the multilayer QM/MM method, users must set up the primary/low-level qm region,
+followed by the setup of the high-level QM/MM region. To do this, use the following 
+procedure.
+
+! first, low-level qm/mm setup. Below, nuqm "2" specifies the allocation of 
+! necessary qm/mm memories for 2 QM/MM setups, where the first QM region is
+! set up as below.
+mndo97 sele [qm-region] end [qm theory] [charge int] remove -
+       nuqm 2  -   
+       [other mndo97 se-qm/mm options] ! if other options for mndo97 se-qm/mm.
+
+! if qchem (OpenMP) is available, high-level qm/mm setup, for the second qm/mm region.
+! Make sure to source qcenv.sh in the working shell as per Q-Chem usage instructions.
+! (Launching CHARMM as '/bin/charmm' or 'mpirun --bind-to none -np &lt;no_mpi_cores&gt; charmm'
+! with mpibind set to 0 is recommended for maximal Q-Chem multi-threaded performance)
+envi qchemcnt  "qchem.inp"  ! qchem input options, e.g., ./data/qchem_ewald.inp 
+envi qcheminp  "q1.inp"     ! in the test directory.
+envi qchemexe  "qchem"
+envi qchemout  "q1.out"
+envi qc_nt     "2"          ! No. of Q-Chem threads
+envi mpibind   "0"          ! Specific option for CHARMM MPI build
+
+mndo97 mlay irepl 2 kharge 1 nstep 1 sele [qm-region] end -
+            qchem omp
+
+! for energy calculation
+energy
+
+! for geometry minimization
+minimization
+
+! for MD simuations, using vver; if leap-frog verlet is used, the MTS option is
+!                                ignored.
+dynamics vver ...
+         nose ...   ! for nose-hoover thermostat using rRESPA with nstep int&gt;1.
+
+
+</div>
+<a id="Multilayer-MLP"></a>
+<div class="charmmdoc">
+<a href="#Top">Top</a>
+                        Description of the MLAY Command with MLPMode
+
+[MLAY] mlayer-spec (atom selection) mlayer-mlp-spec
+
+   mlayer-mlp-spec::= { [PYTHon|DPMM] [MLPMode int ONLY] [PGPUid int] }
+
+The multilayer qm/mm method is extended to provide an interface for machine learning 
+potential (MLP) and deltaMLP potential assisted QM/MM simulations (version c51a2 or later). 
+When the multilayered MLP/deltaMLP qm/mm is used, the total energy is:
+
+E_qm/mm (total) = E_low-level qm/mm (PBC) + dE_corr (high-level)
+
+where dE_corr = [ E_MLP qm/mm (cutoff) - E_low-level qm/mm (cutoff) ] in the case of
+MLP qm/mm. And, dE_corr = E_deltaMLP qm/mm (cutoff) in the case of deltaMLP qm/mm.
+
+PYTHon: A custom Python (&gt;=3.9 and &lt;=3.13) module/script can be used for 
+        MLP/deltaMLP qm/mm calculation. The module/script must have two arguments
+         -pyinp &lt;file.inp&gt; -pyout &lt;file.out&gt;
+        ! Eg: $PYEXE -pyinp $PYINP -pyout $PYOUT 
+        These environment variables should be defined in CHARMM script: 
+        PYEXE, PYINP, and, PYOUT
+
+        ! The python task could be based on a module or script
+        envi PYEXE "/usr/bin/python -m python.module" ! for python module ! or
+        envi PYEXE "/usr/bin/python python_script.py" ! for python script
+
+        ! The module/script must have two arguments (-pyinp, -pyout)
+        envi PYINP "python_input.inp"
+        envi PYOUT "python_output.inp"
+
+        !! Format of PYINP file generated by CHARMM for Python inference
+        !! (X,Y,Z Cooridnates are in Angstrom; Charge is in electrons)
+                qm_atom_count mm_atoms_count
+                X_qm_atom1  Y_qm_atom1  Z_qm_atom1  qm_charge  qm_atomic_number
+                X_qm_atom2  Y_qm_atom2  Z_qm_atom2  qm_charge  qm_atomic_number
+                X_qm_atom3  Y_qm_atom3  Z_qm_atom3  qm_charge  qm_atomic_number
+                .............
+                .............
+                X_mm_atom1  Y_mm_atom1  Z_mm_atom1  mm_charge
+                X_mm_atom2  Y_mm_atom2  Z_mm_atom2  mm_charge
+                X_mm_atom3  Y_mm_atom3  Z_mm_atom3  mm_charge
+                .............
+                .............
+        
+        !! Format of PYOUT file expected by CHARMM after Python inference
+        !! (qm/mm Energy is in kcal/mol;The DX, DY, DZ gradients are in kcal/mol/Angstrom)
+                qm-mm_energy
+                DX_qm_atom1  DY_qm_atom1  DZ_qm_atom1
+                DX_qm_atom2  DY_qm_atom2  DZ_qm_atom2
+                DX_qm_atom3  DY_qm_atom3  DZ_qm_atom3
+                .............
+                .............
+                DX_mm_atom1  DY_mm_atom1  DZ_mm_atom1
+                DX_mm_atom2  DY_mm_atom2  DZ_mm_atom2
+                DX_mm_atom3  DY_mm_atom3  DZ_mm_atom3
+                .............
+                .............
+                
+DPMM:   The Deep Potential Molecular Mechanics (DPMM) based MLP/deltaMLP TorchScript models 
+        trained with mlp_qmmm v0.1 package (github.com/knam-lab/mlp_qmmm/tree/release/0.x)
+        can directly be used. The LibTorch based DPMM inference is faster than PYTHon
+        Refer the DOC.md available in the github repository for training and testing
+        procedueres for DPMM-based MLP/deltaMLP QM/MM models
+        The CHARMM should be compiled --with-torch along with --with-mndo97. 
+        These environment variables should be defined in CHARMM script: PYMODEL, PYCTRL
+
+        ! The TorchScript file generated after training with mlp_qmmm v0.1 (qmmm-train)
+        envi PYMODEL "/path-to/pytorch_script.pt"
+
+        ! The model control/spec file generated with mlp_qmmm v0.1 (qmmm-test)
+        envi PYCTRL "/path-to/bridge_meta.txt"
+
+MLPMode:0 for MLP qm/mm and 1 for deltaMLP qm/mm
+PGPUId: This will set the CUDA_VISIBLE_DEVICES to desired GPU id for MLP/deltaMLP model
+        inference.
+ONLY:   Required flag to turn off high-level calculation with Q-Chem including MTS
+
+Usage:
+The MLAY multilayer QM/MM method, usage is extended to support various MLP/deltaMLP Specific
+options via the PYTHon or DPMM (LibTorch).
+
+[Example.1] deltaMLP qm/mm with an external python (&gt;=3.9 and &lt;=3.13)  module/script. 
+(All the dependencies Required by the module/script must be available within the shell)
+
+envi PYEXE "/usr/bin/python python_script.py"   ! Required by PYTHon
+envi PYINP "python_input.inp"                   ! Required by PYTHon
+envi PYOUT "python_output.inp"                  ! Required by PYTHon
+
+mndo97 mlay irepl 2 kharge 1 nstep 1 sele [qm-region] end -
+            qchem omp -
+            PYTHon MLPMode 1 ONLY PGPUid 0
+
+[Example.2] deltaMLP qm/mm with DPMM TorchScript model. 
+(CHARMM should be compiled with these option: --with-mndo97 --with-torch)
+
+envi PYMODEL "/path-to/pytorch_script.pt"       ! Required by DPMM
+envi PYCTRL "/path-to/bridge_meta.txt"          ! Required by DPMM
+
+mndo97 mlay irepl 2 kharge 1 nstep 1 sele [qm-region] end -
+            qchem omp -
+            DPMM MLPMode 1 ONLY PGPUid 0
+
+</div>
+<a id="Installation"></a>
+<div class="charmmdoc">
+<a href="#Top">Top</a>
+MNDO97/CHARMM interface status (February 1997)
+
+- MNDO97, CADPAC, GAMESS and QUANTUM keywords cannot coexist in pref.dat
+
+To compile MNDO97 with CHARMM one uses:
+
+$ ./configure --with-mndo97 --without-colfft 
+$ make -C build/cmake install
+
+The "--with-mndo97" specifies to compile and link MNDO97 with CHARMM.
+
+To compile MNDO97 for DPMM option. LibTorch is required.
+$ export Torch_DIR=/path-to/libtorch/share/cmake/Torch # Download LibTorch from pytorch.org
+$ mkdir build_dir # inside the charmm directory
+$ cd build_dir
+$ ../configure --prefix=../install_dir --with-mndo97 --with-torch --without-colfft
+$ make -j2 install
+
+</div>
+</pre>
+</body>
+</html>

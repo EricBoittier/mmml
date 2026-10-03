@@ -7,6 +7,10 @@ module colfft_util
   use domdec_common
   use domdec_util_gpu_mod
 #endif
+#if KEY_PARALLEL==1 && KEY_DOMDEC_GPU==0
+  use mpi_f08, only: MPI_Request, MPI_Status, MPI_Datatype, &
+       MPI_REAL4, MPI_REAL8, MPI_STATUSES_IGNORE
+#endif
 #if KEY_FFTW==1
   use fftw3
 #endif
@@ -15,7 +19,7 @@ module colfft_util
   use parallel
   use pmeutil
   use stream
-  
+
 #if KEY_MKL==1
   use, intrinsic :: iso_c_binding
 #endif
@@ -90,9 +94,10 @@ module colfft_util
 #if KEY_PARALLEL==1
   ! Communication buffers for transpose and ftranspose routines
   ! These are allocated in colfft_util_init
-  integer(chm_int4), allocatable, dimension(:) :: pe_list, recv_request, recv_offset, send_request
-  integer(chm_int4), allocatable, dimension(:,:) :: recv_status, send_status
-#endif 
+  integer(chm_int4), allocatable, dimension(:) :: pe_list, recv_offset
+  TYPE(MPI_Request), allocatable, dimension(:) :: recv_request, send_request
+  TYPE(MPI_Status), allocatable, dimension(:) :: recv_status, send_status
+#endif
 
 #if KEY_FFTW==1 || KEY_MKL==1
 #if KEY_FFTW==1
@@ -1388,9 +1393,6 @@ contains
   ! * Deallocates temporary buffers needed for transpose() and ftranspose() -subroutines
   ! *
   subroutine deallocate_transpose()
-#if KEY_PARALLEL==1
-    use mpi,only:mpi_status_size  
-#endif
     use memory
     implicit none
 
@@ -1400,30 +1402,18 @@ contains
             size(pe_list),ci4=pe_list)
     endif
 
-    if (allocated(recv_request)) then
-       call chmdealloc('colfft_util.src','deallocate_transpose','recv_request',&
-            size(recv_request),ci4=recv_request)
-    endif
+    if (allocated(recv_request)) deallocate(recv_request)
 
     if (allocated(recv_offset)) then
        call chmdealloc('colfft_util.src','deallocate_transpose','recv_offset',&
             size(recv_offset),ci4=recv_offset)
     endif
 
-    if (allocated(send_request)) then
-       call chmdealloc('colfft_util.src','deallocate_transpose','send_request',&
-            size(send_request),ci4=send_request)
-    endif
+    if (allocated(send_request)) deallocate(send_request)
 
-    if (allocated(recv_status)) then
-       call chmdealloc('colfft_util.src','deallocate_transpose','recv_status',&
-            MPI_STATUS_SIZE,size(recv_status,2),ci4=recv_status)
-    endif
+    if (allocated(recv_status)) deallocate(recv_status)
 
-    if (allocated(send_status)) then
-       call chmdealloc('colfft_util.src','deallocate_transpose','send_status',&
-            MPI_STATUS_SIZE,size(send_status,2),ci4=send_status)
-    endif
+    if (allocated(send_status)) deallocate(send_status)
 #endif 
 
     return

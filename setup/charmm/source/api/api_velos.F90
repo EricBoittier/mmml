@@ -3,9 +3,7 @@ module api_velos
   use api_dataframe, only: t_dataframe
   implicit none
 
-#if KEY_LIBRARY == 1
   logical :: fill_velos = .false.
-
   type(t_dataframe) :: velos
 
 contains
@@ -158,5 +156,5 @@ contains
        call dataframe_add_row(velos, new_row)
     end do
   end subroutine velos_add_rows
-#endif /* KEY_LIBRARY */
+
 end module api_velos

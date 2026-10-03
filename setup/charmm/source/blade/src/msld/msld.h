@@ -33,6 +33,7 @@ class Msld {
   int *lambdaSite_d;
   real *lambdaBias_d;
   real *lambdaCharge_d;
+  real *netCharge_d;
 
   int siteCount;
   int *blocksPerSite;
@@ -46,7 +47,20 @@ class Msld {
   real restScaling;
 
   real gamma;
+  real temperature;
+  real *thetaFriction;     // per-block friction (AKMA internal units, converted from ps^-1 by timfac on Fortran side)
   real fnex;
+
+  // New Implicit Constraint
+  bool new_implicit = false;
+  real_x* theta0_d; // [nSite] newton solved variable in new implicit model
+  real* dcdt_d; // [nBlock] derivative of constraint w.r.t. theta.i -> -'ve der w.r.t. theta0
+  real well_width = 1.0; // flat bottom harmonic starting outside of [-w, w]
+  real well_k = 100.0; // strength of fb harmonic
+  real N_target = 2;
+  real imp_m = 0;
+  real imp_alpha = 10;
+  real imp_xi = 0;
 
   bool scaleTerms[6]; // bond,ureyb,angle,dihe,impr,cmap
 
@@ -78,12 +92,23 @@ class Msld {
   int msldEwaldType; // 1=normal scaling 2=normal scaling squared self interactions 3=correct scaling
 
   real kRestraint;
-  real kChargeRestraint;
+  // Discrete solvent linear correction (kChargerRestraint1)
+  // dx.doi.org/10.1063/1.4826261
+  // A citation for net charge - neutralizing background interaction (kChargeRestraint2)
+  // dx.doi.org/10.1021/acs.jctc.6b00552
+  real kChargeRestraint1; // linear discrete solvent correction bias -(2*pi/3)*kELECTRIC*gamma*NH2O*q/V, gamma=0.76414 e*A^2, kCR1=gamma*NH2O
+  real kChargeRestraint2; // quadratic net charge neutralization volume bias -(pi/2)*kELECTRIC*q^2/V/betaEwald^2 kCR2=0 (off) or 1 (on)
+  real kChargeRestraint3; // quadratic flat bottom charge restraint 0.5*kCR3*(abs(q-q0CR3)-wCR3)^2 if abs(q-q0CR3)-wCR3>0
+  real q0ChargeRestraint3;
+  real wChargeRestraint3;
   real softBondRadius;
   real softBondExponent;
   real softNotBondExponent;
 
   bool fix; // ffix
+
+  bool *blockFixed;    // per-block fixed flag (host)
+  bool *blockFixed_d;  // per-block fixed flag (device)
 
   Msld();
   ~Msld();
@@ -126,13 +151,19 @@ extern "C" {
   void blade_add_msld_atomassignment(System *system,int atomIdx,int blockIdx);
   void blade_add_msld_initialconditions(System *system,int blockIdx,int siteIdx,double theta0,double thetaVelocity,double thetaMass,double fixBias,double blockCharge);
   void blade_add_msld_termscaling(System *system,int scaleBond,int scaleUrey,int scaleAngle,int scaleDihe,int scaleImpr,int scaleCmap);
-  void blade_add_msld_flags(System *system,double gamma,double fnex,int useSoftCore,int useSoftCore14,int msldEwaldType,double kRestraint,double kChargeRestraint,double softBondRadius,double softBondExponent,double softNotBondExponent,int fix);
+  void blade_add_msld_flags(System *system,double gamma,double fnex,double temperature,int useSoftCore,int useSoftCore14,int msldEwaldType,double kRestraint,double softBondRadius,double softBondExponent,double softNotBondExponent,int fix);
+  void blade_add_msld_charges(System *system,double kChargeRestraint1,double kChargeRestraint2,double kChargeRestraint3,double q0ChargeRestraint3,double wChargeRestraint3);
   void blade_add_msld_bias(System *system,int i,int j,int type,double l0,double k,int n);
   void blade_add_msld_thetacollbias(System *system,int sites,int i,double k,double n);
   void blade_add_msld_thetaindebias(System *system,int sites,int i,double k);
+  void blade_set_msld_thetaedgebias(System *system,double k,double N,double alpha,double phi);
+  void blade_set_msld_piecewise_constraint(System *system, int do_imp, double width, double k);
+  void blade_add_msld_block_friction(System *system,int blockIdx,double friction);
   void blade_add_msld_softbond(System *system,int i,int j);
   void blade_add_msld_atomrestraint(System *system);
   void blade_add_msld_atomrestraint_element(System *system,int i);
+  void blade_set_msld_block_fixed(System *system,int blockIdx,int fixed);
+  int blade_sync_msld_bias(System *system,double *bias,int count);
 }
 
 #endif

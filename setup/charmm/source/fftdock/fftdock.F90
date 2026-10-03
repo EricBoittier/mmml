@@ -31,6 +31,7 @@ module fftdock
        flag_init_quaternions_from_file = .false., &
        flag_add_random = .false., &
        flag_read_probe = .false., &
+       flag_hbond = .false., &
        is_ocl_session_active = .false.
 
 #if KEY_FFTDOCK == 1
@@ -92,6 +93,14 @@ module fftdock
 #if KEY_OPENCL == 1
   type(c_ptr) :: ocl_context, ocl_queue
 #endif /* OPENCL */
+
+#if KEY_METAL == 1
+  !! Opaque handle to the MetalDockContext allocated by metal_fftdock_setup
+  !! (source/fftdock/metal_fftdock_gpu.mm).  Persists across batches and is
+  !! released by metal_fftdock_cleanup in the FFTDOCK CLEAR branch of
+  !! fft_dock_set below.   - YWu
+  type(c_ptr), save :: metal_ctx = C_NULL_PTR
+#endif /* METAL */
 
   interface
 #if KEY_CUDA == 1
@@ -220,10 +229,9 @@ module fftdock
        integer(c_int), value :: BatchIdx, BatchSize, NumQuaterions, NumAtoms,&
             NumVdwGridUsed, XGridNum, YGridNum, ZGridNum
        real(c_float), value :: DGrid
-       real(c_float), dimension(:) :: &
-            SelectAtomsParameters, &
-            LigRotamerCoors, LigRotamerMinCoors
        type(c_ptr), value :: ocl_dev_id, ocl_context, ocl_queue
+       type(c_ptr), value :: SelectAtomsParameters, &
+            LigRotamerCoors, LigRotamerMinCoors
        type(c_ptr) :: d_LigGrid_F
      end subroutine calcLigGrid
 
@@ -236,14 +244,13 @@ module fftdock
           d_liggrid_fort, d_liggrid_fft_fort, &
           d_gridpot_fort, d_gridpot_fft_fort, &
           d_ligsum_fort, d_ligsum_fft_fort) bind(c)
-       use, intrinsic :: iso_c_binding, only: c_int, c_ptr, c_float
+       use, intrinsic :: iso_c_binding, only: c_int, c_ptr
        implicit none
        integer(c_int), value :: &
             xdim, ydim, zdim, &
             batch_size, idx_batch, &
             num_rotamers, num_grid
-       real(c_float), dimension(:) :: grid_potential
-       type(c_ptr), value :: EnergyGrid, &
+       type(c_ptr), value :: grid_potential, EnergyGrid, &
             ocl_dev_id, ctx, q, &
             potential_r2c_plan, lig_r2c_plan, c2r_plan
        type(c_ptr) :: &
@@ -298,6 +305,84 @@ module fftdock
             d_gridpot_fort, d_gridpot_fft_fort, &
             d_ligsum_fort, d_ligsum_fft_fort
      end subroutine clean_fftdock_gpu
+#elif KEY_METAL == 1 /* KEY_CUDA */
+  !
+  ! Metal (Apple Silicon / macOS) backend.
+  !
+  ! Pipeline (all GPU, single MPSCommandBuffer per batch):
+  !   metal_fftdock_setup            (once, after num_vdw_grid_used known)
+  !   metal_fftdock_upload_potential (once, after Used_GridPot populated)
+  !   metal_fftdock_run_batch        (per batch: R2C + conjMult + sumGrids
+  !                                    + C2R + correctEnergy, committed once
+  !                                    per batch — no blit, output goes
+  !                                    directly into the shared energy buf)
+  !   metal_fftdock_cleanup          (on FFTDOCK CLEAR)
+  !
+  ! Grid generation shares the CUDA C signatures — calcPotGrid / calcLigGrid
+  ! implementations live in source/fftdock/metal_grid_pot.mm /
+  ! metal_grid_lig.mm.   - YWu
+
+     SUBROUTINE metal_fftdock_setup(gpu_id, xdim, ydim, zdim, &
+          batch_size, num_grid, ctx) &
+          bind(c, name = 'metal_fftdock_setup')
+       use, intrinsic :: iso_c_binding
+       implicit none
+       integer(c_int), value :: gpu_id, xdim, ydim, zdim, &
+            batch_size, num_grid
+       type(c_ptr) :: ctx            ! OUT: opaque MetalDockContext*
+     END SUBROUTINE metal_fftdock_setup
+
+     SUBROUTINE metal_fftdock_upload_potential(ctx, grid_potential) &
+          bind(c, name = 'metal_fftdock_upload_potential')
+       use, intrinsic :: iso_c_binding
+       implicit none
+       type(c_ptr), value :: ctx
+       type(c_ptr), value :: grid_potential   ! float* [num_grid * X*Y*Z]
+     END SUBROUTINE metal_fftdock_upload_potential
+
+     SUBROUTINE metal_fftdock_run_batch(ctx, d_lig_grid_f, energy_grid) &
+          bind(c, name = 'metal_fftdock_run_batch')
+       use, intrinsic :: iso_c_binding
+       implicit none
+       type(c_ptr), value :: ctx
+       type(c_ptr), value :: d_lig_grid_f     ! retained id<MTLBuffer>
+       type(c_ptr), value :: energy_grid      ! host float* output
+     END SUBROUTINE metal_fftdock_run_batch
+
+     SUBROUTINE metal_fftdock_cleanup(ctx) &
+          bind(c, name = 'metal_fftdock_cleanup')
+       use, intrinsic :: iso_c_binding
+       implicit none
+       type(c_ptr) :: ctx                     ! INOUT: zeroed on return
+     END SUBROUTINE metal_fftdock_cleanup
+
+     SUBROUTINE calcPotGrid(NumGrid, NumAtoms, DGrid, &
+          XGridNum, YGridNum, ZGridNum, XMin, YMin, ZMin, &
+          Fa, Fb, Gmax, &
+          VdwEmax, ElecAttrEmax, ElecReplEmax, CCELEC, ElecMode, Dielec, &
+          SelectAtomsParameters, GridPot, GridRadii) &
+          bind(c, name = 'calcPotGrid')
+       use, intrinsic :: iso_c_binding
+       integer(c_int), value :: XGridNum, YGridNum, ZGridNum, NumAtoms, &
+            NumGrid, ElecMode
+       real(c_float), value :: DGrid, Fa, Fb, Gmax, &
+            XMin, YMin, ZMin, ElecReplEmax, ElecAttrEmax, VdwEmax, CCELEC, Dielec
+       type(c_ptr), value :: SelectAtomsParameters, GridPot, GridRadii
+     END SUBROUTINE calcPotGrid
+
+     SUBROUTINE calcLigGrid(BatchIdx, BatchSize, NumQuaterions, NumAtoms, &
+          NumVdwGridUsed, DGrid, XGridNum, YGridNum, &
+          ZGridNum, SelectAtomsParameters, LigGrid, LigRotamerCoors, &
+          LigRotamerMinCoors, d_LigGrid_F) bind(c, name='calcLigGrid')
+       use, intrinsic :: iso_c_binding
+       implicit none
+       integer(c_int), value :: BatchIdx, BatchSize, NumQuaterions, NumAtoms, &
+            NumVdwGridUsed, XGridNum, YGridNum, ZGridNum
+       real(c_float), value :: DGrid
+       type(c_ptr), value :: SelectAtomsParameters, LigGrid, &
+            LigRotamerCoors, LigRotamerMinCoors, d_LigGrid_F
+     END SUBROUTINE calcLigGrid
+
 #endif  /* KEY_CUDA */
   end interface
 
@@ -377,7 +462,7 @@ CONTAINS
     integer comlen
     Logical flag_PGEN, flag_save_lig_conformer, flag_READ_PotGrid, flag_coor, &
         flag_include_identity_quaternions, flag_clear, flag_quaternion_file_unit
-    logical flag_Write_PotGrid,flag_hbond,Form
+    logical flag_Write_PotGrid,Form
     logical flag_read_probe_from_file
     integer out_Potgrid_Unit, probes_unit
     integer num_grid_points, tot_num_grid_points
@@ -394,6 +479,7 @@ CONTAINS
     character(len=1000) tmp_a
 
     integer status
+
 
     flag_PGEN = .False.
     flag_coor = .False.
@@ -415,7 +501,6 @@ CONTAINS
           write(outu,'(a)') "          quaternions, quaternions_from_file, aff_random"
        endif
        flag_init_lig_conformers = .False.
-       flag_init_fft_plans = .true.
        flag_init_lig_grid = .false.
        flag_init_lig_rotamers = .false.
        flag_init_potential_grid = .false.
@@ -649,8 +734,6 @@ CONTAINS
        print *, "allocate gpu" 
        call allocate_gpu_id(gpuid)
 #elif KEY_OPENCL == 1
-       call wrndie(-5, '<FFTDOCK>', &
-       'FFTDOCK is not support on the OpenCL platform yet, please use CUDA instead.')
        call fftdock_device_init(gpuid)
 #endif
        print *, "flag_init_quaternions_from_file ", &
@@ -751,6 +834,18 @@ CONTAINS
              call make_fft_C2R_plan(ocl_context, ocl_queue, &
                   XGridNum, YGridNum, ZGridNum, &
                   batch_size, fft_C2R_plan)
+#elif KEY_METAL == 1  /* KEY_CUDA */
+             ! Create MetalDockContext + MPSGraph FFT plans + persistent
+             ! device buffers.  Deferred to here so num_vdw_grid_used and
+             ! Used_GridPot (populated by the first Generate_Lig_Grid_GPU
+             ! above) are valid.
+             call metal_fftdock_setup(gpuid, &
+                  XGridNum, YGridNum, ZGridNum, &
+                  batch_size, num_vdw_grid_used + 1, metal_ctx)
+             ! Upload receptor potential and run its R2C FFT once; result
+             ! stays GPU-resident for every batch that follows.
+             call metal_fftdock_upload_potential(metal_ctx, &
+                  c_loc(Used_GridPot))
 #endif /* KEY_CUDA */
           end if
 
@@ -773,10 +868,17 @@ CONTAINS
                potential_fft_R2C_plan, &
                lig_fft_R2C_plan, &
                fft_C2R_plan, &
-               Used_GridPot, c_loc(EnergyGrid), &
+               c_loc(Used_GridPot), c_loc(EnergyGrid), &
                d_LigGrid, d_LigGrid_FFT, &
                d_GridPot, d_GridPot_FFT, &
                d_LigSum, d_LigSum_FFT)
+#elif KEY_METAL == 1  /* KEY_CUDA */
+          ! Single-command-buffer docking pipeline:
+          !   R2C FFT (lig) → conjMult → sumGrids → C2R IFFT →
+          !   correctEnergy → blit, all encoded into one
+          !   MTLCommandBuffer and committed once.
+          call metal_fftdock_run_batch(metal_ctx, &
+               d_LigGrid, c_loc(EnergyGrid))
 #endif /* KEY_CUDA */
           call Translate_Lig_Rotamer(lig_rotamer_coors, batch_size, idx_batch, num_lig_atoms, &
                lig_rotamer_min_coors, lig_rotamer_max_coors, &
@@ -794,6 +896,13 @@ CONTAINS
        call clean_FFTDock_GPU(d_LigGrid, d_LigGrid_FFT, &
             d_GridPot, d_GridPot_FFT, &
             d_LigSum, d_LigSum_FFT)
+#elif KEY_METAL == 1  /* KEY_CUDA */
+       ! Metal path: the MetalDockContext and every MPSGraph / MTLBuffer
+       ! it owns are kept alive so a subsequent FFTDOCK DOCK command in
+       ! the same CHARMM session can reuse them (matches the CUDA
+       ! behaviour where FFT plans survive end-of-loop and are only
+       ! released on FFTDOCK CLEAR).  Final release lives in the
+       ! flag_fftdock_clear block below.
 #endif /* KEY_CUDA */
     end if
 
@@ -816,6 +925,14 @@ CONTAINS
           call destroy_fft_plan(lig_fft_R2C_plan)
           call destroy_fft_plan(fft_C2R_plan)
           call tear_down_fft()
+#elif KEY_METAL == 1  /* KEY_CUDA */
+          ! FFT plans are owned by MetalDockContext and released in
+          ! metal_fftdock_cleanup above; nothing else to do here.
+          ! Only run cleanup if it hasn't already executed in the
+          ! flag_save_lig_conformer branch.
+          if (c_associated(metal_ctx)) then
+             call metal_fftdock_cleanup(metal_ctx)
+          end if
 #endif  /* KEY_CUDA */
           flag_init_fft_plans = .false.
        end if  ! if flat_init_fft_plans
@@ -1508,7 +1625,7 @@ CONTAINS
       NumGrid = num_probes + 3
   END SUBROUTINE Read_Probes_Radii
 
-#if KEY_CUDA == 1 || KEY_OPENCL == 1
+#if KEY_CUDA == 1 || KEY_OPENCL == 1 || KEY_METAL == 1
   SUBROUTINE Generate_Potential_Grid_Gpu(NumGrid, num_select_atoms, DGrid4, &
             XGridNum, YGridNum, ZGridNum, XGridMin, YGridMin, ZGridMin, &
             Fa, Fb, Gmax, VdwEmax, ElecAttrEmax, ElecReplEmax, CCELEC_charmm4, &
@@ -1553,6 +1670,12 @@ CONTAINS
        call wrndie(-5, '<FFTDOCK>', &
             'Something went wrong while generating the potential grid.')
     end if
+#elif KEY_METAL == 1 /* KEY_CUDA */
+    call calcPotGrid(NumGrid, num_select_atoms, DGrid4, &
+         XGridNum, YGridNum, ZGridNum, XGridMin, YGridMin, ZGridMin, &
+         Fa, Fb, Gmax, &
+         VdwEmax, ElecAttrEmax, ElecReplEmax, CCELEC_charmm4, ElecMode, Dielec, &
+         c_loc(SelectAtomsParameters), c_loc(GridPot), c_loc(GridRadii4))
 #endif /* KEY_CUDA */
   END SUBROUTINE Generate_Potential_Grid_GPU
 
@@ -1570,7 +1693,6 @@ CONTAINS
     integer tmp_i, tmp_j, tmp_k, tmp_idx, tmp_x
     integer idx_batch, idx_quaternions_in_batch, num_batch
     integer NumVdwGrid, num_parameters
-    logical flag_hbond
     real(chm_real4) DGrid4
     integer status
 
@@ -1758,10 +1880,19 @@ CONTAINS
          idx_batch, batch_size, &
          num_quaternions, num_lig_atoms, num_vdw_grid_used, dgrid4, &
          xgridnum, ygridnum, zgridnum, &
-         d_ligandparams, d_ligandrotamercoors, d_ligandrotamermincoors, &
+         c_loc(d_ligandparams), c_loc(d_ligandrotamercoors), &
+         c_loc(d_ligandrotamermincoors), &
          d_liggrid)
+#elif KEY_METAL == 1 /* KEY_CUDA */
+    call calcLigGrid(idx_batch, batch_size, &
+         num_quaternions, num_lig_atoms, num_vdw_grid_used, &
+         DGrid4, &
+         XGridNum, YGridNum, ZGridNum, &
+         c_loc(d_LigandParams), c_loc(LigGrid), &
+         c_loc(d_LigandRotamerCoors), c_loc(d_LigandRotamerMinCoors), &
+         c_loc(d_LigGrid))
 #endif /* KEY_CUDA */
   END SUBROUTINE Generate_Lig_Grid_GPU
-#endif /* KEY_CUDA == 1 || KEY_OPENCL == 1 */
+#endif /* KEY_CUDA == 1 || KEY_OPENCL == 1 || KEY_METAL == 1 */
 #endif /* KEY_FFTDOCK */
 end module fftdock

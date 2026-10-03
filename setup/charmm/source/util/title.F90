@@ -625,7 +625,7 @@ SUBROUTINE PUSTRM(COMLYN,MXCMSZ,COMLEN)
   use string, only:encodi,gtrmi,indxa,joinwd,addsta,addst,nextwd,gtrma10, indx, itoa
   use multicom_aux
 #if KEY_MPI==1
-  use mpi
+  use mpi_f08
 #endif
 #else  /* VO */
   use string, only:encodi,gtrmi,indxa,joinwd,addsta,addst,nextwd
@@ -648,7 +648,8 @@ SUBROUTINE PUSTRM(COMLYN,MXCMSZ,COMLEN)
 #if KEY_MULTICOM==1 /*  VO : string v */
   character(len=20) :: comm_name=''
   integer :: l=len(comm_name), mpi_err
-  integer*4 :: comm_parser, me_comm_parser, size_comm_parser
+  TYPE(MPI_Comm) :: comm_parser
+  integer*4 :: me_comm_parser, size_comm_parser
   logical :: qcomm
 #endif /* VO : string ^ */
   !
@@ -797,13 +798,13 @@ SUBROUTINE PPSTRM(OK)
   use multicom_aux, only : MPI_COMM_PARSER, SIZE_PARSER, ME_PARSER 
 #endif
 #if KEY_MULTICOM==1
-  use mpi                                                          
+  use mpi_f08                                                          
 #endif
   use parallel,only: psnd4
 #if KEY_REPDSTR==1
   use repdstr, only: qrepdstr, qrdqtt
   use parallel, only: comm_charmm
-  use mpi
+  use mpi_f08
 #endif
   ! VO string ^
 

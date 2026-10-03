@@ -3,21 +3,19 @@ module steepd_module
 contains
 
   SUBROUTINE STEEPD(COMLYN,COMLEN &
-#if KEY_LIBRARY == 1
        , min_opts, sd_opts &
-#endif /* KEY_LIBRARY */
        )
   !-----------------------------------------------------------------------
   !     STEEPD performs a steepest descent minimization.
   !
 #if KEY_STRINGM==1 /*  VO stringm */
-  use sm_config, only: repa_on, repa_freq                 
+  use sm_config, only: repa_on, repa_freq
 #endif
 #if KEY_CHEQ==1
-  use cheq,only:qmolc,cgfix,cgtmp,qnpart,molcgt           
+  use cheq,only:qmolc,cgfix,cgtmp,qnpart,molcgt
 #endif
 #if KEY_FLUCQ==1
-  use flucqm, only: fqseln                                
+  use flucqm, only: fqseln
 #endif
   use chm_kinds
   use dimens_fcm
@@ -34,7 +32,7 @@ contains
 #if KEY_TSM==1
   use tsms_mod
   use tsmh
-#endif 
+#endif
 #if KEY_FLUCQ==1
   use flucq
 #endif
@@ -42,14 +40,12 @@ contains
 !AP/MF
   use dhdgb,only:sdef,qfhdgb,totals
 #endif
- 
+
   use pathm
   use memory
 
-#if KEY_LIBRARY == 1
   use api_types, only: min_settings, min_sd_settings
-#endif /* KEY_LIBRARY */
-  
+
   implicit none
   real(chm_real),allocatable,dimension(:) :: VARB
   real(chm_real),allocatable,dimension(:) :: GRAD
@@ -62,10 +58,8 @@ contains
   INTEGER       COMLEN
   CHARACTER(len=*) COMLYN
 
-#if KEY_LIBRARY == 1
   type(min_settings), optional :: min_opts
   type(min_sd_settings), optional :: sd_opts
-#endif /* KEY_LIBRARY */
 
   !
   !     Local variables.
@@ -78,17 +72,13 @@ contains
   !
   CONVRG = 0
 
-#if KEY_LIBRARY == 1
   if (present(min_opts)) then
      NPRINT = min_opts%nprint
      NSTEP  = min_opts%nstep
   else
-#endif
      NPRINT = GTRMI(COMLYN,COMLEN,'NPRI',NPRINT)
      NSTEP  = GTRMI(COMLYN,COMLEN,'NSTE',100)
-#if KEY_LIBRARY == 1
   end if
-#endif
 
 #if KEY_STRINGM==1 /*  VO stringm v */
   if (repa_on.and.nstep.lt.repa_freq) then ! this should not be permitted within the 0K string method, so warn & abort
@@ -99,14 +89,13 @@ contains
   endif
 #endif /* VO ^ */
 
-#if KEY_LIBRARY == 1
   if (present(min_opts)) then
      STEP   = min_opts%step
      TOLFUN = min_opts%tolenr
   ! VO begin
   ! the criteria below are inapplicable to the 0K string method
 #if KEY_STRINGM==1
-     if (.not.repa_on) then                     
+     if (.not.repa_on) then
 #endif
         TOLGRD = min_opts%tolgrd
         TOLSTP = min_opts%tolstp
@@ -114,39 +103,32 @@ contains
      endif
 #endif
   else
-#endif /* KEY_LIBRARY */
      STEP   = GTRMF(COMLYN,COMLEN,'STEP',PT02)
      TOLFUN = GTRMF(COMLYN,COMLEN,'TOLE',ZERO)
   ! VO begin
   ! the criteria below are inapplicable to the 0K string method
 #if KEY_STRINGM==1
-     if (.not.repa_on) then                     
+     if (.not.repa_on) then
 #endif
         TOLGRD = GTRMF(COMLYN,COMLEN,'TOLG',ZERO)
         TOLSTP = GTRMF(COMLYN,COMLEN,'TOLS',ZERO)
 #if KEY_STRINGM==1
      endif
 #endif
-#if KEY_LIBRARY == 1
   end if
-#endif /* KEY_LIBRARY */
 
   IF (NPRINT  <  0 .OR. NPRINT  >  NSTEP) NPRINT = 0
 
-#if KEY_LIBRARY == 1
   if (present(sd_opts)) then
      LMINUC = sd_opts%lattice > 0
      MINXYZ = sd_opts%nocoords <= 0
      QNOENER = sd_opts%noenergy > 0
   else
-#endif /* KEY_LIBRARY */
      LMINUC = (INDXA(COMLYN,COMLEN,'LATT')  >  0)
      MINXYZ = (INDXA(COMLYN,COMLEN,'NOCO')  <=  0)
      QNOENER = (INDXA(COMLYN,COMLEN,'NOEN')  >  0) ! jwchu
-#if KEY_LIBRARY == 1
   end if
-#endif /* KEY_LIBRARY */
-  
+
   IF(QNOENER) WRITE(OUTU,'(A)')  &
        ' STEEPD> SD minimization based on force is activated.'
   !
@@ -166,7 +148,7 @@ contains
      NVAR = NVAR + TOTALS
   ENDIF
 #endif
- 
+
 #if KEY_CHEQ==1
   ! if some charges are to be fixed this statement needs to be modified
   ! -1 for total charge constraint
@@ -184,7 +166,7 @@ contains
      ENDIF
      CALL MOLCGT(NATOM,CG,cgfix)
   ENDIF
-#endif 
+#endif
   !
   IF (NPRINT  /=  0 .AND. PRNLEV >= 2) THEN
      WRITE (OUTU,'(/)')
@@ -208,17 +190,17 @@ contains
   !
   CALL GETVR1(.TRUE.,NATOM,VARB,IMOVE,X,Y,Z,LMINUC, &
 #if KEY_CHEQ==1
-       QCGMIN,CG, &              
+       QCGMIN,CG, &
 #endif
        XTLTYP,XTLABC,XTLREF, &
 #if KEY_FLUCQ==1
-       QFLUC,CG,FQSELN, &        
+       QFLUC,CG,FQSELN, &
 #endif
 #if KEY_FOURD==0
-       .FALSE.,(/ZERO/),(/0/) &  
+       .FALSE.,(/ZERO/),(/0/) &
 #endif
 #if KEY_FOURD==1
-       DIM4,FDIM,IMOVE4 &        
+       DIM4,FDIM,IMOVE4 &
 #endif
 #if KEY_DHDGB==1
        ,QFHDGB,SDEF,TOTALS &
@@ -237,17 +219,17 @@ contains
   !
   CALL PUTVR1(.TRUE.,NATOM,VBEST,IMOVE,X,Y,Z, &
 #if KEY_CHEQ==1
-       QCGMIN,CG,CGFIX,CGTMP, &  
+       QCGMIN,CG,CGFIX,CGTMP, &
 #endif
        LMINUC,XTLTYP,XTLABC,XTLREF,.TRUE., &
 #if KEY_FLUCQ==1
-       QFLUC,CG,FQSELN, &        
+       QFLUC,CG,FQSELN, &
 #endif
 #if KEY_FOURD==0
-       .FALSE.,(/ZERO/),(/0/) &  
+       .FALSE.,(/ZERO/),(/0/) &
 #endif
 #if KEY_FOURD==1
-       DIM4,FDIM,IMOVE4 &        
+       DIM4,FDIM,IMOVE4 &
 #endif
 #if KEY_DHDGB==1
 !AP/MF
@@ -306,7 +288,7 @@ contains
   !
 #if KEY_CHEQ==1
   IF (allocated(cgfix)) deallocate(cgfix,cgtmp)
-#endif 
+#endif
   RETURN
 END SUBROUTINE STEEPD
 
@@ -325,7 +307,7 @@ SUBROUTINE STEEP2(MMODE,NVAR,VARB,GRAD,VREF,NSTEP, &
   use sm_config, only: repa_on, repa_freq, stat_on, stat_freq, confcons_on, confcons_freq, chirality_on, chirality_freq
   use sm0k, only: sm0k_repa, sm0k_stat, sm0k_confcons, sm0k_chirality
   use parallel
-  use mpi
+  use mpi_f08
   use multicom_aux
 #endif
   use chm_kinds
@@ -338,7 +320,7 @@ SUBROUTINE STEEP2(MMODE,NVAR,VARB,GRAD,VREF,NSTEP, &
   use energym
   use replica_mod
 #if KEY_RPATH==1
-  use epathmod,only: PJDX,PJDY,PJDZ,PSDX,PSDY,PSDZ,PTANX,PTANY,PTANZ 
+  use epathmod,only: PJDX,PJDY,PJDZ,PSDX,PSDY,PSDZ,PTANX,PTANY,PTANZ
 #endif
   use neb       ! jwchuneb
   use pathm
@@ -352,13 +334,13 @@ SUBROUTINE STEEP2(MMODE,NVAR,VARB,GRAD,VREF,NSTEP, &
   real(chm_real)  FUNC, GRAD(NVAR), STEP, TOLFUN, TOLGRD, TOLSTP, &
        VARB(NVAR), VREF(NVAR), VBEST(NVAR), GBEST(NVAR)
 #if KEY_REPLICA==1 && KEY_RPATH==1
-  real(chm_real)  ERMS,ERMSO                              
+  real(chm_real)  ERMS,ERMSO
 #endif
   LOGICAL QNOENER ! jwchu
   INTEGER NPRINT  ! jwchu
   !
   INTEGER I,II,ERSTAT
-  INTEGER IPT, J                  
+  INTEGER IPT, J
   real(chm_real)  FBEST,FOLD,GNORM,S,GOLD,GNOW,SOLD,GODTGN
   real(chm_real)  GNOLD,FACT,FACT1,GORTH,S1
   real(chm_real)  U,DELE,GRMR0,GRMOVDF,test,GTOT,GN,GF,PSTEP,PSOLD
@@ -366,7 +348,7 @@ SUBROUTINE STEEP2(MMODE,NVAR,VARB,GRAD,VREF,NSTEP, &
 !AP/MF
   LOGICAL QFHDGB
   integer count_i
-#endif 
+#endif
   !
   ! VO stringm v
   !
@@ -399,7 +381,7 @@ SUBROUTINE STEEP2(MMODE,NVAR,VARB,GRAD,VREF,NSTEP, &
      if (qrepa) then
       qstat=stat_on.and.stat_freq.gt.0
       if (qstat) qstat=(ncalls.gt.0.and.mod(ncalls,stat_freq).eq.0)
-      if (qstat) then 
+      if (qstat) then
         if (prnlev.ge.3) write(outu,'(A,I3)') &
      &      ' STEEPD> COMPUTING STRING STATISTICS.'
         call sm0k_stat(nvar,varb)
@@ -420,7 +402,7 @@ SUBROUTINE STEEP2(MMODE,NVAR,VARB,GRAD,VREF,NSTEP, &
       call sm0k_chirality(.true.,varb)
      endif
      !
-     if (qrepa) then 
+     if (qrepa) then
       if (prnlev.ge.3) write(outu,'(A,I3)') &
      &      ' STEEPD> PERFORMING STRING REPARAMETRIZATION.'
       call sm0k_repa(nvar, varb)
@@ -437,7 +419,7 @@ SUBROUTINE STEEP2(MMODE,NVAR,VARB,GRAD,VREF,NSTEP, &
 
      CALL EGRAD1(NVAR,VARB,VREF,FUNC,GRAD,NCALLS,1,ERSTAT)
 #if KEY_STRINGM==1
-     if (repa_on.and.ncalls.eq.0) fold_repa=func              
+     if (repa_on.and.ncalls.eq.0) fold_repa=func
 #endif
      !
      ! If neb is used, fill projected gradients into pgrad
@@ -469,7 +451,7 @@ SUBROUTINE STEEP2(MMODE,NVAR,VARB,GRAD,VREF,NSTEP, &
      ! VO stringm mods
      IF(NCALLS == 0 &
 #if KEY_STRINGM==1 /*  reset after each sm0K iteration */
-     & .or.qrepa    &                       
+     & .or.qrepa    &
 #endif
      &    ) THEN ! at first iteration
         FOLD=FUNC
@@ -478,12 +460,12 @@ SUBROUTINE STEEP2(MMODE,NVAR,VARB,GRAD,VREF,NSTEP, &
         GNOLD=GNORM
 !        SOLD=STEP ! not used
 #if KEY_STRINGM==1
-        if (.not.qrepa) then                 
+        if (.not.qrepa) then
 #endif
-         vbest(1:nvar) = VARB(1:NVAR) 
+         vbest(1:nvar) = VARB(1:NVAR)
          gbest(1:nvar) = GRAD(1:NVAR)
 #if KEY_STRINGM==1
-        endif                                
+        endif
 #endif
      ENDIF
      ! VO stringm ^
@@ -491,26 +473,26 @@ SUBROUTINE STEEP2(MMODE,NVAR,VARB,GRAD,VREF,NSTEP, &
      !MAYGR         if(mod(ncalls,50) == 0) then
      !MAYGR           write(outu,*) 'n= ',ncalls,' step= ', step,' s= ', s,
      !MAYGR     &  ' GODTGN = ',GODTGN,' GNOW= ',GNOW,' GOLD= ',GOLD,
-     !MAYGR     &  ' sold= ',sold    
-     !MAYGR         endif           
+     !MAYGR     &  ' sold= ',sold
+     !MAYGR         endif
      !
      IF(.NOT.QNOENER) THEN
         STEP = HALF * STEP
         IF(FUNC  <  FOLD) STEP = TWOPT4 * STEP
         ! VO: if the 0K string method is used, do not let step increase beyond initial step
 #if KEY_STRINGM==1
-        if (repa_on.and.step.gt.step0) step=step0  
+        if (repa_on.and.step.gt.step0) step=step0
 #endif
      ENDIF
      IF (FUNC  <  FBEST) THEN
         FBEST=FUNC
-        vbest(1:nvar) = VARB(1:NVAR) 
+        vbest(1:nvar) = VARB(1:NVAR)
      ENDIF
 
      IF (NCALLS /= 0) THEN
      !    the two criteria below are not applicable in the zero-temperature string method
 #if KEY_STRINGM==1 /*  VO */
-        if (.not.repa_on) then                           
+        if (.not.repa_on) then
 #endif
          IF (STEP            <  TOLSTP) CONVRG = 1
          IF (GNORM           <  TOLGRD) CONVRG = 2
@@ -526,7 +508,7 @@ SUBROUTINE STEEP2(MMODE,NVAR,VARB,GRAD,VREF,NSTEP, &
 #endif /* Vo stringm */
           IF (ABS(FOLD-FUNC)  <  TOLFUN) CONVRG = 3
 #if KEY_STRINGM==1
-        endif                                            
+        endif
 #endif
         IF (NCALLS          >=  NSTEP)  CONVRG = 4
 #if KEY_STRINGM==1 /*  VO */
@@ -575,11 +557,11 @@ SUBROUTINE STEEP2(MMODE,NVAR,VARB,GRAD,VREF,NSTEP, &
 #if KEY_RPATH==1
      S1=STEP/MAX(GOLD,RSMALL)
 
-#endif 
-#endif 
+#endif
+#endif
      !
 #if KEY_STRINGM==1 /*  VO update vbest only if convergence test fails    */
-     if (qrepa) vbest=varb       
+     if (qrepa) vbest=varb
 #endif
      !
      VARB(1:nvar) = VARB(1:nvar) - S * GRAD(1:nvar)
@@ -590,10 +572,10 @@ SUBROUTINE STEEP2(MMODE,NVAR,VARB,GRAD,VREF,NSTEP, &
      FOLD  = FUNC
 !     SOLD  = STEP
 #if KEY_STRINGM==1 /*  execute only after reparametrization */
-     if (qrepa) fold_repa=func       
+     if (qrepa) fold_repa=func
 #endif
   enddo loop10   !  GOTO 10
-  return 
+  return
 end SUBROUTINE STEEP2
 #if KEY_REPLICA==1 /*replica_main*/
 
@@ -605,10 +587,10 @@ SUBROUTINE STEEPDNEB(COMLYN,COMLEN)
   !     STEEPD performs a steepest descent minimization.
   !
 #if KEY_CHEQ==1
-  use cheq,only:cgfix,cgtmp,qmolc,qnpart,molcgt    
+  use cheq,only:cgfix,cgtmp,qmolc,qnpart,molcgt
 #endif
 #if KEY_FLUCQ==1
-  use flucqm, only: fqseln                         
+  use flucqm, only: fqseln
 #endif
   use chm_kinds
   use dimens_fcm
@@ -625,10 +607,10 @@ SUBROUTINE STEEPDNEB(COMLYN,COMLEN)
 #if KEY_TSM==1
   use tsms_mod
   use tsmh
-#endif 
+#endif
 #if KEY_FLUCQ==1
   use flucq
-#endif 
+#endif
   use pathm
   use memory
 #if KEY_DHDGB==1
@@ -687,7 +669,7 @@ SUBROUTINE STEEPDNEB(COMLYN,COMLEN)
  CALL CALCNVAR(QTSM,BACKLS,NVAR)
 #else /**/
  CALL CALCNVAR(.FALSE.,(/0/),NVAR)
-#endif 
+#endif
 #if KEY_CHEQ==1
  ! if some charges are to be fixed this statement needs to be modified
  ! -1 for total charge constraint
@@ -705,7 +687,7 @@ SUBROUTINE STEEPDNEB(COMLYN,COMLEN)
     ENDIF
     CALL MOLCGT(NATOM,CG,CGFIX)
  ENDIF
-#endif 
+#endif
  !
  IF (NPRINT  /=  0 .AND. PRNLEV >= 2) THEN
     WRITE (OUTU,'(/)')
@@ -737,17 +719,17 @@ SUBROUTINE STEEPDNEB(COMLYN,COMLEN)
  !
  CALL GETVR1(.TRUE.,NATOM,VARB,IMOVE,X,Y,Z,LMINUC, &
 #if KEY_CHEQ==1
-      QCGMIN,CG, &             
+      QCGMIN,CG, &
 #endif
       XTLTYP,XTLABC,XTLREF, &
 #if KEY_FLUCQ==1
-      QFLUC,CG,FQSELN, &       
+      QFLUC,CG,FQSELN, &
 #endif
 #if KEY_FOURD==0
-      .FALSE.,(/ZERO/),(/0/) & 
+      .FALSE.,(/ZERO/),(/0/) &
 #endif
 #if KEY_FOURD==1
-      DIM4,FDIM,IMOVE4 &       
+      DIM4,FDIM,IMOVE4 &
 #endif
 #if KEY_DHDGB==1
 !AP/MF
@@ -758,17 +740,17 @@ SUBROUTINE STEEPDNEB(COMLYN,COMLEN)
  CALL GETVR1(.TRUE.,NATOM,RMASS,IMOVE,AMASS, &
       AMASS,AMASS,LMINUC, &
 #if KEY_CHEQ==1
-      QCGMIN,CG, &             
+      QCGMIN,CG, &
 #endif
       XTLTYP,XTLABC,XTLREF, &
 #if KEY_FLUCQ==1
-      QFLUC,CG,FQSELN, &       
+      QFLUC,CG,FQSELN, &
 #endif
 #if KEY_FOURD==0
-      .FALSE.,(/ZERO/),(/0/) & 
+      .FALSE.,(/ZERO/),(/0/) &
 #endif
 #if KEY_FOURD==1
-      DIM4,FDIM,IMOVE4 &       
+      DIM4,FDIM,IMOVE4 &
 #endif
 #if KEY_DHDGB==1
 !AP/MF
@@ -785,17 +767,17 @@ SUBROUTINE STEEPDNEB(COMLYN,COMLEN)
  !
  CALL PUTVR1(.TRUE.,NATOM,VBEST,IMOVE,X,Y,Z, &
 #if KEY_CHEQ==1
-      QCGMIN,CG,CGFIX,CGTMP,  & 
+      QCGMIN,CG,CGFIX,CGTMP,  &
 #endif
       LMINUC,XTLTYP,XTLABC,XTLREF,.TRUE., &
 #if KEY_FLUCQ==1
-      QFLUC,CG,FQSELN, &        
+      QFLUC,CG,FQSELN, &
 #endif
 #if KEY_FOURD==0
-      .FALSE.,(/ZERO/),(/0/) &  
+      .FALSE.,(/ZERO/),(/0/) &
 #endif
 #if KEY_FOURD==1
-      DIM4,FDIM,IMOVE4 &        
+      DIM4,FDIM,IMOVE4 &
 #endif
 #if KEY_DHDGB==1
        ,QFHDGB=.FALSE.,SDEF=DUM_FHDGB, TOTALS=TOTALS &
@@ -860,7 +842,7 @@ SUBROUTINE STEEPDNEB(COMLYN,COMLEN)
  !
 #if KEY_CHEQ==1
  IF (allocated(cgfix)) deallocate(cgfix,cgtmp)
-#endif 
+#endif
  RETURN
 END SUBROUTINE STEEPDNEB
 
@@ -882,7 +864,7 @@ SUBROUTINE STEEP2NEB(MMODE,NVAR,VARB,GRAD,VREF,NSTEP,STEP, &
   use energym
   use replica_mod
 #if KEY_RPATH==1
-  use epathmod,only: PJDX,PJDY,PJDZ,PSDX,PSDY,PSDZ,PTANX,PTANY,PTANZ 
+  use epathmod,only: PJDX,PJDY,PJDZ,PSDX,PSDY,PSDZ,PTANX,PTANY,PTANZ
 #endif
 
   use neb       ! jwchuneb
@@ -894,9 +876,9 @@ SUBROUTINE STEEP2NEB(MMODE,NVAR,VARB,GRAD,VREF,NSTEP,STEP, &
   use parallel
 #if KEY_FLUCQ==1
   use flucq
-#endif 
+#endif
 # if KEY_DHDGB==1
- use dhdgb,only:totals 
+ use dhdgb,only:totals
 #endif
  use minmiz_util_module, only: mintrj
 
@@ -913,7 +895,7 @@ SUBROUTINE STEEP2NEB(MMODE,NVAR,VARB,GRAD,VREF,NSTEP,STEP, &
        VBEST(NVAR)
   !
   INTEGER I,ERSTAT
-  INTEGER IPT, J  
+  INTEGER IPT, J
   real(chm_real)  FBEST,FOLD,GNORM,S,S1,GOLD,GNOW,SOLD,GODTGN
   real(chm_real)  GNOLD,FACT,GORTH
   real(chm_real)  DELE,GRMR0,GRMOVDF,test,GTOT,PSTEP,PSOLD
@@ -971,18 +953,18 @@ SUBROUTINE STEEP2NEB(MMODE,NVAR,VARB,GRAD,VREF,NSTEP,STEP, &
        PJDX,PJDY,PJDZ,PTANX,PTANY,PTANZ,QPCIMG,ICLREP)
 
   ERMS=ETERM(PRMS)
-#endif 
-#endif 
+#endif
+#endif
 
   call addvec(PSGRAD,PGRAD,PTOT,NVAR)
 
   CALL PUTVR1(.TRUE.,NATOM,PTOT,IMOVE,DX,DY,DZ, &
 #if KEY_CHEQ==1
-       .false.,(/ZERO/),(/ZERO/),(/ZERO/), & 
+       .false.,(/ZERO/),(/ZERO/),(/ZERO/), &
 #endif
        LMINUC,XTLTYP,XTLABC,XTLREF,.TRUE., &
 #if KEY_FLUCQ==1
-       .false.,(/ZERO/),(/0/), & 
+       .false.,(/ZERO/),(/0/), &
 #endif
        .false.,(/ZERO/),(/0/) &
 #if KEY_DHDGB==1
@@ -1003,7 +985,7 @@ SUBROUTINE STEEP2NEB(MMODE,NVAR,VARB,GRAD,VREF,NSTEP,STEP, &
   IF(NCALLS == 0) THEN
      FOLD=FUNC
      FBEST=FUNC
-     ERMSO=ERMS     
+     ERMSO=ERMS
      normpgradold=normpgrad
      normpsgradold=normpsgrad
      normptotold=normptot
@@ -1050,7 +1032,7 @@ SUBROUTINE STEEP2NEB(MMODE,NVAR,VARB,GRAD,VREF,NSTEP,STEP, &
      VARB(I) = VARB(I)-S*PGRAD(I)-S1*PSGRAD(I)
 
   enddo
-    ! 
+    !
     pgrado(1:nvar)  = PGRAD(1:NVAR)
     psgrado(1:nvar) = PSGRAD(1:NVAR)
     ptoto(1:nvar)   = PTOT(1:NVAR)

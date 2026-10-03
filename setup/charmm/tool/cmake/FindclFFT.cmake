@@ -1,42 +1,40 @@
-FIND_PATH(clFFT_ROOT_DIR
+find_path(clFFT_ROOT_DIR
   NAMES include/clFFT.h
   HINTS
     ${CLFFT_HOME}
-    ENV CLFFT_HOME 
+    ENV CLFFT_HOME
     ${CLFFT_ROOT}
-    ENV CLFFT_ROOT 
+    ENV CLFFT_ROOT
     /usr/local/
   DOC "clFFT root directory.")
 
-FIND_PATH(clFFT_INCLUDE_DIRS
+find_path(clFFT_INCLUDE_DIRS
   NAMES clFFT.h
   HINTS
     ${clFFT_ROOT_DIR}
     ${CLFFT_HOME}
-    ENV CLFFT_HOME 
+    ENV CLFFT_HOME
     ${CLFFT_ROOT}
-    ENV CLFFT_ROOT 
+    ENV CLFFT_ROOT
     /usr/local/
   PATH_SUFFIXES include
   DOC "clFFT include directory")
 
-FIND_LIBRARY(clFFT_LIBRARY
+find_library(clFFT_LIBRARY
   NAMES clFFT
   HINTS
     ${clFFT_ROOT_DIR}
     ${CLFFT_HOME}
-    ENV CLFFT_HOME 
+    ENV CLFFT_HOME
     ${CLFFT_ROOT}
-    ENV CLFFT_ROOT 
+    ENV CLFFT_ROOT
     /usr/local/
   PATH_SUFFIXES lib64 lib
   DOC "clFFT shared library")
 
-SET(clFFT_LIBRARIES ${clFFT_LIBRARY})
+set(clFFT_LIBRARIES ${clFFT_LIBRARY})
 
-INCLUDE (FindPackageHandleStandardArgs)
-FIND_PACKAGE_HANDLE_STANDARD_ARGS(
+include(FindPackageHandleStandardArgs)
+find_package_handle_standard_args(
   clFFT DEFAULT_MSG clFFT_LIBRARIES clFFT_INCLUDE_DIRS)
-MARK_AS_ADVANCED(clFFT_LIBRARIES clFFT_INCLUDE_DIRS)
-
-
+mark_as_advanced(clFFT_LIBRARIES clFFT_INCLUDE_DIRS)

@@ -153,16 +153,16 @@ void openmmgbsw_gbswforce_setcphmdparameters_(OpenMMGBSW_GBSWForce*& target, int
 void OPENMMGBSW_GBSWFORCE_SETCPHMDPARAMETERS(OpenMMGBSW_GBSWForce*& target, int const& index, int const& titrateResID, double const& refChargeState1, double const& refChargeState2, double const& chargeState1, double const& chargeState2) {
     OpenMMGBSW_GBSWForce_setCphmdParameters(target, index, titrateResID, refChargeState1, refChargeState2, chargeState1, chargeState2);
 }
-void openmmgbsw_gbswforce_getlambdaoutputfile_(const OpenMMGBSW_GBSWForce*& target, char*& result) {
+void openmmgbsw_gbswforce_getlambdaoutputfile_(const OpenMMGBSW_GBSWForce*& target, const char*& result) {
     result = OpenMMGBSW_GBSWForce_getLambdaOutputFile(target);
 }
-void OPENMMGBSW_GBSWFORCE_GETLAMBDAOUTPUTFILE(const OpenMMGBSW_GBSWForce*& target, char*& result) {
+void OPENMMGBSW_GBSWFORCE_GETLAMBDAOUTPUTFILE(const OpenMMGBSW_GBSWForce*& target, const char*& result) {
     result = OpenMMGBSW_GBSWForce_getLambdaOutputFile(target);
 }
-void openmmgbsw_gbswforce_setlambdaoutputfile_(OpenMMGBSW_GBSWForce*& target, char* tmp) {
+void openmmgbsw_gbswforce_setlambdaoutputfile_(OpenMMGBSW_GBSWForce*& target, const char* tmp) {
     OpenMMGBSW_GBSWForce_setLambdaOutputFile(target, tmp);
 }
-void OPENMMGBSW_GBSWFORCE_SETLAMBDAOUTPUTFILE(OpenMMGBSW_GBSWForce*& target, char* tmp) {
+void OPENMMGBSW_GBSWFORCE_SETLAMBDAOUTPUTFILE(OpenMMGBSW_GBSWForce*& target, const char* tmp) {
     OpenMMGBSW_GBSWForce_setLambdaOutputFile(target, tmp);
 }
 double openmmgbsw_gbswforce_getsystemph_(const OpenMMGBSW_GBSWForce*& target) {

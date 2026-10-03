@@ -1,7 +1,7 @@
 module VALBOND
   use chm_kinds
   implicit none
-      
+
  !  ********************************************************************
  !  ********************************************************************
  !  *********         VALBOND GLOBAL VARIABLES            **************
@@ -21,7 +21,7 @@ module VALBOND
        VBMET,  &  ! TRUE FOR METAL ATOMS
        VBSKIP     ! TRUE IF ATOM HAS CHARMM ANGLES
 
-      ! VARIABLES INDEXED BY ATOM AND BOND (I,J) 
+      ! VARIABLES INDEXED BY ATOM AND BOND (I,J)
       ! (FORMERLY DIMENSIONED MAXA,VBMAXV)
       INTEGER,ALLOCATABLE,DIMENSION(:,:),SAVE :: &
         VBNEI,  & ! NEIGHBOR LIST
@@ -31,7 +31,7 @@ module VALBOND
         VBP,    & ! VALBOND P HYBRIDIZATION FOR BOND J
         VBD,    & ! SAME FOR D
         VBSMAX    ! MAX. STRENGTH FUNCTION
-    
+
       ! ARRAY SIZE PARAMETERS
       INTEGER VBMAXV            ! MAXIMUM VALENCE
       PARAMETER (VBMAXV = 8)
@@ -76,7 +76,7 @@ module VALBOND
  ! ====================================================================
 
       contains
-     
+
 #if KEY_VALBOND==1 /*valbond*/
 
  !  ********************************************************************
@@ -94,7 +94,7 @@ module VALBOND
   use string
       INTEGER NLP,ISHYP,ZI,ZJ
       REAL(chm_real) NP,ND,VAL
- ! 
+ !
       CHARACTER*4 wrd,ANAME,BNAME
       CHARACTER*40 MSG
 
@@ -270,7 +270,7 @@ module VALBOND
       CHARACTER*30 MSG
       DO I = 1, NATOM
          IF (ATYPE(I)(1:4).EQ.ANAME) THEN
-            if (prnlev >= 2) write(outu, '(''VB: D ELEC. COUNT(''A4'') = ''I4)') ANAME,NE
+            if (prnlev >= 2) write(outu, '("VB: D ELEC. COUNT(",A4,") = ",I4)') ANAME, NE
             VBDE(I) = NE
             GOTO 10 ! BREAK
          ENDIF
@@ -278,7 +278,7 @@ module VALBOND
       WRITE(MSG,*) 'ATOM NOT FOUND: ', ANAME
       CALL WRNDIE(-1,'<VALB E>', MSG)
    10 CONTINUE
-      RETURN 
+      RETURN
       END SUBROUTINE VBSE
 
 
@@ -292,7 +292,7 @@ module VALBOND
       CHARACTER*30 MSG
       DO I = 1, NATOM
          IF (ATYPE(I)(1:4).EQ.ANAME) THEN
-            if (prnlev >= 2) write(outu, '(''VB: LP(''A4'') = ''I4)') ANAME,NLP
+            if (prnlev >= 2) write(outu, '("VB: LP(",A4,") = ",I4)') ANAME, NLP
             VBLP(I) = NLP
             GOTO 10 ! BREAK
          ENDIF
@@ -300,7 +300,7 @@ module VALBOND
       WRITE(MSG,*) 'ATOM NOT FOUND: ', ANAME
       CALL WRNDIE(-1,'<VALB LP>', MSG)
    10 CONTINUE
-      RETURN 
+      RETURN
       END SUBROUTINE VBSLP
 
       SUBROUTINE VBSHYB(ANAME,BNAME,NP,ND,ISHYP)
@@ -319,7 +319,7 @@ module VALBOND
       DO I = 1, NATOM
         IF (ATYPE(I)(1:4).EQ.ANAME) THEN
           IF(ISHYP.NE.0) THEN
-            VBHYP(I) = .TRUE. 
+            VBHYP(I) = .TRUE.
             if (prnlev >= 2) WRITE (OUTU,900) I, ANAME
   900       FORMAT('VALBOND: SETTING ATOM ',I4,' (',A4, &
                    ') AS HYPERVALENT')
@@ -342,7 +342,7 @@ module VALBOND
       ENDIF
       RETURN
       END SUBROUTINE VBSHYB
-      
+
       SUBROUTINE VBSHYA(ANAME,NP,ND,ISHYP)
       ! SET THE HYBRIDIZATION OF AN ATOM
   use dimens_fcm
@@ -390,7 +390,7 @@ module VALBOND
            VBWTLP(J) = 1.0  ! DEFAULT LONE PAIR WEIGHT (UNOFFICIAL)
            VBBLI(J) = 0.    ! DEFAULT TRANS BOND LENGTHENING EFFECT
            VBBLS(J) = 1.0   ! DEFAULT BOND LENGTHENING SENSITIVITY
-           
+
            ! METAL PARAMETERS FROM 1998 PAPER
            VBK(21,J) = 40.0
            VBK(22,J) = 40.0
@@ -575,7 +575,7 @@ module VALBOND
        VBSKIP(NATOM), &
        VBNEI(NATOM,VBMAXV),VBB(NATOM,VBMAXV), &
        VBP(NATOM,VBMAXV),VBD(NATOM,VBMAXV),VBSMAX(NATOM,VBMAXV))
-      
+
       DO I = 1,NATOM
          VBRAWP(I) = 0
          VBRAWD(I) = 0
@@ -715,7 +715,7 @@ module VALBOND
       END SUBROUTINE VBDONE
 
 
-      
+
 
  !  ********************************************************************
  !  ********************************************************************
@@ -726,28 +726,28 @@ module VALBOND
       SUBROUTINE EANGVB(ET,X,Y,Z,DX,DY,DZ,NATOMX)
  !      Calculates VALBOND bond angles, angle energies and forces
  !      loops through all angles
- ! 
+ !
   use number
   use stream
   use consta
   use dimens_fcm
- ! 
+ !
       REAL(chm_real) ET
       REAL(chm_real) DX(NATOMX),DY(NATOMX),DZ(NATOMX)
       REAL(chm_real) X(NATOMX),Y(NATOMX),Z(NATOMX)
- ! 
+ !
       INTEGER I,J,K,NATOMX,II,KK
       REAL(chm_real) RIR,RJR,DXIR,DYIR,DZIR,DXJR,DYJR,DZJR,DF,E
- ! 
+ !
  !       WRITE(OUTU,*) "#IN : ",I,J,K,NATOMX
  !       WRITE(OUTU,*) X(I),Y(I),Z(I)
  !       WRITE(OUTU,*) X(J),Y(J),Z(J)
  !       WRITE(OUTU,*) X(K),Y(K),Z(K)
-      
+
       ET=ZERO
       IF(.NOT.VBINID) RETURN
- ! 
-      ! LOOP OVER ALL ATOMS, AND THEN OVER ALL PAIRS OF NEIGHBORS 
+ !
+      ! LOOP OVER ALL ATOMS, AND THEN OVER ALL PAIRS OF NEIGHBORS
       ! (I.E., ALL ANGLES)
       ! THE ANGLE IS DEFINED AS I-J-K; J IS THE CENTRAL ATOM
       IF(.NOT.VBPRUT) THEN
@@ -868,12 +868,12 @@ module VALBOND
         Z(I) = TMP
 
       ENDDO
-      RETURN 
+      RETURN
       END SUBROUTINE VBHV
 
 
       SUBROUTINE VBCOMB(J,X,Y,Z,NATOMX,ET)
-      ! generates all hypervalent valbond configurations (combinations) 
+      ! generates all hypervalent valbond configurations (combinations)
       ! for a hypervalent center
       ! J = HYPERVALENT ATOM
       ! X,Y,Z = COORDINATE ARRAYS
@@ -1040,7 +1040,7 @@ module VALBOND
  900      FORMAT('     ANGLE ',A4,'-',A4,'-',A4,' = ',F7.2,' DEG', &
                 '; BOF = ', F4.2)
           IF (PLOOK(II).EQ.KK) THEN ! USE HV FORMULA
-            ! XXX: AMBIGUITY IN PAPER: SHOULD WE USE II OR KK??? 
+            ! XXX: AMBIGUITY IN PAPER: SHOULD WE USE II OR KK???
             ! LET'S DO THE AVERAGE OF BOTH...
             M = VBP(J,II)
             N = VBD(J,II)
@@ -1134,7 +1134,7 @@ module VALBOND
             ET=ET+BOF*E
           ENDIF
         ENDDO
-        ! For metals, now add the bond energy terms for the normal 
+        ! For metals, now add the bond energy terms for the normal
         ! bonds (the ones that are not part of a hypervalent pair)
         IF (PLOOK(II).EQ.0.AND.VBMET(J)) THEN
           IC=ICB(VBB(J,II))
@@ -1162,33 +1162,33 @@ module VALBOND
  !      Calculates VALBOND bond angles, angle energies and forces
  !      for a single angle, defined by atoms I,J,K
  !      Based on subroutine EANGLE() from energy/eintern.src
- ! 
+ !
   use number
   use stream
   use consta
   use dimens_fcm
- ! 
+ !
       REAL(chm_real) ET
       INTEGER ATOMX
       REAL(chm_real) DX(NATOMX),DY(NATOMX),DZ(NATOMX)
       REAL(chm_real) X(NATOMX),Y(NATOMX),Z(NATOMX)
- ! 
- ! 
+ !
+ !
       INTEGER I,J,K,NATOMX,II,KK
       REAL(chm_real) DXI,DYI,DZI,DXJ,DYJ,DZJ,RI2,RJ2,RI,RJ
       REAL(chm_real) RIR,RJR,DXIR,DYIR,DZIR,DXJR,DYJR,DZJR,CST,AT,DA,DF,E,D
       REAL(chm_real) ST2R,STR,DTXI,DTXJ,DTYI,DTYJ,DTZI,DTZJ
       REAL(chm_real) DFX,DFY,DFZ,DGX,DGY,DGZ,SMALLV
       REAL(chm_real) RIK,B,C,DXK,DYK,DZK,EX,KE
- ! 
+ !
  !       WRITE(OUTU,*) "#IN : ",I,J,K,NATOMX
  !       WRITE(OUTU,*) X(I),Y(I),Z(I)
  !       WRITE(OUTU,*) X(J),Y(J),Z(J)
  !       WRITE(OUTU,*) X(K),Y(K),Z(K)
-      
+
       ET=ZERO
       SMALLV=RPRECI
- ! 
+ !
 
        DXI=X(I)-X(J)
        DYI=Y(I)-Y(J)
@@ -1333,7 +1333,7 @@ module VALBOND
         DY(K)=DY(K)-DFY
         DZ(K)=DZ(K)-DFZ
       ENDIF
-       
+
       RETURN
       END SUBROUTINE EANGV1
 
@@ -1377,25 +1377,25 @@ module VALBOND
 
       REAL(chm_real) FUNCTION ANGIJK(I,J,K,X,Y,Z,NATOMX)
  !      COMPUTE THE ANGLE FOR ATOMS I,J,K
- ! 
+ !
   use number
   use stream
   use consta
   use dimens_fcm
- ! 
+ !
       INTEGER NATOMX
       REAL(chm_real) X(NATOMX),Y(NATOMX),Z(NATOMX)
- ! 
- ! 
+ !
+ !
       INTEGER I,J,K
       REAL(chm_real) DXI,DYI,DZI,DXJ,DYJ,DZJ,RI2,RJ2,RI,RJ
       REAL(chm_real) RIR,RJR,DXIR,DYIR,DZIR,DXJR,DYJR,DZJR,CST,AT,DA,DF,E,D
       REAL(chm_real) DFX,DFY,DFZ,DGX,DGY,DGZ,SMALLV
 
       SMALLV=RPRECI
- ! 
+ !
 
-      !WRITE(6,'(A7,9F8.3)')'ANGIJK ', X(I) 
+      !WRITE(6,'(A7,9F8.3)')'ANGIJK ', X(I)
       DXI=X(I)-X(J)
       DYI=Y(I)-Y(J)
       DZI=Z(I)-Z(J)
@@ -1483,12 +1483,9 @@ module VALBOND
       END SUBROUTINE NULL_VB
 
 #endif /* (valbond)*/
-      
+
 
  ! =====================================================================
  !  End of module VALBOND
- ! =====================================================================      
+ ! =====================================================================
       end module VALBOND
-      
-   
-

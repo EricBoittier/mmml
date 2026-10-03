@@ -1,0 +1,126 @@
+* Regression test: an OpenMM dynamics command must produce one continuous
+* trajectory regardless of how often it writes a restart file (isvfrq).
+*
+
+! Bug (pre-fix, source/openmm/omm_main.F90): DCNTRL calls omm_dynamics once per
+! integration cycle, and a small isvfrq/nsavc/iprfrq splits a single `dynamics`
+! command into many short cycles (isvfrq 1 -> one cycle per step).  omm_dynamics
+! unconditionally invalidated (tore down + rebuilt) the OpenMM context and
+! re-set the velocities on every cycle, so with isvfrq 1 the context was
+! destroyed and rebuilt after every single restart-file write.  Each rebuild
+! re-seeds the integrator's random-number stream, so a stochastic integrator
+! (Langevin / Andersen / MC barostat) got a brand-new noise sequence every step
+! and the trajectory was corrupted.
+!
+! This test runs the SAME Langevin (NVT) dynamics twice from identical initial
+! conditions and the same velocity seed, differing ONLY in isvfrq: once writing
+! a restart only at the end, once writing every step (isvfrq 1).  Restart-write
+! frequency is pure I/O and must not change the physics, so on a correct build
+! the two final potential energies agree closely; the residual difference is
+! only integrator-chunking round-off (measured 3-42 kcal/mol here, sub-1%).
+! The pre-fix build re-seeds the Langevin noise every step in the isvfrq=1 run,
+! which shifts the final potential energy by ~1500 kcal/mol (about a third of
+! the total) -- so the two runs disagree grossly and the test FAILS.
+!
+! The check is a self-contained same-platform two-run comparison, so it needs
+! no captured reference energy and is independent of platform / FP details.
+! The absolute tolerance (200 kcal/mol) sits in the wide, categorical gap
+! between "chunking round-off" and "the noise stream was reset every step".
+
+if ?openmm .ne. 1 then
+   echo "Test NOT performed."
+   stop
+endif
+
+if ?numnode .ne. 1 then
+ echo "Test NOT performed in parallel."
+ stop
+endif
+
+stream datadir.def
+set testfail 0
+
+omm on precision mixed
+
+set cutoff = 11
+set ctofnb = 9
+set ctonnb = 9
+calc cutim = @cutoff
+set kappa = 0.32
+set nmesh = 24
+set tref = 298
+set nsteps = 20
+set seed = 314159
+
+read rtf card name @0/top_all22_prot.inp
+read param card name @0/par_all22_prot.inp
+
+read sequ ala 3
+generate pro0 setup first ace last ct3
+
+read sequ tip3 465
+generate wt00 setup noangl nodihe
+
+set pdb = ala3_solv-equil.pdb
+read coor pdb name @0/@pdb resi
+
+set size 24.534238
+set theta = 90.0
+crystal define cubic @size @size @size @theta @theta @theta
+crystal build cutoff @cutim noper 0
+
+image byseg xcen 0.0 ycen 0.0 zcen 0.0 select segid pro0 end
+image byres xcen 0.0 ycen 0.0 zcen 0.0 select segid wt00 end
+
+faster on
+nbonds eps 1.0 cutnb @cutoff cutim @cutim -
+        ctofnb @ctofnb ctonnb @ctonnb vswi -
+        ewald kappa @kappa pme order 4 fftx @nmesh ffty @nmesh fftz @nmesh
+
+shake fast bonh tol 1.0e-5 para
+
+! ---------------------------------------------------------------------------
+! Run A: Langevin NVT, restart written only at the final step (isvfrq =
+! nsteps -> a single integration cycle, no mid-run restart writes/rebuilds).
+! Reference trajectory.
+! ---------------------------------------------------------------------------
+read coor pdb name @0/@pdb resi
+open unit 10 write form name @9/omm_restart_context.res
+dynamics leap start timestep 0.002 -
+     nstep @nsteps nprint @nsteps iprfrq @nsteps -
+     firstt @tref finalt @tref -
+     iasors 1 iasvel 1 iscvel 0 iseed @seed -
+     ilbfrq 0 inbfrq -1 imgfrq -1 echeck -1 -
+     iunread 10 iunwrite 10 isvfrq @nsteps -
+     eps 1.0 cutnb @cutoff cutim @cutim ctofnb @ctofnb ctonnb @ctonnb vswi -
+     ewald kappa @kappa pme order 4 fftx @nmesh ffty @nmesh fftz @nmesh ntrfq @nsteps -
+     langevin gamma 6
+set eref = ?ener
+
+! ---------------------------------------------------------------------------
+! Run B: identical Langevin run, but writing a restart file EVERY step
+! (isvfrq 1).  Same initial coordinates and velocity seed, so a correct build
+! must reproduce Run A.  The pre-fix bug tore the context down (and re-seeded
+! the Langevin noise) after every step here.
+! ---------------------------------------------------------------------------
+read coor pdb name @0/@pdb resi
+open unit 10 write form name @9/omm_restart_context.res
+dynamics leap start timestep 0.002 -
+     nstep @nsteps nprint @nsteps iprfrq @nsteps -
+     firstt @tref finalt @tref -
+     iasors 1 iasvel 1 iscvel 0 iseed @seed -
+     ilbfrq 0 inbfrq -1 imgfrq -1 echeck -1 -
+     iunread 10 iunwrite 10 isvfrq 1 -
+     eps 1.0 cutnb @cutoff cutim @cutim ctofnb @ctofnb ctonnb @ctonnb vswi -
+     ewald kappa @kappa pme order 4 fftx @nmesh ffty @nmesh fftz @nmesh ntrfq @nsteps -
+     langevin gamma 6
+set etest = ?ener
+
+! Restart-write frequency must not change the trajectory.  Absolute tolerance
+! (negative -> |val - ref| <= |tol|).
+@testcheck @etest @eref -200.0 omm_isvfrq_invariance
+
+echo omm_restart_context test failures: @testfail
+
+omm clear
+stop

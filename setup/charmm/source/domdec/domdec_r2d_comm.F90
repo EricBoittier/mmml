@@ -752,7 +752,7 @@ contains
     use memory
     use stream,only:outu, prnlev
     use parallel,only:mpi_integer_size, mpi_real8_size
-    use mpi,only:mpi_integer, mpi_byte, mpi_success, mpi_real8
+    use mpi_f08,only:mpi_integer, mpi_byte, mpi_success, mpi_real8
     use new_timer,only:timer_start, timer_stop, T_r2r
     use domdec_common,only:nthread, q_test
     use domdec_dr_common,only:comm_recip, nrecip, commbuffersize, commbufferpos, commbuffer, &
@@ -1352,7 +1352,7 @@ contains
     use number,only:zero
     use stream,only:outu, prnlev
     use domdec_common,only:ndirect, nthread, q_test, q_use_single, ncons, q_cons
-    use mpi,only:mpi_integer, mpi_byte, mpi_success, mpi_statuses_ignore
+    use mpi_f08,only:mpi_integer, mpi_byte, mpi_success, mpi_statuses_ignore
     use parallel,only:mpi_integer_size, mpi_real8_size
     use new_timer,only:timer_start, timer_stpstrt, timer_stop, T_d2r, T_d2r_recv_size, T_d2r_recv,&
          T_d2r_unpack
@@ -1683,13 +1683,19 @@ contains
     subroutine alloc_realloc(natom, ndirect, ncomm, nthread, ncons)
       use memory
       use nblist_util,only:init_array
-      use mpi,only:mpi_status_size
       implicit none
       ! Input
       integer, intent(in) :: natom, ndirect, ncomm, nthread, ncons
 
       ! reqbuffer
-      call alloc_realloc_integer_buffer(reqbuffer, max(ndirect,ncomm))
+      if (allocated(reqbuffer)) then
+         if (size(reqbuffer) < max(ndirect,ncomm)) then
+            deallocate(reqbuffer)
+         endif
+      endif
+      if (.not.allocated(reqbuffer)) then
+         allocate(reqbuffer(max(ndirect,ncomm)))
+      endif
 
       ! commnode
       call alloc_realloc_integer_buffer(commnode, ncomm)
@@ -1722,7 +1728,7 @@ contains
   ! *
   subroutine comm_force_among_recip(dx, dy, dz)
     use pack_mod,only:pack_double_byte, unpack_double_byte
-    use mpi,only:mpi_real8, mpi_byte, mpi_success, mpi_sum
+    use mpi_f08,only:mpi_real8, mpi_byte, mpi_success, mpi_sum
     use parallel,only:mpi_integer_size, mpi_real8_size
     use domdec_dr_common,only:comm_recip, commbuffersize, commbufferpos, commbuffer, mynod_split, &
          nrecip, cons_node_split
@@ -1918,7 +1924,7 @@ contains
   subroutine send_results_to_direct(forcex, forcey, forcez, nauxdata, auxdata)
     use number,only:zero
     use pack_mod,only:pack_xyz_atom_byte, pack_double_byte, pack_double_zeros
-    use mpi,only:mpi_success, mpi_byte, mpi_statuses_ignore
+    use mpi_f08,only:mpi_success, mpi_byte, mpi_statuses_ignore
     use domdec_dr_common,only:ncomm, commbuffersize, commbufferpos, commbuffer, &
          nreqbuffer, reqbuffer, commnode, FORCEBUF, comm_direct_recip, mynod_split
 #if KEY_DOMDEC_GPU==1

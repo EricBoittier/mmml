@@ -200,16 +200,22 @@ To dynamically start new processes in parallel MPI-2 standard is used,
 namely MPI_COMM_SPAWN routine. It is availalble in OpenMPI library
 (currently in use) and MPICH-2. 
 
-As of July 2018 the recommended commands to compile CHARMM are the
-following.
+As of August 20, 2025 the recommended commands to compile CHARMM are
+the following.
 
 To use the cmake infrastructure, execute
-$ ./configure --with-repdstr --add mscale
+$ ./configure --with-repdstr --add mscale,eds,qeds
 $ make -C build/cmake install
+
+
+Recommended MPI Version: Please note that MPICH version 3.4.3 does not
+currently compile with CHARMM. We recommend using OpenMPI version
+4.1.6, as OpenMPI 5.0.6 has known issues with finishing mscale test
+cases.
 
 II.
 
-Matrices for coefficients in substraction methods:
+Matrices for coefficients in subtraction methods:
 
 L=low level theory, H=high level theory
 B=big system, S=small system

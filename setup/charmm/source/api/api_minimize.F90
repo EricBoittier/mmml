@@ -3,7 +3,6 @@ module api_minimize
   implicit none
 contains
 
-#if KEY_LIBRARY == 1
   !> @brief run steepest descent minimization
   !
   !> param[in] min_opts type(min_settings) options for the minimization algorithm
@@ -23,7 +22,7 @@ contains
 
     minimize_run_sd = 0
     call minmiz(command_line, command_line_len, min_opts, sd_opts=sd_opts)
-    minimize_run_sd = 1    
+    minimize_run_sd = 1
   end function minimize_run_sd
 
   !> @brief run the minimization
@@ -39,13 +38,13 @@ contains
 
     type(min_settings) :: min_opts
     type(min_abnr_settings) :: abnr_opts
-    
+
     character(len=128) :: command_line = ' '
     integer :: command_line_len = 0
 
     minimize_run_abner = 0
     call minmiz(command_line, command_line_len, min_opts, abnr_opts=abnr_opts)
-    minimize_run_abner = 1    
+    minimize_run_abner = 1
   end function minimize_run_abner
 
   !> @brief ABNR with optional CRYSTAL LATTice / NOCOords (KEY_LIBRARY dynopt path).
@@ -75,6 +74,5 @@ contains
     call minmiz(command_line, command_line_len, min_opts, abnr_opts=abnr_opts)
     minimize_run_abnr_lattice = 1
   end function minimize_run_abnr_lattice
-#endif /* KEY_LIBRARY */
 
 end module api_minimize

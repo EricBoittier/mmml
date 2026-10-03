@@ -66,14 +66,14 @@ File: Sgld, Node: Background, Up: Top, Previous: Syntax, Next: Examples
      LARMORD implements a simple and fast model for predicting chemical shifts. Specifically, the chemical shift, \delta_{i}^{pred}, for a given 
 nucleus i, is given by a polynomial expansion of inter-atomic distances, i.e.,
      
-      \delta_{i}^{pred} = \delta_{i}^{rc}+ \sum_{j}^{N}α_{j} r_{ij}^{beta}  Eq.(1).
+      \delta_{i}^{pred} = \delta_{i}^{rc}+ \sum_{j}^{N}alpha_{j} r_{ij}^{beta}  Eq.(1).
 
-Here, \delta_{i}^{rc} is the so-called “random coil” chemical shift for nucleus i, N is the total number of 
+Here, \delta_{i}^{rc} is the so-called "random coil" chemical shift for nucleus i, N is the total number of 
 heavy atoms in the RNA, r_{ij} is the inter-atomic distance between atoms i and j, and alpha_{j} and beta_{j} is parameter 
 that depends on the atom and residue type associated with j (Note: in ref XX beta = -3 for all j(s)). Since the module was 
 developed initially for RNA, the provided parameters (toppar/larmord.dat) are specifically for predicting 
-chemical shifts for non-exchangeable 1H (H1’, H2’, H3’, H4’, H5’, H5’’, H2, H5, H6, H8) and 
-protonated 13C (C1’, C2’, C3’, C4’, C5’, C2, C5, C6, C8) RNA nuclei. That being said the current implementation is general and so 
+chemical shifts for non-exchangeable 1H (H1', H2', H3', H4', H5', H5'', H2, H5, H6, H8) and 
+protonated 13C (C1', C2', C3', C4', C5', C2, C5, C6, C8) RNA nuclei. That being said the current implementation is general and so 
 LARMORD can in principle be used to predict chemcial shifts for any biomolecule, provided the parameters are available 
 (alphas and betas Eq. 1).
 

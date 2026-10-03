@@ -8,6 +8,7 @@
 
 #include "xdr/xdrfile.h"
 #include "xdr/xdrfile_xtc.h"
+#include "update/lbfgs.h"
 
 // Forward delcaration
 class System;
@@ -17,6 +18,25 @@ struct Cutoffs {
   real rCut;
   real rSwitch;
 };
+
+typedef enum emin {
+  elbfgs, // Limited memory BFGS algo
+  esd, // steepest descent
+  esdfd, // steepest descent with finite difference to choose step length
+  esdmd, // guarded steepest descent with monotonic energy
+  eminend} EMin;
+
+typedef enum eelec {
+  efswitch, // force switching (no PME, no shift)
+  epme,     // Particle Mesh Ewald
+  efshift,  // force switching with shift
+  eelecend} EElec;
+
+typedef enum evdw {
+  evfswitch, // 0: force switching (VFSWITCH)
+  evswitch,  // 1: potential switching (VSWITCH)
+  evshift,   // 2: potential shift (VSHIFT)
+  evdwend} EVdw;
 
 class Run {
   public:
@@ -40,16 +60,28 @@ class Run {
 
   long int step; // current step
   long int step0; // starting step
-  int nsteps; // steps in next dynamics call
+  long int nsteps; // steps in next dynamics call
   real dt;
   real T;
   real gamma;
 
+  // Minimization variables
+  real dxAtomMax; // maximum step length
+  real dxRMSInit;
+  real dxRMS;
+  EMin minType; // minimization scheme
+
+  // L-BFGS variables
+  LBFGS* lbfgs;
+  int lbfgs_energy_evals = 0;
+  int lbfgs_m = 7; // gradient history length*DOF
+  real lbfgs_eps = 1.0*KCAL_MOL/ANGSTROM; // gradient rms convergence criteria
+
   real betaEwald;
   real rCut;
   real rSwitch;
-  bool vfSwitch;   //added by clb3
-  bool usePME;
+  EVdw vdwMethod;   // VDW method: evfswitch, evswitch, or evshift
+  EElec elecMethod; // electrostatic method: efswitch, epme, or efshift
   real gridSpace; // grid spacing for PME calculation
   int grid[3];
   int orderEwald; // interpolation order (4, 6, or 8 typically)
@@ -59,8 +91,6 @@ class Run {
   int freqNPT;
   real volumeFluctuation;
   real pressure;
-
-  bool domdecHeuristic;
 
   std::map<std::string,int> termStringToInt;
   std::map<int,bool> calcTermFlag;
@@ -77,12 +107,14 @@ class Run {
   cudaStream_t biaspotStream;
   cudaStream_t nbdirectStream;
   cudaStream_t nbrecipStream;
+  cudaStream_t mlpotStream; // eemlp
 
   cudaEvent_t forceBegin;
   cudaEvent_t bondedComplete;
   cudaEvent_t biaspotComplete;
   cudaEvent_t nbdirectComplete;
   cudaEvent_t nbrecipComplete;
+  cudaEvent_t mlpotComplete; // eemlp
   // cudaEvent_t forceComplete;
   cudaEvent_t communicate;
   cudaEvent_t *communicate_omp;
@@ -102,6 +134,7 @@ class Run {
   void set_term(char *line,char *token,System *system);
   void energy(char *line,char *token,System *system);
   void test(char *line,char *token,System *system);
+  void minimize(char *line,char *token,System *system);
   void dynamics(char *line,char *token,System *system);
 
   void dynamics_initialize(System *system);

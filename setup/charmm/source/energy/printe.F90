@@ -145,8 +145,27 @@ SUBROUTINE PRINTE(UNIT, EPRPX, ETRMX, ENAME, ETYPE, QHEADR, &
 #if KEY_SSNMR==1
   LOGICAL QSSNMR
 #endif
+#if KEY_MODELLER==1
+  LOGICAL QMODEL
+#endif
 #if KEY_LJPME==1
   logical qljpme
+#endif
+#if KEY_OMMTORCH == 1
+  logical qommtorch
+#endif
+#if KEY_MLMM==1
+  logical QMLPS ! eemlp
+#endif
+  ! MLpot terms are printed only when non-zero, so a run that does not use
+  ! MLpot sees the default energy table unchanged.  Unguarded: MLpot is always
+  ! compiled and gated at runtime (no KEY_MLPOT).
+  logical QMLPOT
+#if KEY_OPENMM == 1
+  logical qcustom
+#endif
+#if KEY_BLOCK==1
+  logical qmslde
 #endif
 
   real(chm_real)  DRMS, EDIF, EOTHER
@@ -367,9 +386,30 @@ SUBROUTINE PRINTE(UNIT, EPRPX, ETRMX, ENAME, ETYPE, QHEADR, &
 #if KEY_SSNMR==1
       QSSNMR = (ABS(ETRMX(ECS)).GT.ACCU)
 #endif
+#if KEY_MODELLER==1
+      QMODEL = (ABS(ETRMX(EMD)).GT.ACCU)
+#endif
 #if KEY_LJPME==1
     qljpme = abs(etrmx(ljrec)) > accu .or. abs(etrmx(ljsel)) > accu .or. abs(etrmx(ljexc)) > accu
 #endif
+#if KEY_OMMTORCH == 1
+    qommtorch = abs(etrmx(nnpo)) > accu
+#endif
+#if KEY_MLMM==1
+    qmlps = abs(etrmx(mlps)) > accu ! eemlp
+#endif
+    qmlpot = (abs(etrmx(mlpo)) > accu) .or. (abs(etrmx(mlel)) > accu)
+#if KEY_OPENMM == 1
+    qcustom = (abs(etrmx(cfint)) > accu) .or. &
+              (abs(etrmx(cfnon)) > accu) .or. &
+              (abs(etrmx(cfext)) > accu) .or. &
+              (abs(etrmx(cfmny)) > accu) .or. &
+              (abs(etrmx(cfcv))  > accu)
+#endif
+#if KEY_BLOCK==1
+    qmslde = abs(etrmx(ldbv)) > accu .or. abs(etrmx(thbv)) > accu .or. abs(etrmx(cats)) > accu
+#endif
+    
   !
   !=======================================================================
   !     . Print out the headers if required.
@@ -562,6 +602,19 @@ SUBROUTINE PRINTE(UNIT, EPRPX, ETRMX, ENAME, ETYPE, QHEADR, &
      IF (qljpme) WRITE(UNIT,'(3A)') ENAME, &
           ' LJPME:           LJREC       LJSElf       LJEXcl'
 #endif
+#if KEY_OMMTORCH == 1
+     IF (qommtorch) WRITE(UNIT,'(3A)') ENAME, &
+          ' OMMTCH:       NNPOtential'
+#endif
+#if KEY_OPENMM == 1
+     IF (qcustom) WRITE(UNIT,'(3A)') ENAME, &
+          ' CUSTOM:        CFINternal      CFNonbnd     CFEXternal', &
+          '       CFManybd        CFCVar'
+#endif
+#if KEY_BLOCK==1
+     IF (qmslde) WRITE(UNIT,'(4A)') ENAME, &
+          ' MSLD:             LDBV         THBV         CGBV         CATS'
+#endif
 
      !CC Note: SF has "borrowed" the XTLKe column to report surface tension
      !CC       This will be corrected in future versions.
@@ -634,6 +687,10 @@ SUBROUTINE PRINTE(UNIT, EPRPX, ETRMX, ENAME, ETYPE, QHEADR, &
 #if KEY_SSNMR==1
       IF (QSSNMR) WRITE(UNIT,'(3A)') ENAME, &
            'SSNMR:             ECS'
+#endif
+#if KEY_MODELLER==1
+      IF (QMODEL) WRITE(UNIT, '(3A)') ENAME, &
+           'MODELLER:          EMD'
 #endif
 #if KEY_RDC==1
         IF (QRDC) WRITE(UNIT,'(3A)') ENAME,           &
@@ -1045,6 +1102,43 @@ SUBROUTINE PRINTE(UNIT, EPRPX, ETRMX, ENAME, ETYPE, QHEADR, &
      WRITE(UNIT,F144) ENAME,' LJPME> ',ETRMX(ljrec), ETRMX(ljsel), ETRMX(ljexc)
   endif
 #endif
+#if KEY_OMMTORCH == 1
+  if(qommtorch) then
+     call setfmt(etrmx(nnpo),zero,zero,zero,zero,f13)
+     F144='(A4,A9,1X,1'//F13//')'
+     WRITE(UNIT,F144) ENAME,' OMMTCH> ',ETRMX(nnpo)
+  endif
+#endif
+#if KEY_MLMM==1
+  IF (QMLPS) THEN  ! eemlp
+     call setfmt(etrmx(mlps),zero,zero,zero,zero,F13) ! eemlp
+     F144='(A4,A8,2X,1'//F13//')' ! eemlp
+     WRITE(UNIT,F144) ENAME,' MLPOTE>',etrmx(mlps) ! eemlp
+  ENDIF ! eemlp
+#endif
+  ! MLpot: appended below the default terms, printed only when non-zero.
+  IF (QMLPOT) THEN
+     call setfmt(etrmx(mlpo),etrmx(mlel),zero,zero,zero,F13)
+     F144='(A4,A8,2X,2'//F13//')'
+     WRITE(UNIT,F144) ENAME,' MLPOT>',etrmx(mlpo),etrmx(mlel)
+  ENDIF
+#if KEY_OPENMM == 1
+  if (qcustom) then
+     call setfmt(etrmx(cfint),etrmx(cfnon),etrmx(cfext), &
+          etrmx(cfmny),etrmx(cfcv),f13)
+     F144='(A4,A9,1X,5'//F13//')'
+     WRITE(UNIT,F144) ENAME,' CUSTOM> ', &
+          ETRMX(cfint), ETRMX(cfnon), ETRMX(cfext), &
+          ETRMX(cfmny), ETRMX(cfcv)
+  endif
+#endif
+#if KEY_BLOCK==1
+  if (qmslde) then
+     call setfmt(etrmx(ldbv),etrmx(thbv),etrmx(cats),zero,zero,f13)
+     F144='(A4,A8,2X,4'//F13//')'
+     WRITE(UNIT,F144) ENAME,' MSLD>  ',etrmx(ldbv), etrmx(thbv), etrmx(cgbv), etrmx(cats)
+  endif
+#endif
 
 #if KEY_FOURD==1 /*4dprinte*/
   IF (DIM4.AND.QDYNAM) THEN
@@ -1192,6 +1286,13 @@ SUBROUTINE PRINTE(UNIT, EPRPX, ETRMX, ENAME, ETYPE, QHEADR, &
          WRITE(UNIT,F144) ENAME,' SSNMR> ',ETRMX(ECS)
       ENDIF
 #endif
+#if KEY_MODELLER==1
+      IF (QMODEL) THEN
+         call setfmt(etrmx(emd),zero,zero,zero,zero,F13)
+         F144='(A4,A8,2X,5'//F13//')'
+         WRITE(UNIT,F144) ENAME,' MODEL> ',ETRMX(EMD)
+      ENDIF
+#endif         
 #if KEY_RDC==1
      IF (QRDC) THEN
          call setfmt(etrmx(erdc),zero,zero,zero,zero,F13)

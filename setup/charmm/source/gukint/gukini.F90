@@ -154,7 +154,7 @@ LOGICAL QDONE,LDUM
        QGMREM=.FALSE.
        NGAMES=0
 #if KEY_GAMESS==1 || KEY_GAMESSUK==1
-#if KEY_SQUANTM==1
+#if KEY_SQUANTM==1 || KEY_MNDO97==1
        QMLAY_high=.FALSE.            
 #endif
 #endif 
@@ -1117,8 +1117,523 @@ LOGICAL QDONE,LDUM
     !     
     RETURN
   END SUBROUTINE GUKINI
+  !
+#if KEY_MNDO97==1 /* (mndo97)*/
+  subroutine GUKINI_mlayer(COMLYN,COMLEN)
+    !-----------------------------------------------------------------------
+    !     Define the set of quantum mechanical atoms and set up the data
+    !     structures for high qm level for dual-level qm/mm methods
+    !
+    !     Supported QM packages: QChem, G09 and ...
+    !                            (others not supported)
+    !
+    !     Supported options
+    !
+    !     Definitely, not supported options:
+    !                 QM/MM Replica PATH
+    !                 PERT
+    !
+    !
+    !     Currently there is no cutoff method incorporated, but this should
+    !     be straightforward. No big loss since Natom(QM) is usually small so 
+    !     Natom(QM)*Natom(MM)/2 is also small. Also there shouldn't be any 
+    !     inconsistency with MM cutoff methods, since these are different
+    !     terms anyway. 
+    !
+    use dimens_fcm
+    use memory
+    !use code
+    use coord
+    use psf
+    use select
+    use storage
+    use stream
+    use string
+    use energym
+    use replica_mod
+    use pathm
+    use gamess_fcm
+    use block_fcm
+    use number
+    use parallel
+    !use scalar_module
+    use ewald_1m,only:lewald
+    use mndo97
+    use qm1_info
+#if KEY_QCHEM==1 || KEY_QTURBO==1
+    use pert
+#endif
+
+    implicit none
+#if KEY_QCHEM==1 || KEY_QTURBO==1
+    INTEGER            :: SCRATCHLEN,K
+    CHARACTER(len=1), parameter :: QUOTE = ''
+    CHARACTER(len=255) :: QCSDIR
+    CHARACTER(len=4)   :: QCSDIRNUM
+    LOGICAL            :: dir_e,QRESTART2
+#endif
+    !
+    !
+    character(len=240) :: name
+    integer            :: kstrm,koutu
+    COMMON /CHGMIO/  KSTRM,KOUTU,name
+    !
+    CHARACTER          :: COMLYN*(*)
+    INTEGER            :: COMLEN
+    !
+    LOGICAL            :: QQINP
+    INTEGER            :: KFRAG,JFRAG
+    !CCC  test code...
+    logical            :: mopac
+    common /mpctst/mopac
+    !
+    character(len=200) :: tmpqms
+    INTEGER            :: i,j,ipt
+    !
+    CHARACTER(LEN=17)  :: CFN
+    CHARACTER(LEN=13)  :: CRN
+    CHARACTER(LEN=10)  :: WRD
+    INTEGER            :: NQMPMEt1,NQMPMEt2,XI,YI,ZI
+    INTEGER            :: BASLEN1,BASLEN2
+    LOGICAL            :: QDONE,LDUM
+    logical            :: qchem_use,qgamess_use,LQMEWD_local
+    !
+    !
+#if KEY_GAMESS==0 && KEY_GAMESSUK==0 && KEY_QCHEM==0 && KEY_G09==0 /*guk_mlayer_main*/
+    ! how about other ai-qm modules?
+    !
+    call wrndie(-1,'<GUKINI_mlayer>','Ab initio QM/MM code not compiled.')
+#else /* (guk_mlayer_main)*/
+
+    ! check which ai-qm modules are used.
+#if KEY_QCHEM==1
+    qchem_use=(INDXA(COMLYN,COMLEN,'QCHE') > 0)
+    if(qchem_use) qmused_qchem=.true.
+#endif
+#if KEY_GAMESS==1 || KEY_GAMESSUK==1
+    qgamess_use=(INDXA(COMLYN,COMLEN,'GAME') > 0)
+    if(qgamess_use) qmused_gamess=.true.
+#endif
+#if KEY_G09==1 
+    qg09_use=(INDXA(COMLYN,COMLEN,'GAUS') > 0)
+    if(qg09_use) qmused_g09=.true.
+#endif
+
+    !
+    CFN='gukini_mlayer.src'
+    CRN='GUKINI_mlayer'
+
+    !  to disable QM/MM-Ewald for Multi-layered qm/mm compilation.
+!#if KEY_SQUANTM==1
+!    LEWMODE= .false.
+!#endif 
+
+    !
+#if KEY_QCHEM==1
+    QRESTART2=.false.
+#endif 
+
+    qmused = .true.             ! safe here since next are the allocations, ...
+    call allocate_gamess_update ! try to reduce from MAXA to NATOM & update
+
+    ! do not use the following options
+    QGMDIV=(INDXA(COMLYN,COMLEN,'DIV') > 0) ! for DIV - guanhua_puja_QC_UW1212
+    if(QGMDIV) then
+       call wrndie(-1,'<MLAYer>','MLAYer QM/MM is not tested with DIV. Ignored.')
+       QGMDIV=.false.
+    end if
+    QBLUCH=(INDXA(COMLYN,COMLEN,'BLUR') > 0)
+    if(QBLUCH) then
+       call wrndie(-1,'<MLAYer>','MLAYer QM/MM is not tested with BLUR. Ignored.')
+       QBLUCH=.false.
+    end if
+
+    !QGMREM=(INDXA(COMLYN,COMLEN,'REMO') > 0)
+    !QGMEXG=(INDXA(COMLYN,COMLEN,'EXGR') > 0)
+    !
+#if KEY_QCHEM==1
+    QMIXED=(INDXA(COMLYN,COMLEN,'MIX') > 0)
+    if(QMIXED) then
+       CALL GTRMWD(COMLYN,COMLEN,'BAS1',4,BASIS1,10,BASLEN1)
+       CALL GTRMWD(COMLYN,COMLEN,'BAS2',4,BASIS2,10,BASLEN2)
+       ! write(*,*)'Basis sets... ', BASIS1, BASIS2 
+       WRITE(OUTU,22)'Q-Chem will use a mixed basis set; basis1 and basis2 must be defined.'
+       WRITE(OUTU,'(A,A,A)')' QCHEM> The following basis sets will be used: ', BASIS1, BASIS2
+    end if
+
+    QRESET=(INDXA(COMLYN,COMLEN,'RESE') > 0)
+    if(QRESET) then
+       if(PRNLEV >= 2) WRITE(OUTU,22) 'RESET: Resetting Q-Chem options'
+
+       QQCOORD   =.FALSE.    ! Pass Coordinates from Q-Chem back to CHARMM
+       QRESTART  =.FALSE.    ! Determine if Q-Chem restarts first step from saved orbitals
+       QSAVORB   =.FALSE.    ! Save orbitals from Q-Chem calculation
+       QQCLJ     =.FALSE.    ! Use Lennard-Jones parameters in Q-Chem calculation
+       QMICRO    =.FALSE.    ! Controls Micro-iteration procedure
+       QFRSTMICIT=.false.    ! First micro-iteration step?
+       OPTCNT    = 0         ! Counts QM/MM optimization steps
+       QCPARA    =-1         ! Reset the Parallel options 
+       QSAVEHESS =.false.    ! Reset Hessian saving option
+       QREADHESS =.false.    ! Reset Hessian reading option 
+       QSAVEGRAD =.false.    ! Reset Gradient saving option
+       QREADGRAD =.false.    ! Reset Gradient reading option
+       QSAVEINP  =.false.    ! Save Q-Chem input files
+       QSAVEOUT  =.false.    ! Save Q-Chem output files
+       QPCM      =.false.    ! Turn off QM/MM/PCMa
+       QWRITeinp =.false.    ! Force Q-Chem to write input file and then quit
+       NREStart  = 0         ! Number of times to restart Q-Chem if a job fails 
+       QQEWALD   =.false.    ! Not using John Herbert's QM/MM Ewald
+       QMESS     =.false.    ! Not using MESS QM/MM energy estimation
+       NRoots    = 0         ! Number of roots for MESS-H
+       QMALpha   = ZERO      ! alpha / kappa for QM part of QM/MM ewald 
+       MMALpha   = ZERO      ! alpha / kappa for MM part of QM/MM ewald
+       QQNOLKATMS=.false.    ! Check if we explicitly exclude link atoms from Q-Chem
+    end if
+#endif 
+
+#if KEY_QCHEM==1 || KEY_QTURBO==1 /*qchem, qturbo*/
+#if KEY_PERT == 1
+    QQMPERT=.false. ! (INDXA(COMLYN,COMLEN,'PERT') > 0)
+#endif
+
+#if KEY_REPLICA==1 && KEY_RPATH==1
+    QQCRP=.false.   ! (INDXA(COMLYN,COMLEN,'RPATH') > 0)
+#endif
+#endif                            /*qchem, qturbo*/
+
+#if KEY_QCHEM==1  /*qchem*/
+    QQCHARG=.false.
+    QQCHARG=(INDXA(COMLYN,COMLEN,'CHAR') > 0)  ! Reading QM Charges from charges.dat file
+    if(QQCHARG) then
+       call wrndie(-1,'<MLAYer>','MLAYer QM/MM is not tested with CHAR. Ignored.')
+       QQCHARG=.false.
+    end if
+    !
+    QNRAP=(INDXA(COMLYN,COMLEN,'NRAP') > 0)
+    !
+    QCPARA=GTRMI(COMLYN,COMLEN,'PARA',-1)
+#if KEY_PARALLEL==1
+    call PSND4(QCPARA,1)
+#endif
+    if(QCPARA /= -1) then
+       if(QCPARA > NUMNOD) then
+#if KEY_PARALLEL==1
+          if(.not.QQCRP .and. NUMNOD > 1) QCPARA=NUMNOD
+#endif
+       end if
+       if(prnlev >= 2) &
+          write(OUTU,'(A,I3,A)') ' QCHEM> PARALLEL: Q-Chem will be run on ',QCPARA,' processors.'
+    end if
+    NREStart=GTRMI(COMLYN,COMLEN,'NRES',0)
+    if(prnlev >= 2) write(OUTU,'(A,I3,A)') ' QCHEM> Q-Chem will restart jobs ',NREStart,' times.'
+    NROOts=GTRMI(COMLYN,COMLEN,'NROO',0)
+    if(prnlev >= 2) write(OUTU,'(A,I3,A)') ' QCHEM> Q-Chem will solve ',NROOts,' roots.'
+    !
+    QQCOORD=(INDXA(COMLYN,COMLEN,'COOR') > 0)
+    if(QQCOORD) then
+       !if(prnlev >= 2) write(outu,22) &
+       !       'Coordinates from Q-Chem will be passed back to CHARMM'
+       call wrndie(-1,'<MLAYer>','MLAYer QM/MM does not support COOR. Ignored.')
+       QQCOORD=.false.
+    end if
+    QQRESD=(INDXA(COMLYN,COMLEN,'RESD').GT.0)
+    if(QQRESD) then
+       !if(prnlev>=2) write(outu,22) &
+       !        'RESDistance information from CHARMM will be sent to Q-Chem'
+       !QQCONS=(INDXA(COMLYN,COMLEN,'CONS').GT.0)
+       !if(prnlev>=2) write(outu,22) 'Only use single CONStraint for distance'
+       call wrndie(-1,'<MLAYer>','MLAYer QM/MM does not support RESD. Ignored.')
+       QQRESD =.false.
+    end if
+    !
+    ! Test to see if Hessian is gonna be read in 
+    QREADHESS =.false.
+    QSAVEHESS =.false.
+    QSAVEGRAD =.false.
+    QREADGRAD =.false.
+    QPCM      =.false.
+    QWRITeinp =.false.
+    QMESS     =.false.
+    QQNOLKATMS=.false.
+    !    QREADHESS=(INDXA(COMLYN,COMLEN,'RHES') > 0)
+    !    QSAVEHESS=(INDXA(COMLYN,COMLEN,'SHES') > 0)
+    !    ! Test to see if Gradient is going to be saved
+    !    QSAVEGRAD=(INDXA(COMLYN,COMLEN,'SGRA') > 0)
+    !    QREADGRAD=(INDXA(COMLYN,COMLEN,'RGRA') > 0)
+    ! Test to see if input/output files will be saved
+    QSAVEINP=(INDXA(COMLYN,COMLEN,'SINP') > 0)
+    QSAVEOUT=(INDXA(COMLYN,COMLEN,'SOUT') > 0)
+    !    ! Test to see if PCM will be used with QM/MM
+    !    QPCM=(INDXA(COMLYN,COMLEN,'PCM') > 0)
+    !    QWRITeinp=(INDXA(COMLYN,COMLEN,'WQIN') > 0)
+    QOPENMP=(INDXA(COMLYN,COMLEN,'OMP') > 0)
+    !    QMESS=(INDXA(COMLYN,COMLEN,'MESS') > 0)
+    !    ! Test to check for link atom exclusions
+    !    QQNOLKATMS=(INDXA(COMLYN,COMLEN,'NOLI') > 0)
+
+    QQEWALD=(INDXA(COMLYN,COMLEN,'EWAL') > 0)
+    if(QQEWALD) then
+      !QMALpha=gtrmf_crl(COMLYN,COMLEN,'QMAL',ZERO)
+      !MMALpha=gtrmf_crl(COMLYN,COMLEN,'MMAL',ZERO)
+      !if(PRNLEV >= 2) then
+      !  write(OUTU,'(A,F6.3,A,F6.3)')' QCHEM> Q-Chem use, ',QMALpha,' and ',MMALpha, & 
+      !  ' for the QM and MM part of EWALD respectively'
+      !end if
+      call wrndie(-1,'<MLAYer>','MLAYer QM/MM does not support EWAL. Ignored.')
+      QQEWALD=.false.
+    end if
+    !
+    QMICRO=(INDXA(COMLYN,COMLEN,'MICR') > 0)
+    if(QMICRO) then
+       !QFRSTMICIT=.true.
+       !OPTCNT=0
+       !if(prnlev>=2) then
+       !   WRITE(OUTU,22) 'MICRO: Micro-iteration Procedure Activated'
+       !   !write(*,*)'QFRSTMICIT = ',QFRSTMICIT
+       !end if
+       call wrndie(-1,'<MLAYer>','MLAYer QM/MM does not support MICR. Ignored.')
+       QMICRO=.false.
+    end if
+#endif            /*qchem*/
+    !
+    QCUTFLAG=(INDXA(COMLYN,COMLEN,'CUTO') > 0)
+    if(QCUTFLAG) then
+       !if(PRNLEV >= 2) WRITE(OUTU,22) 'CUTOFF: the cutoff method from NBOND will be used.'
+       call wrndie(-1,'<MLAYer>','MLAYer QM/MM does not support CUTO. Ignored.')
+       QCUTFLAG=.false.
+    end if
+    !
+
+#if KEY_QCHEM==1  /*qchem*/
+    call get_environment_variable("QCSCRATCH", QCSDIR)
+    !write(*,*)'QCSDIR =',QCSDIR
+    looprst: do i=1,10000
+       write(QCSDIRNUM,'(I3)') i
+       QCSDIRNUM = adjustl(QCSDIRNUM)
+       j         = len(trim(QCSDIR))
+       QCSCRATCH ='SAVE'
+       QCSCRATCH = QCSCRATCH(1:4)//trim(QCSDIRNUM)
+       k         = len(trim(QCSCRATCH))
+       QCSCRATCH = QCSDIR(1:j)//QCSCRATCH(1:k)
+       !write(*,*) QCSCRATCH(1:k),len(QCSCRATCH)
+       !
+       inquire(file=QCSCRATCH,exist=dir_e)
+       if(.not. dir_e) then
+          QCSCRATCH   ='SAVE'//trim(QCSDIRNUM)
+          QRESTART    =(INDXA(COMLYN,COMLEN,'REST') > 0)
+          if(QRESET .or. QRESTART) then
+             QCSCRATCH= QCSCRATCHOLD
+             QRESTART2=.true.
+             exit looprst
+          end if
+          QCSCRATCHOLD=QCSCRATCH
+          exit looprst
+       end if
+    end do looprst
+    !write(*,*)QCSCRATCH(1:k),LEN(QCSCRATCH),'SAVE'//trim(QCSDIRNUM),QCSCRATCHOLD(1:k)
+
+    SCRATCHLEN=255
+    CALL GTRMWA(COMLYN,COMLEN,'SCRA',4,QCSCRATCH,255,SCRATCHLEN)
+    if(SCRATCHLEN /= 0) QQCSCRATCH=.true.
+    if(QQCSCRATCH .and. prnlev>=2) then
+       write(outu,22)'User defined scratch directory will be used to save Q-Chem files'
+    end if
+
+    ! for qchem restarting... see the documentation
+    QRESTART =.false.
+    QSAVORB  =.false.
+    QRESTART =(INDXA(COMLYN,COMLEN,'REST') > 0)
+    QSAVORB  =(INDXA(COMLYN,COMLEN,'SAVE') > 0)
+
+    QRESTART = QRESTART2
+    if(QRESTART) then
+       if(prnlev >= 2) then
+          write(outu,22)       'Using previously saved orbitals to restart'
+          write(outu,'(A41,A)')'QCHEM> Q-Chem orbitals will be read from:',QCSDIR(1:j)//QCSCRATCH(1:k)
+       end if
+       QSAVORB   =.false.
+       QQCSCRATCH=.true.
+       OPTCNT    = 0
+       QRESTART2 =.false.
+       QRESTART  =.true.
+    end if
+    if(QSAVORB) then
+       if(prnlev >= 2) then
+          write(outu,22)       'Orbitals from current QM/MM calculation will be saved'
+          write(outu,'(A41,A)')'QCHEM> Q-Chem orbitals will be saved in:',QCSDIR(1:j)//QCSCRATCH(1:k)
+       end if
+       QRESTART  =.false.
+       QQCSCRATCH=.true.
+    end if
+
+    QQCLJ=(INDXA(COMLYN,COMLEN,'QCLJ') > 0)
+    if(QQCLJ) then
+       !if(prnlevV >= 2) write(outu,22) 'Lennard-Jones parameters will be applied to QM calculation'
+       call wrndie(-1,'<MLAYer>','MLAYer QM/MM does not support QCLJ. Ignored.')
+       QQCLJ     =.false.
+    end if
+#endif            /*qchem*/
+
+#if KEY_GAMESS==1 || KEY_QCHEM==1
+    QNOGU=(INDXA(COMLYN,COMLEN,'NOGU') > 0)
+    if(QNOGU) then
+       KGUES     = 0
+       KHFDFT    = 0
+       if(prnlev>=2) write(outu,22) 'NOGUess: Initial guess obtained from previous step.'
+#if KEY_QCHEM==1
+       k         = len(trim(QCSCRATCH))
+       QQCSCRATCH=.true.
+       if(prnlev>=2) write(outu,'(A45,A)') &
+               ' QCHEM> Q-Chem scratch files will be saved in:',QCSDIR(1:j)//QCSCRATCH(1:k)
+#endif 
+    end if
+#endif 
+
+    !
+#if KEY_GAMESS==1
+    QFMO=(INDXA(COMLYN,COMLEN,'FMO') > 0)
+    if(QFMO) then
+       if(prnlev>=2) write(outu,22) 'FMO: Fragment MO method specified.'
+       call wrndie(-1,'<MLAYer>','MLAYer QM/MM does not support FMO. Ignored.')
+       QFMO = .false.
+    end if
+    KDIESL=GTRMI(COMLYN,COMLEN,'DIES',-1)
+    if(KDIESL>=0 .and. prnlev>=2) write(outu,22) 'DIESel: Multi Reference CI energy calculation.'
+#endif
+    ! do not use qfrag
+    QFRAG=.false.
+    NFRAG=GTRMI(COMLYN,COMLEN,'FRAG',0)
+    if(NFRAG /= 0) then
+       !QXFRAG   =.FALSE.
+       !if(NFRAG < 0) then
+       !   QXFRAG=.TRUE.
+       !   NFRAG =-NFRAG
+       !end if
+       !QFRAG    =.TRUE.
+       !IFRAG    = IFRAG + 1
+       !if(IFRAG > NFRAG) CALL WRNDIE(-1,'<GUKINI>','Too many fragments.')
+       call wrndie(-1,'<MLAYer>','MLAYer QM/MM does not support FRAG. Ignored.')
+       NFRAG= 0
+       QFRAG=.false.
+    end if
+
+    ! How to handle charge? QINP=.TRUE. use input MM charges for the QM atom charges
+    QQINP=(INDXA(COMLYN,COMLEN,'QINP') > 0)
+    if(prnlev >= 2) then
+       if(QQINP) then
+          write(outu,22) 'QINP: Charges will input for QM atoms.'
+       else
+          write(outu,22) 'No QINP: Charges will be based on atomic numbers.'
+       end if
+    end if
+    MOPAC=(INDXA(COMLYN,COMLEN,'MOPAC') > 0)
+    if(MOPAC) then
+       !if(prnlev>=2) write(outu,22) 'MOPAC: A MOPAC calculation will be performed.'
+       call wrndie(-1,'<MLAYer>','MLAYer QM/MM does not support MOPAC. Ignored.')
+       MOPAC=.false.
+    end if
+    write(outu,'(A)')' '
+#if KEY_G09==1
+22  format('G09    mlayer> ',A)
+#elif KEY_QCHEM==1
+22  format('QCHEM  mlayer> ',A)
+#elif KEY_QTURBO==1
+22  format('QTURBO mlayer> ',A)
+#else /* */
+22  format('GUKINI_mlayer> ',A)
+#endif 
+    !
+    !MUSTUP=.TRUE.
+    !
+
+#if KEY_QCHEM==1 || KEY_QTURBO==1
+    if(qmused_qchem)then
+      MAPFF(1) = -1
+      do i=2,natom
+         MAPFF(i) = MAPFF(i-1) - 1
+      end do
+    end if
+#endif 
+
+    ! initialization (done in subroutine copsel)
+    do i=1,natom
+       ndiv(i) = 0
+    end do
+
+!!    ! need to work on this...
+!!    CALL COPSEL(ISLCT,QQINP)
+!!    !     
+!!    !     This initialize gamess data 
+!!    QINIGM=.TRUE.
+!!    !
+!!    !     Modify QChem input and output filenames for replica/path and neb
+!!#if KEY_QCHEM==1 || KEY_G09==1 /*qcini*/
+!!    ! Get the info from the Q-chem input file
+!!    if(qmused_qchem .or. qmused_g09) then
+!!       !CALL QCHEMINI(NGAMES,mlay_c%igmsel)
+!!       qmused_qchem =.true.
+!!       NGAMES = qm_main_c%numat  ! total no. of qm atoms for the high-level region.
+!!    end if
+!!#endif /* (qcini)*/
+!!#if KEY_QTURBO==1 /*qtini*/
+!!    !CALL QTURBOINI
+!!    NGAMES = qm_main_c%numat  ! total no. of qm atoms for the high-level region.
+!!#endif /* (qtini)*/
+!!    !write(50+mynodg,'(a,10i4)')'numnod,mynod,irepqm=',numnod,mynod,irepqm
+!!    !
+!!#if KEY_GAMESS==1
+!!    if(qmused_gamess) then
+!!       !if(QFRAG)then
+!!       !   if(IFRAG == JFRAG) CALL ENVIGRP(JFRAG)
+!!       !   !     This has some problems
+!!       !   if(IFRAG == JFRAG) CALL FCOPSEL(JFRAG)
+!!       !!end if
+!!       !!if(QFRAG) then
+!!       !   if(IFRAG == JFRAG) then
+!!       !      CALL CH2GMS(.TRUE.)
+!!       !      CALL GAMESS
+!!       !   end if
+!!       !else
+!!          CALL CH2GMS(.TRUE.)
+!!          CALL GAMESS
+!!       !end if
+!!    end if
+!!#endif
+!!    !
+!!#if KEY_GAMESSUK==1 /*guk*/
+!!    INIT    = 1
+!!    STARTUP =.true.
+!!    iver    = 5
+!!    LQMEWD_local =.false.
+!!    CALL GAMESS(INIT,ICODE,STARTUP,LQMEWD_local,IVER)  ! turn off LQMEWD
+!!    if (IVER /= -5) then
+!!       write(6,*) iver
+!!       call wrndie(-5,'<GAMESS-UK>','Code Version Mismatch')
+!!    end if
+!!#endif /* (guk)*/
+!!    !     
+!!    ! Report QM/MM repulsion energy, also when no derivatives involved
+!!#if KEY_GAMESS==1
+!!    if((PRNLEV>=2).and.qmused_gamess) CALL CGREPE(NATOM) 
+!!#endif
+!!    !     
+!!!#if KEY_PARALLEL==1
+!!!    if(QFRAG)then
+!!!       MYNOD =MYNODG
+!!!       MYNODP=MYNOD+1
+!!!       NUMNOD=NUMNODG
+!!!       NODDIM=NPTWO()
+!!!       CALL CUBE(MYNOD,NUMNOD,IPPMAP)
+!!!    end if
+!!!#endif 
+!!    !
+    !     
+    return
+  end subroutine GUKINI_mlayer
+#endif /* (mndo97)*/
+#endif /* (guk_mlayer_main)*/
   !     
-#if KEY_QCHEM==1 || KEY_G09==1
+#if KEY_QCHEM==1 || KEY_G09==1   /* qchem or g09*/
   ! The following routine is a hack that makes Q-Chem run with CHARMM
   ! when compiled with new MPI libraries (openmpi, mpich2). It should
   ! be removed, once the libraries get fixed for this problem.  The
@@ -1127,11 +1642,11 @@ LOGICAL QDONE,LDUM
   ! 1% of CPU time.
   ! not sure if ##.not.CMPI really works???
   ! This would make it general for ##ENSEMBLE, too???
-#if KEY_PARALLEL==1
-#if KEY_CMPI==1 || KEY_MPI==1
+#if KEY_PARALLEL==1            /* parallel*/
+#if KEY_CMPI==1 || KEY_MPI==1  /* cmpi or mpi*/
   subroutine break_busy_wait_mpi()
     use iso_c_binding
-    use mpi
+    use mpi_f08
     use parallel
 #if KEY_REPLICA==1
     use replica_mod,only:QQCRP
@@ -1146,7 +1661,9 @@ LOGICAL QDONE,LDUM
        end subroutine usleep
     end interface
 
-    integer :: tag,req,ier,status(mpi_status_size),i,to,from
+    integer :: tag,ier,i,to,from
+    TYPE(MPI_Request) :: req
+    TYPE(MPI_Status) :: status
     logical :: flag
     integer(c_int32_t) :: micro_seconds = 10000
     integer,dimension(1) :: x = [1]
@@ -1180,8 +1697,8 @@ LOGICAL QDONE,LDUM
     endif
     return
   end subroutine break_busy_wait_mpi
-#endif
-#endif
+#endif   /* cmpi or mpi*/
+#endif   /* parallel*/
 
   SUBROUTINE QCHEMINI
     !-----------------------------------------------------------------------
@@ -1205,7 +1722,7 @@ LOGICAL QDONE,LDUM
 
     RETURN
   END SUBROUTINE QCHEMINI
-#endif 
+#endif           /* qchem or g09*/
   !
 #if KEY_QCHEM==1 /*qchem*/
   SUBROUTINE QCHEM(E,DX,DY,DZ,CGX,AMASSX,IACX,NDD1,DD1,QSECD,IUPT,JUPT)
@@ -2524,7 +3041,13 @@ LOGICAL QDONE,LDUM
                   ' '//'SAVE')
              QSAVORB=.FALSE.
           ELSE 
+             ! original code ! usual qchem call reverted back to original code ! arat-mtsmlp
              CALL SYSTEM('$QCHEMEXE '//FILIN(1:LI)//' '//FILOUT(1:LO))
+             !
+             ! mpi qchem version
+             ! nmpi & nthreads need to be set using envi in charmm input
+             ! e.g., envi nmpi 8 ; envi nthread 1
+             !CALL SYSTEM('$QCHEMEXE -np $NMPI -nt $NTHREAD ' //FILIN(1:LI)//' '//FILOUT(1:LO))
           ENDIF
        ENDIF
        ENDIF                            ! QSCRATCH TEST 
@@ -3017,6 +3540,773 @@ LOGICAL QDONE,LDUM
 
     RETURN
   END SUBROUTINE QCHEM
+  !
+#if KEY_MNDO97==1 /* (mndo97)*/
+  subroutine QCHEM_mlayer(E,X,Y,Z,DX,DY,DZ,CGX)
+    !-----------------------------------------------------------------------
+    !     Run Q-chem and parse the output 
+    !     version for mlayered qm/mm (high-level qm/mm calculation)
+    !-----------------------------------------------------------------------
+    use chm_kinds
+    use number
+    use dimens_fcm
+    use gamess_fcm
+    use memory
+    use psf
+    use param
+    !use coord
+    use parallel
+    use consta
+    use eutil
+    use storage
+    use stream
+    use string
+    use replica_mod
+    use rtf,only:atct
+    use block_fcm
+    use pathm
+    use pert
+    use code
+    use comand
+    use selctam
+    use scalar_module
+    use lonepr,only: LKATMS
+    use ewald_1m,only:lewald
+    use linkatom, only: findel ! JZ_UW12
+    use image,only:xucell
+    use resdist_ltm
+#if KEY_SMBP==1
+    use pbeq,only:qsmbp,numsurf,qsmbp_qc_grad  /* JZ_UW12: For SMBP*/
+#endif
+#if KEY_PHMD == 1
+    use phmd,only:QPHMD ! PME-PHMD -- Y Huang 2017
+#endif
+#if KEY_MNDO97==1
+    use qm1_info, only : qm_control_c,qm_main_c,QQBUILD,QQPARMODE
+#endif
+
+    implicit none
+
+    real(chm_real)    :: E,X(*),Y(*),Z(*),DX(*),DY(*),DZ(*),CGX(*)
+    !
+    logical           :: LQINIGM,LMIXBAS
+    !
+    integer           :: LC,LI,LO,LX,IMO,OMO,ix,natqm_2
+    integer           :: ILEN,IFLAG,JFLAG,MMATOMS,QMATOMS,TMPVAR,IOSTAT
+    integer           :: I,J,K,L,M,P,mm,STAT
+    integer           :: MAPQM(MAXA),MAPMM(MAXA),IPT,JPT            ! lw050728
+    integer           :: MAPQM2(MAXA),MAPMM2(MAXA)                  !hlw_080705
+    character(len=255):: FILCNT,FILIN,FILOUT,FILEXE,PWDQC,SGROUP,PWDESP,PWD,CWD
+    character(len=80) :: LINE
+    character(len=10) :: corr,filecount
+    character(len=6)  :: ELE,NP,NCIS, &
+                         tmp1,tmp2,tmp3,tmp4,tmp5,tmp6,tmp7,tmp8,tmp9, &
+                         bas1,bas2
+    character(len=80) :: NPOPT ! arat-mtsmlp: options for parallel qchem (for both mpi-charmm and nonmpi-charmm)
+    real(chm_real)    :: T,NC,CC,DUMX,DUMY,DUMZ,LJE,Eewald,EE2,EE21,EE22
+    real(chm_real)    :: TMPX,TMPY,TMPZ,RX,RY,RZ,S,S2
+    integer(chm_int4),allocatable, dimension(:) :: mixbas
+
+    integer           :: ISTAT, ISTAT1, ISTAT2 ! arat-mtsmlp: for checking system calls
+    character(len=6)  :: QPMODE     ! arat-mtsmlp: for checking parallel execution mode of qchem openmp executable
+    character(len=6)  :: QPBIND    ! arat-mtsmlp: for checking parallel execution mode of qchem openmp executable
+    character(len=6)  :: QNT        ! arat-mtsmlp: for checking number of threads for qchem openmp executable
+    character(len=6)  :: QNP        ! arat-mtsmlp: for checking number of processes for qchem mpi executable
+    integer           :: LQPMODE, LQPBIND, IQNT, IQNP, LQNT, LQNP          ! arat-mtsmlp: for checking parallel execution mode of qchem executable
+
+    ! QSECD : second order gradients
+    ! QNRAP : Newton Rapson minimization needing second order gradients
+    !          tempdd1 
+    ! QQCRP : RPATH 
+    ! QQEWALD: ewald.. 
+    !           QCBONDS,TMPQCB
+    ! QMESS : 
+    ! QPCM  : 
+    ! QQCLJ : L-J potentials
+
+#if KEY_PARALLEL==1
+    !The following call should be after the call system() line, but
+    !that one is not executed on CPUs other than 0. So we call it
+    !here, because this routine must be called by everyone!
+#if KEY_CMPI==1 || KEY_MPI==1
+    if(.not.QQCRP) then
+       if(MYNOD > 0) CALL break_busy_wait_mpi()
+    end if
+#endif
+    if(MYNOD > 0) then
+       E=ZERO
+       return
+    end if
+#endif 
+
+    ! basic variables setup.
+    ! The QCHEMCNT variable specifies the main Q-Chem input file which contains
+    ! the $rem section, $molecule section (without geometry), $comment section, etc...
+    call get_environment_variable("QCHEMCNT", FILCNT, LC)
+    if(LC == 0) call wrndie(-5,'<QCHEM_mlayer>','No input specified.')
+
+    ! The QCHEMINP variable is the final input file that will get passed to
+    ! Q-Chem. CHARMM actually writes this file and adds the correct geometry and
+    ! any external/point charges (e.g. MM atoms) to an $external_charges section.
+    FILIN=''
+    call get_environment_variable("QCHEMINP", FILIN, LI)
+    if(LI == 0) call wrndie(-5,'<QCHEM_mlayer>','No input specified.')
+
+    ! The QCHEMOUT file specifies the Q-Chem output file. This file get
+    ! overwritten for each optimization/time step. In the future, there will be a
+    ! mechanism to save old output files.
+    call get_environment_variable("QCHEMOUT", FILOUT, LO)
+    if(LO == 0) call wrndie(-5,'<QCHEM_mlayer>','No output specified.')
+
+    ! The QCHEMEXE is the location of the qchem script. Specify the entire path
+    ! unless $QC/bin is included in your default path.
+    call get_environment_variable("QCHEMEXE", FILEXE, LX)
+    if(LX == 0) call wrndie(-5,'<QCHEM_mlayer>','No Q-chem specified.')
+    !
+
+    IMO=90
+    OMO=91
+
+    open(unit=90,file=FILCNT(1:LC),status='old')           ! QCHEMCNT file, input & scf options
+    open(unit=91,file=FILIN(1:LI) ,status='replace')       ! QCHEMINP file
+
+    if(optcnt == 0) QCHEMCNTRL(1:LC)=FILCNT(1:LC)          ! qchem.inp file
+    if(QCHEMCNTRL(1:LC) /= FILCNT(1:LC)) then
+       QCHEMCNTRL(1:LC)=FILCNT(1:LC)
+       write(outu,22)'Control File Changed'
+       QPRNTINP=.TRUE.
+    end if
+
+    jflag=0
+23  continue  ! loop to restart failed Q-Chem jobs...
+
+
+    if(.not.QPCM .and. .not.QQEWALD) write(omo,'(A)')'$external_charges'
+
+!#if KEY_PARALLEL==1
+    !if(QOPENMP) then
+    !   write(NPOPT,'(A3,1X)')"-nt"
+    !else
+    !   write(NPOPT,'(A3,1X)')"-np"
+    !end if
+!#endif
+
+!arat-mtsmlp-begin
+#if KEY_PARALLEL==0
+   ! non-MPI (serial) charmm, both OpenMP and MPI version QChem are supported.
+   if (QQBUILD == -1) then
+      call system('$QCHEMEXE -np 1 2>&1 | grep -qi "Invalid option: -np"', ISTAT1)
+      call system('$QCHEMEXE -np 1 2>&1 | grep -qi "This is a parallel run on 1 processors"', ISTAT2)
+
+      if (ISTAT1 == 0) then
+         write(outu,22)'Q-Chem OpenMP found on path. Switching to Q-Chem OpenMP execution'
+         QOPENMP = .TRUE.
+         QQBUILD = 1
+      else if (ISTAT2 == 0) then
+         write(outu,22)'Q-Chem MPI found on path. Switching to Q-Chem MPI execution'
+         QOPENMP = .FALSE.
+         QQBUILD = 2
+      else
+         call wrndie(-5,'<QCHEM>', &
+        & 'Neither Q-Chem OpenMP nor MPI build found on path. Check QCHEMEXE environment variable')
+      end if
+   end if
+
+   if (QOPENMP) then
+      QNT = ' '
+      LQNT = 0
+      call get_environment_variable("QC_NT", QNT, LQNT)
+      if (LQNT == 0) then
+         write(outu,22)'Environment variable QC_NT is not set, defaulting to 1 thread for Q-Chem OpenMP execution'
+         write(NPOPT,'(A)') '-nt 1'
+      else
+         write(NPOPT,'(A,A)') '-nt ', trim(adjustl(QNT(1:LQNT)))
+      end if
+   else
+      QNP = ' '
+      LQNP = 0
+      call get_environment_variable("QC_NP", QNP, LQNP)
+      if (LQNP == 0) then
+         write(outu,22)'Environment variable QC_NP is not set, defaulting to 1 process for Q-Chem MPI execution'
+         write(NPOPT,'(A)') '-np 1'
+      else
+         write(NPOPT,'(A,A)') '-np ', trim(adjustl(QNP(1:LQNP)))
+      end if
+   end if
+
+#endif
+
+
+#if KEY_PARALLEL==1
+   ! MPI parallel charmm, only OpenMP version QChem is supported.
+   if (QQBUILD == -1) then
+      call system('$QCHEMEXE -np 1 2>&1 | grep -qi "Invalid option: -np"', ISTAT1)
+      if (ISTAT1 == 0) then
+         write(outu,22)'Q-Chem OpenMP build found on path. Switching to Q-Chem OpenMP execution'
+         write(outu,22)'Set MPIBIND environment variable to 0 ,if CHARMM launched without "mpirun" or with "mpirun --bind-to none" option'
+         QOPENMP = .TRUE.
+         QQBUILD = 1
+      else
+         call wrndie(-5,'<QCHEM>', &
+        & 'Q-Chem OpenMP build not found on path. CHARMM MPI build only supports Q-Chem OpenMP executable')
+      end if
+   end if
+
+   if (QOPENMP .and. QQPARMODE == -1) then
+      QNT = ' '
+      LQNT = 0
+      call get_environment_variable("QC_NT", QNT, LQNT)
+      if (LQNT == 0) then
+         QQPARMODE = 0
+         write(outu,22)'Environment variable QC_NT is not set, defaulting to 1 thread for Q-Chem OpenMP execution'
+      else if (LQNT > 0) then
+         read(QNT(1:LQNT),*,iostat=ISTAT) IQNT
+         if (ISTAT /= 0) then
+            call wrndie(-5,'<QCHEM>','Invalid integer value for QC_NT')
+         end if
+         QPBIND = ' '
+         LQPBIND = 0
+         call get_environment_variable("MPIBIND", QPBIND, LQPBIND)
+         if (LQPBIND > 0 .and. trim(adjustl(QPBIND(1:LQPBIND))) == '0') then
+            QQPARMODE = 0
+            write(outu,22)'MPIBIND is set to 0:' 
+            write(outu,22)'Assuming CHARMM launched without "mpirun" or with "mpirun --bind-to none" option'
+            write(outu,22)'Q-Chem OpenMP thread count will be set by QC_NT environment variable'
+         else if (IQNT < NUMNOD) then
+            QQPARMODE = 0
+            write(outu,22)'Q-Chem OpenMP thread count set by QC_NT environment variable'
+         else if (IQNT >= NUMNOD) then
+            QQPARMODE = 1
+            write(outu,22)'MPIBIND not set to 0; QC_NT >= CHARMM MPI NProcesses'
+            write(outu,22)'Q-Chem OpenMP thread count set to CHARMM MPI NProcesses'
+         end if
+      end if
+   endif
+
+   if (QOPENMP .and. QQPARMODE == 0) then
+      QNT = ' '
+      LQNT = 0
+      call get_environment_variable("QC_NT", QNT, LQNT)
+      if (LQNT == 0) then
+         write(NPOPT,'(A)') '-nt 1'
+      else
+         write(NPOPT,'(A,A)') '-nt ', trim(adjustl(QNT(1:LQNT)))
+      end if
+   else if (QOPENMP .and. QQPARMODE == 1) then
+      write(NPOPT,'(A,I0)') '-nt ', NUMNOD
+   end if
+
+#endif
+!arat-mtsmlp-end
+
+#if KEY_MNDO97==1
+    natqm_2 = qm_main_c%numat
+#endif
+    mmatoms=0
+    jpt    =0
+    do i=1,natqm_2
+       jpt      = jpt + 1
+       mapmm(i) = iabs(qm_control_c%qminb(i))
+    end do
+    do i=natqm_2+1,natom
+       mm = qm_control_c%mminb1(i)
+       if(mm>0) then
+          mmatoms       = mmatoms + 1
+          mapqm(mmatoms)= mm                           ! lw050728
+          mapqm2(mm)    = mmatoms                      ! ys080320
+          write(OMO,'(4F16.8)') X(mm),Y(mm),Z(mm),CGX(mm)
+       end if
+    end do
+    if(.not.QPCM.and..not.QQEWALD) write(omo,'(A)')'$end'
+
+    ! mapff(i)       = mapff(i-1) - 1
+    ! mapmm(1:natqm) = qm-atom no. in the main (x/y/z) array, jcnt
+    ! 
+    ! mapqm(1:mmatom)= mm = qm_control_c%mminb1(i), i.e., (mm) atom no. in the main array
+    ! mapqm2(mm)     = mmatom index to the pointers for mapqm
+
+    ! now, read qchem.inp file containing scf and other informations
+    iflag=0
+    loopmain: do              ! do loop may not be necessary
+       read(IMO,'(A)',end=100) line
+       ILEN=80
+       call TRIMA(LINE,ILEN)
+       call CNVTLC(LINE,ILEN)
+
+       ! default write, jobtype as read input.
+       write(OMO,'(A)') LINE(1:ILEN)
+
+       if(QPRNTINP) then
+#if KEY_PARALLEL==1
+          if(mynodg == 0) then
+#endif
+             if(STRFIN(LINE,'$end') > 0) iflag=0
+             if(IFLAG == 1)              write(outu,22) LINE(1:ILEN)
+             if(STRFIN(LINE,'$rem') > 0) then
+                write(outu,22)'---------------------'   ! arat-mtsmlp: separator line for better readability of qchem input in the output file
+                write(outu,22)'Q-Chem Job Parameters'
+                write(outu,22)'---------------------'
+                IFLAG = 1
+             end if
+#if KEY_PARALLEL==1
+          end if
+#endif
+       end if
+
+       if(STRFIN(LINE,'$molecule') > 0) then
+          read(IMO,'(A)',end=100) line
+          write(OMO,'(A)') line(1:ILEN)
+
+          qmatoms=0
+          ipt    =mmatoms
+          jpt    =natqm_2
+          do i=1,natqm_2
+             LQINIGM    = QINIGM
+             mm         = iabs(qm_control_c%qminb(i))
+             ELE(1:6)   = qm_control_c%CAATOM_local(i)(1:6)
+
+             write(OMO,'(A6,3F20.10)') ELE,X(mm),Y(mm),Z(mm)
+             ipt        = ipt + 1
+             mapqm(ipt) = mm
+             qmatoms    = qmatoms + 1
+          end do
+          do i=natqm_2+1,natom
+             mm         = qm_control_c%mminb1(i)
+             if(mm>0) then
+                jpt        = jpt + 1
+                mapmm(jpt) = mm
+             end if
+          end do
+          QINIGM=.FALSE.
+       end if
+
+       if(STRFIN(LINE,'$rem') > 0) then
+          if(.not.QQEWALD.and..not.QMESS) write(OMO,'(A,I8)') 'igdesp            ',mmatoms
+          write(OMO,'(A,I8)') 'symmetry                off'
+          write(OMO,'(A,I8)') 'sym_ignore             true'
+
+          if(QRESTART.and.(OPTCNT==0)) write(OMO,'(A)')   'scf_guess      read'
+          if(QNOGU) then
+             if(OPTCNT > 0.or.QMESS)   write(OMO,'(A,I8)')'scf_guess      read'
+          end if
+       end if
+
+       !---------------Determine QM Method ------------------
+       if(OPTCNT == 0) corr='hf/dft'
+       j=index(line,'correlation')
+       if(j > 0) then
+          read(line,*)    tmp1,corr
+          k             = index(line,'!')
+          if(k > 0) corr= 'hf/dft'
+          select case (corr)
+             case('mp2')
+                QMP2       =.true.
+             case('local_mp2')
+                QLMP2      =.true.
+             case('ccsd')
+                QCCSD      =.true.
+             case('ccsd(t)')
+                QCCSD      =.true.
+             case('rimp2')
+                QRIMP2     =.true.
+             case('sosmp2')
+                QSOSMP2    =.true.
+             case('mosmp2')
+                QMOSMP2    =.true.
+             case('scsmp2')
+                QSCSMP2    =.true.
+             case DEFAULT
+                QMP2       =.false.
+                QLMP2      =.false.
+                QCCSD      =.false.
+                QCIS       =.false.
+                QRIMP2     =.false.
+                QSOSMP2    =.false.
+                QMOSMP2    =.false.
+                QSCSMP2    =.false.
+                corr       ='hf/dft'
+          end select
+       end if
+
+       L=index(line,'cis_state_deriv')
+       if(L > 0) then
+          read(line,*) tmp1,ncis
+          k          = index(LINE,'!')
+          if (k > 0) then
+             corr='hf/dft'
+             QCIS=.false.
+          else
+             QCIS=.true.
+          end if
+       end if
+
+22     format(' QCHEM_mlayer> ',A)
+    end do loopmain
+100 CONTINUE
+    !-----------------------------------------------------
+    ! end of qchem input
+
+    ! for mixed basis sets.
+    if(QMIXED) then
+       call chmalloc('gukini.src','QCHEM_mlayer','MIXBAS',natom,intg=MIXBAS)
+       mixbas(1:natom) = 0
+       lmixbas         =.false.
+       write(OMO,'(A)')'$basis'
+       K      = 1
+       do i=1, NUMSKY
+          bas1='basis1'
+          bas2='basis2'
+          !         write(*,*)bas1,len(bas1),bas2,len(bas2)
+          call cnvtuc(bas1,len(bas1))
+          call cnvtuc(bas2,len(bas2))
+          do j=1,natqm_2
+             mm = iabs(qm_control_c%qminb(j))
+             if(EQST(NAMSKY(i),LNAMSK(i),bas1,len(bas1))) then
+                if(PTRSKY(i)%a(mm) == 1) then
+                   mixbas(mm)=1
+                   lmixbas   =.true.
+                end if
+             else if(EQST(NAMSKY(i),LNAMSK(i),bas2,len(bas2))) then
+                if(PTRSKY(i)%a(mm) == 1) then
+                   mixbas(mm)=2
+                   lmixbas   =.true.
+                end if
+             end if
+          end do
+       end do
+       k = 1
+       do j=1,natqm_2
+          LQINIGM  = QINIGM
+          mm       = iabs(qm_control_c%qminb(j))
+          ELE(1:6) = qm_control_c%CAATOM_local(j)(1:6)
+          if(mixbas(mm) == 1) then
+             write(OMO,'(A,I4)')  ELE, K
+             write(OMO,'(A)')     BASIS1
+             write(OMO,'(A)')     '****'
+          else if(mixbas(mm) == 2) then
+             write(OMO,'(A,I4)')  ELE, K
+             write(OMO,'(A)')     BASIS2
+             write(OMO,'(A)')     '****'
+          end if
+          K = K + 1
+       end do
+       write(OMO,'(A)')'$end'
+       write(OMO,'(A)')''
+
+       if(.not. lmixbas) call wrndie(-5,'<QCHEM_mlayer>','No mixed basis set defined.')
+       call chmdealloc('gukini.src','QCHEM_mlayer','MIXBAS',NATOM,intg=MIXBAS)
+    END IF
+
+    close(omo)
+    close(imo)
+    QPRNTINP=.FALSE.
+
+    if(QWRITeinp) return
+
+    ! reading (previous) hessian (hessian.dat) == .false. case?
+    if(.not.QREADHESS) then
+       call system('sleep 2')
+
+       ! now call qchem to perform qm/mm calculations.
+#if KEY_PARALLEL==1
+       !write(50+mynodg,'(a,l3,10i4)')'qchem:qqcrp,mynod,numnod=',qqcrp,mynod,numnod
+
+       if(QCPARA /= -1) then
+          write(NP,'(I5,1X)') QCPARA
+       else
+          write(NP,'(I5,1X)') NUMNOD
+       end if
+
+       !----------------------------------------------------------------------------------
+       ! Fix this to work with PARCMD and PARHOST.... 
+       ! If not PARCMD then set this up to work with PBS_NODEFILE and print a warning... 
+       !----------------------------------------------------------------------------------
+       if( (QCPARA /= -1) .or. (NUMNOD > 1) ) then
+          do i=0,numnodg-1
+             call system('hostname -s >> qchosts')
+          end do
+       end if
+
+   if (mynod == 0) then  ! arat-mtsmlp: only execute at master node, otherwise things break with parallel qchem execution and shared file system
+       !write(*,*)'Calling Q-Chem from node ',mynodg   
+       if(QQCSCRATCH) then                ! QSCRATCH TEST 
+          if(QNOGU) then
+             call system('$QCHEMEXE '//NPOPT//' '//FILIN(1:LI)//' '//FILOUT(1:LO)//' '//QCSCRATCH)
+          else
+             if(QRESTART) then
+                call system('$QCHEMEXE '//NPOPT//' '//FILIN(1:LI)//' '//FILOUT(1:LO)//' '//QCSCRATCH)
+                QRESTART=.FALSE.
+             else if(QSAVORB) then
+                call system('$QCHEMEXE '//NPOPT//' '//FILIN(1:LI)//' '//FILOUT(1:LO)//' '//QCSCRATCH)
+                QSAVORB =.FALSE.
+             else
+                call system('$QCHEMEXE '//NPOPT//' '//FILIN(1:LI)//' '//FILOUT(1:LO))
+             end if
+          end if
+       else                             ! QSCRATCH TEST 
+          if(QNOGU) then
+             call system('$QCHEMEXE '//NPOPT//' '//FILIN(1:LI)//' '//FILOUT(1:LO)//' '//'SAVE')
+          else
+             if(QRESTART) then
+                call system('$QCHEMEXE '//NPOPT//' '//FILIN(1:LI)//' '//FILOUT(1:LO)//' '//'SAVE')
+                QRESTART=.FALSE.
+             else if(QSAVORB) then
+                call system('$QCHEMEXE '//NPOPT//' '//FILIN(1:LI)//' '//FILOUT(1:LO)//' '//'SAVE')
+                QSAVORB =.FALSE.
+             else
+                call system('$QCHEMEXE '//NPOPT//' '//FILIN(1:LI)//' '//FILOUT(1:LO))
+             end if
+          end if
+       end if    ! QSCRATCH TEST
+   endif     ! arat-mtsmlp: only execute at master node, otherwise things break with parallel qchem execution and shared file system                        
+#elif KEY_PARALLEL==0
+       ! HLW - Dec. 2007
+       ! Fix the serial CHARMM version to work with QCPARA and allow 
+       ! parallel execution of Q-Chem
+       if(QQCSCRATCH) then                ! QSCRATCH TEST 
+          if(QNOGU) then
+             call system('$QCHEMEXE '//NPOPT//' '//FILIN(1:LI)//' '//FILOUT(1:LO)//' '//QCSCRATCH)
+          else
+             if(QRESTART) then
+                call system('$QCHEMEXE '//NPOPT//' '//FILIN(1:LI)//' '//FILOUT(1:LO)//' '//QCSCRATCH)
+                QRESTART=.FALSE.
+             else if(QSAVORB) then
+                call system('$QCHEMEXE '//NPOPT//' '//FILIN(1:LI)//' '//FILOUT(1:LO)//' '//QCSCRATCH)
+                QSAVORB =.FALSE.
+             else
+                call system('$QCHEMEXE '//NPOPT//' '//FILIN(1:LI)//' '//FILOUT(1:LO))
+             end if
+          end if
+       else                             ! QSCRATCH TEST 
+          if(QNOGU) then
+             call system('$QCHEMEXE '//NPOPT//' '//FILIN(1:LI)//' '//FILOUT(1:LO)//' '//'SAVE')
+          else
+             if(QRESTART) then
+                call system('$QCHEMEXE '//NPOPT//' '//FILIN(1:LI)//' '//FILOUT(1:LO)//' '//'SAVE')
+                QRESTART=.FALSE.
+             else if(QSAVORB) then
+                call system('$QCHEMEXE '//NPOPT//' '//FILIN(1:LI)//' '//FILOUT(1:LO)//' '//'SAVE')
+                QSAVORB =.FALSE.
+             else
+                ! original code
+                call system('$QCHEMEXE '//NPOPT//' '//FILIN(1:LI)//' '//FILOUT(1:LO))
+                !
+                ! mpi qchem version
+                ! nmpi & nthreads need to be set using envi in charmm input
+                ! e.g., envi nmpi 8 ; envi nthread 1
+                ! call system('$QCHEMEXE -np $NMPI -nt $NTHREAD ' //FILIN(1:LI)//' '//FILOUT(1:LO))
+             end if
+          end if
+       end if                            ! QSCRATCH TEST 
+#endif
+
+       ! The following routine must be called after call
+       ! system('qchem...')  This is executed only on processor 0
+       ! here, so it must have corresponding call elsewhere. Currently
+       ! in the beginning of this routine!
+#if KEY_PARALLEL==1
+#if KEY_CMPI==1 || KEY_MPI==1
+       ! QQCRP (RPATH) case
+       if(.not.QQCRP) then
+          ! write(*,*)'calling break_busy_wait: L2393' 
+          call break_busy_wait_mpi()
+       end if
+#endif
+#endif
+       ! by now, qchem must be completed......
+
+       !------------------------------------------------------
+       !---- Get the energy and forces from Q-chem output ----
+       !------------------------------------------------------
+       E =ZERO
+       T =ZERO
+       CC=ZERO
+
+       open(omo,FILE=filout(1:lo),status='old')
+20     read(omo,'(a)',end=200) line
+
+       if(QMP2 .or. QCCSD .or. QSOSMP2 .or. QMOSMP2 .or. QSCSMP2) then
+          i=index(line,'The QM part of the Energy is')
+          if(i>0) read(line,*) tmp1,tmp2,tmp2,tmp4,tmp5,tmp6,tmp7,E
+       else if(QLMP2) THEN
+          i=index(line,'TRIM MP2           total energy')
+          if(i>0) read(line,*) tmp1,tmp2,tmp3,tmp4,tmp5,E
+       else if(QRIMP2) THEN
+          i=index(line,'RI-MP2 TOTAL ENERGY')
+          if(i>0) read(line,*) tmp1,tmp2,tmp3,tmp4,E
+       else if(QCIS) THEN
+          i=index(line,'Total energy for state   ')
+          if(i>0) then
+             tmp1 = line(29:30)
+             if(tmp1(2:3) == ncis) read(line,*) tmp1,tmp2,tmp3,tmp4,tmp5,E
+          end if
+       else
+          i=index(line,'criterion')
+          if(i>0) read(line,*) ix, E
+       end if
+
+       ! if scf failure?
+       i=index(line,'Convergence failure')
+       if(i > 0) then
+          write(outu,22)'SCF Convergence Failure!!!'
+          write(outu,22)'Try adding "SCF_ALGORITHM DIIS_GDM" to QM file'
+          write(outu,22)'Or increase the number of scf iterations....'
+          write(outu,22)'MAX_SCF_CYCLES 100'
+          STOP
+       end if
+
+       i=index(line,'Thank you very much for using Q-Chem.')
+       if(i > 0) then
+          ! write(outu,22)'Q-Chem Run successful... '
+          jflag=-1
+       end if
+
+       i=index(line,'Nucleus-charge')
+       if(i > 0) read(line,*) tmp1,tmp2,tmp3,NC
+       i=index(line,'Charge-charge')   ! perhaps, mm-mm interactions?
+       if(i > 0) read(line,*) tmp1,tmp2,tmp3,CC
+       i=index(line,'Eewald:')
+       if(i > 0) read(line,*) tmp1,Eewald
+
+50     format(3F12.7)
+51     format(3F15.10)
+52     format(F25.18)
+
+       goto 20
+200    continue
+    end if !end test of QREADHESS
+
+    !   write(*,*)'jflag= ',jflag
+    !   write(*,*)'NREStart = ',NREStart
+    if(jflag /= -1) then
+       ! Make "5" a user setable option.... 
+       if(jflag < NREStart) then
+          write(outu,22) 'Q-Chem Job Failed... '
+          write(outu,22) 'Restarting Q-Chem Job'
+          jflag = jflag + 1
+          goto 23            ! restart qchem calculation.
+       end if
+    end if
+
+    !-----------------------------------------------------------
+    !    GET QM AND EXTERNAL FIELD DERIVATIVES and CHARGES
+    !-----------------------------------------------------------
+    TMPVAR=mmatoms
+    !if(QQCRP) then
+    !   open(imo,FILE=PWDQC(1:LPWD)//'/rpath'//SGROUP(1:M)//'/efield.dat',status='unknown')
+    !else
+       open(imo,FILE='efield.dat',status='unknown')
+    !end if
+    !------------------------------------------------------
+
+    ! CONVERT FROM A.U. TO KCAL/MOL
+    do i=1,mmatoms
+       read(imo,'(a)',end=300) line
+       read(line,*) dumx,dumy,dumz
+       ipt     = mapqm(i)
+       dx(ipt) = dx(ipt) + (dumx*TOKCAL/BOHRR)*(-CGX(ipt))
+       dy(ipt) = dy(ipt) + (dumy*TOKCAL/BOHRR)*(-CGX(ipt))
+       dz(ipt) = dz(ipt) + (dumz*TOKCAL/BOHRR)*(-CGX(ipt))
+    end do
+    do i=mmatoms+1,mmatoms+qmatoms
+       read(imo,'(a)',end=300) line
+       read(line,*,iostat=iostat) dumx,dumy,dumz
+
+       ! LNI format fix, in an attempt to cope with lines such as this:
+       !  13.97408441879924545503-116.04812193725601332517 -31.62032204259966761128
+       if(iostat > 0) read(line,'(3F25.0)') dumx,dumy,dumz
+       ipt     = mapqm(i)
+       dx(ipt) = dx(ipt) + dumx*TOKCAL/BOHRR
+       dy(ipt) = dy(ipt) + dumy*TOKCAL/BOHRR
+       dz(ipt) = dz(ipt) + dumz*TOKCAL/BOHRR
+    end do
+
+300 continue
+
+    !    -----------------------------------   
+    !      Start QM/MM Hessian Computation
+    !    -----------------------------------   
+    !IF(QSECD .or. QNRAP) THEN
+    !ENDIF
+
+    if(QREADGRAD) then
+      do i=1,natom
+         dx(i)=xtmpgrad(i)
+         dy(i)=ytmpgrad(i)
+         dz(i)=ztmpgrad(i)
+      end do
+    end if
+
+    close(imo)
+    close(omo)
+    close(99)
+
+    if(QSAVEGRAD) then
+       do i=1,natom
+          xtmpgrad(i)=dx(i)
+          ytmpgrad(i)=dy(i)
+          ztmpgrad(i)=dz(i)
+       end do
+    end if
+
+    ! deal with the energy, to remove charge-charge interaction
+    !if(QQCRP) then
+    !else
+       !if(QQCLJ) then
+       !else
+          ! Remove Charge-Charge Interaction  ! perhaps, CC = mm-mm interactions?
+          E = E - CC
+       !end if
+    !end if
+
+    if(QSAVEINP) then
+       call get_environment_variable(NAME="PWD",VALUE=PWD,STATUS=stat)
+       if(stat /= 0) then
+          write(outu,22)'Current directory unknown, using /tmp'
+          write(filecount,'(i10)') OPTCNT
+          M = 10
+          CALL TRIMA(FILECOUNT,M)
+          call system ('mkdir -p /tmp/saved_inputs')
+          call system ('cp '//FILIN(P:LI)//' /tmp/saved_inputs/qchem.inp_'//FILECOUNT)
+       else
+          write(filecount,'(i10)') OPTCNT
+          M = 10
+          CALL TRIMA(FILECOUNT,M)
+          call system ('mkdir -p '//TRIM(PWD)//'/saved_inputs')
+          call system ('cp '//TRIM(PWD)//'/'//FILIN(1:LI)//' '//TRIM(PWD)//'/saved_inputs/qchem.inp_'//FILECOUNT)
+       end if
+    end if
+
+    if(QSAVEOUT) then
+       call get_environment_variable(NAME="PWD",VALUE=PWD,STATUS=stat)
+       if(stat /= 0) then
+          write(outu,22)'Current directory unknown, using /tmp'
+          write(filecount,'(i10)')OPTCNT
+          M = 10
+          CALL TRIMA(FILECOUNT,M)
+          call system ('mkdir -p /tmp/saved_outputs')
+          call system ('cp '//FILOUT(P:LO)//' /tmp/saved_outputs/qchem.inp_'//FILECOUNT)
+       else
+          write(filecount,'(i10)')OPTCNT
+          M = 10
+          CALL TRIMA(FILECOUNT,M)
+          call system ('mkdir -p '//TRIM(PWD)//'/saved_outputs')
+          call system ('cp '//TRIM(PWD)//'/'//FILOUT(1:LO)//' '//TRIM(PWD)//'/saved_outputs/qchem.out_'//FILECOUNT)
+       end if
+    end if
+
+    ! write(*,*)'Modifing OPTCNT'
+    OPTCNT = OPTCNT + 1
+    ! Remove old efield.dat file
+    call unlink('efield.dat')
+    call unlink('qchosts')
+
+    !write(50+mynodg,'(a,l3,10i4)')'qchem>end::qqcrp,mynod,numnod=',qqcrp,mynod,numnod
+    !write(*,*)'Leaving Q-Chem Subroutine....'
+
+    return
+  end subroutine QCHEM_mlayer
+#endif /* (mndo97)*/
 #endif /* (qchem)*/
 
     ! Guanhua_QC_UW1111: this subroutine takes care of G09 calculations
@@ -4066,7 +5356,7 @@ LOGICAL QDONE,LDUM
   END SUBROUTINE ENVIAPP
   !     
 #endif /* (gamessuk)*/
-#if KEY_GAMESS==1 || KEY_QCHEM==1 || KEY_G09==1 /*gamess*/
+#if KEY_GAMESS==1 || KEY_QCHEM==1 || KEY_G09==1 /*gamess or qchem or g09*/
   SUBROUTINE ENVIGRP(GROUP)
     !-----------------------------------------------------------------------
     !     Define new environment variables for the GAMESS files
@@ -4221,7 +5511,7 @@ LOGICAL QDONE,LDUM
     RETURN
   END SUBROUTINE ENVIAPP
 
-#if KEY_GAMESS==1
+#if KEY_GAMESS==1  /*gamess only*/
   SUBROUTINE CH2GMS(BFIRST)
     !-----------------------------------------------------------------------
     !     Define CHARMM atoms as point charges and copy to COMMON/CHMGMS/
@@ -4269,14 +5559,14 @@ LOGICAL QDONE,LDUM
     ! this is currently broken (FIXME) - maybe not needed ???
     ! multi-layered qm/mm and then return after that.
 #if KEY_GAMESS==1
-#if KEY_SQUANTM==1 /*squantm*/
-    If(QMLAY_high) then
+#if KEY_SQUANTM==1 || KEY_MNDO97==1 /*squantm & mndo97*/
+    if(QMLAY_high) then
        call CH2GMS_mlayer(natom,nchmat,nbluch,ibluch, &
             xchm,ychm,zchm,qchm, &
             tmpblur,ebluch,cgblch,sgblch,cbluch)
        return
-    End if
-#endif /* (squantm)*/
+    end if
+#endif                              /*squantm & mndo97*/
 #endif 
 
     !     
@@ -4404,11 +5694,156 @@ LOGICAL QDONE,LDUM
     !
     RETURN
   END SUBROUTINE CH2GMS
-#endif
   !
-#endif /* (gamess)*/
+  subroutine CH2GMS_mlayer(natomx,nchmat,nbluch,ibluch, &
+                           xchm,ychm,zchm,qchm, &
+                           tmpblur,ebluch,cgblch,sgblch,cbluch)
+    !-----------------------------------------------------------------------
+    !     Multi-layered QM/MM version of CH2GMS.
+    !
+    !     Define CHARMM atoms as point charges and copy to COMMON/CHMGMS/
+    !
+    !     (Not used in GAMESS-UK case)
+    !     
+    !     To simplify changes in GAMESS we build contiguous arrays:
+    !     (XCHM,YCHM,ZCHM,QCHM) for .not.QM atoms.
+    !     [NOTE: Similar code is present also in CGREP for
+    !     nuclear repulsion derivatives]
+    !     
+    !     On QM atoms we don't care for cutoff, we just take all of the
+    !     atoms in the system. This is not inconsistent with MM since QMs
+    !     are special anyway. Also calculation time is linear with number
+    !     of MM atoms!
+    !     
+    !     [NOTE: It should be straightforward to implement usage of
+    !     variety of cutoff methods implemented in the CHARMM:
+    !     Just use nonbond array here and disable CGREP routine;
+    !     but you need to specify charges on QM atoms as their
+    !     atomic number in the RTF file!!!
+    !     
+    !     
+    use chm_kinds
+    use dimens_fcm
+    use dimens_fcm
+    use consta
+    use number
+    use exfunc
+    !
+    use coord
+#if KEY_SQUANTM==1
+    use squantm
+#endif
+#if KEY_MNDO97==1
+    use qm1_info, only : qm_control_c,qm_main_c
+#endif
+    use psf
+    use scalar_module
+
+    implicit none
+    integer :: natomx,nchmat,nbluch
+    integer :: ibluch(*)
+    real(chm_real) :: xchm(*),ychm(*),zchm(*),qchm(*)
+    real(chm_real) :: tmpblur(*),ebluch(*),cgblch(*),sgblch(*),cbluch(*)
+
+    integer :: J,I,N,NBLUR,natqm_2,mm
+    real(chm_real) ::SIGM1,SIGM2,SIGM3,FAC
+    real(chm_real),parameter :: rtpipoh=0.5079490874739d0
+    real(chm_real),parameter :: RBR=ONE/BOHRR
+
+    !
+    NBLUR            = 0
+    IBLUCH(1:natomx) = 0
+
+    n = 0
+#if KEY_SQUANTM==1
+    natqm_2 = natqm(2)
+#endif
+#if KEY_MNDO97==1
+    natqm_2 = qm_main_c%numat
+#endif
+!    if(QBLUCH) then
+!       !     fill in blurred charges array
+!       if(recallint /= -1) then
+!          do i=1,natomx
+!             !! this was wrong               tmpblur(i) = ptrsto(i)
+!             tmpblur(i)=ptrsto(recallint)%a(i)
+!          end do
+!       else
+!          tmpblur(1:natomx) = wmain(1:natomx)
+!       end if
+!
+!       do i=natqm_2+1,natomx
+!#if KEY_SQUANTM==1
+!          mm = mminb1_dual(i,2)
+!#endif
+!#if KEY_MNDO97==1
+!          mm = qm_control_c%mminb1(i)
+!#endif
+!          if(mm > 0) then
+!             n = n + 1
+!             xchm(n) = x(mm)*RBR
+!             ychm(n) = y(mm)*RBR
+!             zchm(n) = z(mm)*RBR
+!             qchm(n) = cg(mm)
+!
+!             if(abs(tmpblur(mm)).ge.rsmall) then
+!                if(tmpblur(mm).gt.NINE99) then
+!                   qchm(n) = zero
+!                else
+!                   nblur = nblur + 1
+!                   ibluch(nblur) = n
+!                   sigm1 = BOHRR/tmpblur(mm)
+!                   sigm2 = sigm1*sigm1
+!                   sigm3 = sigm2*sigm1
+!                   ebluch(nblur)=sigm2
+!                   cgblch(nblur)=cg(mm)   ! do not use BFIRST check.
+!                   sgblch(nblur)=tmpblur(mm)*RBR
+!                   ! it was:            cbluch(nblur)=cgblch(nblur)*sigm3/TPIPOH
+!                   !  or                cbluch(nblur)=cgblch(nblur)*sigm3*0.5079490874739d0
+!                   cbluch(nblur)=cgblch(nblur)*sigm3*rtpipoh
+!
+!                   !     put to zero both mm charges
+!                   !     a) the one which goes to GAMESS (QCHM)
+!                   !ccC     b) the one which goes to CHARMM (CG)
+!                   !cc                     cg(mm)  = zero
+!                   qchm(mm)= zero
+!
+!                   !ccc     for now put back mm charges
+!                   !ccc     they are dealt in CHARMM, and we only have
+!                   !ccc     blurred charges interacting with QM atoms.
+!                   !cc                     cg(mm)  = cgblch(nblur) 
+!                end if
+!             end if
+!          end if
+!       end do
+!    else
+       do i=natqm_2+1,natomx
+#if KEY_SQUANTM==1
+          mm = mminb1_dual(i,2)
+#endif
+#if KEY_MNDO97==1
+          mm = qm_control_c%mminb1(i)
+#endif
+          if(mm > 0) then
+             n       = n + 1
+             xchm(n) = x(mm)*RBR
+             ychm(n) = y(mm)*RBR
+             zchm(n) = z(mm)*RBR
+             FAC     = one            ! for block? (GAMESS only, also no blur yet)
+             qchm(n) = cg(mm)*FAC
+          end if
+       end do
+!    end if
+    NCHMAT=N
+    NBLUCH=NBLUR
+
+    return
+  end subroutine CH2GMS_mlayer
+#endif /* gamess only*/
+  !
+#endif /* (gamess or qchem or g09)*/
 #if KEY_QTURBO==0 && KEY_G09==0 /*noqchem*/
-#if KEY_GAMESS==1 || KEY_GAMESSUK==1
+#if KEY_GAMESS==1 || KEY_GAMESSUK==1      /* gamess, gamess-uk*/
   SUBROUTINE CHMDAT(AATOM,AZNUC,CORD,NAT &
 #if KEY_GAMESSUK==1
        ,nel,expo,wght,maxatg                & 
@@ -4479,7 +5914,7 @@ LOGICAL QDONE,LDUM
 
     ! multi-layered qm/mm and then return after that.
 #if KEY_GAMESS==1 || KEY_GAMESSUK==1
-#if KEY_SQUANTM==1 /*squantm*/
+#if KEY_SQUANTM==1 || KEY_MNDO97==1 /*squantm & mndo97*/
     If(QMLAY_high) then
        call CHMDAT_mlayer(AATOM,AZNUC,CORD,NAT &
 #if KEY_GAMESSUK==1
@@ -4490,7 +5925,7 @@ LOGICAL QDONE,LDUM
             )
        return
     End if
-#endif /* (squantm)*/
+#endif                              /*squantm & mndo97*/
 #endif 
 
     !     
@@ -4731,7 +6166,300 @@ LOGICAL QDONE,LDUM
     !     
     RETURN
   END SUBROUTINE CHMDAT
+  !
+  subroutine CHMDAT_mlayer(AATOM,AZNUC,CORD,NAT,    &
+#if KEY_GAMESSUK==1
+                           nel,expo,wght,maxatg,    &
 #endif
+                           X,Y,Z,WMAIN)
+    !-----------------------------------------------------------------------
+    !     Multi-layered QM/MM version of CHMDAT.
+    !
+    !     Define the set of quantum mechanical atoms and set up the data
+    !     structures.
+    !     
+    !     NB - for the GAMESS-UK interface, this deals with the 
+    !     classical atoms as well, since all interactions are 
+    !     handled within GAMESS-UK
+    !     
+    use chm_kinds
+    use dimens_fcm
+    use number
+    use exfunc
+    use consta
+    use psf
+    use param
+    !use rtf,only:atct
+    use stream
+    use gamess_fcm
+    use parallel
+#if KEY_GAMESSUK==1
+    use scalar_module
+#endif
+#if KEY_SQUANTM==1
+    use squantm
+#endif
+#if KEY_MNDO97==1
+    use qm1_info, only : qm_control_c,qm_main_c
+#endif
+
+    implicit none
+    !     The following is defined in GAMESS after call to CHMDAT
+    !!logical :: mopac
+    !!common /mpctst/mopac
+    !     
+#if KEY_GAMESS==1 /*gamess*/
+    character(len=10):: AATOM(MAXGMS)
+    real(chm_real)   :: AZNUC(MAXGMS), CORD(MAXGMS,3)
+#endif /* (gamess)*/
+#if KEY_GAMESSUK==1 /*gamessuk*/
+    character(len=10):: AATOM(*)
+    real(chm_real)   :: AZNUC(*), CORD(3,*)
+    real(chm_real)   :: expo(*),wght(*),SIGM1,SIGM2,totnuc
+    integer          :: NEL, IATOM, MAXATG, K
+    real(chm_real)   :: AZN, EXP1, WGH, TESTNE
+    character(len=6) :: atype
+    logical          :: qm,obq
+#endif /* (gamessuk)*/
+
+    real(chm_real)   :: X(*),Y(*),Z(*),WMAIN(*)
+
+    integer          :: NAT,natqm_2
+    integer          :: I,NSLCT,natmm_high,natqm_high,NATLNK,n,mm
+    character(len=6) :: ELE
+    real(chm_real)   :: tmpblur(maxa)
+    real(chm_real),parameter:: RBR = one/BOHRR
+
+    ! Counter for true QM atoms
+#if KEY_SQUANTM==1
+    natqm_2   = natqm(2)
+#elif KEY_MNDO97==1
+    natqm_2   = qm_main_c%numat
+#endif
+    natqm_high= 0
+
+#if KEY_GAMESSUK==1 /*gamessuk*/
+    ! for consistency with GAMESS(US) this is a counter for BQ-class centres 
+    ! and Blurred centres (not useful to the QM code)
+    NCHMAT = 0
+    totnuc = zero
+
+    ! to obtain position in the charmm list of atom igms in the GAMESS-UK list use
+    !
+    ! ichm = GMSMAP(igms)
+    GMSMAP(1:natom) = -1
+    !
+    if(natqm_2>MAXATG) call wrndie(0,'<CHMDAT_mlayer>','Too many atoms, redimension GAMESS-UK')
+
+    ! ensure mass vector is only referenced for initialisation
+    ! step (helps use lone pair assignments)
+    if(QINIGM) then
+#if KEY_SQUANTM==1
+       do i = 1, natom
+          if(igmsel_dual(i) == 1) then
+             A2MASS(i) = AMASS(i)
+          else if(igmsel_dual(i) == 2) then  ! it is 2 for H-link atom.
+             A2MASS(i) = 1.00800d0
+          else
+             A2MASS(i) = ZERO                ! right?
+          end if
+
+          ! for charges
+          QMCMUL(i) = CG(i)
+          QMCLOW(i) = CG(i)
+          QMCKOL(i) = CG(i)
+       end do
+#elif KEY_MNDO97==1
+       do i = 1, natom
+          if(qm_control_c%igmsel(i) == 1) then
+             A2MASS(i) = AMASS(i)
+          else if(qm_control_c%igmsel(i) == 2 .or. qm_control_c%igmsel(i) == 3) then  ! H-link atom.
+             A2MASS(i) = 1.00800d0
+          else
+             A2MASS(i) = ZERO      ! right?
+          end if
+
+          ! for charges
+          QMCMUL(i) = qm_control_c%cg_local(i)
+          QMCLOW(i) = qm_control_c%cg_local(i)
+          QMCKOL(i) = qm_control_c%cg_local(i)
+       end do
+#endif
+    end if
+
+    !  First loop Quantum atoms
+    iatom = 0
+    do i = 1,natqm_2
+#if KEY_SQUANTM==1
+       n            = iabs(qminb2_dual(i))
+#elif KEY_MNDO97==1
+       n            = iabs(qm_control_c%qminb(i))
+#endif
+       iatom        = iatom + 1
+       natqm_high   = natqm_high + 1
+       gmsmap(iatom)= n
+
+       cord(1,iatom)= x(n)*RBR
+       cord(2,iatom)= y(n)*RBR
+       cord(3,iatom)= z(n)*RBR
+
+       expo(iatom)  =  minone
+       wght(iatom)  =  zero
+       !cc         AZNUC(iatom) =  zero 
+
+#if KEY_SQUANTM==1
+       aatom(iatom) = CAATOM_high(iatom)
+       uznuc(iatom) = AZNUC_high(iatom)
+       aznuc(iatom) = AZNUC_high(iatom)
+#elif KEY_MNDO97==1
+       aatom(iatom) = qm_control_c%CAATOM_local(iatom)
+       uznuc(iatom) = qm_control_c%AZNUC_local(iatom)
+       aznuc(iatom) = qm_control_c%AZNUC_local(iatom)
+#endif
+
+       ! Store sum of nuclear charges
+       totnuc       = totnuc + aznuc(IATOM)
+    end do
+
+    ! just keep here, though may not be used.
+    !  Secon loop for blurred atoms.
+    !
+    ! it has a high chance to be wrong....!!! (iatom sequence is not same as
+    ! original implementation!!! (namkh)
+!    if(QBLUCH)then
+!       tmpblur(1:natom)=WMAIN(1:natom)
+!       loopii: do i=1,natom
+!#if KEY_SQUANTM==1
+!          n = igmsel_dual(i)
+!#elif KEY_MNDO97==1
+!          n = qm_control_c%igmsel(i)
+!#endif
+!          if(n == 0) then 
+!             ! for mm atoms
+!             if(abs(tmpblur(i)) >= RSMALL) then
+!                if(tmpblur(i) > NINE99) then
+!                   ! explicitly excluded atom
+!                   cycle loopii
+!                else
+!                   ! add a blurred centre
+!                   iatom = iatom + 1
+!                   if(iatom>MAXATG) call wrndie(0,'<CHMDAT_mlayer>', &
+!                                               'Too many atoms, redimension GAMESS-UK')
+!                   gmsmap(iatom) = i
+!                   NCHMAT        = NCHMAT + 1
+!                   AZNUC(IATOM)  = ZERO
+!                   AATOM(IATOM)  ='BQ        '
+!                   CORD(1,IATOM) = X(I)*RBR
+!                   CORD(2,IATOM) = Y(I)*RBR
+!                   CORD(3,IATOM) = Z(I)*RBR
+!                   NBLUCH        = NBLUCH+1
+!                   SIGM1         = BOHRR/tmpblur(I)
+!                   SIGM2         = SIGM1*SIGM1
+!                   expo(IATOM)   = SIGM2
+!#if KEY_SQUANTM==1
+!                   wght(IATOM)   = CG(I)
+!#elif KEY_MNDO97==1
+!                   wght(IATOM)   = qm_control_c%cg_local(i)
+!#endif
+!                end if
+!             end if
+!          end if                    ! igmsel(i) == 0
+!       end do loopii
+!    end if                          ! QBLUCH
+
+    ! Third loop to assign BQ atoms
+    do i = natqm_2+1,natom
+#if KEY_SQUANTM==1
+       mm = mminb1_dual(i,2)
+#elif KEY_MNDO97==1
+       mm = qm_control_c%mminb1(i)
+#endif
+       if(mm > 0) then
+          OBQ = .TRUE.
+
+!          ! skip blurred centres (already included above)
+!          ! this statement also skips explicitly excluded atoms,
+!          ! these have WMAIN(I).GT.NINE99
+!          if(QBLUCH) OBQ = (.NOT. (abs(tmpblur(mm)) >= RSMALL))
+
+          if(OBQ) then
+             iatom         = iatom + 1
+             if(iatom>maxatg) call wrndie(0,'<CHMDAT_mlayer>','Too many atoms, redimension GAMESS-UK')
+             gmsmap(iatom) = mm
+             NCHMAT        = NCHMAT + 1
+             aatom(iatom)  = 'BQ        '
+             cord(1,iatom) = x(mm)*RBR
+             cord(2,iatom) = y(mm)*RBR
+             cord(3,iatom) = z(mm)*RBR
+             expo(iatom)   = minone
+             wght(iatom)   = zero
+#if KEY_SQUANTM==1
+             aznuc(iatom)  = CG(mm)
+#elif KEY_MNDO97==1
+             aznuc(iatom)  = qm_control_c%cg_local(mm)
+#endif
+          end if
+       end if
+    end do
+
+    nat    = iatom
+    nel    = NINT(totnuc)
+    TESTNE = NEL
+    TESTNE = TESTNE - TOTNUC
+    if(dabs(testne) > PT0001) then
+       write (6,9568) totnuc,1.0d0*nel,testne
+       call wrndie(0,'<CHMDAT_mlayer>','non-integral QM charge')
+    end if
+9568 format(1x,'non-integral charge found',1x,3e15.8)
+#endif /*  (gamessuk)*/
+
+#if KEY_GAMESS==1 /*gamess*/
+    do i = 1,natqm_2
+#if KEY_SQUANTM==1
+       n = iabs(qminb2_dual(i))
+#elif KEY_MNDO97==1
+       n = iabs(qm_control_c%qminb(i))
+#endif
+       natqm_high         =natqm_high + 1
+       cord(natqm_high,1) =x(n)
+       cord(natqm_high,2) =y(n)
+       cord(natqm_high,3) =z(n)
+       cuniq(natqm_high,1)=cord(natqm_high,1)
+       cuniq(natqm_high,2)=cord(natqm_high,2)
+       cuniq(natqm_high,3)=cord(natqm_high,3)
+
+       if(QINIGM) then
+#if KEY_SQUANTM==1
+          aatom(natqm_high)=CAATOM_high(natqm_high)
+          uatom(natqm_high)=aatom(natqm_high)
+          aznuc(natqm_high)=AZNUC_high(natqm_high)
+          uznuc(natqm_high)=AZNUC_high(natqm_high)
+#elif KEY_MNDO97==1
+          aatom(natqm_high)=qm_control_c%CAATOM_local(natqm_high)
+          uatom(natqm_high)=aatom(natqm_high)
+          aznuc(natqm_high)=qm_control_c%AZNUC_local(natqm_high)
+          uznuc(natqm_high)=qm_control_c%AZNUC_local(natqm_high)
+#endif
+       end if
+    end do
+
+    NAT         = natqm_high
+    NATREL      = NAT
+    UATOM(NAT+1)='$END      '
+#endif /* (gamess)*/
+
+    if(natqm_high<=0) call wrndie(0,'<CHMDAT_mlayer>','No quantum mechanical atoms selected.')
+    natmm_high  = natom - natqm_high
+    NGAMES      = natqm_high
+
+    ! Write out some information and options requested.
+    !if(QBLUCH .and. prnlev>=2 .and. QINIGM) &
+    !   write (outu,'(/,8X,A,I10)') ' The number of blurred MM charges         = ',NBLUCH
+
+    return
+  end subroutine CHMDAT_mlayer
+  !
+#endif /* gamess, gamess-uk*/
 #endif /* (noqchem)*/
 
 #if KEY_NWCHEM==1
@@ -5197,8 +6925,8 @@ LOGICAL QDONE,LDUM
     !     Are there any QM atoms?
     !     
     IF(NGAMES.EQ.0) RETURN
-#if KEY_GAMESS==1 || KEY_GAMESSUK==1
-#if KEY_SQUANTM==1
+#if KEY_GAMESS==1 || KEY_GAMESSUK==1 || KEY_QCHEM==1 || KEY_G09==1
+#if KEY_SQUANTM==1 || KEY_MNDO97==1
     IF(QMLAY_high) RETURN    
 #endif
 #endif 
@@ -5599,6 +7327,8 @@ LOGICAL QDONE,LDUM
        CALL QCHEM(E,DX,DY,DZ,CGX,AMASSX,IACX,NDD1,DD1,QSECD,IUPT,JUPT)
     ENDIF
     GTOT=E*TOKCAL
+    ! for debug purpose..
+    !if(mynod==0) write(6,'(A,F15.5)') 'High E:',GTOT
 
     !     We obtain E,DX,DY,DZ from Q-chem output
     !     We put X,Y,Z to input for Q-chem
@@ -5762,6 +7492,35 @@ LOGICAL QDONE,LDUM
     !
     RETURN
   END SUBROUTINE GETQMCHG
+  !
+  subroutine GETQMCHG_mlayer(natqm,cgx,qminb)
+    !-----------------------------------------------------------------------
+    !     Get the charges from ab initio program
+    !     Currently this works only for GAMESS but others
+    !     can do the same (use COMMON /QMCHG/ in gamess_ltm.src)
+    !
+    use chm_kinds
+    use dimens_fcm
+    use psf
+    use gamess_fcm
+    !
+    INTEGER       :: natqm,IPT,I,iatom,qminb(*)
+    real(chm_real):: cgx(*)
+    !
+    do i=1,natom
+       QMCMUL(i) = cgx(i)
+       QMCLOW(i) = cgx(i)
+       QMCKOL(i) = cgx(i)
+    end do
+    do i=1,natqm
+       iatom         = iabs(qminb(i))
+       QMCMUL(iatom) = QMMUL(i)
+       QMCLOW(iatom) = QMLOW(i)
+       QMCKOL(iatom) = QMKOL(i)
+    end do
+    !
+    return
+  end subroutine GETQMCHG_mlayer
   !
   SUBROUTINE SCFITCHM(NBASIS,D,S,FAO,ZAN,NSHELL,KATOM,KMIN,KMAX)
     !-----------------------------------------------------------------------
@@ -5930,12 +7689,12 @@ LOGICAL QDONE,LDUM
     IF(QBLUCH) CALL ERRT
 
     ! multi-layered qm/mm and then return after that.
-#if KEY_SQUANTM==1 /*squantm*/
+#if KEY_SQUANTM==1 || KEY_MNDO97==1 /*squantm & mndo97*/
     If(QMLAY_high) then
        call CGREP_mlayer(natom,repuls,dx,dy,dz,C,ZAN)
        return
     End if
-#endif /* (squantm)*/
+#endif                              /*squantm & mndo97*/
 
 #if KEY_PARALLEL==1
     IF (MYNOD.GT.0) RETURN
@@ -6131,12 +7890,12 @@ LOGICAL QDONE,LDUM
     !
 
     ! multi-layered qm/mm and then return after that.
-#if KEY_SQUANTM==1 /*squantm*/
+#if KEY_SQUANTM==1 || KEY_MNDO97==1 /*squantm & mndo97*/
     If(QMLAY_high) then
        call CGREPE_mlayer(natom,Prnlev,ZAN,C,E,EG)
        return
     End if
-#endif /* (squantm)*/
+#endif                              /*squantm & mndo97*/
 
     L = 0
     REPULS = ZERO
@@ -6189,6 +7948,287 @@ LOGICAL QDONE,LDUM
     !
     RETURN
   END SUBROUTINE CGREPE
+  !
+  subroutine CGREP_mlayer(NATOM,REPULS,DX,DY,DZ,c,zan)
+    !-----------------------------------------------------------------------
+    !
+    !     This routine calculates nuclear repulsion between
+    !     CHARMM atoms and GAMESS atoms + derivatives
+    !
+    !     Calculate derivatives in the right places in DX,DY,DZ arrays
+    !     and take Newton's 3rd law into account.
+    !
+    use chm_kinds
+    use dimens_fcm
+    use consta
+    use number
+    use stream
+    use gamess_fcm
+    use parallel
+#if KEY_SQUANTM==1
+    use squantm
+#endif
+#if KEY_MNDO97==1
+    use qm1_info, only : qm_control_c,qm_main_c
+#endif
+
+    implicit none
+    integer        :: natom
+    real(chm_real) :: REPULS,DX(*),DY(*),DZ(*)
+    real(chm_real) :: ZAN(MAXGMS), C(3,MAXGMS)
+    !
+    integer        :: I,J,N,KBLUCH,KKBLCH,NN,im,iq,natqm_2
+    real(chm_real) :: ERRF,ETMP,SIGM1,SIGM2
+    real(chm_real) :: Q1,Q2,X1,X2,Y1,Y2,Z1,Z2,R12,RR12,EL,ELR
+    real(chm_real) :: X12,Y12,Z12
+    real(chm_real),parameter :: RBR=ONE/BOHRR,TSQP=two/sqrt(PI)
+#if KEY_REPLICA==0
+    real(chm_real) :: BLFACTOR
+#endif
+
+#if KEY_REPLICA==0
+    BLFACTOR=ONE
+#endif
+    REPULS = ZERO
+
+#if KEY_PARALLEL==1
+    if (mynod > 0) return
+#endif 
+
+#if KEY_SQUANTM==1
+    natqm_2 = natqm(2)
+#elif KEY_MNDO97==1
+    natqm_2 = qm_main_c%numat
+#endif
+    !
+    ! This loop is for QM nuclei - MM atoms electrostatic interaction
+    ! It deals also with QM nuclei - Blurred charge interaction
+    !
+    ! loop over qm atoms.
+    do i=1, natqm_2
+#if KEY_SQUANTM==1
+       iq = iabs(qminb2_dual(i))
+#elif KEY_MNDO97==1
+       iq = iabs(qm_control_c%qminb(i))
+#endif
+       q1     = zan(i)
+       if(FQQCHG(i) > -nine99) q1 = FQQCHG(i)
+       x1     = c(1,i)
+       y1     = c(2,i)
+       z1     = c(3,i)
+       n      = 0
+       kbluch = 1
+       ! for mm atoms.
+       do j=natqm_2+1,natom
+#if KEY_SQUANTM==1
+          im = mminb1_dual(j,2)
+#elif KEY_MNDO97==1
+          im = qm_control_c%mminb1(j)
+#endif
+          if(im > 0) then
+             n   = n + 1
+             x12 = x1-xchm(n)   ! x1-x2
+             y12 = y1-ychm(n)   ! y1-y2
+             z12 = z1-zchm(n)   ! z1-z2
+             rr12= x12*x12+y12*y12+z12*z12
+             r12 = sqrt(rr12)
+!             if(QBLUCH .and. (n == ibluch(kbluch))) then
+!                !      qm nuclei - Blurred charge interaction
+!                q2    = cgblch(kbluch)
+!                etmp  = r12/sgblch(kbluch)
+!                el    = q1*q2/r12*BLFACTOR
+!                elr   = (el/rr12)*(errf(etmp)-tsqp*etmp*exp(-etmp*etmp))*tokcal*RBR
+!                el    = el*errf(etmp)
+!                kbluch= kbluch + 1
+!             else
+                el    = q1*qchm(n)/r12*BLFACTOR
+                elr   = el/rr12*tokcal*RBR
+!             end if
+             repuls   = repuls + el
+
+             dx(iq) = dx(iq) - x12*elr
+             dx(im) = dx(im) + x12*elr
+             dy(iq) = dy(iq) - y12*elr
+             dy(im) = dy(im) + y12*elr
+             dz(iq) = dz(iq) - z12*elr
+             dz(im) = dz(im) + z12*elr
+          end if
+       end do
+    end do
+    !
+    !     This loop is for Blurred charges - MM atoms electrostatic interaction
+    !     It deals also with the Blurred charge - Blurred charge interaction
+    !
+    !============================
+    !
+    !     SIMPLIFICATION: (????)
+    !     For now we deal with blurred charges not interacting
+    !     with QM region in the CHARMM as classical atoms.
+    !     The following code is not good for MM - Blur and Blur - Blur,
+    !     because it doesn't deal correctly with the bonded atoms!!
+    !
+    !     USE: bnbnd%inblo,bnbnd%jnb
+    !
+    !
+    if(QBLUCH) return
+!!    if(QBLUCH) then
+!!       n      = 0
+!!       kbluch = 1
+!!       do i=natqm_2+1,natom
+!!#if KEY_SQUANTM==1
+!!          iq=mminb1_dual(i,2)
+!!#elif KEY_MNDO97==1
+!!          iq=qm_control_c%mminb1(i)
+!!#endif
+!!          if(iq > 0) then
+!!             n = n + 1
+!!             if(n == ibluch(kbluch)) then
+!!                ! found kbluch-th blurred charge.
+!!                x1    = xchm(n)
+!!                y1    = xchm(n)
+!!                z1    = zchm(n)
+!!                q1    = cgblch(kbluch)
+!!                sigm1 = sgblch(kbluch)
+!!                kbluch= kbluch + 1
+!!                nn    = 0
+!!                kkblch= 1
+!!                do j=natqm_2+1,natom
+!!#if KEY_SQUANTM==1
+!!                   im=mminb1_dual(j,2)
+!!#elif KEY_MNDO97==1
+!!                   im=qm_control_c%mminb1(j)
+!!#endif
+!!                   if(im > 0) then
+!!                      ! either mm or blurred atom.
+!!                      nn = nn + 1
+!!                      x2 = xchm(nn)
+!!                      y2 = ychm(nn)
+!!                      z2 = zchm(nn)
+!!                      x12= x1-x2
+!!                      y12= y1-y2
+!!                      z12= z1-z2
+!!                      rr12= x12*x12+y12*y12+z12*z12
+!!                      r12 = sqrt(rr12)
+!!                      elr = zero
+!!                      el  = zero
+!!                      if(nn == ibluch(kkblch)) then
+!!                         if(kkblch >= kbluch) then
+!!                            ! for blurred charge-blurred charge.
+!!                            sigm2 = one/sqrt(ebluch(kkblch))
+!!                            etmp  = r12/sqrt(sigm1*sigm1+sigm2*sigm2)
+!!                            el    = q1*cgblch(kkblch)/r12
+!!                            elr   = (el/r12)*(errf(etmp)-tsqp*etmp*exp(-etmp*etmp))*tokcal*RBR
+!!                            el    = el*errf(etmp)
+!!                         end if
+!!                         kkblch = kkblch + 1
+!!                      else
+!!                         ! for blurred charge - mm charge.
+!!                         etmp   = r12/sigm1
+!!                         el     = q1*qchm(nn)/r12
+!!                         elr    = (el/r12)*(errf(etmp)-tsqp*etmp*exp(-etmp*etmp))*tokcal*RBR
+!!                         el     = el*errf(etmp)
+!!                      end if
+!!                      repuls    = repuls + el
+!!
+!!                      dx(iq) = dx(iq) - x12*elr
+!!                      dx(im) = dx(im) + x12*elr
+!!                      dy(iq) = dy(iq) - y12*elr
+!!                      dy(im) = dy(im) + y12*elr
+!!                      dz(iq) = dz(iq) - z12*elr
+!!                      dz(im) = dz(im) + z12*elr
+!!                   end if
+!!                end do
+!!             end if
+!!          end if
+!!       end do
+!!    end if
+    !
+    return
+  end subroutine CGREP_mlayer
+  !
+  subroutine CGREPE_mlayer(NATOM,Prnlev,ZAN,C,E,EG)
+    !-----------------------------------------------------------------------
+    !
+    !     This is here for the debugging purpose!
+    !     This routine calculates nuclear repulsion between
+    !     CHARMM atoms and GAMESS atoms - IT DOES NOT WORK WITH BLUR!!!
+    !                                     Try to get rid of it
+    !                                     by filling ETERM array with the
+    !                                     terms calculated in the CGREP
+    !                                     subroutine
+    !
+    use chm_kinds
+    use dimens_fcm
+    use consta
+    use number
+    use gamess_fcm
+#if KEY_SQUANTM==1
+    use squantm
+#endif
+#if KEY_MNDO97==1
+    use qm1_info, only : qm_control_c,qm_main_c
+#endif
+
+    implicit none
+
+    integer        :: natom,prnlev
+    real(chm_real) :: zan(MAXGMS),c(3,MAXGMS)
+    real(chm_real) :: e,eg(3*MAXGMS)
+    !
+    integer        :: i,j,n,kbluch,iq,im,natqm_2
+    real(chm_real) :: q1,q2,x1,x2,y1,y2,z1,z2,r12,rr12,EL
+    real(chm_real) :: x12,y12,z12
+    real(chm_real) :: repuls
+    !
+
+    REPULS = ZERO
+#if KEY_SQUANTM==1
+    natqm_2= natqm(2)
+#elif KEY_MNDO97==1
+    natqm_2 = qm_main_c%numat
+#endif
+    ! loop over qm atoms.
+    do i=1,natqm_2
+#if KEY_SQUANTM==1
+       iq     = iabs(qminb2_dual(i))
+#elif KEY_MNDO97==1
+       iq     = iabs(qm_control_c%qminb(i))
+#endif
+       q1     = zan(i)
+       if(FQQCHG(i) > -nine99) q1=FQQCHG(i)
+       x1     = c(1,i)
+       y1     = c(2,i)
+       z1     = c(3,i)
+
+       ! loop over mm atoms.
+       n      = 0
+       !kbluch = 1
+       do j=natqm_2+1,natom
+#if KEY_SQUANTM==1
+          im  = mminb1_dual(j,2)
+#elif KEY_MNDO97==1
+          im  = qm_control_c%mminb1(j)
+#endif
+          if(im > 0) then
+             n      = n + 1
+             x12    = x1-xchm(n)   ! x1-x2
+             y12    = y1-ychm(n)   ! y1-y2
+             z12    = z1-zchm(n)   ! z1-z2
+             rr12   = x12*x12+y12*y12+z12*z12
+             r12    = sqrt(rr12)
+             el     = q1*qchm(n)/r12
+             repuls = repuls + el
+          end if
+       end do
+    end do
+
+    if(prnlev >= 2) then
+       write(6,'(A,2F20.8)')'QM/MM repulsion (a.u.,kcal/mole) = ',REPULS,REPULS*TOKCAL
+       write(6,'(A,2F20.8)')'QM/MM total en. (a.u.,kcal/mole) = ',E+REPULS,(E+REPULS)*TOKCAL
+    end if
+
+    return
+  end subroutine CGREPE_mlayer
   !
   SUBROUTINE CHGMIU(IR,IW,inize)
     !-----------------------------------------------------------------------

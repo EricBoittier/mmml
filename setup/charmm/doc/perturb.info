@@ -444,15 +444,15 @@ MOVE DIHE PENT 1 C2 PENT 1 C3 PENT 1 C4 PENT 1 C5 BY 5.0 -
 
 However, in the algorithm which changes bond and dihedral angles, a 
 perturbation in the forward direction corresponds to a counterclockwise 
-rotation of the atoms to be moved around the bond vector (e.g. C2ÐC3 or 
-C3ÐC4 in pentane).  Thus, with the above MOVE commands, the forward 
+rotation of the atoms to be moved around the bond vector (e.g. C2-C3 or 
+C3-C4 in pentane).  Thus, with the above MOVE commands, the forward 
 perturbation decreases phi while it increases psi.  That is not what we 
 wanted.  To fix the problem, we simply reverse the sign of the BY value in 
 one of the MOVE commands:
 
 MOVE DIHE PENT 1 C1 PENT 1 C2 PENT 1 C3 PENT 1 C4 BY 5.0 -
   INTE SELE ((ATOM PENT 1 C1) .OR. (ATOM PENT 1 C2)) END
-MOVE DIHE PENT 1 C2 PENT 1 C3 PENT 1 C4 PENT 1 C5 BY Ð5.0 -
+MOVE DIHE PENT 1 C2 PENT 1 C3 PENT 1 C4 PENT 1 C5 BY -5.0 -
   INTE SELE ((ATOM PENT 1 C4) .OR. (ATOM PENT 1 C5)) END
 
 Now the forward perturbation decreases both phi and psi and the reverse 

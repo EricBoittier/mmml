@@ -163,7 +163,7 @@ dynamics start langevin timestep 0.001 nstep @ndyn -
      iasvel 5 iasors 5 iunr -1 iunwri 25 -
      nsavc @outfrq nsavv 0 punit 12 -
      iuncrd 26  iunvel -1 isvfrq 10000 -
-     iunldm 27
+     iunldm 27 iseed 1
 
 close unit 8
 close unit 12
@@ -202,7 +202,7 @@ dynamics restart langevin timestep 0.001 nstep @ndyn -
 close unit 8
 close unit 12
 close unit 24
-close unit 25 
+close unit 25
 close unit 26
 
 
@@ -212,4 +212,3 @@ if pertlam le 1.0 goto looplam
 
 
 STOP
-

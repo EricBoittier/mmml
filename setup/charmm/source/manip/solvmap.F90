@@ -1,6 +1,6 @@
 ! Calculates solvation map 
 !
-! by Wonmuk Hwang, 2014,2017
+! by Wonmuk Hwang, 2014,2017,2026(bugfix)
 !
 module solvmap
     use chm_kinds
@@ -20,7 +20,7 @@ module solvmap
     use parallel, only: mynod,mynodp,numnod,comm_charmm,psnd4,psnd8
 !    use parallel, only: mynod,mynodp,numnod,comm_charmm,mpi_integer_size, &
 !       mpi_real8_size
-    use mpi
+    use mpi_f08
 #endif
 
     implicit none
@@ -787,6 +787,7 @@ subroutine slv_dift(x,y,z,wmain,natom,nunit,firstu,nskip,nbegn,nstop, &
   ! local vars
   integer numvisit
   real rcut2,wdist2,dt
+  real wdist2_tmp(1)
   integer, allocatable,dimension(:) :: solvent,solute ! section subset
   real(chm_real4),allocatable,dimension(:) :: itemp
   integer,allocatable,dimension(:) :: ifreat
@@ -825,7 +826,9 @@ subroutine slv_dift(x,y,z,wmain,natom,nunit,firstu,nskip,nbegn,nstop, &
   call mpi_barrier(COMM_CHARMM,ierr)
   call psnd8(xmax,1); call psnd8(ymax,1); call psnd8(zmax,1);
   call psnd8(xmin,1); call psnd8(ymin,1); call psnd8(zmin,1);
-  call psnd4r(wdist2,1) ! possibly bug
+  wdist2_tmp(1) = wdist2
+  call psnd4r(wdist2_tmp,1)
+  wdist2 = wdist2_tmp(1)
   call psnd4(nx,1); call psnd4(ny,1); call psnd4(nz,1);
   call psnd4(npoint,1); call psnd4(nslct,1); call psnd4(nsolv,1);
   call mpi_barrier(COMM_CHARMM,ierr)
@@ -1343,6 +1346,7 @@ subroutine write_data(adata,ounit,outmode,res,rcut,label)
            write(ounit,'(a,i5,a,i5,a,i5,a,i5)') '# nx= ',nx,' ny= ',ny, &
                 ' nz= ',nz, '  NCOORD= ',ncoord
            write(ounit,'(a,f7.3,a,f10.3)') '# binsize= ',res, ' Rcut= ',rcut
+           write(ounit,'(a)') '# x,y,z below: voxel center coordinate'
            write(ounit,'(a,a15)') '# ix       x      iy       y      iz       z       ',   label
 81         FORMAT(I4,' ',F10.4,' ',I4,' ',F10.4,' ',I4,' ',F10.4,' ',ES15.5E3)
            do iz = 1, nz
@@ -1377,7 +1381,10 @@ subroutine write_data(adata,ounit,outmode,res,rcut,label)
            idum=2
            nx4=nx; ny4=ny; nz4=nz
            amin4=amin; amax4=amax; amean4=amean; rms4=rms
-           ncs=ceiling(x0/res); nrs=ceiling(y0/res); nss=ceiling(z0/res)
+           ! The following sents coords to voxel center
+           !ncs=ceiling(x0/res); nrs=ceiling(y0/res); nss=ceiling(z0/res)
+           ! Set coords to voxel corner to follow MRC file convention
+           ncs=ceiling(xmin/res); nrs=ceiling(ymin/res); nss=ceiling(zmin/res)
            ncs=ncs-1; nrs=nrs-1; nss=nss-1
            rdum=xmax-xmin; XL=rdum;
            rdum=ymax-ymin; YL=rdum;
@@ -1386,9 +1393,13 @@ subroutine write_data(adata,ounit,outmode,res,rcut,label)
            mapc=1 ; mapr=2 ; maps=3
            ISPG=1 ; NSYMBT=0 ; LSKFLG=0
            SKWMAT = (/ 0,0,0, 0,0,0, 0,0,0 /); SKWTRN = (/ 0,0,0 /)
-           do k = 1, 15
+           ! do k = 1, 15
+           do k = 1, 12
               EXTRA(k) = 0.0
            enddo
+           EXTRA(13)=real(x0) ! physical origin of the voxel center
+           EXTRA(14)=real(y0) ! used by chimerax
+           EXTRA(15)=real(z0) ! 
            MAP='MAP' ; MACHST='DA'
            LABEL_N(1)='::::CHARMM::::SOLVMAP::::' // label//'::::'
            write(cdum1,'(F6.3)') res; write(cdum2,'(F6.3)') rcut; 

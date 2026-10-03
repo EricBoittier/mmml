@@ -1,7 +1,8 @@
-__kernel void correctEnergy(const int N, const int idist, __global float * d_lig_sum_f) { 
-    for (int idx = get_group_id(0)*get_local_size(0) + get_local_id(0);
-            idx < N;
-            idx += get_local_size(0)*get_num_groups(0) ){
+/* gpu_compat.h is prepended at compile time */
+
+KERNEL void correctEnergy(const int N, const int idist,
+                          GLOBAL float * d_lig_sum_f) {
+    for (int idx = THREAD_ID; idx < N; idx += GRID_STRIDE) {
         d_lig_sum_f[idx] = d_lig_sum_f[idx] / idist;
     }
 }

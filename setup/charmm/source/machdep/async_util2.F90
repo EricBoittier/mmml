@@ -9,11 +9,12 @@
 !
 ! this routine exchanges integer lists (e.g. atom numbers) between CPUS, with non-blocking calls.
 ! it first exchanges the number of atoms in the lists; then it exchanges the lists themselves.
-   use asynccomg 
-   use chm_types, only: arofar_i4,arofar_i8 
+   use asynccomg
+   use chm_types, only: arofar_i4,arofar_i8
    use memory
    use parallel, only: gcomb
-!LMYSIMATM_L   !temporary  
+   use mpi_f08
+!LMYSIMATM_L   !temporary
    implicit none
    integer,intent(in),dimension(:) :: CPULIST !list of selected cpus
    integer,intent(in),dimension(:) :: LISTBYCPU,LISTHI,LISTMNY
@@ -24,7 +25,7 @@
    integer :: IBEG,IEND,II,NODE,CNT,ATM
    integer :: RRND,SRND,ADD,CPU
    integer,allocatable,dimension(:) :: RNODAR,SNODAR  
-   integer(chm_int4),allocatable,dimension(:),save :: LOCSHAND,LOCRHAND
+   TYPE(MPI_Request),allocatable,dimension(:),save :: LOCSHAND,LOCRHAND
 #if KEY_INTEGER8==1
    type(arofar_i8),allocatable,dimension(:),save :: LOCRBUF,LOCSBUF
 #else /**/
@@ -270,10 +271,11 @@
   use parallel,only: MYNODP !temporary
   use memory
   use asynccomg
+  use mpi_f08
   implicit none
   integer,dimension(:),intent(in) :: OTHCPUS  ! list of other cpus in the group
   integer,intent(in) :: NUMNODGR  !number of cpus in this group (not including me)
-  integer,intent(in) :: MYINTEGER  
+  integer,intent(in) :: MYINTEGER
   integer,intent(in) :: NUMNODES  !number of nodes in system (dimension of OTHERSINT)
   integer,allocatable,dimension(:),intent(out) :: OTHERSINT !integers received from others
 !local
@@ -283,10 +285,9 @@
   type(arofar_i8),allocatable,dimension(:),save :: LOCRBUF,LOCSBUF
 #else /**/
   type(arofar_i4),allocatable,dimension(:),save :: LOCRBUF,LOCSBUF
-#endif 
-  integer(chm_int4),allocatable,dimension(:) :: LOCSHAND,LOCRHAND
+#endif
+  TYPE(MPI_Request),allocatable,dimension(:) :: LOCSHAND,LOCRHAND
 !  integer,allocatable,dimension(:) :: NULLRECV
-  include 'mpif.h'  !temporary
   integer(chm_int4) :: status !temporary
 ! end of decl
 
@@ -347,10 +348,11 @@
 !  use async_util,only: cleannull
   use memory
   use asynccomg
+  use mpi_f08
   implicit none
   integer,dimension(:),intent(in) :: CPUSEND,CPURECV  ! list of other cpus in the group
   integer,intent(in) :: NCPUSEND,NCPURECV  !number of cpus in this group (not including me)
-  integer,intent(in) :: MYINTEGER  
+  integer,intent(in) :: MYINTEGER
   integer,intent(in) :: NUMNODES  !number of nodes in system (dimension of OTHERSINT)
   integer,allocatable,dimension(:),intent(out) :: OTHERSINT !integers received from others
 !local
@@ -360,10 +362,9 @@
   type(arofar_i8),allocatable,dimension(:),save :: LOCRBUF,LOCSBUF
 #else /**/
   type(arofar_i4),allocatable,dimension(:),save :: LOCRBUF,LOCSBUF
-#endif 
-  integer(chm_int4),allocatable,dimension(:) :: LOCSHAND,LOCRHAND
+#endif
+  TYPE(MPI_Request),allocatable,dimension(:) :: LOCSHAND,LOCRHAND
 !  integer,allocatable,dimension(:) :: NULLRECV
-  include 'mpif.h'  !temporary
   integer(chm_int4) :: status !temporary
   integer,dimension(:),allocatable,save :: RNODARR,SNODARR
   integer :: NRNODARR,NSNODARR
@@ -445,6 +446,7 @@
   use memory
   use asynccomg
 !  use async_util,only: cleannull
+  use mpi_f08
   implicit none
   integer,dimension(:),intent(in) :: CPUSEND,CPURECV  ! list of other cpus in the group
   integer,intent(in) :: NCPUSEND,NCPURECV  !number of cpus in this group (not including me)
@@ -452,7 +454,7 @@
   integer,dimension(:),intent(in) :: RECVMNY  ! length of list blocks to receive
   integer,dimension(:),intent(out) :: RECVLIST,RECVHI  !recvhi could probably be eliminated
   integer,intent(in) :: NUMNODES  !number of nodes in ccator (dimension of OTHERSINT)
-  integer(chm_int4),intent(in),optional :: PCCATOR  !communicator
+  TYPE(MPI_Comm),intent(in),optional :: PCCATOR  !communicator
   integer(chm_int4),intent(in),optional :: plabint  !communicator
   real(chm_real),intent(inout),optional,dimension(:),target :: PSXX,PSYY,PSZZ
   real(chm_real),intent(inout),optional,dimension(:),target :: PRXX,PRYY,PRZZ
@@ -463,12 +465,11 @@
   type(arofar_i8),allocatable,dimension(:),save :: LOCRBUF,LOCSBUF
 #else /**/
   type(arofar_i4),allocatable,dimension(:),save :: LOCRBUF,LOCSBUF
-#endif 
-  integer(chm_int4),allocatable,dimension(:) :: LOCSHAND,LOCRHAND
+#endif
+  TYPE(MPI_Request),allocatable,dimension(:) :: LOCSHAND,LOCRHAND
 !  integer,allocatable,dimension(:) :: NULLRECV
-  include 'mpif.h'  !temporary
   integer(chm_int4) :: status !temporary
-  integer(chm_int4) :: ccator  !communicator
+  TYPE(MPI_Comm) :: ccator  !communicator
   integer :: NODE2 !temporary
   logical :: QXYZDATA,QXYZDATA2
   real(chm_real),pointer,dimension(:) :: RECVX,RECVY,RECVZ
@@ -631,12 +632,12 @@
    use parallel,only: NUMNOD,MYNODP
    use nbndcc_utilb,only: parstoperr
    use chm_types
-   implicit none 
+   use mpi_f08
+   implicit none
    integer,dimension(:),allocatable,intent(in) :: NTCPUSEN,NTCPUREC
    integer,intent(in) :: NNTCPUSEN,NNTCPUREC
    integer,optional,intent(in) :: plabint
    logical,optional,intent(in) :: pqverb
-   include 'mpif.h'
 ! local
    integer(chm_int4) :: status
    integer,dimension(:,:),allocatable :: DEBUGRECS,DEBUGSENDS,TOTALREC,TOTALSEN

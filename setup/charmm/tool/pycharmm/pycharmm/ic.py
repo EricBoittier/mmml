@@ -41,7 +41,7 @@ Examples
 
 import ctypes
 
-import pycharmm.lib as lib
+from pycharmm.loader import lib
 
 
 # fill internal coords with values from parameter file
@@ -65,13 +65,13 @@ def prm_fill(replace_all):
     if replace_all:
         flag = ctypes.c_int(1)
 
-    lib.charmm.ic_fill_from_param_file(ctypes.byref(flag))
+    lib.ic_fill_from_param_file(ctypes.byref(flag))
 
 
 def show():
     """Print the internal coordinates of a molecule
     """
-    lib.charmm.ic_print()
+    lib.ic_print()
 
 
 def edit_dihedral(res1, atom1,
@@ -121,7 +121,7 @@ def edit_dihedral(res1, atom1,
 
     new_psi = ctypes.c_double(new_psi)
 
-    lib.charmm.ic_edit_dihedral(ctypes.byref(res1), atom1,
+    lib.ic_edit_dihedral(ctypes.byref(res1), atom1,
                                 ctypes.byref(res2), atom2,
                                 ctypes.byref(res3), atom3,
                                 ctypes.byref(res4), atom4,
@@ -167,7 +167,7 @@ def edit_angle(res1, atom1,
 
     new_angle = ctypes.c_double(new_angle)
 
-    lib.charmm.ic_edit_angle(ctypes.byref(res1), atom1,
+    lib.ic_edit_angle(ctypes.byref(res1), atom1,
                              ctypes.byref(res2), atom2,
                              ctypes.byref(res3), atom3,
                              ctypes.byref(new_angle))
@@ -204,7 +204,7 @@ def edit_dist(res1, atom1,
 
     new_dist = ctypes.c_double(new_dist)
 
-    lib.charmm.ic_edit_dist(ctypes.byref(res1), atom1,
+    lib.ic_edit_dist(ctypes.byref(res1), atom1,
                             ctypes.byref(res2), atom2,
                             ctypes.byref(new_dist))
 
@@ -237,7 +237,7 @@ def seed(res1, atom1,
     res3 = ctypes.c_int(res3)
     atom3 = ctypes.create_string_buffer(atom3.encode())
 
-    lib.charmm.ic_seed(ctypes.byref(res1), atom1,
+    lib.ic_seed(ctypes.byref(res1), atom1,
                        ctypes.byref(res2), atom2,
                        ctypes.byref(res3), atom3)
 
@@ -251,4 +251,4 @@ def build():
     placed on the first opportunity (no checking is done for currently placed
     atoms).
     """
-    lib.charmm.ic_build()
+    lib.ic_build()

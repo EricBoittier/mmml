@@ -106,26 +106,26 @@
 #if (KEY_MULTICOM==1)
       use multicom_aux;
 #endif
-      use mpi
+      use mpi_f08
       use param_store, only: set_param
       use parallel, only: psnd4, psnd8
 !
       implicit none
 #if (KEY_PARALLEL==1)
 #if (KEY_SINGLE==1)
- integer :: mpifloat=MPI_REAL
+ TYPE(MPI_Datatype) :: mpifloat=MPI_REAL
 #endif
 #if (KEY_SINGLE==0)
- integer :: mpifloat=MPI_REAL8
+ TYPE(MPI_Datatype) :: mpifloat=MPI_REAL8
 #endif
 #if (KEY_INTEGER8==0)
- integer :: mpiint=MPI_INTEGER
+ TYPE(MPI_Datatype) :: mpiint=MPI_INTEGER
 #endif
 #if (KEY_INTEGER8==1)
- integer :: mpiint=MPI_INTEGER8
+ TYPE(MPI_Datatype) :: mpiint=MPI_INTEGER8
 #endif
- integer :: mpichar=MPI_CHARACTER
- integer :: mpibool=MPI_LOGICAL
+ TYPE(MPI_Datatype) :: mpichar=MPI_CHARACTER
+ TYPE(MPI_Datatype) :: mpibool=MPI_LOGICAL
 #endif
 !
       logical :: qroot, qslave
@@ -204,7 +204,7 @@
 #if (KEY_MULTICOM==1)
       use multicom_aux;
 #endif
-      use mpi
+      use mpi_f08
       use param_store, only: set_param
 
       implicit none
@@ -674,7 +674,7 @@ call trima(methods(interp_method), mlen)
       use dimens_fcm
       use coord; use coordc
       use string
-      use mpi
+      use mpi_f08
       use psf
 !
       implicit none
@@ -684,22 +684,22 @@ call trima(methods(interp_method), mlen)
 !
 #if (KEY_PARALLEL==1)
 #if (KEY_SINGLE==1)
- integer :: mpifloat=MPI_REAL
+ TYPE(MPI_Datatype) :: mpifloat=MPI_REAL
 #endif
 #if (KEY_SINGLE==0)
- integer :: mpifloat=MPI_REAL8
+ TYPE(MPI_Datatype) :: mpifloat=MPI_REAL8
 #endif
 #if (KEY_INTEGER8==0)
- integer :: mpiint=MPI_INTEGER
+ TYPE(MPI_Datatype) :: mpiint=MPI_INTEGER
 #endif
 #if (KEY_INTEGER8==1)
- integer :: mpiint=MPI_INTEGER8
+ TYPE(MPI_Datatype) :: mpiint=MPI_INTEGER8
 #endif
- integer :: mpichar=MPI_CHARACTER
- integer :: mpibool=MPI_LOGICAL
+ TYPE(MPI_Datatype) :: mpichar=MPI_CHARACTER
+ TYPE(MPI_Datatype) :: mpibool=MPI_LOGICAL
 #endif
 !
-      integer :: stat(MPI_STATUS_SIZE)
+      TYPE(MPI_Status) :: stat
       integer :: ierror
       integer :: me, ncpu
       integer :: i, j
@@ -957,7 +957,7 @@ call trima(methods(interp_method), mlen)
       subroutine sm0k_confcons(from_sd_,var) ! optionally, accepts variables directly from sd minimizer; no fixed atom support yet
 ! conformational consistency check within SM0K
 !
-      use mpi
+      use mpi_f08
       use stream
       use multicom_aux;
       use coord; use coordc
@@ -979,22 +979,22 @@ call trima(methods(interp_method), mlen)
 !
 #if (KEY_PARALLEL==1)
 #if (KEY_SINGLE==1)
- integer :: mpifloat=MPI_REAL
+ TYPE(MPI_Datatype) :: mpifloat=MPI_REAL
 #endif
 #if (KEY_SINGLE==0)
- integer :: mpifloat=MPI_REAL8
+ TYPE(MPI_Datatype) :: mpifloat=MPI_REAL8
 #endif
 #if (KEY_INTEGER8==0)
- integer :: mpiint=MPI_INTEGER
+ TYPE(MPI_Datatype) :: mpiint=MPI_INTEGER
 #endif
 #if (KEY_INTEGER8==1)
- integer :: mpiint=MPI_INTEGER8
+ TYPE(MPI_Datatype) :: mpiint=MPI_INTEGER8
 #endif
- integer :: mpichar=MPI_CHARACTER
- integer :: mpibool=MPI_LOGICAL
+ TYPE(MPI_Datatype) :: mpichar=MPI_CHARACTER
+ TYPE(MPI_Datatype) :: mpibool=MPI_LOGICAL
 #endif
 !
-      integer :: stat(MPI_STATUS_SIZE)
+      TYPE(MPI_Status) :: stat
 !
 !
       character(len=len("SM0K_CONFCONS>") ),parameter::whoami="SM0K_CONFCONS>";!macro
@@ -1082,7 +1082,7 @@ call trima(methods(interp_method), mlen)
 ! this is a plain wrapper around the chirality checker routine
 !
       use stream
-      use mpi
+      use mpi_f08
       use multicom_aux;
       use coord; use coordc
       use psf
@@ -1103,19 +1103,19 @@ call trima(methods(interp_method), mlen)
 !
 #if (KEY_PARALLEL==1)
 #if (KEY_SINGLE==1)
- integer :: mpifloat=MPI_REAL
+ TYPE(MPI_Datatype) :: mpifloat=MPI_REAL
 #endif
 #if (KEY_SINGLE==0)
- integer :: mpifloat=MPI_REAL8
+ TYPE(MPI_Datatype) :: mpifloat=MPI_REAL8
 #endif
 #if (KEY_INTEGER8==0)
- integer :: mpiint=MPI_INTEGER
+ TYPE(MPI_Datatype) :: mpiint=MPI_INTEGER
 #endif
 #if (KEY_INTEGER8==1)
- integer :: mpiint=MPI_INTEGER8
+ TYPE(MPI_Datatype) :: mpiint=MPI_INTEGER8
 #endif
- integer :: mpichar=MPI_CHARACTER
- integer :: mpibool=MPI_LOGICAL
+ TYPE(MPI_Datatype) :: mpichar=MPI_CHARACTER
+ TYPE(MPI_Datatype) :: mpibool=MPI_LOGICAL
 #endif
 !
 !
@@ -1186,7 +1186,7 @@ call trima(methods(interp_method), mlen)
 !
       use bestfit, only : eig3s, RMSBestFit, rmsd, norm3, veccross3
       use stream
-      use mpi
+      use mpi_f08
       use string
       use dimens_fcm
       use number
@@ -1838,7 +1838,7 @@ call trima(methods(interp_method), length)
       use tsms_mod, only:qtsm
 #endif
 #if (KEY_MPI==1)
-      use mpi
+      use mpi_f08
 #endif
 !ccccccccccccccccccccccccccccccccccccccccccccccccc
       implicit none
@@ -2338,24 +2338,24 @@ call trima(methods(interp_method), length)
       use multicom_aux;
 #endif
       use number
-      use mpi
+      use mpi_f08
 !
       implicit none
 #if (KEY_PARALLEL==1)
 #if (KEY_SINGLE==1)
- integer :: mpifloat=MPI_REAL
+ TYPE(MPI_Datatype) :: mpifloat=MPI_REAL
 #endif
 #if (KEY_SINGLE==0)
- integer :: mpifloat=MPI_REAL8
+ TYPE(MPI_Datatype) :: mpifloat=MPI_REAL8
 #endif
 #if (KEY_INTEGER8==0)
- integer :: mpiint=MPI_INTEGER
+ TYPE(MPI_Datatype) :: mpiint=MPI_INTEGER
 #endif
 #if (KEY_INTEGER8==1)
- integer :: mpiint=MPI_INTEGER8
+ TYPE(MPI_Datatype) :: mpiint=MPI_INTEGER8
 #endif
- integer :: mpichar=MPI_CHARACTER
- integer :: mpibool=MPI_LOGICAL
+ TYPE(MPI_Datatype) :: mpichar=MPI_CHARACTER
+ TYPE(MPI_Datatype) :: mpibool=MPI_LOGICAL
 #endif
 !
       integer :: n

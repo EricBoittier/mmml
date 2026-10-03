@@ -3,7 +3,6 @@ module api_energy
   use chm_kinds, only: chm_real
   implicit none
 
-#if KEY_LIBRARY == 1
   integer, parameter :: &
        eprop_name_size = 4, &
        eterm_name_size = 4
@@ -111,7 +110,7 @@ contains
   integer(c_int) function get_eterm_statuses(out_qeterms) bind(c)
     use, intrinsic :: iso_c_binding, only: c_double, c_int
     use api_util, only: f2c_logical
-    use energym, only: qeterm, lenenp
+    use energym, only: qeterm, lenent
 
     implicit none
 
@@ -119,7 +118,14 @@ contains
     integer :: i
 
     get_eterm_statuses = 0
-    do i = 1, lenenp
+    ! QETERM is dimensioned LENENT, not LENENP.  This loop used LENENP,
+    ! so every term index above LENENP was never copied out and the
+    ! caller saw whatever its buffer held -- zero, i.e. "term disabled",
+    ! for pyCHARMM, which allocates a zeroed array.  With LENENP=60 and
+    ! LENENT=128 that silently reported terms 61-128 as always off,
+    ! including NNPO and the CF* custom-force buckets, and hence dropped
+    ! them from energy.get_energy()'s DataFrame.
+    do i = 1, lenent
        out_qeterms(i) = f2c_logical(qeterm(i))
     end do
     get_eterm_statuses = 1
@@ -403,5 +409,5 @@ contains
             'term name ' // eterm_name // ' not found')
     end if
   end function get_eterm_by_name
-#endif /* KEY_LIBRARY */
+
 end module api_energy

@@ -17,6 +17,15 @@ contains
     ! use cnst_fcm, only: allocate_cnst
     use cstran_mod, only: setup_fix_const
     use psf, only: natom, nbond, ntheta
+#if KEY_BLADE==1
+    use blade_main, only: system_dirty
+#endif
+#if KEY_OPENMM==1
+    use omm_ctrl, only: omm_system_changed
+#endif
+#if KEY_DOMDEC==1
+    use domdec_common, only: domdec_system_changed
+#endif
 
     use code, only: &
 #if KEY_CMAP==1
@@ -119,6 +128,16 @@ contains
 
     if (mstup) call psfsum(outu)
     success = f2c_logical(qsuccess)
+
+#if KEY_BLADE==1
+    system_dirty = .true.
+#endif
+#if KEY_OPENMM==1
+    call omm_system_changed()
+#endif
+#if KEY_DOMDEC==1
+    call domdec_system_changed()
+#endif
   end function cons_fix_turn_off
 
   !> @brief set up fix constraints
@@ -142,6 +161,15 @@ contains
     ! use cnst_fcm, only: allocate_cnst
     use cstran_mod, only: setup_fix_const
     use psf, only: nbond, ntheta
+#if KEY_BLADE==1
+    use blade_main, only: system_dirty
+#endif
+#if KEY_OPENMM==1
+    use omm_ctrl, only: omm_system_changed
+#endif
+#if KEY_DOMDEC==1
+    use domdec_common, only: domdec_system_changed
+#endif
 
     use code, only: &
 #if KEY_CMAP==1
@@ -242,5 +270,15 @@ contains
 
     if (mstup) call psfsum(outu)
     success = f2c_logical(qsuccess)
+
+#if KEY_BLADE==1
+    system_dirty = .true.
+#endif
+#if KEY_OPENMM==1
+    call omm_system_changed()
+#endif
+#if KEY_DOMDEC==1
+    call domdec_system_changed()
+#endif
   end function cons_fix_setup
 end module api_cons_fix

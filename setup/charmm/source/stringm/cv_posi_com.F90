@@ -354,7 +354,7 @@ write(info(1),*)' POSITION_COM_',pos,' CV ALREADY PRESENT. NOTHING DONE.';call w
        subroutine cv_posi_com_list(i)
       use stream
       use multicom_aux;
-      use mpi
+      use mpi_f08
       use chutil, only : atomid
 !
        character(len=132)::info(21)=(/'','','','','','','','','','','','','','','','','','','','',''/);! output buffer

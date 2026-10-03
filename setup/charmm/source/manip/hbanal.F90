@@ -377,7 +377,7 @@ contains
     use psf
 #if KEY_PARALLEL==1
     use parallel
-    use mpi
+    use mpi_f08
 #endif
     use stream
     use memory
@@ -438,7 +438,8 @@ contains
     integer, parameter :: pario_len = 10*8+38
     character(len=pario_len),allocatable,dimension(:) :: pario_lines
     integer pario_count ! how many lines need to be send/received
-    integer pario_i, pario_tag, pario_stat(mpi_status_size), pario_err
+    TYPE(MPI_Status) :: pario_stat
+    integer pario_i, pario_tag, pario_err
     integer pario_st, pario_sk
     integer,allocatable,dimension(:) :: pario_count_all
 #endif

@@ -75,7 +75,7 @@ SUBROUTINE GREC(FROM,TAG,BUF,LEN)
   use parallel,only:COMM_CHARMM    
 #endif
 #if KEY_MPI==1
-  use mpi                          
+  use mpi_f08                          
 #endif
 
   implicit none
@@ -88,7 +88,9 @@ SUBROUTINE GREC(FROM,TAG,BUF,LEN)
 #endif 
   !
 #if KEY_MPI==1
-  INTEGER M_STAT(MPI_STATUS_SIZE),IERR,REQ,COUNT,size
+  TYPE(MPI_Status) :: M_STAT
+  TYPE(MPI_Request) :: REQ
+  INTEGER IERR,COUNT,size
   IF(LEN.GT.0) THEN
      CALL MPI_IRECV(BUF,LEN,MPI_BYTE,FROM,TAG,COMM_CHARMM,REQ, &
           IERR)
@@ -101,7 +103,7 @@ SUBROUTINE GREC(FROM,TAG,BUF,LEN)
   !      CALL DDI_RECV(BUF,(LEN+7)/8,FROM)
 ! for DDI:  CALL DDI_RECV(BUF,LEN/8,FROM)
   !
-#endif 
+#endif
   !
   RETURN
 END SUBROUTINE GREC
@@ -116,7 +118,7 @@ SUBROUTINE GRECMAP(FROM,TAG,BUF,LEN)
   use chm_kinds
   use parallel
 #if KEY_MPI==1
-  use mpi                          
+  use mpi_f08
 #endif
   !
   implicit none
@@ -125,10 +127,12 @@ SUBROUTINE GRECMAP(FROM,TAG,BUF,LEN)
   BYTE BUF(*)
 #else /**/
   INTEGER BUF(*)
-#endif 
+#endif
   !
 #if KEY_MPI==1
-  INTEGER M_STAT(MPI_STATUS_SIZE),IERR,REQ,COUNT,size
+  TYPE(MPI_Status) :: M_STAT
+  TYPE(MPI_Request) :: REQ
+  INTEGER IERR,COUNT,size
   IF(LEN.GT.0) THEN
      CALL MPI_IRECV(BUF,LEN,MPI_BYTE,IPPMAP(FROM),TAG, &
           COMM_CHARMM,REQ,IERR)
@@ -203,7 +207,7 @@ SUBROUTINE GSEN(TO,TAG,BUF,LEN)
   use parallel,only:COMM_CHARMM    
 #endif
 #if KEY_MPI==1
-  use mpi                          
+  use mpi_f08                          
 #endif
   implicit none
   !
@@ -215,7 +219,9 @@ SUBROUTINE GSEN(TO,TAG,BUF,LEN)
 #endif 
   !
 #if KEY_MPI==1
-  INTEGER IERR,REQ,M_STAT(MPI_STATUS_SIZE)
+  TYPE(MPI_Status) :: M_STAT
+  TYPE(MPI_Request) :: REQ
+  INTEGER IERR
   IF(LEN.GT.0) THEN
      CALL MPI_ISEND(BUF,LEN,MPI_BYTE,TO,TAG,COMM_CHARMM,REQ, &
           IERR)
@@ -229,7 +235,7 @@ SUBROUTINE GSEN(TO,TAG,BUF,LEN)
   !      CALL DDI_SEND(BUF,(LEN+7)/8,TO)
 ! for DDI:  CALL DDI_SEND(BUF,LEN/8,TO)
   !
-#endif 
+#endif
   !
   RETURN
 END SUBROUTINE GSEN
@@ -244,7 +250,7 @@ SUBROUTINE GSENMAP(TO,TAG,BUF,LEN)
   use chm_kinds
   use parallel
 #if KEY_MPI==1
-  use mpi                          
+  use mpi_f08
 #endif
   !
   implicit none
@@ -253,10 +259,12 @@ SUBROUTINE GSENMAP(TO,TAG,BUF,LEN)
   BYTE BUF(*)
 #else /**/
   INTEGER BUF(*)
-#endif 
+#endif
   !
 #if KEY_MPI==1
-  INTEGER IERR,REQ,M_STAT(MPI_STATUS_SIZE)
+  TYPE(MPI_Status) :: M_STAT
+  TYPE(MPI_Request) :: REQ
+  INTEGER IERR
   IF(LEN.GT.0) THEN
      CALL MPI_ISEND(BUF,LEN,MPI_BYTE,IPPMAP(TO),TAG, &
           COMM_CHARMM,REQ,IERR)
@@ -357,7 +365,7 @@ SUBROUTINE GRECSEN(TO,TAG,RBUF,RLEN,SBUF,SLEN)
   use memory
 #if KEY_MPI==1
   use parallel,only:COMM_CHARMM    
-  use mpi                          
+  use mpi_f08                          
 #endif
 
   implicit none
@@ -369,8 +377,12 @@ SUBROUTINE GRECSEN(TO,TAG,RBUF,RLEN,SBUF,SLEN)
   !
 #if KEY_MPI==1
   INTEGER I
-  INTEGER REQ(2),STATUS_ARRAY(MPI_STATUS_SIZE,2),IERR, &
-       MTO,MTYPE,MRLEN,MSLEN,WTALL,MDP,MCOMM
+  TYPE(MPI_Request) :: REQ(2)
+  TYPE(MPI_Status) :: STATUS_ARRAY(2)
+  TYPE(MPI_Datatype) :: MDP
+  TYPE(MPI_Comm) :: MCOMM
+  INTEGER IERR, &
+       MTO,MTYPE,MRLEN,MSLEN,WTALL
   !
   MTO=TO
   MTYPE=ABS(TAG)
@@ -432,7 +444,7 @@ SUBROUTINE GRECSENR(ME,IPPMAP,NUMNOD,ITYPE,W,JLEN,X,ILEN)
   use parallel,only:COMM_CHARMM    
 #endif
 #if KEY_MPI==1
-  use mpi                          
+  use mpi_f08                          
 #endif
 
   implicit none
@@ -445,8 +457,12 @@ SUBROUTINE GRECSENR(ME,IPPMAP,NUMNOD,ITYPE,W,JLEN,X,ILEN)
   !
 #if KEY_MPI==1
   !
-  INTEGER ITMP,REQ(2),STATUS_ARRAY(MPI_STATUS_SIZE,2),IERR, &
-       MILEN,MITYPE,MJLEN,WTALL,MDP,MCOMM
+  TYPE(MPI_Request) :: REQ(2)
+  TYPE(MPI_Status) :: STATUS_ARRAY(2)
+  TYPE(MPI_Datatype) :: MDP
+  TYPE(MPI_Comm) :: MCOMM
+  INTEGER ITMP,IERR, &
+       MILEN,MITYPE,MJLEN,WTALL
   !
 
   MDP = MPI_DOUBLE_PRECISION
@@ -495,7 +511,7 @@ SUBROUTINE SWAP1D(N,XL,XR,PL,PR)
   use parallel,only:COMM_CHARMM    
 #endif
 #if KEY_MPI==1 && KEY_CMPI==1
-  use mpi                          
+  use mpi_f08                          
 #endif
   implicit none
   INTEGER N,PL,PR
@@ -504,8 +520,12 @@ SUBROUTINE SWAP1D(N,XL,XR,PL,PR)
   !
 #if KEY_CMPI==1
 #if KEY_MPI==1
-  INTEGER REQ(2),STATUS_ARRAY(MPI_STATUS_SIZE,2),IERR,WTALL, &
-       MN,MPL,MPR,MDP,MCOMM
+  TYPE(MPI_Request) :: REQ(2)
+  TYPE(MPI_Status) :: STATUS_ARRAY(2)
+  TYPE(MPI_Datatype) :: MDP
+  TYPE(MPI_Comm) :: MCOMM
+  INTEGER IERR,WTALL, &
+       MN,MPL,MPR
   !
   IF ( (PL.LT.0) .AND. (PR.LT.0) ) RETURN
   MN=N
@@ -552,7 +572,7 @@ SUBROUTINE SWAPD3(N,X,XL,XR,PL,PR)
   use parallel,only:COMM_CHARMM   
 #endif
 #if KEY_MPI==1 && KEY_CMPI==1
-  use mpi                         
+  use mpi_f08                         
 #endif
 
   implicit none
@@ -562,8 +582,12 @@ SUBROUTINE SWAPD3(N,X,XL,XR,PL,PR)
   !
 #if KEY_CMPI==1
 #if KEY_MPI==1
-  INTEGER REQ(4),STATUS_ARRAY(MPI_STATUS_SIZE,4),IERR,WTALL, &
-       MN,MPL,MPR,MDP,MCOMM
+  TYPE(MPI_Request) :: REQ(4)
+  TYPE(MPI_Status) :: STATUS_ARRAY(4)
+  TYPE(MPI_Datatype) :: MDP
+  TYPE(MPI_Comm) :: MCOMM
+  INTEGER IERR,WTALL, &
+       MN,MPL,MPR
   !
   MN=N
   MPL=PL

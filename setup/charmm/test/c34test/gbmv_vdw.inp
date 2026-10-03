@@ -6,6 +6,15 @@
 * Author: S. Tanizaki/M. Feig, Michigan State University June 2005
 *
 
+! Self-checking.  Every quantity checked below is bit-identical on 1, 2 and
+! 8 MPI ranks, so the tolerances are tight on purpose: this test's job is to
+! notice if the GBVDW nonpolar term or its first derivative changes.  It used
+! to check nothing at all and was graded by diffing its output, which never
+! worked -- an unguarded debug WRITE inside the per-atom GBVDW loop made ~8000
+! lines of the output reorder with MPI rank interleaving on every run.
+! Reference values captured on morrison (conda-forge gcc, Linux x86_64) per
+! the policy in test/data/test.str.
+
 stream datadir.def
 
 open unit 1 read card name @0/top_all22_prot.inp
@@ -137,6 +146,21 @@ GBMV CORR 1 -
 
 test first tol 0.00001 step 0.000001 select (type CA) end
 
+! The 5 CA atoms contribute 3 derivative components each, and ?NOK counts
+! how many agreed with the finite-difference value inside TOL -- so 15 means
+! every one of them did.  This is the check the testcase is named for.
+! NOTE: `test first` only shows analytic and numerical derivatives agree with
+! each other.  Both come from the same energy routine, so it stays at 15 even
+! if that energy is wrong; the energy checks below are what catch that.
+@testcheck ?NOK 15 -0.5 gbmv_vdw_dfirst_std
+
+! Polar GB energy, nonpolar (GBVDW) term, and total, at the input geometry.
+@testcheck ?GBEN -281.848191 1e-5 gbmv_vdw_gben_std
+@testcheck ?ASP 27.9269748 1e-5 gbmv_vdw_asp_std
+@testcheck ?ENER -137.927116 1e-5 gbmv_vdw_ener_std
+set e0std ?ENER
+
+
 !-------------------------------------------------------------------------------
 ! Molecular dynamics 
 !-------------------------------------------------------------------------------
@@ -156,6 +180,19 @@ dyna leap -
      iunwri -1 iuncrd -1 iunrea -1 kunit -1 -
      iprfrq 50 nprint 1 nsavc 0 nsavv 0  -
      iseed 314159
+
+! The state after 10 steps of dynamics is NOT a fixed number: velocities come
+! from the RNG, and CHARMM's testcases run under -prevclcg, which selects a
+! different generator from the default.  So this is a sanity band against the
+! energy this run itself started from -- wide enough for either generator
+! (drift seen: 32 kcal under -prevclcg, 42 without) and still narrow enough to
+! catch a blown-up or NaN trajectory.  Capture the state here; the FAST
+! section below is evaluated on exactly these coordinates, so it can be
+! compared against these values rather than against captured constants.
+@testcheck ?ENER @e0std -150.0 gbmv_vdw_dyna_std
+set ednstd ?ENER
+set gbndstd ?GBEN
+set aspdstd ?ASP
 
 GBMV CLEA
 
@@ -177,6 +214,19 @@ GBMV CORR 1 -
 
 test first tol 0.00001 step 0.000001 select (type CA)  end
 
+@testcheck ?NOK 15 -0.5 gbmv_vdw_dfirst_fast
+
+! FAST is set up on the coordinates the standard run left behind, so its
+! absolute energies inherit that trajectory and are not fixed numbers.  What
+! IS reproducible, and is the real point of the test, is that the fast
+! approximation reproduces the standard implementation on the SAME structure.
+! Measured agreement is ~5e-6 on all three terms, so 1e-4 leaves ample room
+! for another platform while still catching the fast path drifting away.
+@testcheck ?ENER @ednstd 1e-4 gbmv_vdw_fast_matches_ener
+@testcheck ?GBEN @gbndstd 1e-4 gbmv_vdw_fast_matches_gben
+@testcheck ?ASP @aspdstd 1e-4 gbmv_vdw_fast_matches_asp
+set e0fast ?ENER
+
 !-------------------------------------------------------------------------------
 ! Molecular dynamics 
 !-------------------------------------------------------------------------------
@@ -195,5 +245,17 @@ dyna leap -
      iunwri -1 iuncrd -1 iunrea -1 kunit -1 -
      iprfrq 50 nprint 1 nsavc 0 nsavv 0 -
      iseed 314159
+
+! Same reasoning as the standard endpoint above (drift seen: 7 kcal under
+! -prevclcg, 14 without).
+@testcheck ?ENER @e0fast -100.0 gbmv_vdw_dyna_fast
+
+if @testfail eq 0 then
+   set status PASS
+else
+   set status FAIL - @testfail failing tests
+endif
+
+echo GBMV_VDW TESTCASE RESULT: @status
 
 stop

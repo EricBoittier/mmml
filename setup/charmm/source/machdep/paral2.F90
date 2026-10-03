@@ -18,7 +18,7 @@ SUBROUTINE CMPI_INIT(STATUS &
   use stream
   use number
 #if KEY_MPI==1
-  use mpi                     
+  use mpi_f08                     
 #endif
 #if KEY_MULTICOM==1 /*  VO stringm */
   use multicom_aux            
@@ -142,7 +142,7 @@ SUBROUTINE CMPI_BCAST(ARRAY,LENGTH,SIZE,ROOT,WORLD,STATUS)
   use stream
   use parallel
 #if KEY_MPI==1
-  use mpi   
+  use mpi_f08   
 #endif
 
   implicit none

@@ -15,6 +15,13 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 """Functions to configure nonbonded interactions
+
+IMPORTANT: PME/EWALD electrostatics require orthorhombic crystal boxes!
+Non-orthorhombic crystals (monoclinic, triclinic, hexagonal, rhombohedral,
+truncated octahedron, rhombic dodecahedron) will cause CHARMM to die with:
+    "The periodic box is non orthorhombic (EWALD wont work)"
+
+Use check_pme_crystal_compatibility() to verify before enabling PME.
    controlling how energy is calculated to compute forces for
    minimization, dynamics or simply energy commands
 
@@ -25,16 +32,35 @@ for more information
 
 Functions
 =========
-- `set_cutnb` -- change cutnb
-- `set_ctonnb` -- change ctonnb
-- `set_ctofnb` -- change ctofnb
-- `set_eps` -- change eps
-- `use_cdie` -- turn cdie on
-- `use_atom` -- turn atom on
-- `use_fswitch` -- turn fswitch on
-- `use_vatom` -- turn vatom on
-- `use_vfswitch` -- turn vfswitch on
+Setters
+-------
+- `set_cutnb` -- change cutnb (nonbond list cutoff distance)
+- `set_ctonnb` -- change ctonnb (switching function start distance)
+- `set_ctofnb` -- change ctofnb (switching function end distance)
+- `set_cutim` -- change cutim (image update cutoff distance)
+- `set_eps` -- change eps (dielectric constant)
+- `set_inbfrq` -- change inbfrq (nonbond list update frequency)
+- `set_imgfrq` -- change imgfrq (image list update frequency)
+
+Getters
+-------
+- `get_cutnb` -- get current cutnb value
+- `get_ctonnb` -- get current ctonnb value
+- `get_ctofnb` -- get current ctofnb value
+
+Toggles
+-------
+- `use_cdie` -- use constant dielectric (1/R energy form)
+- `use_atom` -- compute interactions on atom-atom pair basis
+- `use_fswitch` -- use switching function on forces only
+- `use_vatom` -- compute VDW on atom-atom pair basis
+- `use_vfswitch` -- use switching function on VDW forces
+
+Utilities
+---------
 - `configure` -- set nonbonded params from a dict
+- `update_bnbnd` -- update non-bonded exclusion list
+- `update_nbxmod` -- update NBXMod parameter
 
 Examples
 ========
@@ -59,7 +85,7 @@ Another way to setup the nonbonded interactions
 """
 
 import ctypes
-import pycharmm.lib as lib
+from pycharmm.loader import lib
 
 
 def set_inbfrq(new_inbfrq):
@@ -89,7 +115,7 @@ def set_inbfrq(new_inbfrq):
                  the old inbfrq
     """
     new_inbfrq = ctypes.c_int(new_inbfrq)
-    old_inbfrq = lib.charmm.nbonds_set_inbfrq(ctypes.byref(new_inbfrq))
+    old_inbfrq = lib.nbonds_set_inbfrq(ctypes.byref(new_inbfrq))
     return old_inbfrq
 
 
@@ -121,7 +147,7 @@ def set_imgfrq(new_imgfrq):
                  the old imgfrq
     """
     new_imgfrq = ctypes.c_int(new_imgfrq)
-    old_imgfrq = lib.charmm.nbonds_set_imgfrq(ctypes.byref(new_imgfrq))
+    old_imgfrq = lib.nbonds_set_imgfrq(ctypes.byref(new_imgfrq))
     return old_imgfrq
 
 
@@ -140,7 +166,7 @@ def set_cutim(new_cutim):
     """
     new_cutim = ctypes.c_double(new_cutim)
 
-    c_set_cutim = lib.charmm.nbonds_set_cutim
+    c_set_cutim = lib.nbonds_set_cutim
     c_set_cutim.restype = ctypes.c_double
 
     old_cutim = c_set_cutim(ctypes.byref(new_cutim))
@@ -162,7 +188,7 @@ def set_cutnb(new_cutnb):
     """
     new_cutnb = ctypes.c_double(new_cutnb)
 
-    c_set_cutnb = lib.charmm.nbonds_set_cutnb
+    c_set_cutnb = lib.nbonds_set_cutnb
     c_set_cutnb.restype = ctypes.c_double
 
     old_cutnb = c_set_cutnb(ctypes.byref(new_cutnb))
@@ -184,7 +210,7 @@ def set_ctonnb(new_ctonnb):
     """
     new_ctonnb = ctypes.c_double(new_ctonnb)
 
-    c_set_ctonnb = lib.charmm.nbonds_set_ctonnb
+    c_set_ctonnb = lib.nbonds_set_ctonnb
     c_set_ctonnb.restype = ctypes.c_double
 
     old_ctonnb = c_set_ctonnb(ctypes.byref(new_ctonnb))
@@ -206,7 +232,7 @@ def set_ctofnb(new_ctofnb):
     """
     new_ctofnb = ctypes.c_double(new_ctofnb)
 
-    c_set_ctofnb = lib.charmm.nbonds_set_ctofnb
+    c_set_ctofnb = lib.nbonds_set_ctofnb
     c_set_ctofnb.restype = ctypes.c_double
 
     old_ctofnb = c_set_ctofnb(ctypes.byref(new_ctofnb))
@@ -228,7 +254,7 @@ def set_eps(new_eps):
     """
     new_eps = ctypes.c_double(new_eps)
 
-    c_set_eps = lib.charmm.nbonds_set_eps
+    c_set_eps = lib.nbonds_set_eps
     c_set_eps.restype = ctypes.c_double
 
     old_eps = c_set_eps(ctypes.byref(new_eps))
@@ -241,12 +267,11 @@ def use_cdie():
 
     Returns
     -------
-    old_cdie : float
-               the old cdie
+    old_cdie : bool
+        the previous cdie setting
     """
-    old_cdie = lib.charmm.nbonds_use_cdie()
-    bool(old_cdie)
-    return old_cdie
+    old_cdie = lib.nbonds_use_cdie()
+    return bool(old_cdie)
 
 
 def use_atom():
@@ -254,12 +279,11 @@ def use_atom():
 
     Returns
     -------
-    old_atom : float
-               the old atom
+    old_atom : bool
+        the previous atom setting
     """
-    old_atom = lib.charmm.nbonds_use_atom()
-    bool(old_atom)
-    return old_atom
+    old_atom = lib.nbonds_use_atom()
+    return bool(old_atom)
 
 
 def use_vatom():
@@ -267,12 +291,11 @@ def use_vatom():
 
     Returns
     -------
-    old_vatom : float
-               the old vatom
+    old_vatom : bool
+        the previous vatom setting
     """
-    old_vatom = lib.charmm.nbonds_use_vatom()
-    bool(old_vatom)
-    return old_vatom
+    old_vatom = lib.nbonds_use_vatom()
+    return bool(old_vatom)
 
 
 def use_fswitch():
@@ -280,12 +303,11 @@ def use_fswitch():
 
     Returns
     -------
-    old_fswitch : float
-               the old fswitch
+    old_fswitch : bool
+        the previous fswitch setting
     """
-    old_fswitch = lib.charmm.nbonds_use_fswitch()
-    bool(old_fswitch)
-    return old_fswitch
+    old_fswitch = lib.nbonds_use_fswitch()
+    return bool(old_fswitch)
 
 
 def use_vfswitch():
@@ -293,12 +315,11 @@ def use_vfswitch():
 
     Returns
     -------
-    old_vfswitch : float
-               the old vfswitch
+    old_vfswitch : bool
+        the previous vfswitch setting
     """
-    old_vfswitch = lib.charmm.nbonds_use_vfswitch()
-    bool(old_vfswitch)
-    return old_vfswitch
+    old_vfswitch = lib.nbonds_use_vfswitch()
+    return bool(old_vfswitch)
 
 
 def configure(**kwargs):
@@ -336,76 +357,110 @@ def configure(**kwargs):
     return True
 
 
-# Addition Kai Toepfer May 2022
-def get_cutnb():
-    """Get cutnb, the distance cutoff for interacting particle pairs.
-
-    Returns
-    -------
-    cutnb : float
-        the current cutnb (Å)
-
-    Raises
-    ------
-    AttributeError
-        When ``libcharmm`` was built without ``nbonds_get_cutnb``.
-    RuntimeError
-        When the Fortran getter fails.
-    """
-    if not hasattr(lib.charmm, "nbonds_get_cutnb"):
-        raise AttributeError(
-            "libcharmm lacks nbonds_get_cutnb; rebuild libcharmm from current mmml source"
-        )
-    old_cutnb = (ctypes.c_double * 1)()
-    status = lib.charmm.nbonds_get_cutnb(old_cutnb)
-    if not bool(status):
-        raise RuntimeError('There was a problem fetching cutnb.')
-    return float(old_cutnb[0])
-
-
-def get_ctonnb():
-    """Get ctonnb, distance after which the switching function is active
-
-    Returns
-    -------
-    old_ctonnb : float
-                 the current ctonnb
-    """
-    
-    old_ctonnb = (ctypes.c_double * 1)()
-    status = lib.charmm.nbonds_get_ctonnb(old_ctonnb)
-    qstatus = bool(status)
-    if not qstatus:
-        raise RuntimeError('There was a problem fetching ctonnb.')
-
-    return list(old_ctonnb)[0]
-
-
-def get_ctofnb():
-    """Get ctofnb, distance at which switching function stops being used
-
-    Returns
-    -------
-    old_ctonnb : float
-                 the current ctofnb
-    """
-    
-    old_ctofnb = (ctypes.c_double * 1)()
-    status = lib.charmm.nbonds_get_ctofnb(old_ctofnb)
-    qstatus = bool(status)
-    if not qstatus:
-        raise RuntimeError('There was a problem fetching ctofnb.')
-
-    return list(old_ctofnb)[0]
-
-
 def update_bnbnd():
     """Update non-bonded exclusion list
     """
     
-    lib.charmm.nbonds_update_bnbnd()
+    lib.nbonds_update_bnbnd()
     
     return
+
+
+def get_cutnb():
+    """Get the current value of cutnb from CHARMM
+
+    Returns
+    -------
+    float
+        the current cutnb value
+    """
+    get_cutnb_c = lib.nbonds_get_cutnb
+    get_cutnb_c.restype = ctypes.c_double
+    cutnb = get_cutnb_c()
+    return cutnb
+
+
+def get_ctonnb():
+    """Get the current value of ctonnb from CHARMM
+
+    Returns
+    -------
+    float
+        the current ctonnb value
+    """
+    get_ctonnb_c = lib.nbonds_get_ctonnb
+    get_ctonnb_c.restype = ctypes.c_double
+    ctonnb = get_ctonnb_c()
+    return ctonnb
+
+
+def get_ctofnb():
+    """Get the current value of ctofnb from CHARMM
+
+    Returns
+    -------
+    float
+        the current ctofnb value
+    """
+    get_ctofnb_c = lib.nbonds_get_ctofnb
+    get_ctofnb_c.restype = ctypes.c_double
+    ctofnb = get_ctofnb_c()
+    return ctofnb
+
+
+def update_nbxmod():
+    """Update the NBXMod parameter in CHARMM based on current nonbond settings.
+    """
+    lib.nbonds_update_nbxmod()
+
+
+def get_cutnb():
+    """Get the current value of cutnb from CHARMM
+
+    Returns
+    -------
+    float
+        the current cutnb value
+    """
+    get_cutnb_c = lib.nbonds_get_cutnb
+    get_cutnb_c.restype = ctypes.c_double
+    cutnb = get_cutnb_c()
+    return cutnb
+
+
+def get_ctonnb():
+    """Get the current value of ctonnb from CHARMM
+
+    Returns
+    -------
+    float
+        the current ctonnb value
+    """
+    get_ctonnb_c = lib.nbonds_get_ctonnb
+    get_ctonnb_c.restype = ctypes.c_double
+    ctonnb = get_ctonnb_c()
+    return ctonnb
+
+
+def get_ctofnb():
+    """Get the current value of ctofnb from CHARMM
+
+    Returns
+    -------
+    float
+        the current ctofnb value
+    """
+    get_ctofnb_c = lib.nbonds_get_ctofnb
+    get_ctofnb_c.restype = ctypes.c_double
+    ctofnb = get_ctofnb_c()
+    return ctofnb
+
+
+def update_nbxmod():
+    """Update the NBXMod parameter in CHARMM based on current nonbond settings.
+    """
+    lib.nbonds_update_nbxmod()
+
 
 
 def get_primary_pair_count():
@@ -415,7 +470,7 @@ def get_primary_pair_count():
     Returns ``None`` when unavailable.
     """
     try:
-        getter = lib.charmm.nbonds_get_primary_pair_count
+        getter = lib.nbonds_get_primary_pair_count
     except AttributeError:
         return None
     return int(getter())
@@ -427,8 +482,8 @@ def export_primary_pairs(*, max_pairs: int | None = None):
     Returns ``None`` when the C API is unavailable.
     """
     try:
-        exporter = lib.charmm.nbonds_export_primary_pairs
-        counter = lib.charmm.nbonds_get_primary_pair_count
+        exporter = lib.nbonds_export_primary_pairs
+        counter = lib.nbonds_get_primary_pair_count
     except AttributeError:
         return None
     cap = int(max_pairs) if max_pairs is not None else int(counter())
@@ -442,4 +497,3 @@ def export_primary_pairs(*, max_pairs: int | None = None):
         raise RuntimeError("nbonds_export_primary_pairs failed")
     n = int(out_count[0])
     return [int(out_i[k]) for k in range(n)], [int(out_j[k]) for k in range(n)]
-

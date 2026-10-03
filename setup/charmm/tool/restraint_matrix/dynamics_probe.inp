@@ -1,0 +1,116 @@
+* Does a restraint actually act during dynamics through a given engine, or is
+* it only reported by an energy call?  Runs the same short trajectory twice
+* from identical coordinates and the same RNG stream, once with the restraint
+* and once without, and reports how far the two end up apart.
+*
+
+! Driven by run_dyn_probe.sh.  A bare '*' ends the title block, so this note
+! is in comments.
+!
+!   charmm -prevclcg rtype=pull engine=blade rest=yes -i dynamics_probe.inp
+!
+! Run it with rest=yes and rest=no and compare: if the restraint does not act,
+! the two trajectories are bit-identical.  An energy call cannot tell the
+! difference, because CHARMM evaluates the restraint itself either way.
+
+stream datadir.def
+
+read rtf card name @0/top_all22_prot.inp
+read param card name @0/par_all22_prot.inp
+
+read sequ coor card name @0/5dfr_minimized.crd
+generate 5dfr setup first nter last cter
+read sequ tip3 7023
+generate wat setup noangl nodihe
+read coor card name @0/5dfr_solv.crd
+
+faster on
+Crystal define cubic 62.23 62.23 62.23 90.0 90.0 90.0
+crystal build cutoff 11 noper 0
+image byseg xcen 0.0 ycen 0.0 zcen 0.0 select segid 5dfr end
+image byres xcen 0.0 ycen 0.0 zcen 0.0 select segid wat end
+
+! ---------------- the restraint, deliberately strong ----------------
+
+if @rest eq yes then
+
+   if @rtype eq consdihe then
+      cons dihe bynu 1 5 7 8 min 30.0 width 0.0 force 500.0 period 0
+   endif
+
+   if @rtype eq hmcm then
+      cons hmcm force 500.0 weig refx 20.0 refy 0.0 refz 0.0 -
+           sele bynu 1000:1010 end
+   endif
+
+   if @rtype eq mdip then
+      mmfp
+         mdip xdir 1.0 dip0 0.0 force 5000.0 power 1 -
+              select segid wat .and. resid 1 end
+      end
+   endif
+
+   if @rtype eq pull then
+      pull force 500.0 xdir 1.0 select segid 5dfr .and. type CA end
+   endif
+
+   if @rtype eq rgy then
+      rgyr force 500.0 refe 5.0 select segid 5dfr .and. type CA end
+   endif
+
+   if @rtype eq cdro then
+      cons drop force 0.01 expo 4
+   endif
+
+   ! positive control: BLaDE is known to honour NOE, so this must move
+   if @rtype eq noe then
+      noe
+         assign kmin 500.0 rmin 12.0 kmax 500.0 rmax 12.0 fmax 5000.0 -
+            select segid 5dfr .and. resid 10 .and. type CA end -
+            select segid 5dfr .and. resid 20 .and. type CA end
+      end
+   endif
+
+endif
+
+set nb = e14fac 1.5 eps 1.0 cutnb 11 cutim 11 ctofnb 9 ctonnb 7.5 vswi -
+     Ewald kappa 0.320 pmEwald order 4 fftx 64 ffty 64 fftz 64
+
+! BLaDE refuses a non-zero NTRFRQ, and PME refuses a zero one.  Both engines
+! terminate on the disagreement, so pick per engine.  Either value means
+! "never fires" over 200 steps, and each engine is compared against itself
+! with the same setting, so the comparison is unaffected.
+set ntrf = 100000
+if @engine eq blade set ntrf = 0
+
+coor copy comp
+
+if @engine eq blade then
+   blade on
+endif
+if @engine eq omm then
+   omm on
+endif
+
+if @engine eq omm then
+   dynamics leap start omm nstep 200 timestep 0.001 -
+      firstt 300 finalt 300 tstruct 300 -
+      nprint 200 iprfrq 200 ntrfrq @ntrf nsavc 0 nsavv 0 -
+      iunread -1 iunwrite -1 iunc -1 iunv -1 kunit -1 @nb
+else
+   dynamics leap start nstep 200 timestep 0.001 -
+      firstt 300 finalt 300 tstruct 300 -
+      nprint 200 iprfrq 200 ntrfrq @ntrf nsavc 0 nsavv 0 -
+      iunread -1 iunwrite -1 iunc -1 iunv -1 kunit -1 @nb
+endif
+
+coor stat select segid 5dfr .and. type CA end
+set cx = ?xave
+set cy = ?yave
+set cz = ?zave
+coor rms select segid 5dfr end
+set dr = ?rms
+
+echo DYNEFFECT @engine @rtype rest @rest cx @cx cy @cy cz @cz rms @dr
+
+stop

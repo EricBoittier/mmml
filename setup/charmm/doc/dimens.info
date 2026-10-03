@@ -44,6 +44,8 @@ Data Structure Size
  maxshk (chsize)     Maximum number of SHAKE constraints
  maxaim (chsize*2)   Maximum number of atoms including images
  maxgrp (chsize*2/3) Maximum number of groups
+ maxpar (10240)      Maximum number of CHARMM parameter tokens (@variables)
+ iatbmx (8)          Maximum number of bonds per atom
 
 	Example:
 

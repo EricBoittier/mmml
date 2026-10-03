@@ -91,7 +91,7 @@ energy lambda 0.3 lstart 0.3 lstop 0.3
 set E5 ?ener
 
 shake bonh para
-dynamics start nstep 20 timestep 0.002 nprint 5  ntrfrq 100 lambda 0.3 lstart 0.3 lstop 0.3 pstop 20
+dynamics start nstep 20 timestep 0.002 nprint 5  ntrfrq 100 lambda 0.3 lstart 0.3 lstop 0.3 pstop 20 iseed 1 2 3 4
 energy lambda 0.3 lstart 0.3 lstop 0.3
 set E6 ?ener
 !! Also change LJ radii
@@ -147,7 +147,7 @@ pressure inst
 
 energy lambda 0.3  lstart 0.3 lstop 0.3
 @qcheck ?ener @E5 @tol lookup_pert_18
-dynamics start nstep 20 timestep 0.002 nprint 5  ntrfrq 100 lstart 0.3 lstop 0.3 pstop 20 lambda 0.3
+dynamics start nstep 20 timestep 0.002 nprint 5  ntrfrq 100 lstart 0.3 lstop 0.3 pstop 20 lambda 0.3 iseed 1 2 3 4
 energy lambda 0.3  lstart 0.3 lstop 0.3
 @qcheck ?ener @E6 @tol lookup_pert_19
 !! Also change LJ radii
@@ -243,7 +243,7 @@ pressure inst
 
 energy lambda 0.3 lstart 0.3 lstop 0.3
 set PME5 ?ener
-dynamics start nstep 20 timestep 0.002 nprint 5  ntrfrq 100 lstart 0.3 lstop 0.3 pstop 20 lambda 0.3
+dynamics start nstep 20 timestep 0.002 nprint 5  ntrfrq 100 lstart 0.3 lstop 0.3 pstop 20 lambda 0.3 iseed 1 2 3 4
 energy lambda 0.3 lstart 0.3 lstop 0.3
 set PME6 ?ener
 !! Also change LJ radii
@@ -288,7 +288,7 @@ pressure inst
 
 energy lambda 0.3  lstart 0.3 lstop 0.3
 @qcheck ?ener @PME5 @tol lkpme_15
-dynamics start nstep 20 timestep 0.002 nprint 5  ntrfrq 100 lstart 0.3 lstop 0.3 pstop 20 lambda 0.3
+dynamics start nstep 20 timestep 0.002 nprint 5  ntrfrq 100 lstart 0.3 lstop 0.3 pstop 20 lambda 0.3 iseed 1 2 3 4
 energy lambda 0.3  lstart 0.3 lstop 0.3
 @qcheck ?ener @PME6 @tol lkpme_16
 !! Also change LJ radii

@@ -1,0 +1,42 @@
+*>>>>>>>> All-Hydrogen Parameter File for a Ligand from AMBER GAFF2 <<<<<<
+*>>>>>>>>>>>>>>>>>>>>>>> C. L. Brooks III <<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+*
+
+ATOMS
+MASS  -1  _ha    1.00800 ! H1
+MASS  -1  _ca   12.01000 ! C1
+MASS  -1  _cl   35.45000 ! Cl1
+
+BONDS
+! atom types   Kb    b0
+_ca  _ca   354.250   1.3986
+_ca  _cl   187.980   1.7572
+_ca  _ha   360.690   1.0860
+
+ANGLES
+! atom types     Ktheta    Theta0
+_ca  _ca  _ca    63.670   120.02
+_ca  _ca  _cl    64.060   119.38
+_ca  _ca  _ha    44.900   119.88
+
+DIHEDRALS
+! atom types     Kchi    n    delta
+_ca  _ca  _ca  _ca     3.625 2    180.0
+_ca  _ca  _ca  _cl     3.625 2    180.0
+_ca  _ca  _ca  _ha     3.625 2    180.0
+_cl  _ca  _ca  _ha     3.625 2    180.0
+_ha  _ca  _ca  _ha     3.625 2    180.0
+
+IMPROPERS
+! atom types     Kpsi    n    delta
+_ca  _ca  _ca  _cl     1.100 2    180.0
+_ha  _ca  _ca  _ca     1.100 2    180.0
+
+NONBONDED nbxmod 5 atom cdiel switch vatom vdistance vswitch -
+cutnb 14.0 ctofnb 12.0 ctonnb 10.0 eps 1.0 e14fac 0.8333 wmin 1.5
+!type  ignored   epsilon  Rmin/2   ignored   epsilon,1-4    Rmin/2,1-4
+_ca    0.000000  -0.098800   1.860600   0.000000  -0.049400   1.860600
+_cl    0.000000  -0.263800   1.945200   0.000000  -0.131900   1.945200
+_ha    0.000000  -0.016100   1.473500   0.000000  -0.008050   1.473500
+
+END

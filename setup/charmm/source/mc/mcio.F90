@@ -59,6 +59,13 @@ contains
 #if KEY_DHDGB==1
     real(chm_real) DUM_FHDGB(TOTALS)
 #endif
+#if KEY_MIDSINR == 1
+    ! dummy variables and memory allocations
+    logical :: q_midsinr=.false.
+    integer :: L_val=1
+    real(chm_real),pointer :: v_1ij(:,:,:)=>Null(), &
+                              v_2ij(:,:,:)=>Null()
+#endif
     !
     !     Time is stored such that 1000 steps appear as 1 ps
     !
@@ -119,6 +126,12 @@ contains
                   '/      will not be written to trajectory.', &
                   '/      CHEQ not yet enabled for MC.'
           ENDIF
+#endif
+#if KEY_MIDSINR == 1
+          if(associated(v_1ij)) deallocate(v_1ij)
+          if(associated(v_2ij)) deallocate(v_2ij)
+          allocate(v_1ij(3,L_val,natom))
+          allocate(v_2ij(3,L_val,natom))
 #endif 
           IDP(1:NATOM) = ZERO
           RS = FLOAT(ISDMC)
@@ -139,6 +152,9 @@ contains
                .FALSE., IDP, IDP, IDP,            & 
 #endif
                ISTEP,ISTEP,3*NATOM,NSTEPS,NSAVC,0,RS,TKELV,0,0 &
+#if KEY_MIDSINR == 1
+               , q_midsinr,v_1ij,v_2ij,L_val        &
+#endif
 #if KEY_BLOCK==1 /*ldm*/
                , .FALSE., .FALSE. &
                , 0, (/ ZERO /), (/ ZERO /), (/ ZERO /), 0 &
@@ -160,6 +176,10 @@ contains
           call chmdealloc('mcio.src','MCWRCD','ICGTMP',NATOM,crl=ICGTMP)
 #endif 
           call chmdealloc('mcio.src','MCWRCD','IDP',NATOM,crl=IDP)
+#if KEY_MIDSINR == 1
+          if(associated(v_1ij)) deallocate(v_1ij)
+          if(associated(v_2ij)) deallocate(v_2ij)
+#endif
        ENDIF
     ENDIF
 
@@ -205,6 +225,13 @@ contains
     real(chm_real) DUM_FHDGB3(TOTALS)
     LOGICAL Q_DUM
 #endif
+#if KEY_MIDSINR == 1
+    ! dummy variables and memory allocations
+    logical :: q_midsinr=.false.,q_midsinr_vinit=.false.
+    integer :: L_val=1
+    real(chm_real),pointer :: v_1ij(:,:,:)=>Null(), &
+                              v_2ij(:,:,:)=>Null()
+#endif
     !
     !       Dummy array
     call chmalloc('mcio.src','MCRDCD','IDP',NATOM,crl=IDP)
@@ -215,6 +242,12 @@ contains
     call chmalloc('mcio.src','MCRDCD','ICGOLD',NATOM,crl=ICGOLD)
     call chmalloc('mcio.src','MCRDCD','IVCG',NATOM,crl=IVCG)
     write(outu,*) "--------- QCG ",qcg
+#endif
+#if KEY_MIDSINR == 1
+    if(associated(v_1ij)) deallocate(v_1ij)
+    if(associated(v_2ij)) deallocate(v_2ij)
+    allocate(v_1ij(3,L_val,natom))
+    allocate(v_2ij(3,L_val,natom))
 #endif 
     CALL READYN(IUNREA,NATOM,X,Y,Z, &
          IDP, IDP, IDP, &
@@ -232,6 +265,10 @@ contains
          .FALSE., IDP, IDP, IDP,                    & 
 #endif
          I,I,I,I,I,I,RS,R,I,I &
+#if KEY_MIDSINR == 1
+         ,q_midsinr,q_midsinr_vinit     &
+         ,v_1ij,v_2ij,L_val             &
+#endif
 #if KEY_BLOCK==1 /*ldm*/
          , .FALSE., .FALSE. &
          , 0, (/ ZERO /),  (/ ZERO /),  (/ ZERO /), I &
@@ -254,6 +291,10 @@ contains
     call chmdealloc('mcio.src','MCRDCD','ICG',NATOM,crl=ICG)
 #endif 
     call chmdealloc('mcio.src','MCRDCD','IDP',NATOM,crl=IDP)
+#if KEY_MIDSINR == 1
+    if(associated(v_1ij)) deallocate(v_1ij)
+    if(associated(v_2ij)) deallocate(v_2ij)
+#endif
     RETURN
   END SUBROUTINE MCRDCD
 

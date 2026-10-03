@@ -1,0 +1,52 @@
+MLpot test case: ammonia in water
+=================================
+
+test_mlpot_asparagus.py exercises the MLpot module end to end: it builds the
+system, evaluates the energy first with CGenFF and then with a trained
+machine-learning model potential, and continues with a structure optimization
+and short heating and NVE runs so that energy conservation can be checked.
+
+There are two MLpot tests, and they cover different things:
+
+  test_mlpot_energy_terms.py    the MLPO/MLEL energy-term plumbing, driven
+                                with stub callbacks.  Needs nothing
+                                installed and runs in the normal sweep.
+
+  test_mlpot_asparagus.py       this one.  Needs ASE, Asparagus and the
+                                trained model, and runs real dynamics.
+
+
+Running it
+----------
+
+1. Install CHARMM/pyCHARMM as instructed.
+
+2. Install Asparagus, which supplies the model potential:
+
+     git clone https://github.com/MMunibas/Asparagus.git
+     cd Asparagus
+     python -m pip install .
+
+   and put it on PYTHONPATH:
+
+     export PYTHONPATH=/home/user/Asparagus:$PYTHONPATH
+
+3. It is marked `slow`, so the default sweep skips it.  Ask for it by name:
+
+     cd tool/pycharmm
+     pytest -m slow tests/test_mlpot_asparagus.py
+
+   It also still runs on its own, the way the original script did:
+
+     python tests/test_mlpot_asparagus.py
+
+Without ASE, Asparagus or the model present it skips rather than failing,
+which is what happens on a machine that has none of them.
+
+
+The model
+---------
+
+data/model_nh3/ holds the trained model this test uses: config.json and
+best/best_model.pt.  The configuration ships with "device": "cpu" so the test
+runs on a machine without a GPU.  Change it to "cuda" to use one.

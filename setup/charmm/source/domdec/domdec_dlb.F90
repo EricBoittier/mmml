@@ -9,7 +9,7 @@ module domdec_dlb
 !#if KEY_CMPI==0 /*not_cmpi*/
   use chm_kinds
   use dimens_fcm
-  use mpi
+  use mpi_f08
   implicit none
   private
 
@@ -1103,7 +1103,7 @@ contains
     use parallel,only:comm_charmm,mynod,numnod
     use inbnd,only:cutnb
     use groupxfast,only:maxgrp_rad
-    use mpi
+    use mpi_f08
     use domdec_common,only:energy_time,nx,ny,nz,homeix,homeiy,homeiz,nx_comm,ny_comm,frx,fry,frz,&
          nodeind
     use reawri,only:qcnstp
@@ -1123,7 +1123,8 @@ contains
     real(chm_real) min_nodefr_x, min_nodefr_y, min_nodefr_z
     integer i, j, ihi, jhi
     integer nx_comm0, nx_comm1, ny_comm0, ny_comm1
-    integer status(MPI_STATUS_SIZE), ierror
+    TYPE(MPI_Status) :: status
+    integer ierror
     logical ok, ok_and_all
     !
 !!$    integer nseed
@@ -1676,7 +1677,7 @@ contains
   ! *
   subroutine comm_nodefry(min_nx, max_nx)
     use parallel,only:comm_charmm
-    use mpi
+    use mpi_f08
     use memory
     use domdec_common
     implicit none
@@ -1684,16 +1685,19 @@ contains
     integer min_nx, max_nx
     ! Variables
     integer i, node, ierror, ireq
-    integer, save, allocatable :: stats(:,:), req(:)
+    TYPE(MPI_Status), save, allocatable :: stats(:)
+    TYPE(MPI_Request), save, allocatable :: req(:)
 
     if (q_load_balance_y) then
        i = (max_nx-min_nx+1)*2
        if (.not.allocated(stats)) then
-          call chmalloc('domdec_dlb.src','comm_nodefry','stats',MPI_STATUS_SIZE,i,intg=stats)
-          call chmalloc('domdec_dlb.src','comm_nodefry','req',i,intg=req)
+          allocate(stats(i))
+          allocate(req(i))
        elseif (size(req) < i) then
-          call chmrealloc('domdec_dlb.src','comm_nodefry','stats',MPI_STATUS_SIZE,i,intg=stats)
-          call chmrealloc('domdec_dlb.src','comm_nodefry','req',i,intg=req)
+          deallocate(stats)
+          deallocate(req)
+          allocate(stats(i))
+          allocate(req(i))
        endif
     
        ireq = 0
@@ -1738,7 +1742,7 @@ contains
   ! *
   subroutine comm_nodefrz(min_ny, max_ny, min_nx, max_nx)
     use parallel,only:comm_charmm
-    use mpi
+    use mpi_f08
     use memory
     use domdec_common
     implicit none
@@ -1746,16 +1750,19 @@ contains
     integer min_nx, max_nx, min_ny, max_ny
     ! Variables
     integer i, j, node, ierror, ireq
-    integer, save, allocatable :: stats(:,:), req(:)
+    TYPE(MPI_Status), save, allocatable :: stats(:)
+    TYPE(MPI_Request), save, allocatable :: req(:)
 
     if (q_load_balance_z) then
        i = (max_nx-min_nx+1)*(max_ny-min_ny+1)*2
        if (.not.allocated(stats)) then
-          call chmalloc('domdec_dlb.src','comm_nodefrz','stats',MPI_STATUS_SIZE,i,intg=stats)
-          call chmalloc('domdec_dlb.src','comm_nodefrz','req',i,intg=req)
+          allocate(stats(i))
+          allocate(req(i))
        elseif (size(req) < i) then
-          call chmrealloc('domdec_dlb.src','comm_nodefrz','stats',MPI_STATUS_SIZE,i,intg=stats)
-          call chmrealloc('domdec_dlb.src','comm_nodefrz','req',i,intg=req)
+          deallocate(stats)
+          deallocate(req)
+          allocate(stats(i))
+          allocate(req(i))
        endif
 
        ireq = 0
@@ -1808,7 +1815,7 @@ contains
        energy_time_x, energy_time_y, energy_time_z)
     use parallel,only:comm_charmm
     use number
-    use mpi
+    use mpi_f08
     use domdec_common,only:energy_time,nx,ny,nz,homeix,homeiy,homeiz,nodeind
     implicit none
     ! Input / Output
@@ -1816,7 +1823,8 @@ contains
     real(chm_real) energy_time_x(*), energy_time_y(*), energy_time_z(*)
     ! Variables
     integer i
-    integer ierror, status(MPI_STATUS_SIZE)
+    TYPE(MPI_Status) :: status
+    integer ierror
     real(chm_real) tmp
 
     if (energy_time < zero) energy_time = one

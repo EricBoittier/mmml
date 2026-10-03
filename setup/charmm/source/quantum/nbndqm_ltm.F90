@@ -87,7 +87,7 @@ module nbndqm_mod
   type(chm_iptr),save :: inbgrp, jnbgrp, igrpex, jgrpex, iatmex, jatmex, &
         imbgrp, jmbgrp
 
-  integer,save,pointer,dimension(:) :: iqmgpe,jqmgpe,iqmgex,jqmgex, iqmgpv, jqmgpv
+  integer,save,allocatable,dimension(:) :: iqmgpe,jqmgpe,iqmgex,jqmgex,iqmgpv,jqmgpv
 
   integer,save :: ngrp_old=0          ! also initializes
   integer,save :: nqmlen_nbnd=0
@@ -111,23 +111,27 @@ module nbndqm_mod
   integer,save,  allocatable,dimension(:)  :: IMATTQ
 
   ! size of qm groups
-  integer, parameter :: Maxqmg=200
+  integer, parameter :: Maxqmg=500 ! 200
 
   !
   LOGICAL QNBGRP
 #if KEY_MNDO97==1
-  logical,save :: q_cut_by_group=.false.
   logical,save :: qmswtch_qmmm  =.false.
-  integer,save :: num_mm_group=0
-  integer,save :: num_qm_group=0
-  integer,save :: num_mmatm_in_list=0
-  integer,save,pointer :: map_mmatom_to_group(:)=>Null()   ! map mm atom to its corresponding group in ngrp (igpbs). 
-  integer,save,pointer :: map_qmatom_to_group(:)=>Null()   ! map qm atom to its corresponding group in NQMGRP(1).
-  integer,save,pointer :: map_allatm_to_group(:)=>Null()   ! map each atom to its group in ngrp (igpbs).
-  integer,save,pointer :: map_mmgrp_to_group(:)=>Null()    ! map group in the list to the ngrp.
+
+  type,public :: map_grp
+     integer :: num_mm_group=0                       ! =0
+     integer :: num_qm_group=0                       ! =0
+     integer :: num_mmatm_in_list=0                  ! =0
+     integer,allocatable :: map_mmatom_to_group(:)   ! map mm atom to its corresponding group in ngrp (igpbs). 
+     integer,allocatable :: map_qmatom_to_group(:)   ! map qm atom to its corresponding group in NQMGRP(1).
+     integer,allocatable :: map_allatm_to_group(:)   ! map each atom to its group in ngrp (igpbs).
+     integer,allocatable :: map_mmgrp_to_group(:)    ! map group in the list to the ngrp.
+  end type map_grp
+  TYPE(map_grp), target,allocatable,save :: map_grp_r(:)
+  TYPE(map_grp),pointer,            save :: map_grp_c=>null()
 
   ! memory: mapping boxes to each group.
-  integer, pointer,save :: i_map_box(:,:)  =>Null()
+  integer, allocatable,save :: i_map_box(:,:)
 #endif
   !
 #endif 

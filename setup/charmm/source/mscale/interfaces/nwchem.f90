@@ -1,6 +1,6 @@
 Program interface_nwchem
   !        use nwchem_int
-  use mpi
+  use mpi_f08
   implicit none
   !----------------------------------------------------------------------
   !
@@ -27,8 +27,9 @@ Program interface_nwchem
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
   CHARACTER(LEN=250) :: PROGRAM
-  INTEGER(4) IERR,COMPARENT,MEROOT,IONE,MPIINT,MPIDP,N,MYNOD
-  INTEGER(4) MPICOMW,LENENT,NP
+  TYPE(MPI_Datatype) :: MPIINT, MPIDP
+  TYPE(MPI_Comm) :: COMPARENT, MPICOMW
+  INTEGER(4) :: IERR, MEROOT, IONE, N, MYNOD, LENENT, NP
   INTEGER ARGC,LL,LNWCPATH,NATOM,ASTAT,I,LFN,LETERM
   CHARACTER(LEN=100) :: ARG,FN
   REAL(8) QMEL

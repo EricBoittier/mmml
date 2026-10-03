@@ -358,7 +358,7 @@ subroutine fill_fstprs(nc,nct,shkapr,constr)
   use parallel
   use memory
   ! Following may need specail handling on some machines
-  use mpi
+  use mpi_f08
   implicit none
   integer nc,nct
   integer,allocatable,dimension(:),target :: itmpnc

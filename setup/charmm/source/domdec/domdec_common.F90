@@ -8,7 +8,7 @@ module domdec_common
   use chm_kinds
   use dimens_fcm
 #if KEY_DOMDEC==1
-  use mpi
+  use mpi_f08
 #endif 
   use number
   implicit none
@@ -262,6 +262,21 @@ contains
   ! *
   ! * Divides n iterations evenly on threads
   ! *
+  ! * The split is a plain contiguous index chunk (tid*n/nthread); it does NOT
+  ! * read any domdec spatial decomposition, so it is correct for both domdec
+  ! * and non-domdec builds. It is therefore governed by _OPENMP (whether the
+  ! * build has threads), not by KEY_DOMDEC. Previously the split was compiled
+  ! * out in --without-domdec builds, so every OpenMP thread received the full
+  ! * range (istart=1,iend=n); callers that partition atoms across threads
+  ! * (e.g. the colfft PME charge spread) then processed every atom on every
+  ! * thread, over-counting the reciprocal-space charge grid by ~nthread and
+  ! * the reciprocal energy by ~nthread^2.
+  ! *
+  ! * NOTE: callers MUST invoke this from inside an !$omp parallel region.
+  ! * Outside one, omp_get_thread_num() returns 0 while nthread>1, which would
+  ! * silently assign only the first 1/nthread of the work. This invariant was
+  ! * already required by the domdec build and is unchanged here.
+  ! *
   subroutine divide_thread_work(n, istart, iend)
     implicit none
     ! Input / Output
@@ -270,24 +285,18 @@ contains
 #ifdef _OPENMP
     ! Functions
     integer omp_get_thread_num
-#endif 
-#if KEY_DOMDEC==1
     ! Variables
     integer tid
-#endif 
+#endif
 
-#if KEY_DOMDEC==1 /*domdec*/
 #ifdef _OPENMP
     tid = omp_get_thread_num()
-#else /**/
-    tid = 0
-#endif 
     istart = tid*n/nthread + 1
     iend = (tid+1)*n/nthread
-#else /* (domdec)*/
+#else /**/
     istart = 1
     iend = n
-#endif /* (domdec)*/
+#endif
 
     return
   end subroutine divide_thread_work

@@ -1,0 +1,33 @@
+*>>>>>>>> All-Hydrogen Topology File for Proteins from AMBER parm19sb <<<<<<
+*>>>>>>>>>>>>>> Includes phi, psi cross-term map (CMAP) <<<<<<<<<<<<<<<<
+*>>>>>>>>>>>>>>>>>>>>>>> C. L. Brooks III <<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+*
+36  1
+
+MASS  -1  LP       0.00000 ! EPW
+MASS  -1  HW       1.00800 ! H1
+MASS  -1  OW      16.00000 ! O
+
+DECL -CA
+DECL -C
+DECL -O
+DECL +N
+DECL +HN
+DECL +CA
+DEFA FIRS NONE LAST NONE
+AUTO ANGLES DIHE PATCH
+
+RESI WAT 0.00
+ATOM O    OW      0.00000
+ATOM H1   HW      0.67914
+ATOM H2   HW      0.67914
+ATOM EPW  LP     -1.35828
+BOND O    EPW 
+BOND O    H1  
+BOND O    H2  
+BOND H1   H2  
+ANGL H1 O H2
+ACCE O
+LONEPAIR bisector EPW O H1 H2  distance 0.1594 angle 0.0 dihe 0.0
+
+END

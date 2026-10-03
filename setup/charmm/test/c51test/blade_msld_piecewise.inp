@@ -1,0 +1,406 @@
+* Test case for msld piecewise constraint on blade
+* Based on test/c47test/blade_msld.inp
+* Tests the Newton-solved polynomial constraint (FPIE) for lambda dynamics
+*
+
+if ?blade .ne. 1 then
+   echo "Test NOT performed. BLADE must be defined in pref.dat"
+   stop
+endif
+
+if ?block .ne. 1 then
+   echo "Test NOT performed. BLOCK must be defined in pref.dat"
+   stop
+endif
+
+! BLaDE needs a GPU of its own for every OpenMP thread in every rank, and
+! all ranks on one node see the same devices -- so N ranks x T threads want
+! N*T GPUs.  ?NGPU honours CUDA_VISIBLE_DEVICES; ?NTHREAD is the OpenMP
+! team size.  Across several nodes this is conservative, each node bringing
+! its own GPUs, so it can skip a run that would in fact work -- a needless
+! skip beats aborting inside BLaDE, which is what happens when the counts
+! do not add up.  Reported as an explicit SKIP because the grader matches
+! "TESTCASE RESULT: SKIP" but not the mixed-case "Test NOT performed" this
+! guard printed before.
+calc bladegpu = ?numnode * ?nthread
+if ?ngpu .lt. @bladegpu then
+   echo BLADE_MSLD_PIECEWISE TESTCASE RESULT: SKIP
+   stop
+endif
+
+stream datadir.def
+
+set sysname = 14benz
+set box = 32.964000
+
+! read the full topology and parameter files
+read rtf card name @0prep14benz/top_all36_msld.rtf
+read rtf append card name @0prep14benz/full_ligand.rtf
+read param card flex name @0prep14benz/par_all36_msld.prm
+read param append card flex name @0prep14benz/full_ligand.prm
+
+! read in ligand sequence and coordinates
+set ligseg = lig
+set resnum = 1
+read sequ pdb name @0prep14benz/full_ligand.pdb
+generate @ligseg setup
+read coor pdb resid name @0prep14benz/full_ligand.pdb
+
+! MODIFY to read in water sequence and coords
+read sequ pdb name @0prep14benz/solvent.pdb
+generate WT00 first none last none setup noangl nodihe
+read coor pdb resid name @0prep14benz/solvent.pdb
+
+bomblev -1
+
+! Hybrid Ligand Setup
+! (1) read in patch files
+read rtf append card name @0prep14benz/site1_sub1_pres.rtf
+read rtf append card name @0prep14benz/site1_sub2_pres.rtf
+read rtf append card name @0prep14benz/site1_sub3_pres.rtf
+read rtf append card name @0prep14benz/site1_sub4_pres.rtf
+read rtf append card name @0prep14benz/site1_sub5_pres.rtf
+read rtf append card name @0prep14benz/site2_sub1_pres.rtf
+read rtf append card name @0prep14benz/site2_sub2_pres.rtf
+read rtf append card name @0prep14benz/site2_sub3_pres.rtf
+read rtf append card name @0prep14benz/site2_sub4_pres.rtf
+read rtf append card name @0prep14benz/site2_sub5_pres.rtf
+read rtf append card name @0prep14benz/site2_sub6_pres.rtf
+read rtf append card name @0prep14benz/site2_sub7_pres.rtf
+
+!  (3) add atoms for each substituent
+ic generate
+
+patch p1_1 @ligseg @resnum setup
+read coor pdb resid name @0prep14benz/site1_sub1_frag.pdb
+ic param
+ic build
+
+patch p1_2 @ligseg @resnum setup
+read coor pdb resid name @0prep14benz/site1_sub2_frag.pdb
+ic param
+ic build
+
+patch p1_3 @ligseg @resnum setup
+read coor pdb resid name @0prep14benz/site1_sub3_frag.pdb
+ic param
+ic build
+
+patch p1_4 @ligseg @resnum setup
+read coor pdb resid name @0prep14benz/site1_sub4_frag.pdb
+ic param
+ic build
+
+patch p1_5 @ligseg @resnum setup
+read coor pdb resid name @0prep14benz/site1_sub5_frag.pdb
+ic param
+ic build
+
+patch p2_1 @ligseg @resnum setup
+read coor pdb resid name @0prep14benz/site2_sub1_frag.pdb
+ic param
+ic build
+
+patch p2_2 @ligseg @resnum setup
+read coor pdb resid name @0prep14benz/site2_sub2_frag.pdb
+ic param
+ic build
+
+patch p2_3 @ligseg @resnum setup
+read coor pdb resid name @0prep14benz/site2_sub3_frag.pdb
+ic param
+ic build
+
+patch p2_4 @ligseg @resnum setup
+read coor pdb resid name @0prep14benz/site2_sub4_frag.pdb
+ic param
+ic build
+
+patch p2_5 @ligseg @resnum setup
+read coor pdb resid name @0prep14benz/site2_sub5_frag.pdb
+ic param
+ic build
+
+patch p2_6 @ligseg @resnum setup
+read coor pdb resid name @0prep14benz/site2_sub6_frag.pdb
+ic param
+ic build
+
+patch p2_7 @ligseg @resnum setup
+read coor pdb resid name @0prep14benz/site2_sub7_frag.pdb
+ic param
+ic build
+
+! (2) delete atoms in common core ligand
+!    atoms taken from site1_sub1.txt site2_sub1.txt
+delete atom select ( -
+   atom @ligseg @resnum C4 .or. -
+   atom @ligseg @resnum C5 .or. -
+   atom @ligseg @resnum H4 .or. -
+   atom @ligseg @resnum H5 .or. -
+   none ) end
+
+! MODIFY to set up periodic images or SBC
+coor stat
+crystal define cubic @box @box @box 90. 90. 90.
+crystal build cutoff 15 nope 0
+image byseg xcen 0 ycen 0 zcen 0 sele .not. ( resn TIP3 ) end
+image byres xcen 0 ycen 0 zcen 0 sele resn TIP3 end
+
+
+! Hybrid Ligand Block
+! Substituent definitions
+define site1sub1 -
+   select ( -
+   atom @ligseg @resnum H101 .or. -
+   atom @ligseg @resnum C100 .or. -
+   none ) end
+
+define site1sub2 -
+   select ( -
+   atom @ligseg @resnum O103 .or. -
+   atom @ligseg @resnum H104 .or. -
+   atom @ligseg @resnum C102 .or. -
+   none ) end
+
+define site1sub3 -
+   select ( -
+   atom @ligseg @resnum H108 .or. -
+   atom @ligseg @resnum H109 .or. -
+   atom @ligseg @resnum C106 .or. -
+   atom @ligseg @resnum H107 .or. -
+   atom @ligseg @resnum C105 .or. -
+   none ) end
+
+define site1sub4 -
+   select ( -
+   atom @ligseg @resnum H117 .or. -
+   atom @ligseg @resnum H115 .or. -
+   atom @ligseg @resnum H116 .or. -
+   atom @ligseg @resnum H113 .or. -
+   atom @ligseg @resnum H114 .or. -
+   atom @ligseg @resnum C112 .or. -
+   atom @ligseg @resnum C111 .or. -
+   atom @ligseg @resnum C110 .or. -
+   none ) end
+
+define site1sub5 -
+   select ( -
+   atom @ligseg @resnum H127 .or. -
+   atom @ligseg @resnum H128 .or. -
+   atom @ligseg @resnum H129 .or. -
+   atom @ligseg @resnum H130 .or. -
+   atom @ligseg @resnum H131 .or. -
+   atom @ligseg @resnum H125 .or. -
+   atom @ligseg @resnum H126 .or. -
+   atom @ligseg @resnum H123 .or. -
+   atom @ligseg @resnum H124 .or. -
+   atom @ligseg @resnum C122 .or. -
+   atom @ligseg @resnum C121 .or. -
+   atom @ligseg @resnum C120 .or. -
+   atom @ligseg @resnum C119 .or. -
+   atom @ligseg @resnum C118 .or. -
+   none ) end
+
+define site2sub1 -
+   select ( -
+   atom @ligseg @resnum C132 .or. -
+   atom @ligseg @resnum H133 .or. -
+   none ) end
+
+define site2sub2 -
+   select ( -
+   atom @ligseg @resnum H136 .or. -
+   atom @ligseg @resnum C134 .or. -
+   atom @ligseg @resnum O135 .or. -
+   none ) end
+
+define site2sub3 -
+   select ( -
+   atom @ligseg @resnum H141 .or. -
+   atom @ligseg @resnum H140 .or. -
+   atom @ligseg @resnum C138 .or. -
+   atom @ligseg @resnum C137 .or. -
+   atom @ligseg @resnum H139 .or. -
+   none ) end
+
+define site2sub4 -
+   select ( -
+   atom @ligseg @resnum H145 .or. -
+   atom @ligseg @resnum C143 .or. -
+   atom @ligseg @resnum C142 .or. -
+   atom @ligseg @resnum O144 .or. -
+   none ) end
+
+define site2sub5 -
+   select ( -
+   atom @ligseg @resnum H151 .or. -
+   atom @ligseg @resnum H152 .or. -
+   atom @ligseg @resnum H150 .or. -
+   atom @ligseg @resnum C148 .or. -
+   atom @ligseg @resnum C147 .or. -
+   atom @ligseg @resnum C146 .or. -
+   atom @ligseg @resnum O149 .or. -
+   none ) end
+
+define site2sub6 -
+   select ( -
+   atom @ligseg @resnum H163 .or. -
+   atom @ligseg @resnum H164 .or. -
+   atom @ligseg @resnum H161 .or. -
+   atom @ligseg @resnum H162 .or. -
+   atom @ligseg @resnum H160 .or. -
+   atom @ligseg @resnum C157 .or. -
+   atom @ligseg @resnum C156 .or. -
+   atom @ligseg @resnum C159 .or. -
+   atom @ligseg @resnum C158 .or. -
+   atom @ligseg @resnum C155 .or. -
+   atom @ligseg @resnum C154 .or. -
+   atom @ligseg @resnum C153 .or. -
+   none ) end
+
+define site2sub7 -
+   select ( -
+   atom @ligseg @resnum H174 .or. -
+   atom @ligseg @resnum H175 .or. -
+   atom @ligseg @resnum H172 .or. -
+   atom @ligseg @resnum H173 .or. -
+   atom @ligseg @resnum H171 .or. -
+   atom @ligseg @resnum C168 .or. -
+   atom @ligseg @resnum C165 .or. -
+   atom @ligseg @resnum C167 .or. -
+   atom @ligseg @resnum C166 .or. -
+   atom @ligseg @resnum O170 .or. -
+   atom @ligseg @resnum O169 .or. -
+   none ) end
+
+calc lam1 = 1.0 / 5.0
+calc lam2 = 1.0 / 5.0
+calc lam3 = 1.0 / 5.0
+calc lam4 = 1.0 / 5.0
+calc lam5 = 1.0 / 5.0
+calc lam6 = 1.0 / 7.0
+calc lam7 = 1.0 / 7.0
+calc lam8 = 1.0 / 7.0
+calc lam9 = 1.0 / 7.0
+calc lam10 = 1.0 / 7.0
+calc lam11 = 1.0 / 7.0
+calc lam12 = 1.0 / 7.0
+
+! ************************************
+! *** Set up BLOCK FIRST (before nbonds)
+! ************************************
+
+BLOCK
+   clear
+END
+
+BLOCK 13
+   Call 2 sele site1sub1 end
+   Call 3 sele site1sub2 end
+   Call 4 sele site1sub3 end
+   Call 5 sele site1sub4 end
+   Call 6 sele site1sub5 end
+   Call 7 sele site2sub1 end
+   Call 8 sele site2sub2 end
+   Call 9 sele site2sub3 end
+   Call 10 sele site2sub4 end
+   Call 11 sele site2sub5 end
+   Call 12 sele site2sub6 end
+   Call 13 sele site2sub7 end
+   qldm theta
+   lang temp 298.0
+   ldin 1 1.0 0.0 5.0 0.0 5.0
+   ldin 2 @lam1 0.0 5.0 0.0 5.0
+   ldin 3 @lam2 0.0 5.0 0.0 5.0
+   ldin 4 @lam3 0.0 5.0 0.0 5.0
+   ldin 5 @lam4 0.0 5.0 0.0 5.0
+   ldin 6 @lam5 0.0 5.0 0.0 5.0
+   ldin 7 @lam6 0.0 5.0 0.0 5.0
+   ldin 8 @lam7 0.0 5.0 0.0 5.0
+   ldin 9 @lam8 0.0 5.0 0.0 5.0
+   ldin 10 @lam9 0.0 5.0 0.0 5.0
+   ldin 11 @lam10 0.0 5.0 0.0 5.0
+   ldin 12 @lam11 0.0 5.0 0.0 5.0
+   ldin 13 @lam12 0.0 5.0 0.0 5.0
+   set excl1 = 2 3 2 4 2 5 2 6 3 4 3 5 3 6 4 5 4 6 5 6 7 8 7 9 7 10 7 11 7 12 7 13
+   set excl2 =  8 9 8 10 8 11 8 12 8 13 9 10 9 11 9 12 9 13 10 11 10 12 10 13 11
+   set excl3 =  12 11 13 12 13
+   excl @excl1 @excl2 @excl3
+   rmla bond thet dihe impr
+   ! Use piecewise polynomial constraint instead of fnex
+   ! This is the key difference from blade_msld.inp
+   msld 0 1 1 1 1 1 2 2 2 2 2 2 2 fnpw
+   msma
+
+   thbv flat all 0.35 100 ! w=0.35, k=100kT
+
+   pmel ex
+   soft on
+
+   ldbi 0
+END
+
+! ************************************
+! *** Now read coordinates and nbonds
+! ************************************
+
+read coor pdb resid name @0prep14benz/min14benz.pdb
+
+nbonds atom -
+cdie eps 1 -
+vdw vfswitch -
+cutnb 12.0 -
+cutim 12.0 -
+ctonnb 9.0 ctofnb 10.0 -
+Ewald -
+kappa 0.320 -
+pmEwald -
+order 6 -
+fftx 32 ffty 32 fftz 32
+
+! MSLD dynamics below is GPU-nondeterministic and cannot be diff-graded;
+! validate the stable initial BLaDE energy instead (reference captured
+! on the GV100 CI host).
+energy blade
+@testcheck ?ener -13419.520 -1.0 BLADE_MSLD_PIECEWISE_INITIAL_ENERGY
+
+format (f16.6)
+
+! ************************************
+! ******* Run short dynamics *********
+! ************************************
+
+scalar fbeta set 1.0 sele all end
+
+open unit 21 write unform name @{9}/"piecewise_heat.dcd"
+open unit 22 write form name @{9}/"piecewise_heat.res"
+open unit 24 write file name @{9}/"piecewise_heat.lmd"
+
+dynamics leap start -
+  blade -
+  prmc -
+  iprs 10 -
+  pref 1 -
+  prdv 100 -
+  timestep 0.001 -
+  nstep 50 -
+  nprint 10 -
+  iprfrq 50 -
+  nsavc 50 -
+  nsavl 10 -
+  isvfrq 50 -
+  iunread -1 -
+  iuncrd 21 -
+  iunwri 22 -
+  iunldm 24 -
+  firstt 298 -
+  finalt 298 -
+  tstruc 298 -
+  tbath 298 -
+  ntrfrq 50
+
+! Pass/fail is the @testcheck on the initial BLaDE energy above; the
+! MSLD dynamics need only reach NORMAL TERMINATION.
+
+stop

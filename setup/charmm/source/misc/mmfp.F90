@@ -35,6 +35,7 @@ module mmfp
   ! YRGEO             reference position
   ! ZRGEO             reference position
   ! TRGEO             reference angle
+  ! BLGEO             block for lambda dynamics scaling
   ! XDGEO             unit vector 
   ! YDGEO             unit vector
   ! ZDGEO             unit vector
@@ -100,7 +101,7 @@ module mmfp
   ! TODO type mmfp_geo_t with scalar members
   INTEGER MAXGEO, NTGEO
   integer,allocatable,dimension(:) :: &
-       IGEO,  JGEO, lstgeo,ngeo,iugeo
+       IGEO,  JGEO, lstgeo,ngeo,iugeo, blgeo
   real(chm_real),allocatable,dimension(:) ::  &
        XRGEO,  YRGEO, ZRGEO, TRGEO, &
        XDGEO,  YDGEO, ZDGEO,  &
@@ -473,7 +474,7 @@ END SUBROUTINE BMAP_INPUT
     !-----------------------------------------------------------------------
     ! Local variables
     CHARACTER(len=4)   WRD
-    INTEGER I, IGEO2, IMODE, JGEO2
+    INTEGER I, IGEO2, IMODE, JGEO2, BLGEO2
     real(chm_real)  XREF, YREF, ZREF, TREF, XDIR, YDIR, ZDIR,  &
          DROFF, DTOFF
     real(chm_real)  FORC, P1, P2, P3
@@ -508,6 +509,7 @@ END SUBROUTINE BMAP_INPUT
 
           call chmdealloc('mmfp.src','GEO1','IGEO',MAXGEO,intg=IGEO)
           call chmdealloc('mmfp.src','GEO1','JGEO',MAXGEO,intg=JGEO)
+          call chmdealloc('mmfp.src','GEO1','BLGEO',MAXGEO,intg=BLGEO)
           call chmdealloc('mmfp.src','GEO1','LSTGEO',MAXGEO,intg=LSTGEO)
 
           call chmdealloc('mmfp.src','GEO1','NGEO',MAXGEO,intg=NGEO)
@@ -521,7 +523,7 @@ END SUBROUTINE BMAP_INPUT
        !
     ELSEIF(INDXA(COMLYN,COMLEN,'PRIN').GT.0)THEN
        CALL PRIGEO(NATOM,LSTGEO,NGEO,NTGEO, &
-            IGEO,JGEO, &
+            IGEO,JGEO,BLGEO, &
             XRGEO,YRGEO,ZRGEO,TRGEO, &
             XDGEO,YDGEO,ZDGEO, &
             DRGEO,DTGEO,FCGEO,P1GEO, &
@@ -555,6 +557,7 @@ END SUBROUTINE BMAP_INPUT
           call chmalloc('mmfp.src','GEO1','IUGEO',MAXGEO,intg=IUGEO)
           call chmalloc('mmfp.src','GEO1','IGEO',MAXGEO,intg=IGEO)
           call chmalloc('mmfp.src','GEO1','JGEO',MAXGEO,intg=JGEO)
+          call chmalloc('mmfp.src','GEO1','BLGEO',MAXGEO,intg=BLGEO)
           call chmalloc('mmfp.src','GEO1','LSTGEO',MAXGEO,intg=LSTGEO)
           call chmalloc('mmfp.src','GEO1','NGEO',MAXGEO,intg=NGEO)
           NTGEO  = 0
@@ -571,7 +574,7 @@ END SUBROUTINE BMAP_INPUT
              WRITE(OUTU,100) 'Reading MMFP constraints from unit ',IUNIT
           ENDIF
           CALL RDGEO(IUNIT,NATOM,LSTGEO,NGEO,NTGEO, &
-               IGEO,JGEO, &
+               IGEO,JGEO,BLGEO, &
                XRGEO,YRGEO,ZRGEO,TRGEO, &
                XDGEO,YDGEO,ZDGEO, &
                DRGEO,DTGEO,FCGEO,P1GEO, &
@@ -601,6 +604,7 @@ END SUBROUTINE BMAP_INPUT
        QADPERP = INDXA(COMLYN,COMLEN,'PERP') .GT. 0
        IF((IUMMFP.gt.0).AND.PRNLEV.GE.2) &
             WRITE(OUTU,'(a,i10)') 'Position output to Unit ',IUMMFP
+       BLGEO2 = GTRMI(COMLYN,COMLEN,'BLOC',1)
 
        ! Geometrical boundary
        IF(INDXA(COMLYN,COMLEN,'SPHE').GT.0)THEN
@@ -812,6 +816,7 @@ END SUBROUTINE BMAP_INPUT
 
           CALL STGEO(NATOM,MAXGEO,ISLCT,LSTGEO,NGEO,NTGEO, &
                IGEO2,IGEO,JGEO2,JGEO, &
+               BLGEO2,BLGEO, &
                XREF,YREF,ZREF,TREF, &
                XRGEO,YRGEO,ZRGEO,TRGEO, &
                XDIR,YDIR,ZDIR,XDGEO,YDGEO,ZDGEO, &
@@ -839,6 +844,7 @@ END SUBROUTINE BMAP_INPUT
 
        CALL STGEO(NATOM,MAXGEO,ISLCT,LSTGEO,NGEO,NTGEO, &
             IGEO2,IGEO,JGEO2,JGEO, &
+            BLGEO2,BLGEO, &
             XREF,YREF,ZREF,TREF, &
             XRGEO,YRGEO,ZRGEO,TRGEO, &
             XDIR,YDIR,ZDIR,XDGEO,YDGEO,ZDGEO, &
@@ -871,6 +877,7 @@ END SUBROUTINE BMAP_INPUT
 
           CALL STGEO(NATOM,MAXGEO,ISLCT,LSTGEO,NGEO,NTGEO, &
                IGEO2,IGEO,JGEO2,JGEO, &
+               BLGEO2,BLGEO, &
                XREF,YREF,ZREF,TREF, &
                XRGEO,YRGEO,ZRGEO,TRGEO, &
                XDIR,YDIR,ZDIR,XDGEO,YDGEO,ZDGEO, &
@@ -901,6 +908,7 @@ END SUBROUTINE BMAP_INPUT
 
           CALL STGEO(NATOM,MAXGEO,ISLCT,LSTGEO,NGEO,NTGEO, &
                IGEO2,IGEO,JGEO2,JGEO, &
+               BLGEO2,BLGEO, &
                XREF,YREF,ZREF,TREF, &
                XRGEO,YRGEO,ZRGEO,TRGEO, &
                XDIR,YDIR,ZDIR,XDGEO,YDGEO,ZDGEO, &
@@ -926,6 +934,7 @@ END SUBROUTINE BMAP_INPUT
 
              CALL STGEO(NATOM,MAXGEO,ISLCT,LSTGEO,NGEO,NTGEO, &
                   IGEO2,IGEO,JGEO2,JGEO, &
+                  BLGEO2,BLGEO, &
                   XREF,YREF,ZREF,TREF, &
                   XRGEO,YRGEO,ZRGEO,TRGEO, &
                   XDIR,YDIR,ZDIR,XDGEO,YDGEO,ZDGEO, &
@@ -950,6 +959,7 @@ END SUBROUTINE BMAP_INPUT
 
              CALL STGEO(NATOM,MAXGEO,ISLCT,LSTGEO,NGEO,NTGEO, &
                   IGEO2,IGEO,JGEO2,JGEO, &
+                  BLGEO2,BLGEO, &
                   XREF,YREF,ZREF,TREF, &
                   XRGEO,YRGEO,ZRGEO,TRGEO, &
                   XDIR,YDIR,ZDIR,XDGEO,YDGEO,ZDGEO, &
@@ -968,6 +978,7 @@ END SUBROUTINE BMAP_INPUT
   
   SUBROUTINE STGEO(NATOM,MAXGEO,ISLCT,LSTGEO,NGEO,NTGEO, &
        IGEO2,IGEO,JGEO2,JGEO, &
+       BLGEO2,BLGEO, &
        XREF,YREF,ZREF,TREF,XRGEO,YRGEO,ZRGEO,TRGEO, &
        XDIR,YDIR,ZDIR,XDGEO,YDGEO,ZDGEO, &
        DROFF,DRGEO,DTOFF,DTGEO, &
@@ -979,6 +990,7 @@ END SUBROUTINE BMAP_INPUT
     implicit none
     INTEGER NATOM, MAXGEO, ISLCT(*), NGEO(*), NTGEO
     INTEGER LSTGEO(*), IGEO2, IGEO(*), JGEO2, JGEO(*)
+    INTEGER BLGEO2, BLGEO(*)
     real(chm_real)  XREF, YREF, ZREF, TREF
     real(chm_real)  XRGEO(*), YRGEO(*), ZRGEO(*), TRGEO(*)
     real(chm_real)  XDIR, YDIR, ZDIR
@@ -1025,6 +1037,7 @@ END SUBROUTINE BMAP_INPUT
 
           IGEO(NTGEO)=IGEO2
           JGEO(NTGEO)=JGEO2
+          BLGEO(NTGEO)=BLGEO2
           XRGEO(NTGEO)=XREF
           YRGEO(NTGEO)=YREF
           ZRGEO(NTGEO)=ZREF
@@ -1042,11 +1055,12 @@ END SUBROUTINE BMAP_INPUT
 
           IF(PRNLEV.GT.5)THEN
              WRITE(OUTU,100) NTGEO, NGEO(NTGEO), I, IGEO2, JGEO2, &
+                  BLGEO2, &
                   XREF, YREF, ZREF, TREF, &
                   XDIR, YDIR, ZDIR, DROFF, DTOFF, &
                   FORC, P1, P2, P3
 !100          FORMAT(1X,5I4,12F8.3)
-100          FORMAT(1X,5I10,13F8.3)
+100          FORMAT(1X,6I10,13F8.3)
              IF(PRNLEV.GE.2) WRITE(OUTU,'(3(a,i10))') &
                   'ISTART=',ISTART,' ICOUNT=',ICOUNT,' IOFF=',IOFF
           ENDIF
@@ -1067,9 +1081,10 @@ END SUBROUTINE BMAP_INPUT
                ' affecting ',NGEO(I+1)-NGEO(I),' atoms'
           WRITE(OUTU,102) &
                ' GEOM=',IGEO(I), ' TYPE=',JGEO(I), &
+               ' BLOCK=',BLGEO(I), &
                ' DROFF=',DRGEO(I), ' DTOFF=',DTGEO(I), &
                ' FORC=',FCGEO(I),' P1=',P1GEO(I), ' P2=',P2GEO(I),' P3=',P3GEO(I)
-102       FORMAT(1X,2(A,I3),6(A,F8.3))
+102       FORMAT(1X,3(A,I3),6(A,F8.3))
           WRITE(OUTU,103)'REF(x,y,z,t)=',XRGEO(I),YRGEO(I),ZRGEO(I),TRGEO(I)
 103       FORMAT(1X,A,3F8.3)
           WRITE(OUTU,103) 'VEC=',XDGEO(I), YDGEO(I), ZDGEO(I)
@@ -1082,7 +1097,7 @@ END SUBROUTINE BMAP_INPUT
     RETURN
   END SUBROUTINE STGEO
   
-  SUBROUTINE RDGEO(IUNIT,NATOM,LSTGEO,NGEO,NTGEO,IGEO,JGEO, &
+  SUBROUTINE RDGEO(IUNIT,NATOM,LSTGEO,NGEO,NTGEO,IGEO,JGEO,BLGEO, &
        XRGEO,YRGEO,ZRGEO,TRGEO,XDGEO,YDGEO,ZDGEO,DRGEO, &
        DTGEO,FCGEO,P1GEO,P2GEO,P3GEO,IUGEO)
     !-----------------------------------------------------------------------
@@ -1096,7 +1111,7 @@ END SUBROUTINE BMAP_INPUT
 
     implicit none
     INTEGER  IUNIT, NATOM, NGEO(*), NTGEO
-    INTEGER  LSTGEO(*), IGEO(*), JGEO(*)
+    INTEGER  LSTGEO(*), IGEO(*), JGEO(*), BLGEO(*)
     real(chm_real)   XRGEO(*), YRGEO(*), ZRGEO(*), TRGEO(*)
     real(chm_real)   XDGEO(*), YDGEO(*), ZDGEO(*)
     real(chm_real)   DRGEO(*), DTGEO(*)
@@ -1125,6 +1140,7 @@ END SUBROUTINE BMAP_INPUT
        NGEO(I+1)  = GTRMI(COMLYN,COMLEN,'NGEO',0)
        IGEO(I)  = GTRMI(COMLYN,COMLEN,'GEOM',0)
        JGEO(I)  = GTRMI(COMLYN,COMLEN,'TYPE',0)
+       BLGEO(I) = GTRMI(COMLYN,COMLEN,'BLOC',1)
        DRGEO(I) = GTRMF(COMLYN,COMLEN,'DROF',ZERO)
        DTGEO(I) = GTRMF(COMLYN,COMLEN,'DTOF',ZERO)
 
@@ -1150,7 +1166,7 @@ END SUBROUTINE BMAP_INPUT
     RETURN
   END SUBROUTINE RDGEO
   
-  SUBROUTINE PRIGEO(NATOM,LSTGEO,NGEO,NTGEO,IGEO,JGEO, &
+  SUBROUTINE PRIGEO(NATOM,LSTGEO,NGEO,NTGEO,IGEO,JGEO,BLGEO, &
        XRGEO,YRGEO,ZRGEO,TRGEO,XDGEO,YDGEO,ZDGEO,DRGEO, &
        DTGEO,FCGEO,P1GEO,P2GEO,P3GEO,IUGEO)
     !-----------------------------------------------------------------------
@@ -1161,7 +1177,7 @@ END SUBROUTINE BMAP_INPUT
     implicit none
 
     INTEGER  NATOM, NGEO(*), NTGEO
-    INTEGER  LSTGEO(*), IGEO(*), JGEO(*)
+    INTEGER  LSTGEO(*), IGEO(*), JGEO(*), BLGEO(*)
     real(chm_real)   XRGEO(*), YRGEO(*), ZRGEO(*), TRGEO(*)
     real(chm_real)   XDGEO(*), YDGEO(*), ZDGEO(*)
     real(chm_real)   DRGEO(*), DTGEO(*)
@@ -1180,9 +1196,10 @@ END SUBROUTINE BMAP_INPUT
        WRITE(OUTU,100) 'Constraint:  ',I, &
             ' affecting ',NGEO(I+1)-NGEO(I),' atoms'
        WRITE(OUTU,101) ' GEOM=',IGEO(I),' TYPE=',JGEO(I), &
+            ' BLOCK=',BLGEO(I), &
             ' DROFF=',DRGEO(I),' DTOFF=',DTGEO(I),' FORC=',FCGEO(I), &
             ' P1=',P1GEO(I),' P2=',P2GEO(I),' P3=',P3GEO(I)
-101    FORMAT(1X,2(A,I3),6(A,F8.3))
+101    FORMAT(1X,3(A,I3),6(A,F8.3))
        WRITE(OUTU,102) 'REF=',XRGEO(I), YRGEO(I), ZRGEO(I), TRGEO(I)
        WRITE(OUTU,102) 'VEC=',XDGEO(I), YDGEO(I), ZDGEO(I)
 102    FORMAT(1X,A,4F8.3)
@@ -1200,7 +1217,7 @@ END SUBROUTINE BMAP_INPUT
   
   SUBROUTINE GEO2(EGEO,NATOM,X,Y,Z,DX,DY,DZ, &
        LSTGEO,NGEO,NTGEO, &
-       IGEO,JGEO,AMASS, &
+       IGEO,JGEO,BLGEO,AMASS, &
        XRGEO,YRGEO,ZRGEO,TRGEO, &
        XDGEO,YDGEO,ZDGEO, &
        DRGEO,DTGEO,FCGEO,P1GEO,P2GEO,P3GEO,IUGEO)
@@ -1216,13 +1233,17 @@ END SUBROUTINE BMAP_INPUT
     use dimens_fcm
     use gcmc
 #endif 
+#if KEY_BLOCK==1
+    use block_ltm, only: nblock
+    use lambdam, only: qmld, bixlam, biflam
+#endif
 
     implicit none
 
     real(chm_real)   EGEO
     INTEGER  NATOM, NGEO(*), NTGEO
     real(chm_real)   X(*),Y(*),Z(*),DX(*),DY(*),DZ(*)
-    INTEGER  LSTGEO(*), IGEO(*), JGEO(*)
+    INTEGER  LSTGEO(*), IGEO(*), JGEO(*), BLGEO(*)
     real(chm_real)   AMASS(*)
     real(chm_real)   XRGEO(*), YRGEO(*), ZRGEO(*), TRGEO(*)
     real(chm_real)   XDGEO(*), YDGEO(*), ZDGEO(*)
@@ -1286,6 +1307,9 @@ END SUBROUTINE BMAP_INPUT
 
     ! haiyun for RMAX moving center
     real(chm_real) weight_HY
+
+    ! Lambda scaling
+    real(chm_real) lambdascaling
     
     RMAXON=.FALSE.
 
@@ -1335,6 +1359,16 @@ END SUBROUTINE BMAP_INPUT
        ! end of NKB, Dec, 2002 addition
 
        ! end of addition by NKB ______________________________________________
+
+       LAMBDASCALING = 1
+#if KEY_BLOCK==1
+       if (qmld) then
+          if (BLGEO(I).ne.1) then
+             if (BLGEO(I).lt.1.or.BLGEO(I).gt.nblock) call wrndie(-5,'MMFP>','MMFP BLOCK IS OUTSIDE LEGAL BOUNDS')
+             LAMBDASCALING=BIXLAM(BLGEO(I))
+          endif
+       endif
+#endif
 
        loop20: DO J=NGEO(I),NGEO(I+1)-1
           IAT=LSTGEO(J)
@@ -2010,7 +2044,15 @@ END SUBROUTINE BMAP_INPUT
        ENDIF
 
        IF(E.NE.ZERO)THEN
-          EGEO = EGEO+E
+          EGEO = EGEO+E*LAMBDASCALING
+#if KEY_BLOCK==1
+          if (qmld) then
+             if (BLGEO(I).ne.1) then
+                BIFLAM(BLGEO(I)) = BIFLAM(BLGEO(I)) + E
+             endif
+          endif
+#endif
+          DE = DE*LAMBDASCALING
           ! for distance center of mass constraint, distribution of forces
           IF((IGEO(I).LT.0).AND.(IGEO(I).GT.-4))THEN
              loop30: DO J=NGEO(I),NGEO(I+1)-1
@@ -2036,9 +2078,9 @@ END SUBROUTINE BMAP_INPUT
                 ST2R=ONE/(ONE-CST*CST+SMALLV)
                 STR=SQRT(ST2R)
                 IF(TREF-DTOFF.LT.PT001) THEN
-                   DE=MINONE*FORC*(ONE+DA*DA*SIXTH)
+                   DE=MINONE*FORC*(ONE+DA*DA*SIXTH)*LAMBDASCALING
                 ELSE IF(PI-TREF-DTOFF.LT.PT001) THEN
-                   DE=FORC*(ONE+DA*DA*SIXTH)
+                   DE=FORC*(ONE+DA*DA*SIXTH)*LAMBDASCALING
                 ELSE
                    DE=-DE*STR
                 ENDIF
@@ -2244,6 +2286,7 @@ END SUBROUTINE BMAP_INPUT
 
        loop52: DO I=1,NTGEO
           IF(JGEO(I).EQ.10) THEN
+            if (BLGEO(I).ne.1) call wrndie(-3,'MMFP>','MMFP BLOCK SCALING NOT IMPLEMENTED FOR RMAX FUNCTION')
             ! apply forces on outer atoms inside Rmax
             loop53: DO J=NGEO(I),NGEO(I+1)-1     !  ngeo is the number of atoms under cons
                IAT=LSTGEO(J)

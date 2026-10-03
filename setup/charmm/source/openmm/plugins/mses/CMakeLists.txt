@@ -16,7 +16,7 @@ include_directories(
   "${OPENMM_INCLUDE_DIRS}/openmm/reference"
   "${CMAKE_CURRENT_SOURCE_DIR}/openmmapi")
 
-set(EXTRA_COMPILE_FLAGS "${EXTRA_COMPILE_FLAGS} ${omm_flags}")
+set(EXTRA_COMPILE_FLAGS "${EXTRA_COMPILE_FLAGS} ${omm_flags} -DOMM_VER=${OMM_VER}")
 IF (CMAKE_SYSTEM_NAME MATCHES "Linux")
   SET(EXTRA_LINK_FLAGS "${EXTRA_LINK_FLAGS} -Wl,--no-as-needed -lrt")
 ENDIF (CMAKE_SYSTEM_NAME MATCHES "Linux")
@@ -35,7 +35,7 @@ FOREACH(subdir ${GB_SOURCE_SUBDIRS})
     INCLUDE_DIRECTORIES(BEFORE ${CMAKE_CURRENT_SOURCE_DIR}/${subdir})
 ENDFOREACH(subdir)
 
-set(WRAPPER_SOURCES 
+set(WRAPPER_SOURCES
 	"${OPENMM_DIR}/include/OpenMMFortranModule.f90"
     wrappers/OpenMMMSESCWrapper.h
     wrappers/OpenMMMSESCWrapper.cpp
@@ -71,8 +71,8 @@ INSTALL(TARGETS ${SHARED_GB_TARGET}
 #   ADD_SUBDIRECTORY(platforms/cpu)
 #ENDIF(GB_BUILD_CPU_LIB)
 
-IF(CUDA_FOUND AND OPENMM_CUDA_FOUND)
-    include_directories(${CUDA_INCLUDE_DIRS})
+IF(cuda AND OPENMM_CUDA_FOUND)
+    include_directories(${CUDAToolkit_INCLUDE_DIRS})
     SET(GB_BUILD_CUDA_LIB ON
       CACHE BOOL "Build GB implementation for CUDA")
 ELSE()

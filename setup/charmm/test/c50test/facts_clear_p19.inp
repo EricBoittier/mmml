@@ -1,0 +1,103 @@
+* CHARMM c50a1 Testcase: facts_clear_p19.inp
+* Author:  Charles L. Brooks III
+* Date:    08-14-2024
+* Version: c50a1
+* Test:    FACTS
+*
+
+if ?FACTS .ne. 1 then
+   echo "Test NOT performed."
+   stop
+endif
+
+! --- Begin set definitions ---
+
+stream   datadir.def
+
+set isee 473829
+
+set temp 330.0
+set tcpl 5.0
+
+set psid chan
+
+set frtf toph19.rtf
+set fpar param19.prm
+
+set dtpf @0
+set dhot @9
+set dequ @9
+set dprd @9
+
+! --- End set definitions ---
+
+! --- Begin generation procedure ---
+
+open read card name @dtpf/@frtf unit 30
+read rtf card unit 30
+close unit 30
+
+open read card name @dtpf/@fpar unit 30
+read parameter card unit 30
+close unit 30
+
+
+! --- Loop over generation and build, check energies ---
+
+set ibuild = 0
+label rebuild
+read sequence card
+* chan
+*
+3
+ala  asn  asn  
+
+generate @psid warn setup
+
+! --- End generation procedure ---
+
+! --- Begin constructing coordinates ---
+
+ic parameters
+ic seed 2 ca 2 c 3 n
+ic build
+
+! --- End constructing coordinates ---
+
+
+! --- Begin setting up FACTS ---
+
+! Use the FACTS standard setup for PARAM19.
+
+set diele 2.0
+
+nbond nbxmod 5 atom cdiel eps @diele shift vatom vdistance vshift -
+      cutnb 9.0 ctofnb 7.5 ctonnb 6.5 e14fac 0.4 wmin 1.5
+
+scalar wmain = radius
+scalar wmain set 1.0 selection (type h*) end
+
+facts tcps 19 teps @diele gamm 0.015
+
+! --- End setting up FACTS ---
+
+! --- Get energy and compare with last time ----
+energy
+if @ibuild eq 0 set E0 = ?ener
+if @ibuild gt 0 then
+   calc Ediff = abs ( ?ener - @E0 )
+   if @Ediff gt 1e-5 then
+       set passed = false
+   else
+       set passed = true
+   endif
+endif
+
+facts clear
+delete atoms select all end
+
+incr ibuild by 1
+if @ibuild le 9 goto rebuild
+
+echo 'Clear test passed = @PASSED'
+stop

@@ -7,6 +7,7 @@
 #include "system/potential.h"
 #include "run/run.h"
 #include "main/real3.h"
+#include "main/gpu_check.h"
 
 
 
@@ -187,93 +188,126 @@ __global__ void assign_blocks_localToGlobal_kernel(int globalCount,struct Domdec
 // blockBounds - indices (in the local indexing) of first atom in each block
 __global__ void assign_blocks_blockBounds_kernel(int domainCount,int2 domainDiv,int globalCount,int *localToGlobal,struct DomdecBlockToken *tokens,int *blockCount,int *blockBounds,int maxBlocks)
 {
-  int i=blockIdx.x*blockDim.x+threadIdx.x;
+  int i,i0;
   int domain;
-  int ix=i/domainDiv.y;
-  int iy=i-ix*domainDiv.y;
+  int ix,iy;
   int probePos,hwidth,j;
   int blocksInColumn;
-  extern __shared__ int columnBounds[]; // Two shared arrays of size blockDim.x
-  int *cumBlocks=columnBounds+blockDim.x; // Two shared arrays of size blockDim.x
+  extern __shared__ int columnBounds[]; // Two shared arrays of size blockDim.x+1
+  int *cumBlocks=columnBounds+blockDim.x+1; // Two shared arrays of size blockDim.x+1
   struct DomdecBlockToken token,probeToken;
 
-  if (i==0) {
+  if (threadIdx.x==0) {
     blockCount[0]=0;
+    columnBounds[0]=0;
+    cumBlocks[0]=0;
   }
 
   __syncthreads();
 
+  // Loop through domains (slabs in z direction)
   for (domain=0; domain<domainCount; domain++) {
-    token.domain=domain;
-    token.ix=ix;
-    token.iy=iy;
-    token.z=-INFINITY;
+    // Loops through columns in x and y dimension
+    for (i0=0; i0<domainDiv.x*domainDiv.y; i0+=blockDim.x) {
+      i=i0+threadIdx.x; // column index
+      ix=i/domainDiv.y; // x column index
+      iy=i-ix*domainDiv.y; // y column index
 
-    int lowerPos=-1;
-    int upperPos=globalCount;
+      // Create search token
+      token.domain=domain;
+      token.ix=ix;
+      token.iy=iy;
+      token.z=INFINITY; // Infinity finds first element in next column
 
-    // Find half of next highest power of 2 above localCount+1
-    hwidth=globalCount; // (localCount+1)-1
-    hwidth|=hwidth>>1;
-    hwidth|=hwidth>>2;
-    hwidth|=hwidth>>4;
-    hwidth|=hwidth>>8;
-    hwidth|=hwidth>>16;
-    hwidth++;
-    hwidth=hwidth>>1;
+      // Set bounds for binary search
+      int lowerPos=-1;
+      int upperPos=globalCount;
 
-    for (; hwidth>0; hwidth=hwidth>>1) {
-      probePos=lowerPos+hwidth;
-      if (probePos<upperPos) {
-        probeToken=tokens[localToGlobal[probePos]];
-        if (probeToken<token) {
-          lowerPos=probePos;
-        } else {
-          upperPos=probePos;
+      // Find half of next highest power of 2 above localCount+1
+      hwidth=globalCount; // (localCount+1)-1
+      hwidth|=hwidth>>1;
+      hwidth|=hwidth>>2;
+      hwidth|=hwidth>>4;
+      hwidth|=hwidth>>8;
+      hwidth|=hwidth>>16;
+      hwidth++;
+      hwidth=hwidth>>1;
+
+      // Do binary search
+      for (; hwidth>0; hwidth=hwidth>>1) {
+        probePos=lowerPos+hwidth;
+        if (probePos<upperPos) {
+          probeToken=tokens[localToGlobal[probePos]];
+          if (probeToken<token) {
+            lowerPos=probePos;
+          } else {
+            upperPos=probePos;
+          }
         }
       }
-    }
 
-    columnBounds[i]=upperPos;
+      // Search complete, save to shared array columnBounds
+      int is0=threadIdx.x; // shared memory i position
+      int is1=threadIdx.x+1; // shared memory i+1 position
+      columnBounds[is1]=upperPos;
 
-    __syncthreads();
-
-    if (i<domainDiv.x*domainDiv.y) {
-      blocksInColumn=columnBounds[i+1]-columnBounds[i];
-      blocksInColumn=(blocksInColumn+31)/32;
-      cumBlocks[i+1]=blocksInColumn;
-    } else { // if (i==domainDiv.x*domainDiv.y)
-      cumBlocks[0]=0; // Someone needs to zero the first entry
-      blocksInColumn=1; // Add an entry at the end of block bounds below
-    }
-
-    // Requires shared memory because the number of columns is unrelated to warp size
-    for (hwidth=1; hwidth<domainDiv.x*domainDiv.y+1; hwidth*=2) {
       __syncthreads();
-      if (hwidth&i) {
-        cumBlocks[i]+=cumBlocks[(i|(hwidth-1))-hwidth];
+
+      lowerPos=columnBounds[is0];
+      blocksInColumn=upperPos-lowerPos;
+      blocksInColumn=(blocksInColumn+31)/32;
+
+      // Compute cumulative sum of blocks in all previous columns in shared array cumBlocks
+      // Requires shared memory because the number of columns is unrelated to warp size
+      cumBlocks[is1]=blocksInColumn;
+      for (hwidth=1; hwidth<blockDim.x+1; hwidth*=2) {
+        __syncthreads();
+        if (hwidth&is1) {
+          cumBlocks[is1]+=cumBlocks[(is1|(hwidth-1))-hwidth];
+        }
       }
+
+      __syncthreads();
+
+      // Save the block bounds into the blockBounds array
+      if (i<domainDiv.x*domainDiv.y) {
+        int j0=cumBlocks[is0];
+        // if (j0+blocksInColumn<=maxBlocks) {
+        for (j=0; j<blocksInColumn; j++) {
+          blockBounds[j+j0]=lowerPos+32*j;
+        }
+        // } else if (j0<maxBlocks) {
+        // warning "printf in kernel, this doesn't affect occupancy of 93.8\% on 2080 TI."
+        //   printf("Error: Overflow of maxBlocks. Use \"run setvariable domdecheuristic off\" - except that reallocation is not implemented here\n");
+        // Removed checks because block can't overflow anymore with new maxBlocks 2026-07-03
+        // }
+      }
+
+      __syncthreads();
+
+      // Update columnBounds and cumBlocks for next part of this domain
+      if (threadIdx.x==0) {
+        columnBounds[0]=columnBounds[blockDim.x];
+        cumBlocks[0]=cumBlocks[blockDim.x];
+      }
+      __syncthreads();
     }
 
+    // Update blockCount for next domain after this one is complete
+    if (threadIdx.x==0) {
+      blockCount[domain+1]=cumBlocks[0];
+    }
     __syncthreads();
+  }
 
-    int j0=blockCount[domain]+cumBlocks[i];
-    if (j0+blocksInColumn<=maxBlocks) {
-    for (j=0; j<blocksInColumn; j++) {
-      blockBounds[j+j0]=upperPos+32*j;
-    }
-    } else if (j0<maxBlocks) {
-// #warning "printf in kernel, this doesn't affect occupancy of 93.8\% on 2080 TI."
-      printf("Error: Overflow of maxBlocks. Use \"run setvariable domdecheuristic off\" - except that reallocation is not implemented here\n");
-    }
-
-    if (i==domainDiv.x*domainDiv.y) {
-      blockCount[domain+1]=blockCount[domain]+cumBlocks[domainDiv.x*domainDiv.y];
-    }
+  // Set final bound
+  if (threadIdx.x==0) {
+    // blockBounds[blockCount[domainCount]]=globalCount;
+    blockBounds[cumBlocks[0]]=columnBounds[0]; // Equivalent statements
   }
 }
 
-__global__ void assign_blocks_localNbonds_kernel(int blockCount,int *blockBounds,int *localToGlobal,int *globalToLocal,NbondPotential *nbonds,NbondPotential *localNbonds)
+__global__ void assign_blocks_localNbonds_kernel(int blockCount,int *blockBounds,int *localToGlobal,int *globalToLane,int *globalToBlock,NbondPotential *nbonds,NbondPotential *localNbonds)
 {
   int i=blockIdx.x*blockDim.x+threadIdx.x;
   int iBlock=i/32;
@@ -285,7 +319,9 @@ __global__ void assign_blocks_localNbonds_kernel(int blockCount,int *blockBounds
     iLocal+=(i&31);
     if ((i&31)<atomsInBlock) {
       iGlobal=localToGlobal[iLocal];
-      globalToLocal[iGlobal]=iLocal;
+      // globalToLocal[iGlobal]=iLocal;
+      globalToLane[iGlobal]=(i&31);
+      globalToBlock[iGlobal]=iBlock;
       localNbonds[i]=nbonds[iGlobal];
     }
   }
@@ -361,34 +397,37 @@ void Domdec::assign_blocks(System *system)
     } else {
       box=system->state->orthBox_f;
     }
-    real V=box.x*box.y*box.z;
-    real dr=exp(log(32*V/system->state->atomCount)/3); // Target block size
-    int2 domainDiv;
-    domainDiv.x=(int)ceil(box.x/(dr*gridDomdec.x));
-    domainDiv.y=(int)ceil(box.y/(dr*gridDomdec.y));
 
     assign_blocks_get_tokens_kernel<<<(globalCount+1+BLUP-1)/BLUP,BLUP,0,r->updateStream>>>(globalCount,gridDomdec,domainDiv,domain_d,(real3*)system->state->position_fd,box,blockToken_d);
+    gpuCheck(cudaGetLastError());
 
     // Make the tree structure
 
-    cudaMemsetAsync(blockSort_d,-1,(globalCount+1)*sizeof(struct DomdecBlockSort),r->updateStream);
+    gpuCheck(cudaMemsetAsync(blockSort_d,-1,(globalCount+1)*sizeof(struct DomdecBlockSort),r->updateStream));
 
     assign_blocks_grow_tree_kernel<<<(globalCount+BLUP-1)/BLUP,BLUP,0,r->updateStream>>>(globalCount,blockToken_d,blockSort_d);
+    gpuCheck(cudaGetLastError());
     assign_blocks_count_tree_kernel<<<(globalCount+BLUP-1)/BLUP,BLUP,0,r->updateStream>>>(globalCount,blockToken_d,blockSort_d);
+    gpuCheck(cudaGetLastError());
 
     // Create sorted structures
 
     assign_blocks_localToGlobal_kernel<<<(globalCount+BLUP-1)/BLUP,BLUP,0,r->updateStream>>>(globalCount,blockSort_d,localToGlobal_d);
+    gpuCheck(cudaGetLastError());
 
-    if (domainDiv.x*domainDiv.y>1024) fatal(__FILE__,__LINE__,"Need to rethink domain decomposition, that's nearing the boundary of what this decomposition can do. assign_blocks_blockBounds_kernel is probably going to fail.\n");
-    assign_blocks_blockBounds_kernel<<<1,domainDiv.x*domainDiv.y+1,2*(domainDiv.x*domainDiv.y+1)*sizeof(int),r->updateStream>>>(idCount,domainDiv,globalCount,localToGlobal_d,blockToken_d,blockCount_d,blockBounds_d,maxBlocks);
+    int ndiv=domainDiv.x*domainDiv.y;
+    ndiv=((ndiv>1024)?1024:ndiv);
+    assign_blocks_blockBounds_kernel<<<1,ndiv,2*(ndiv+1)*sizeof(int),r->updateStream>>>(idCount,domainDiv,globalCount,localToGlobal_d,blockToken_d,blockCount_d,blockBounds_d,maxBlocks);
+    gpuCheck(cudaGetLastError());
 
-    cudaMemcpy(blockCount,blockCount_d,(idCount+1)*sizeof(int),cudaMemcpyDeviceToHost);
+    gpuCheck(cudaMemcpy(blockCount,blockCount_d,(idCount+1)*sizeof(int),cudaMemcpyDeviceToHost));
 
-    assign_blocks_localNbonds_kernel<<<(32*blockCount[idCount]+BLUP-1)/BLUP,BLUP,0,r->updateStream>>>(blockCount[idCount],blockBounds_d,localToGlobal_d,globalToLocal_d,system->potential->nbonds_d,localNbonds_d);
+    assign_blocks_localNbonds_kernel<<<(32*blockCount[idCount]+BLUP-1)/BLUP,BLUP,0,r->updateStream>>>(blockCount[idCount],blockBounds_d,localToGlobal_d,globalToLane_d,globalToBlock_d,system->potential->nbonds_d,localNbonds_d);
+    gpuCheck(cudaGetLastError());
 
     // Redundant with pack_positions, needed for call to cull
     assign_blocks_localPosition_kernel<<<(32*blockCount[idCount]+BLUP-1)/BLUP,BLUP,0,r->updateStream>>>(blockCount[idCount],blockBounds_d,localToGlobal_d,(real3*)system->state->position_fd,localPosition_d,blockVolume_d);
+    gpuCheck(cudaGetLastError());
   }
 }
 
@@ -398,6 +437,7 @@ void Domdec::pack_positions(System *system)
   int N=blockCount[idCount];
   if (id>=0) {
     assign_blocks_localPosition_kernel<<<(32*N+BLUP-1)/BLUP,BLUP,0,r->nbdirectStream>>>(N,blockBounds_d,localToGlobal_d,(real3*)system->state->position_fd,localPosition_d,blockVolume_d);
+    gpuCheck(cudaGetLastError());
   }
 }
 
@@ -423,5 +463,6 @@ void Domdec::unpack_forces(System *system)
   int N=blockCount[idCount];
   if (id>=0) {
     unpack_forces_kernel<<<(32*N+BLUP-1)/BLUP,BLUP,0,r->nbdirectStream>>>(N,blockBounds_d,localToGlobal_d,(real3_f*)system->state->force_d,localForce_d);
+    gpuCheck(cudaGetLastError());
   }
 }

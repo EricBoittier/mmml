@@ -3,7 +3,9 @@ module qm1_scf_module
   use number
   use qm1_constant
 
-  ! used is pair indexing. (see below define_pair_indix, which is called from qmmm_load_parameters_setup_qm_info.)
+  ! used is pair indexing. 
+  ! see below define_pair_indix, which is called from qmmm_load_parameters_setup_qm_info.
+  ! and memory/arrays are defined in qm1_info.F90
   ! FINDX1 & FINDX2
   ! IP(LMI)   indices of unique one-center AO pairs = I(I-1)/2+J
   ! IP1(LMI)  index of first AO in the one-center pair = I (coul)
@@ -14,153 +16,20 @@ module qm1_scf_module
   ! JX(LM1)   1st  exchange pair index for given atom
   ! JXLAST    last exchange pair index for last  atom
   ! LMI= 4*numat; LME= 81*numat
-  integer,pointer,save :: IP_local(:) =>Null(),IP1_local(:)=>Null(),IP2_local(:)=>Null()
-  integer,pointer,save :: indx_local(:)=>Null()  ! local copy of indx array
-  logical,pointer,save :: ip_check(:)=>Null()
-  !
-  ! used in uhf case
-  integer,pointer,save :: JP1_local(:)=>Null(),JP2_local(:)=>Null(),JP3_local(:)=>Null(), &
-                          JX_local(:) =>Null()
-  integer,save         :: JXLAST_local
 
   ! for qm/mm-ewald related.
-  real(chm_real),pointer,save :: empot_local(:)=>Null(),empot_all(:)=>Null()
-
-  ! diis related part.
-  TYPE, public :: qm_scf_diis
-  ! for DIIS related.
-    ! FDA(LM4,MXDIIS+1)=FDB; Ediis(LM4,MXDIIS+1); Bdiis(MX1P); Adiix(MX1P); Xdiix(MXDIIS+1);
-    ! iwork_diis(6*LMX), LMX=9*LM1
-    integer            :: mxdiis=100            ! maximum number of diis iterations allowed.
-    integer            :: mx1   =101  ! = mxdiis+1
-    integer            :: mx1p  =5151 ! =(mx1*(mx1+1))/2
-    !
-    real(chm_real),pointer:: FDA(:,:)=>Null(), &! Fock matrices from Diis iterations, RHF or UHF-Alpha.
-                             FDB(:,:)=>Null()   !                                   , UHF-beta
-    real(chm_real),pointer:: Ediis(:,:)=>Null() ! Error matrixces from Diis iterations.
-    real(chm_real),pointer:: Bdiis(:)=>Null()   ! Coefficient matrix for Diis linear equations.
-    real(chm_real),pointer:: Adiis(:)=>Null()   ! Coefficient matrix for Diis linear equations.
-    real(chm_real),pointer:: Xdiis(:)=>Null()   ! RHS vector and solutions for Diis linear equations.
-    ! integer scratch array
-    integer,pointer :: iwork_diis(:)=>Null()    ! iwork in routine diis size: 12*numat
-  END TYPE qm_scf_diis
-
-  ! fock matrix dynamics (ref: )
-  TYPE, public :: qm_fockmd_diis
-     integer                :: mxfdiis            ! 5: n-2,n-1,n,n+1,n+2 or..
-                                                  ! 7: n-3,n-2,n-1,n,n+1,n+2,n+3
-     real(chm_real),pointer :: FA_sv(:)=>Null()   ! Fock matrix from the previous md step.
-     real(chm_real),pointer :: FDA(:,:)=>Null()   ! Fock matrices for Fock md iteration.
-  END TYPE qm_fockmd_diis
-
-  TYPE(qm_scf_diis), save :: qm_scf_diis_r
-  TYPE(qm_fockmd_diis),save :: qm_fockmd_diis_r
+  real(chm_real),allocatable,save :: empot_local(:),empot_all(:)
 
   contains
   !
 #if KEY_MNDO97==1
-  !
-  subroutine allocate_deallocate_qm_diis(qm_scf_main_l,qm_scf_diis_l,qm_fockmd_diis_l, &
-                                         qdiis,q_fockmd,imax_fdiss,uhf,qallocate)
-  !
-  ! allocate/deallocate Diis related arrays.
-  ! if qallocate == .true. , allocate memory
-  !                  false., deallocate memory
-
-  use qm1_info,only : qm_scf_main,Aass
-#if KEY_PARALLEL==1
-  use parallel
-#endif
-
-  implicit none
-  TYPE(qm_scf_main)    :: qm_scf_main_l
-  TYPE(qm_scf_diis)    :: qm_scf_diis_l
-  TYPE(qm_fockmd_diis) :: qm_fockmd_diis_l
-  logical :: qdiis,q_fockmd,uhf,qallocate
-  integer :: imax_fdiss
-
-  integer :: LMX,LMX6,dim_norbs,dim_linear_norbs,MXDIIS,MX1P
-  integer :: ier=0
-  integer :: mstart,mstop,msize,mxfdiis
-
-  ! first, define array sizes (determined in determine_qm_scf_arrray_size)
-  dim_norbs       = qm_scf_main_l%dim_norbs
-  dim_linear_norbs= qm_scf_main_l%dim_linear_norbs
-  LMX             = 9*qm_scf_main_l%dim_numat
-  LMX6            = 6*LMX
-  mxdiis          = qm_scf_diis_l%MXDIIS
-  mx1p            = qm_scf_diis_l%MX1P
-
-  ! deallocate if arrays are associated.
-  if(associated(qm_scf_diis_l%FDA))   deallocate(qm_scf_diis_l%FDA,stat=ier)
-     if(ier.ne.0) call Aass(0,'allocate_deallocate_qm_diis','FDA')
-  if(associated(qm_scf_diis_l%FDB))   deallocate(qm_scf_diis_l%FDB,stat=ier)
-     if(ier.ne.0) call Aass(0,'allocate_deallocate_qm_diis','FDB')
-  if(associated(qm_scf_diis_l%Ediis)) deallocate(qm_scf_diis_l%Ediis,stat=ier)
-     if(ier.ne.0) call Aass(0,'allocate_deallocate_qm_diis','Ediis')
-  if(associated(qm_scf_diis_l%Bdiis)) deallocate(qm_scf_diis_l%Bdiis,stat=ier)
-     if(ier.ne.0) call Aass(0,'allocate_deallocate_qm_diis','Bdiis')
-  if(associated(qm_scf_diis_l%Adiis)) deallocate(qm_scf_diis_l%Adiis,stat=ier)
-     if(ier.ne.0) call Aass(0,'allocate_deallocate_qm_diis','Adiix')
-  if(associated(qm_scf_diis_l%Xdiis)) deallocate(qm_scf_diis_l%Xdiis,stat=ier)
-     if(ier.ne.0) call Aass(0,'allocate_deallocate_qm_diis','Xdiis')
-  if(associated(qm_scf_diis_l%iwork_diis)) deallocate(qm_scf_diis_l%iwork_diis,stat=ier)
-     if(ier.ne.0) call Aass(0,'allocate_deallocate_qm_diis','iwork_diis')
-
-  !
-  if(associated(qm_fockmd_diis_l%FA_sv)) deallocate(qm_fockmd_diis_l%FA_sv,stat=ier)
-  if(associated(qm_fockmd_diis_l%FDA))   deallocate(qm_fockmd_diis_l%FDA,stat=ier)
-
-  ! now, allocate memory, only if qallocate==.true.
-  if(qallocate.and.qdiis) then
-     allocate(qm_scf_diis_l%FDA(dim_linear_norbs,mxdiis+1),stat=ier)
-        if(ier.ne.0) call Aass(1,'allocate_deallocate_qm_diis','FDA')
-     if(uhf) then
-        allocate(qm_scf_diis_l%FDB(dim_linear_norbs,mxdiis+1),stat=ier)
-           if(ier.ne.0) call Aass(1,'allocate_deallocate_qm_diis','FDB')
-     end if
-     allocate(qm_scf_diis_l%Ediis(dim_linear_norbs,mxdiis+1),stat=ier)
-        if(ier.ne.0) call Aass(1,'allocate_deallocate_qm_diis','Ediis')
-     allocate(qm_scf_diis_l%Bdiis(mx1p),stat=ier)
-        if(ier.ne.0) call Aass(1,'allocate_deallocate_qm_diis','Bdiis')
-     allocate(qm_scf_diis_l%Adiis(mx1p),stat=ier)
-        if(ier.ne.0) call Aass(1,'allocate_deallocate_qm_diis','Adiix')
-     allocate(qm_scf_diis_l%Xdiis(mxdiis+1),stat=ier)
-        if(ier.ne.0) call Aass(1,'allocate_deallocate_qm_diis','Xdiis')
-     allocate(qm_scf_diis_l%iwork_diis(LMX6),stat=ier)
-        if(ier.ne.0) call Aass(1,'allocate_deallocate_qm_diis','iwork_diis')
-  end if
-
-  ! now, allocate memory only if qallocate==.true.
-  if(qallocate.and.q_fockmd) then
-     qm_fockmd_diis_l%mxfdiis= imax_fdiss
-     mxfdiis= imax_fdiss
-     mstart = 1
-     mstop  = dim_linear_norbs
-#if KEY_PARALLEL==1
-     if(numnod>1) then
-        mstart = dim_linear_norbs*(mynod)/numnod + 1
-        mstop  = dim_linear_norbs*(mynod+1)/numnod
-     end if
-#endif
-     msize = (mstop-mstart)+1
-     allocate(qm_fockmd_diis_l%FA_sv(msize),stat=ier)
-        if(ier.ne.0) call Aass(1,'allocate_deallocate_qm_diis','FA_sv')
-     allocate(qm_fockmd_diis_l%FDA(mxfdiis,msize),stat=ier)
-        if(ier.ne.0) call Aass(1,'allocate_deallocate_qm_diis','FDA')
-  end if
-
-  return
-  end subroutine allocate_deallocate_qm_diis
-
-
   subroutine scf_iter(E_scf,H,W,Q,                   &
                       CA,DA,EA,FA,PA,CB,DB,EB,FB,PB, &
                       numat,                         &
                       dim_norbs,dim_linear_norbs,    &
                       dim_linear_fock,dim_linear_fock2, &
                       dim_scratch,ifockmd_counter,dim_iwork,         &
-                      iwork,icall,UHF,q_cpmd_bomd)
+                      iwork,icall,UHF)
   !
   ! Scf iteration
   ! E_scf  : scf electonic energy
@@ -181,7 +50,7 @@ module qm1_scf_module
   ! icall  : error flag.
   ! uhf    : UHF flag
   !
-  ! other matrices from Diis (qm_gho_info_r):
+  ! other matrices from Diis (qm_gho_info_c):
   ! FDA    : rhf or uhf-alpha Fock matrices from diis iterations.
   ! FDB    : uhf-beta Fock matrices from diis iterations.
   ! Ediis  : error matrices from different diis iterations.
@@ -189,18 +58,16 @@ module qm1_scf_module
   ! Adiis  : coefficient matrix for diis linear equations.
   ! Xdiis  : RHS vector and solutions of diis linear equations.
   !
-  !use chm_kinds
-  !use number
-  !use qm1_constant
-  use qm1_info, only : qm_control_r,qm_main_r,mm_main_r,qm_scf_main_r
-  use qm1_parameters, only : CORE
+  use qm1_info, only : qm_control_c,qm_main_c,mm_main_c,qm_scf_main_c,qm_param_c, &
+                       qm_scf_indx_c,qm_scf_diis_c,qm_fockmd_diis_c, &
+                       qm_gho_info_c
   use qmmmewald_module,only : qm_ewald_prepare_fock  ! qm_ewald_add_fock,qm_ewald_correct_ee
-  use mndgho_module,only : qm_gho_info_r,GHO_expansion,FTOFHB,CTRASF
-  use qm1_diagonalization, only : fast_diag,evvrsp
+  use mndgho_module,only : GHO_expansion,FTOFHB,CTRASF
+  use qm1_diagonalization
 #if KEY_PARALLEL==1
   use parallel
 !#if KEY_MPI==1  /*MPI run*/
-!  use mpi
+!  use mpi_f08
 !#endif /*MPI run*/
 #endif
   use stream, only : prnlev
@@ -216,15 +83,15 @@ module qm1_scf_module
                    EA(dim_norbs),EB(dim_norbs),                            &
                    FA(dim_linear_norbs),FB(dim_linear_norbs),              &
                    PA(dim_linear_norbs),PB(dim_linear_norbs)
-  logical :: UHF,q_cpmd_bomd
+  logical :: UHF
 
   ! local variables
   real(chm_real),parameter :: TRANS=0.10D0,     &
                               r_three=one/three 
   character(LEN=4) :: MEXT,MFAST
-  character(LEN=4) :: MXS(qm_scf_main_r%KITSCF),MFS(qm_scf_main_r%KITSCF)
-  real(chm_real)   :: EDS(qm_scf_main_r%KITSCF),EES(qm_scf_main_r%KITSCF), &
-                      ERS(qm_scf_main_r%KITSCF),PLS(qm_scf_main_r%KITSCF)
+  character(LEN=4) :: MXS(qm_scf_main_c%KITSCF),MFS(qm_scf_main_c%KITSCF)
+  real(chm_real)   :: EDS(qm_scf_main_c%KITSCF),EES(qm_scf_main_c%KITSCF), &
+                      ERS(qm_scf_main_c%KITSCF),PLS(qm_scf_main_c%KITSCF)
   !
   integer :: i,j,ii,jj,KEXT,NDIIS,NITER,nstart,nstep,info
   real(chm_real):: EEP,PL,PM,EF,EH,EFA,EFB,EHA,EHB,E_error,EDmax,EFA_L,EFB_L
@@ -232,62 +99,49 @@ module qm1_scf_module
   logical :: scf_succeed,fockmd_on
   integer :: nnumnod,mmynod
 #if KEY_PARALLEL==1
-  !integer :: ISTRT_CHECK       ! external function
-  integer,save  :: JPARPT_local(0:MAXNODE),KPARPT_local(0:MAXNODE)
-!#if KEY_MPI==1
-!  integer*4 :: IERR
-!  real(chm_real):: Escf_local
-!#endif
+  integer :: JPARPT_local(0:numnod),KPARPT_local(0:numnod),JPARPT_fock(0:numnod), &
+             JPARPT_diis(0:numnod)
 #endif
-  integer, save :: old_N = 0, old_nqm=0
-  integer, save :: mstart,mstop,msize  !,iqmst,iqmend
+  integer :: mstart,mstop,msize,fstart,fstop,kstart,kstop,kmstart,kmstop,kkmax, &
+             mkstart,mkstop,mstart_diis,mstop_diis,mstart_a_dens,mstop_a_dens,  &
+             mstart_b_dens,mstop_b_dens
   real(chm_real):: t1,t2
 
-  !!!real(chm_real),pointer,save :: empot_local(:)=>Null(),empot_all(:)=>Null()
-  !
+  !!! for qm/mm-ewald related.
+  !!real(chm_real),allocatable :: empot_local(:),empot_all(:)
 
-  ! for parallelization
+  ! for parallelization, define variables for arrays.
 #if KEY_PARALLEL==1
   mmynod  = mynod
   nnumnod = numnod
 #else
-  nnumnod = 1
-  mmynod  = 0
+  nnumnod= 1
+  mmynod = 0
 #endif
-  if(old_N .ne. dim_linear_norbs) then
-     old_N  = dim_linear_norbs
-     mstart = 1
-     mstop  = dim_linear_norbs
-     !iqmst  = 1
-     !iqmend = numat
-#if KEY_PARALLEL==1
-     if(numnod>1) then
-        !mstart = ISTRT_CHECK(mstop,dim_linear_norbs)
-        JPARPT_local(0)=0
-        KPARPT_local(0)=0
-        do i=1,numnod
-           JPARPT_local(i)= dim_linear_norbs*i/numnod ! for linear vector
-           KPARPT_local(i)= numat*i/numnod
-        end do
-        mstart = JPARPT_local(mynod)+1
-        mstop  = JPARPT_local(mynod+1)
+  call setup_array_index(qm_gho_info_c%q_gho) 
 
-        !iqmst  = ISTRT_CHECK(iqmend,numat)
-        !iqmst  = KPARPT_local(mynod)+1
-        !iqmend = KPARPT_local(mynod+1)
-     end if
-#endif
-     msize = (mstop-mstart)+1
+  ! specific for qm/mm-Ewald part. allocate local memory
+  if(mm_main_c%LQMEWD) then
+     allocate(empot_all(numat))
+     allocate(empot_local(numat))
   end if
 
-  ! specific for qm/mm-Ewald part.
-  if(old_nqm.ne.numat) then
-     old_nqm = numat
-     if(mm_main_r%LQMEWD) then
-        if(associated(empot_all))   deallocate(empot_all)
-        if(associated(empot_local)) deallocate(empot_local)
-        allocate(empot_all(numat))
-        allocate(empot_local(numat))
+  ! arrays and memories for diagonalization routines
+  if(qm_gho_info_c%q_gho) then
+     if(UHF) then                  !norbs(==n),nvect,nv,nocc,nocc(beta)
+        call setup_diag_array_info(qm_gho_info_c%norbhb,qm_gho_info_c%norbhb,qm_gho_info_c%norbhb, &
+                                   qm_main_c%numb,qm_main_c%nbeta,uhf)
+     else
+        call setup_diag_array_info(qm_gho_info_c%norbhb,qm_gho_info_c%norbhb,qm_gho_info_c%norbhb, &
+                                   qm_main_c%numb,qm_main_c%numb,uhf)
+     end if
+  else
+     if(UHF) then
+        call setup_diag_array_info(qm_main_c%norbs,qm_main_c%norbs,dim_norbs, &
+                                   qm_main_c%numb,qm_main_c%nbeta,uhf)
+     else
+        call setup_diag_array_info(qm_main_c%norbs,qm_main_c%norbs,dim_norbs, &
+                                   qm_main_c%numb,qm_main_c%numb,uhf)
      end if
   end if
 
@@ -299,7 +153,7 @@ module qm1_scf_module
   EEP   = zero
   PL    = zero
   FASTDG=.false. ! .true.  ! at the beginning, but will be determined again below.  
-  if(qm_control_r%q_diis) then
+  if(qm_control_c%q_diis) then
      nstart = -1  ! if diis is on, do not use damping/extrapolatin 
   else            ! in cal_density_matrix
      nstart = 4
@@ -307,73 +161,67 @@ module qm1_scf_module
   nstep  = 4      ! use extrapolation, it should be set negative if damping.
 
   ! overwrite here.
-  !qm_scf_main_r%SCFCRT=1.000000000000000d-006
-  !qm_scf_main_r%PLCRT =1.000000000000000d-006
-  !
-  !if(mm_main_r%q_cut_by_group .or. mm_main_r%q_diag_coulomb) then
-  !   qm_scf_main_r%SCFCRT=1.000000000000000d-006
-  !   qm_scf_main_r%PLCRT =1.000000000000000d-006
-  !else
-     qm_scf_main_r%SCFCRT=1.000000000000000d-006
-     qm_scf_main_r%PLCRT =1.000000000000000d-006 
-  !end if
+  qm_scf_main_c%SCFCRT=1.000000000000000d-006
+  qm_scf_main_c%PLCRT =1.000000000000000d-006 
 
   ! for Fock matrix dynamics (ref: ).
   fockmd_on=.false.
-  if(qm_control_r%q_fockmd .and. qm_control_r%q_do_fockmd_scf) then
-     call fock_diis(qm_fockmd_diis_r%FA_sv,qm_fockmd_diis_r%FDA,     &
-                    dim_linear_norbs,qm_fockmd_diis_r%mxfdiis,msize, &
-                    qm_control_r%i_fockmd_option,ifockmd_counter,fockmd_on)
+  if(qm_control_c%q_fockmd .and. qm_control_c%q_do_fockmd_scf) then
+     call fock_diis(qm_fockmd_diis_c%FA_sv,qm_fockmd_diis_c%FDA,     &
+                    dim_linear_norbs,qm_fockmd_diis_c%mxfdiis,msize, &
+                    qm_control_c%i_fockmd_option,ifockmd_counter,fockmd_on, &
+                    mstart,mstop,mmynod,nnumnod)
      if(fockmd_on) then
         ! run a single diagonalization to determine the updated density.
-        FA(mstart:mstop) = qm_fockmd_diis_r%FA_sv(1:msize)
+        FA(mstart:mstop) = qm_fockmd_diis_c%FA_sv(1:msize)
 #if KEY_PARALLEL==1
         if(nnumnod>1) call VDGBRE(FA,JPARPT_local)
 #endif
-        if (qm_gho_info_r%q_gho) then
+        if (qm_gho_info_c%q_gho) then
            ! transform f into hb for QM link atom
-           call FTOFHB(FA,qm_gho_info_r%FAHB,qm_gho_info_r%BT,    &
-                       qm_gho_info_r%numat,qm_gho_info_r%nqmlnk,  &
-                       dim_norbs,qm_gho_info_r%norbao,            &
-                       qm_gho_info_r%lin_norbao,qm_gho_info_r%nactatm, &
-                       qm_main_r%NFIRST,qm_main_r%NLAST,          &
-                       qm_scf_main_r%indx)
-           call square(qm_gho_info_r%FAHB,qm_gho_info_r%FAHBwrk, &
-                       qm_gho_info_r%norbhb,qm_gho_info_r%norbhb, &
-                       qm_gho_info_r%lin_norbhb,.false.)
-           call evvrsp(qm_gho_info_r%norbhb,qm_gho_info_r%norbhb, &
-                       qm_gho_info_r%norbhb,                      &
-                       qm_gho_info_r%FAHBwrk,Q,IWORK,EA,qm_gho_info_r%CAHB,INFO,.false.)
-           call cal_density_matrix(qm_gho_info_r%CAHB,qm_gho_info_r%DAHB,     &
-                                   qm_gho_info_r%PAHB,qm_gho_info_r%FAHBwrk,PL,  &
-                                   qm_gho_info_r%norbhb,                      &
-                                   qm_gho_info_r%lin_norbhb,                  &
-                                   qm_gho_info_r%norbhb,qm_main_r%numb,       &
-                                   qm_main_r%iodd,qm_main_r%jodd,niter,kext,nstart,nstep)
+           call FTOFHB(FA,qm_gho_info_c%FAHB,qm_gho_info_c%BT,    &
+                       qm_gho_info_c%numat,qm_gho_info_c%nqmlnk,  &
+                       dim_norbs,qm_gho_info_c%norbao,            &
+                       qm_gho_info_c%lin_norbao,qm_gho_info_c%nactatm, &
+                       qm_main_c%NFIRST,qm_main_c%NLAST,          &
+                       qm_scf_main_c%indx)
+           call square(qm_gho_info_c%FAHB,qm_gho_info_c%FAHBwrk, &
+                       qm_gho_info_c%norbhb,qm_gho_info_c%norbhb, &
+                       qm_gho_info_c%lin_norbhb,.false.)
+           call evvrsp(qm_gho_info_c%norbhb,qm_gho_info_c%norbhb, &
+                       qm_gho_info_c%norbhb,                      &
+                       qm_gho_info_c%FAHBwrk,Q,IWORK,EA,qm_gho_info_c%CAHB,INFO,.false.)
+           call cal_density_matrix(qm_gho_info_c%CAHB,qm_gho_info_c%DAHB,     &
+                                   qm_gho_info_c%PAHB,qm_gho_info_c%FAHBwrk,PL,  &
+                                   qm_gho_info_c%norbhb,                      &
+                                   qm_gho_info_c%lin_norbhb,                  &
+                                   qm_gho_info_c%norbhb,qm_main_c%numb,       &
+                                   qm_main_c%iodd,qm_main_c%jodd,niter,kext,nstart,nstep, &
+                                   mstart_a_dens,mstop_a_dens)
 
            ! do the GHO-expasion.
-           call GHO_expansion(qm_gho_info_r%norbhb,qm_gho_info_r%naos,     &
-                              qm_gho_info_r%lin_naos,qm_gho_info_r%nqmlnk, &
-                              qm_gho_info_r%lin_norbhb,dim_norbs,          &
-                              dim_linear_norbs,qm_gho_info_r%mqm16,        &
+           call GHO_expansion(qm_gho_info_c%norbhb,qm_gho_info_c%naos,     &
+                              qm_gho_info_c%lin_naos,qm_gho_info_c%nqmlnk, &
+                              qm_gho_info_c%lin_norbhb,dim_norbs,          &
+                              dim_linear_norbs,qm_gho_info_c%mqm16,        &
                               PL,PM,PA,PA,                                 &
-                              qm_gho_info_r%PAHB,qm_gho_info_r%PAHB,       &
-                              qm_gho_info_r%PAOLD,qm_gho_info_r%PAOLD,     &
-                              qm_gho_info_r%QMATMQ,qm_gho_info_r%BT,qm_gho_info_r%BTM, &
-                              qm_scf_main_r%indx,UHF)
+                              qm_gho_info_c%PAHB,qm_gho_info_c%PAHB,       &
+                              qm_gho_info_c%PAOLD,qm_gho_info_c%PAOLD,     &
+                              qm_gho_info_c%QMATMQ,qm_gho_info_c%BT,qm_gho_info_c%BTM, &
+                              qm_scf_main_c%indx,UHF)
         else
-           call square(FA,qm_scf_main_r%FAwork,qm_main_r%norbs,dim_norbs,dim_linear_norbs,.false.)
-           call evvrsp(qm_main_r%norbs,qm_main_r%norbs,dim_norbs,           &
-                       qm_scf_main_r%FAwork,Q,IWORK,EA,CA,INFO,.false.)
-           call cal_density_matrix(CA,DA,PA,qm_scf_main_r%FAwork,PL,     &
+           call square(FA,qm_scf_main_c%FAwork,qm_main_c%norbs,dim_norbs,dim_linear_norbs,.false.)
+           call evvrsp(qm_main_c%norbs,qm_main_c%norbs,dim_norbs,           &
+                       qm_scf_main_c%FAwork,Q,IWORK,EA,CA,INFO,.false.)
+           call cal_density_matrix(CA,DA,PA,qm_scf_main_c%FAwork,PL,     &
                                    dim_norbs,dim_linear_norbs,           &
-                                   qm_main_r%norbs,qm_main_r%numb,       &
-                                   qm_main_r%iodd,qm_main_r%jodd,niter,kext,nstart,nstep)
+                                   qm_main_c%norbs,qm_main_c%numb,       &
+                                   qm_main_c%iodd,qm_main_c%jodd,niter,kext,nstart,nstep,&
+                                   mstart_a_dens,mstop_a_dens)
         end if
-
-        ! now, lower the scf criteria.
-        qm_scf_main_r%SCFCRT=1.000000000000000d-006
-        qm_scf_main_r%PLCRT =1.000000000000000d-006
+        !! lower the scf criteria.
+        !qm_scf_main_c%SCFCRT=1.000000000000000d-006
+        !qm_scf_main_c%PLCRT =1.000000000000000d-006
      end if
   end if
 
@@ -396,28 +244,45 @@ module qm1_scf_module
      FA(mstart:mstop) = H(mstart:mstop)  ! FA(1:dim_linear_norbs) = H(1:dim_linear_norbs)
 
      ! coulumb and exchange contribution.
-     call fockx(FA,PA,PB,Q,W,dim_linear_norbs,dim_linear_fock,UHF,     &
-                numat,qm_main_r%nfirst,qm_main_r%nlast,qm_main_r%num_orbs, &
-                qm_scf_main_r%NW)
+     ! in subroutine fockx, LM6 = dim_linear_fock
+     !                      LM4 = dim_linear_norbs
+     call fockx(FA,PA,PB,Q,W,dim_linear_norbs,dim_linear_fock,UHF,         &
+                numat,qm_main_c%nfirst,qm_main_c%nlast,qm_main_c%num_orbs, &
+                qm_scf_main_c%NW,qm_scf_main_c%INDX,                       &
+                mstart,mstop,fstart,fstop,                                 &
+#if KEY_PARALLEL==1
+                JPARPT_fock(0:numnod),                                     &
+#endif
+                qm_scf_indx_c%ip_local,qm_scf_indx_c%ip_check,             &
+                [0],[0],[0],[0],[0],[0])
+                !qm_scf_indx_c%ip1_local,qm_scf_indx_c%ip2_local,           & ! These are used in UHF. Thus, the memory
+                !qm_scf_indx_c%jp1_local,qm_scf_indx_c%jp2_local,           & ! is defined with size 1.
+                !qm_scf_indx_c%jp3_local,qm_scf_indx_c%jx_local)              !
      !exit Scfloop
 
      ! QM/MM-Ewald
-     if(mm_main_r%LQMEWD) then
+     if(mm_main_c%LQMEWD) then
         ! Q = PA + PB (UHF) or 2*PA (constructed in fockx). 
-        call calc_mulliken(numat,qm_main_r%nat,qm_main_r%nfirst,qm_main_r%num_orbs, &
-                           Q,mm_main_r%qm_charges,                                  &
+        call calc_mulliken(numat,qm_main_c%num_orbs,                       &
+                           qm_param_c%core,Q,mm_main_c%qm_charges,         &
+                           mkstart,mkstop,                                 &
 #if KEY_PARALLEL==1
-                           nnumnod,                       & 
+                           KPARPT_local(0:numnod),                         & 
 #endif
-                           dim_linear_fock)
+                           qm_scf_main_c%INDX)
         ! compute Ewald correction potential on qm atom site and mofidy Fock matrix. 
         ! Since Eslf(nquant,nquant) matrix is used, it is only need to do matrix
         ! multiplication to get the correction terms from QM images to be SCF iterated.
-        call qm_ewald_prepare_fock(numat,empot_all,empot_local,mm_main_r%qm_charges)
+        call qm_ewald_prepare_fock(numat,empot_all,empot_local,            &
+                                   mkstart,mkstop,                         &
+#if KEY_PARALLEL==1
+                                   KPARPT_local(0:numnod),                 &
+#endif
+                                   mm_main_c%qm_charges)
 
         ! now correct the fock matrix.
-        call qm_ewald_add_fock(numat,qm_main_r%nfirst,qm_main_r%num_orbs,  &
-                               qm_scf_main_r%indx,FA,mm_main_r%qm_charges, &
+        call qm_ewald_add_fock(numat,qm_main_c%nfirst,qm_main_c%num_orbs,  &
+                               qm_scf_main_c%indx,FA,mm_main_c%qm_charges, &
                                dim_linear_norbs) 
      end if
 #if KEY_PARALLEL==1
@@ -431,29 +296,43 @@ module qm1_scf_module
         ! now do the copy fb=h
         FB(mstart:mstop) = H(mstart:mstop)  ! FB(1:dim_linear_norbs) = H(1:dim_linear_norbs)
 
-        call fockx(FB,PB,PA,Q,W,dim_linear_norbs,dim_linear_fock,UHF,     &
-                   numat,qm_main_r%nfirst,qm_main_r%nlast,qm_main_r%num_orbs, &
-                   qm_scf_main_r%NW)
+        call fockx(FB,PB,PA,Q,W,dim_linear_norbs,dim_linear_fock,UHF,         &
+                   numat,qm_main_c%nfirst,qm_main_c%nlast,qm_main_c%num_orbs, &
+                   qm_scf_main_c%NW,qm_scf_main_c%INDX,                       &
+                   mstart,mstop,fstart,fstop,                                 &
+#if KEY_PARALLEL==1
+                   JPARPT_fock(0:numnod),                                     &
+#endif
+                   qm_scf_indx_c%ip_local,qm_scf_indx_c%ip_check,             &
+                   qm_scf_indx_c%ip1_local,qm_scf_indx_c%ip2_local,           & ! These are used in UHF.
+                   qm_scf_indx_c%jp1_local,qm_scf_indx_c%jp2_local,           & !
+                   qm_scf_indx_c%jp3_local,qm_scf_indx_c%jx_local)              !
 
         ! QM/MM-Ewald
-        if(mm_main_r%LQMEWD) then
+        if(mm_main_c%LQMEWD) then
            ! As the following done above.. no need to do here.
-           !call calc_mulliken(numat,qm_main_r%nat,qm_main_r%nfirst,qm_main_r%num_orbs, &
-           !                   Q,mm_main_r%qm_charges,                                  &
+           !call calc_mulliken(numat,qm_main_c%num_orbs,                      &
+           !                   qm_param_c%core,Q,mm_main_c%qm_charges,        &
+           !                   mkstart,mkstop,                                &
            !#if KEY_PARALLEL==1
-           !                   nnumnod,                       &
+           !                   KPARPT_local(0:numnod),                        &
            !#endif
-           !                   dim_linear_fock)
+           !                   qm_scf_main_c%INDX)
            !
            ! As the following done above.. no need to do here.
            ! compute Ewald correction potential on qm atom site and mofidy Fock matrix. 
            ! Since Eslf(nquant,nquant) matrix is used, it is only need to do matrix
            ! multiplication to get the correction terms from QM images to be SCF iterated.
-           !call qm_ewald_prepare_fock(numat,empot_all,empot_local,mm_main_r%qm_charges)
+           !call qm_ewald_prepare_fock(numat,empot_all,empot_local,           &
+           !                           mkstart,mkstop,                        &
+           !#if KEY_PARALLEL==1
+           !                           KPARPT_local(0:numnod),                &
+           !#endif
+           !                           mm_main_c%qm_charges)
 
            ! now correct the fock matrix.
-           call qm_ewald_add_fock(numat,qm_main_r%nfirst,qm_main_r%num_orbs,  &
-                                  qm_scf_main_r%indx,FB,mm_main_r%qm_charges, &
+           call qm_ewald_add_fock(numat,qm_main_c%nfirst,qm_main_c%num_orbs,  &
+                                  qm_scf_main_c%indx,FB,mm_main_c%qm_charges, &
                                   dim_linear_norbs) 
         end if
 #if KEY_PARALLEL==1
@@ -461,131 +340,136 @@ module qm1_scf_module
 #endif
      end if         ! (UHF)
 
-     !====================START OPENMP PARALLEL========================!
-!$omp parallel NUM_THREADS(2)
-!$omp sections
-!$omp section
      ! Energy calculation.
      ! Note that there were two escf call in the original code, one with F=H copy (core-Hamiltonian),
      ! and the other one with full F. Here, in this implementation, the two separate calls are
      ! merged to a single energy call.
      ! This is done here, becaue the energy calls are done with F and H (and not with FAHB).
-     EFA = escf(dim_norbs,PA,FA,H,dim_linear_norbs)
+     EFA = escf(dim_norbs,PA,FA,H,kmstart,kmstop,kstart,kstop,dim_linear_norbs)
      if(UHF) then
-        EFB = escf(dim_norbs,PB,FB,H,dim_linear_norbs)
+        EFB = escf(dim_norbs,PB,FB,H,kmstart,kmstop,kstart,kstop,dim_linear_norbs)
      else
         EFB = EFA    ! computed for complete Fock-matrix (here) and H-core matrix.
      end if
-     !------------------------END SECTION 1----------------------------!
 
-!$omp section
      ! In case of using QM/MM-Ewald, MM atom contributes in full.
      EFA_L = zero
      EFB_L = zero
-     if(mm_main_r%LQMEWD) then
+     if(mm_main_c%LQMEWD) then
         ! empot_local is already copied above, qm_ewald_prepare_fock.
-        EFA_L = qm_ewald_correct_ee(numat,qm_main_r%nfirst,qm_main_r%num_orbs, &
-                                      qm_scf_main_r%indx,PA)
+        EFA_L = qm_ewald_correct_ee(numat,qm_main_c%nfirst,qm_main_c%num_orbs, &
+                                    mkstart,mkstop,qm_scf_main_c%indx,PA)
         if(UHF) then
-           EFB_L = qm_ewald_correct_ee(numat,qm_main_r%nfirst,qm_main_r%num_orbs, &
-                                      qm_scf_main_r%indx,PB)
+           EFB_L = qm_ewald_correct_ee(numat,qm_main_c%nfirst,qm_main_c%num_orbs, &
+                                       mkstart,mkstop,qm_scf_main_c%indx,PB)
         else
            EFB_L = EFA_L
         end if
      end if
 
-
      ! For GHO.
-     if (qm_gho_info_r%q_gho) then
+     if (qm_gho_info_c%q_gho) then
         ! only need to do before exit: converged or scf iteraction exceeded.
-        if(kext.eq.-1 .or. niter.ge.qm_scf_main_r%KITSCF) then
+        if(kext == -1 .or. niter >= qm_scf_main_c%KITSCF) then
           ! store Fock matrix in AO basis for derivative
-          qm_gho_info_r%FAOA(1:dim_linear_norbs)=FA(1:dim_linear_norbs)
+          qm_gho_info_c%FAOA(1:dim_linear_norbs)=FA(1:dim_linear_norbs)
         end if
 
         ! transform f into hb for QM link atom
-        call FTOFHB(FA,qm_gho_info_r%FAHB,qm_gho_info_r%BT,    &
-                    qm_gho_info_r%numat,qm_gho_info_r%nqmlnk,  &
-                    dim_norbs,qm_gho_info_r%norbao,            &
-                    qm_gho_info_r%lin_norbao,qm_gho_info_r%nactatm, &
-                    qm_main_r%NFIRST,qm_main_r%NLAST,          &
-                    qm_scf_main_r%indx)
+        call FTOFHB(FA,qm_gho_info_c%FAHB,qm_gho_info_c%BT,    &
+                    qm_gho_info_c%numat,qm_gho_info_c%nqmlnk,  &
+                    dim_norbs,qm_gho_info_c%norbao,            &
+                    qm_gho_info_c%lin_norbao,qm_gho_info_c%nactatm, &
+                    qm_main_c%NFIRST,qm_main_c%NLAST,          &
+                    qm_scf_main_c%indx)
 
         if(UHF) then
            ! only need to do before exit: converged or scf iteraction exceeded.
            ! either converged or scf interation exceeded.
-           if(kext.eq.-1 .or. niter.ge.qm_scf_main_r%KITSCF) then
-              qm_gho_info_r%FAOB(1:dim_linear_norbs)=FB(1:dim_linear_norbs)
+           if(kext == -1 .or. niter >= qm_scf_main_c%KITSCF) then
+              qm_gho_info_c%FAOB(1:dim_linear_norbs)=FB(1:dim_linear_norbs)
            end if
 
            ! for GHO, transform beta Fock matrix to hybrid basis
-           call FTOFHB(FB,qm_gho_info_r%FBHB,qm_gho_info_r%BT,    &
-                       qm_gho_info_r%numat,qm_gho_info_r%nqmlnk,  &
-                       dim_norbs,qm_gho_info_r%norbao,            &
-                       qm_gho_info_r%lin_norbao,qm_gho_info_r%nactatm, &
-                       qm_main_r%nfirst,qm_main_r%nlast,          &
-                       qm_scf_main_r%indx)
+           call FTOFHB(FB,qm_gho_info_c%FBHB,qm_gho_info_c%BT,    &
+                       qm_gho_info_c%numat,qm_gho_info_c%nqmlnk,  &
+                       dim_norbs,qm_gho_info_c%norbao,            &
+                       qm_gho_info_c%lin_norbao,qm_gho_info_c%nactatm, &
+                       qm_main_c%nfirst,qm_main_c%nlast,          &
+                       qm_scf_main_c%indx)
         end if
      end if
-     !-------------------------END SECTION 2---------------------------!
-!$omp end sections
-!$omp end parallel
-     !======================END OPENMP PARALLEL========================!
 
      ! apply Diis convergence acceleration.
-     dodiis =(qm_control_r%q_diis .and. niter.ge.1 .and. kext.ne.-1)
-     if(dodiis) then ! if(dodiis .and. .not.(qm_control_r%q_dxl_bomd .and. qm_control_r%q_do_dxl_scf)) then
-       if (qm_gho_info_r%q_gho) then
+     dodiis =(qm_control_c%q_diis .and. niter >= 1 .and. kext /= -1)
+     if(dodiis) then ! if(dodiis .and. .not.(qm_control_c%q_dxl_bomd .and. qm_control_c%q_do_dxl_scf)) then
+       if (qm_gho_info_c%q_gho) then
          ! GHO-DIIS extrapolation
          if(UHF) then
-            call diis(qm_gho_info_r%FAHB,qm_gho_info_r%FBHB,             &
-                      qm_gho_info_r%PAOLD,qm_gho_info_r%PBOLD,           &
-                      qm_scf_main_r%FAwork,qm_scf_main_r%FBwork,         &
-                      qm_scf_main_r%PAwork,qm_scf_main_r%PBwork,         &
-                      qm_scf_diis_r%FDA,qm_scf_diis_r%FDB,               &
-                      qm_scf_diis_r%Ediis,                               &
-                      qm_scf_diis_r%Adiis,qm_scf_diis_r%Bdiis,           &
-                      qm_scf_diis_r%Xdiis,                               &
-                      qm_gho_info_r%norbhb,qm_gho_info_r%lin_norbhb,     &
-                      qm_gho_info_r%norbhb,NDIIS,qm_scf_diis_r%mxdiis,   &
-                      qm_scf_diis_r%iwork_diis,EDMAX,.true.,UHF)
+            call diis(qm_gho_info_c%FAHB,qm_gho_info_c%FBHB,             &
+                      qm_gho_info_c%PAOLD,qm_gho_info_c%PBOLD,           &
+                      qm_scf_main_c%FAwork,qm_scf_main_c%FBwork,         &
+                      qm_scf_main_c%PAwork,qm_scf_main_c%PBwork,         &
+                      qm_scf_diis_c%FDA,qm_scf_diis_c%FDB,               &
+                      qm_scf_diis_c%Ediis,                               &
+                      qm_scf_diis_c%Adiis,qm_scf_diis_c%Bdiis,           &
+                      qm_scf_diis_c%Xdiis,                               &
+                      qm_gho_info_c%norbhb,qm_gho_info_c%lin_norbhb,     &
+                      qm_gho_info_c%norbhb,NDIIS,qm_scf_diis_c%mxdiis,   &
+#if KEY_PARALLEL==1
+                      JPARPT_diis(0:numnod),                             &
+#endif
+                      mstart_diis,mstop_diis,                            &
+                      qm_scf_diis_c%iwork_diis,EDMAX,.true.,UHF)
          else
-            call diis(qm_gho_info_r%FAHB,qm_gho_info_r%FAHB,             &
-                      qm_gho_info_r%PAOLD,qm_gho_info_r%PAOLD,           &
-                      qm_scf_main_r%FAwork,qm_scf_main_r%FAwork,         &
-                      qm_scf_main_r%PAwork,qm_scf_main_r%PAwork,         &
-                      qm_scf_diis_r%FDA,qm_scf_diis_r%FDA,               &
-                      qm_scf_diis_r%Ediis,                               &
-                      qm_scf_diis_r%Adiis,qm_scf_diis_r%Bdiis,           &
-                      qm_scf_diis_r%Xdiis,                               &
-                      qm_gho_info_r%norbhb,qm_gho_info_r%lin_norbhb,     &
-                      qm_gho_info_r%norbhb,NDIIS,qm_scf_diis_r%mxdiis,   &
-                      qm_scf_diis_r%iwork_diis,EDMAX,.true.,UHF)
+            call diis(qm_gho_info_c%FAHB,qm_gho_info_c%FAHB,             &
+                      qm_gho_info_c%PAOLD,qm_gho_info_c%PAOLD,           &
+                      qm_scf_main_c%FAwork,qm_scf_main_c%FAwork,         &
+                      qm_scf_main_c%PAwork,qm_scf_main_c%PAwork,         &
+                      qm_scf_diis_c%FDA,qm_scf_diis_c%FDA,               &
+                      qm_scf_diis_c%Ediis,                               &
+                      qm_scf_diis_c%Adiis,qm_scf_diis_c%Bdiis,           &
+                      qm_scf_diis_c%Xdiis,                               &
+                      qm_gho_info_c%norbhb,qm_gho_info_c%lin_norbhb,     &
+                      qm_gho_info_c%norbhb,NDIIS,qm_scf_diis_c%mxdiis,   &
+#if KEY_PARALLEL==1
+                      JPARPT_diis(0:numnod),                             &
+#endif
+                      mstart_diis,mstop_diis,                            &
+                      qm_scf_diis_c%iwork_diis,EDMAX,.true.,UHF)
          end if
        else
          ! normal diis extrapolation.
          if(UHF) then
-            call diis(FA,FB,PA,PB,                               &
-                      qm_scf_main_r%FAwork,qm_scf_main_r%FBwork, &
-                      qm_scf_main_r%PAwork,qm_scf_main_r%PBwork, &
-                      qm_scf_diis_r%FDA,qm_scf_diis_r%FDB,       &
-                      qm_scf_diis_r%Ediis,                       &
-                      qm_scf_diis_r%Adiis,qm_scf_diis_r%Bdiis,   &
-                      qm_scf_diis_r%Xdiis,                       &
-                      dim_norbs,dim_linear_norbs,                &
-                      qm_main_r%NORBS,NDIIS,qm_scf_diis_r%mxdiis,   &
-                      qm_scf_diis_r%iwork_diis,EDMAX,.true.,UHF)
+            call diis(FA,FB,PA,PB,                                       &
+                      qm_scf_main_c%FAwork,qm_scf_main_c%FBwork,         &
+                      qm_scf_main_c%PAwork,qm_scf_main_c%PBwork,         &
+                      qm_scf_diis_c%FDA,qm_scf_diis_c%FDB,               &
+                      qm_scf_diis_c%Ediis,                               &
+                      qm_scf_diis_c%Adiis,qm_scf_diis_c%Bdiis,           &
+                      qm_scf_diis_c%Xdiis,                               &
+                      dim_norbs,dim_linear_norbs,                        &
+                      qm_main_c%NORBS,NDIIS,qm_scf_diis_c%mxdiis,        &
+#if KEY_PARALLEL==1
+                      JPARPT_diis(0:numnod),                             &
+#endif
+                      mstart_diis,mstop_diis,                            &
+                      qm_scf_diis_c%iwork_diis,EDMAX,.true.,UHF)
          else
-            call diis(FA,FB,PA,PB,                               &
-                      qm_scf_main_r%FAwork,qm_scf_main_r%FAwork, &
-                      qm_scf_main_r%PAwork,qm_scf_main_r%PAwork, &   
-                      qm_scf_diis_r%FDA,qm_scf_diis_r%FDA,       &
-                      qm_scf_diis_r%Ediis,                       &
-                      qm_scf_diis_r%Adiis,qm_scf_diis_r%Bdiis,   &
-                      qm_scf_diis_r%Xdiis,                       &
-                      dim_norbs,dim_linear_norbs,                &
-                      qm_main_r%NORBS,NDIIS,qm_scf_diis_r%mxdiis,   &
-                      qm_scf_diis_r%iwork_diis,EDMAX,.true.,UHF)
+            call diis(FA,FB,PA,PB,                                       &
+                      qm_scf_main_c%FAwork,qm_scf_main_c%FAwork,         &
+                      qm_scf_main_c%PAwork,qm_scf_main_c%PAwork,         &   
+                      qm_scf_diis_c%FDA,qm_scf_diis_c%FDA,               &
+                      qm_scf_diis_c%Ediis,                               &
+                      qm_scf_diis_c%Adiis,qm_scf_diis_c%Bdiis,           &
+                      qm_scf_diis_c%Xdiis,                               &
+                      dim_norbs,dim_linear_norbs,                        &
+                      qm_main_c%NORBS,NDIIS,qm_scf_diis_c%mxdiis,        &
+#if KEY_PARALLEL==1
+                      JPARPT_diis(0:numnod),                             &
+#endif
+                      mstart_diis,mstop_diis,                            &
+                      qm_scf_diis_c%iwork_diis,EDMAX,.true.,UHF)
          end if
        end if
      end if
@@ -601,16 +485,16 @@ module qm1_scf_module
 
      E_ERROR= E_scf-EEP  ! current E - past E
      EEP    = E_scf
-     !if(mynod==0) write(6,*) niter,E_scf
+     !!if(mynod==0) write(6,*) niter,E_scf
 
      ! Check energy related information.
      ! save scf information
-     if(niter.gt.0 .and. niter.le.qm_scf_main_r%KITSCF) then
+     if(niter > 0 .and. niter <= qm_scf_main_c%KITSCF) then
         if(dodiis) then
            MEXT  = 'DIIS'
-        else if(kext.ge.2) then
+        else if(kext >= 2) then
            MEXT  = 'DAMP'
-        else if(kext.eq.1) then
+        else if(kext == 1) then
            MEXT  = 'YES '
         else
            MEXT  = 'NO  '
@@ -630,22 +514,22 @@ module qm1_scf_module
 
      ! scf convergence test and set flag for fast diagonalization.
      ! if kext=-1, meaning the scf convergence has been achieved.
-     if(niter.gt.0) then
-        if(kext.eq.-1) exit Scfloop  ! exit main iteration loop
-        if(abs(E_error).lt.qm_scf_main_r%SCFCRT .and. PL.lt.qm_scf_main_r%PLCRT .and. kext.ne.1) then
+     if(niter > 0) then
+        if(kext == -1) exit Scfloop  ! exit main iteration loop
+        if(abs(E_error) < qm_scf_main_c%SCFCRT .and. PL < qm_scf_main_c%PLCRT .and. kext /= 1) then
            !ITSAVE= niter+1  ! itsave may not be used in the current
                              ! implementation.
            kext   =-1        ! converged, and exit at next step.
         else
            ! so, meaning, not yet scf converged.
-           if(niter.gt.qm_scf_main_r%KITSCF) then
+           if(niter > qm_scf_main_c%KITSCF) then
               ! Scf failed by exceeding scf cycle; Exit the main loop.
               scf_succeed=.false.
               exit Scfloop
            end if
 
            ! for DXL-BOMD
-           if(qm_control_r%q_dxl_bomd .and. qm_control_r%q_do_dxl_scf .and. qm_control_r%N_scf_step == niter) then
+           if(qm_control_c%q_dxl_bomd .and. qm_control_c%q_do_dxl_scf .and. qm_control_c%N_scf_step == niter) then
               kext   =-1        ! converged, and exit at next step.
            end if
            ! FASTDG on, if PL < TRANS (=0.10d0) .and. niter < kitscf-50.
@@ -654,7 +538,7 @@ module qm1_scf_module
            else
               FASTDG =(PL.lt.TRANS .and. (niter.gt.1))
            end if
-           if(niter.gt.qm_scf_main_r%KITSCF-50) FASTDG =.false. ! turn off is niter approaches kitscf 
+           if(niter > qm_scf_main_c%KITSCF-50) FASTDG =.false. ! turn off is niter approaches kitscf 
         end if
      end if
 
@@ -662,28 +546,48 @@ module qm1_scf_module
      ! diagonalize the F-matrix.
      ! info: error code.
      if(FASTDG) then
-        if(qm_gho_info_r%q_gho) then
-           call square(qm_gho_info_r%FAHB,qm_gho_info_r%FAHBwrk,     &
-                       qm_gho_info_r%norbhb,qm_gho_info_r%norbhb, &
-                       qm_gho_info_r%lin_norbhb,.false.) !.true.)
-           call fast_diag(qm_gho_info_r%FAHBwrk,qm_gho_info_r%CAHB,EA,Q, &   ! qm_gho_info_r%FAHBwrk,
-                          qm_gho_info_r%norbhb,qm_gho_info_r%norbhb,qm_main_r%numb)
+        if(qm_gho_info_c%q_gho) then
+           call square(qm_gho_info_c%FAHB,qm_gho_info_c%FAHBwrk,     &
+                       qm_gho_info_c%norbhb,qm_gho_info_c%norbhb, &
+                       qm_gho_info_c%lin_norbhb,.false.) !.true.)
+           call fast_diag(qm_gho_info_c%FAHBwrk,qm_gho_info_c%CAHB,EA,Q, &   ! qm_gho_info_c%FAHBwrk,
+                          qm_gho_info_c%norbhb,qm_gho_info_c%norbhb,qm_main_c%numb, &
+#if KEY_PARALLEL==1
+                          KPARPT_fast_a(0:numnod),                                  &
+#endif
+                          fmo_local_a,nv1d_a,nv2d_a,mstart_fast,mstop_fast,         &
+                          kstart_fast_a,kstop_fast_a,fstart_fast_a,fstop_fast_a)
         else
-           call square(FA,qm_scf_main_r%FAwork,qm_main_r%norbs,dim_norbs,dim_linear_norbs,.false.) !.true.)
-           call fast_diag(qm_scf_main_r%FAwork,CA,EA,Q,dim_norbs, &          ! qm_scf_main_r%FAwork,
-                          qm_main_r%norbs,qm_main_r%numb)
+           call square(FA,qm_scf_main_c%FAwork,qm_main_c%norbs,dim_norbs,dim_linear_norbs,.false.) !.true.)
+           call fast_diag(qm_scf_main_c%FAwork,CA,EA,Q,dim_norbs, &          ! qm_scf_main_c%FAwork,
+                          qm_main_c%norbs,qm_main_c%numb,                       &
+#if KEY_PARALLEL==1
+                          KPARPT_fast_a(0:numnod),                              &
+#endif
+                          fmo_local_a,nv1d_a,nv2d_a,mstart_fast,mstop_fast,     &
+                          kstart_fast_a,kstop_fast_a,fstart_fast_a,fstop_fast_a)
         end if
         if(UHF) then
-           if(qm_gho_info_r%q_gho) then
-              call square(qm_gho_info_r%FBHB,qm_gho_info_r%FBHBwrk,     &
-                          qm_gho_info_r%norbhb,qm_gho_info_r%norbhb, &
-                          qm_gho_info_r%lin_norbhb,.false.) !.true.)
-              call fast_diag(qm_gho_info_r%FBHBwrk,qm_gho_info_r%CBHB,EB,Q, &  ! qm_gho_info_r%FBHBwrk,
-                             qm_gho_info_r%norbhb,qm_gho_info_r%norbhb,qm_main_r%nbeta)
+           if(qm_gho_info_c%q_gho) then
+              call square(qm_gho_info_c%FBHB,qm_gho_info_c%FBHBwrk,     &
+                          qm_gho_info_c%norbhb,qm_gho_info_c%norbhb, &
+                          qm_gho_info_c%lin_norbhb,.false.) !.true.)
+              call fast_diag(qm_gho_info_c%FBHBwrk,qm_gho_info_c%CBHB,EB,Q, &  ! qm_gho_info_c%FBHBwrk,
+                             qm_gho_info_c%norbhb,qm_gho_info_c%norbhb,qm_main_c%nbeta, &
+#if KEY_PARALLEL==1
+                             KPARPT_fast_b(0:numnod),                                   &
+#endif
+                             fmo_local_b,nv1d_b,nv2d_b,mstart_fast,mstop_fast,          &
+                             kstart_fast_b,kstop_fast_b,fstart_fast_b,fstop_fast_b)
            else
-              call square(FB,qm_scf_main_r%FBwork,qm_main_r%norbs,dim_norbs,dim_linear_norbs,.false.) !.true.)
-              call fast_diag(qm_scf_main_r%FBwork,CB,EB,Q,dim_norbs, &         ! qm_scf_main_r%FBwork,
-                             qm_main_r%norbs,qm_main_r%nbeta)
+              call square(FB,qm_scf_main_c%FBwork,qm_main_c%norbs,dim_norbs,dim_linear_norbs,.false.) !.true.)
+              call fast_diag(qm_scf_main_c%FBwork,CB,EB,Q,dim_norbs, &         ! qm_scf_main_c%FBwork,
+                             qm_main_c%norbs,qm_main_c%nbeta,                      &
+#if KEY_PARALLEL==1
+                             KPARPT_fast_b(0:numnod),                              &
+#endif
+                             fmo_local_b,nv1d_b,nv2d_b,mstart_fast,mstop_fast,     &
+                             kstart_fast_b,kstop_fast_b,fstart_fast_b,fstop_fast_b)
            end if
         end if
         !!if(mynod==0) write(6,'(A17,F12.5)')'Time (FAST-DIAG)=',(t2-t1)*1000.0d0
@@ -693,42 +597,42 @@ module qm1_scf_module
         ! IDIAG=0 (default diagonalizer).
         ! refer DIAGON.f and full_diagonalization.f
         !
-        if(qm_gho_info_r%q_gho) then
-           call square(qm_gho_info_r%FAHB,qm_gho_info_r%FAHBwrk, &
-                       qm_gho_info_r%norbhb,qm_gho_info_r%norbhb, &
-                       qm_gho_info_r%lin_norbhb,.false.)
-           call evvrsp(qm_gho_info_r%norbhb,qm_gho_info_r%norbhb, &
-                       qm_gho_info_r%norbhb,                      &
-                       qm_gho_info_r%FAHBwrk,Q,IWORK,EA,qm_gho_info_r%CAHB,INFO,.false.)
+        if(qm_gho_info_c%q_gho) then
+           call square(qm_gho_info_c%FAHB,qm_gho_info_c%FAHBwrk, &
+                       qm_gho_info_c%norbhb,qm_gho_info_c%norbhb, &
+                       qm_gho_info_c%lin_norbhb,.false.)
+           call evvrsp(qm_gho_info_c%norbhb,qm_gho_info_c%norbhb, &
+                       qm_gho_info_c%norbhb,                      &
+                       qm_gho_info_c%FAHBwrk,Q,IWORK,EA,qm_gho_info_c%CAHB,INFO,.false.)
         else
-           call square(FA,qm_scf_main_r%FAwork,qm_main_r%norbs,dim_norbs,dim_linear_norbs,.false.)
-           call evvrsp(qm_main_r%norbs,qm_main_r%norbs,dim_norbs,           &
-                       qm_scf_main_r%FAwork,Q,IWORK,EA,CA,INFO,.false.)
+           call square(FA,qm_scf_main_c%FAwork,qm_main_c%norbs,dim_norbs,dim_linear_norbs,.false.)
+           call evvrsp(qm_main_c%norbs,qm_main_c%norbs,dim_norbs,           &
+                       qm_scf_main_c%FAwork,Q,IWORK,EA,CA,INFO,.false.)
         end if
         !!if(mynod==0) write(6,'(A17,F12.5)')'Time (FULL-DIAG)=',(t2-t1)*1000.0d0
         ! Error section:
-        if(info.ne.0 .and. prnlev.ge.2) write(6,400) info
+        if(info /= 0 .and. prnlev >= 2) write(6,400) info
         !
         if(UHF) then
-           if(qm_gho_info_r%q_gho) then
-              call square(qm_gho_info_r%FBHB,qm_gho_info_r%FBHBwrk, &
-                          qm_gho_info_r%norbhb,qm_gho_info_r%norbhb, &
-                          qm_gho_info_r%lin_norbhb,.false.)
-              call evvrsp(qm_gho_info_r%norbhb,qm_gho_info_r%norbhb, &
-                          qm_gho_info_r%norbhb,                      &
-                          qm_gho_info_r%FBHBwrk,Q,IWORK,EB,qm_gho_info_r%CBHB,INFO,.false.)
+           if(qm_gho_info_c%q_gho) then
+              call square(qm_gho_info_c%FBHB,qm_gho_info_c%FBHBwrk, &
+                          qm_gho_info_c%norbhb,qm_gho_info_c%norbhb, &
+                          qm_gho_info_c%lin_norbhb,.false.)
+              call evvrsp(qm_gho_info_c%norbhb,qm_gho_info_c%norbhb, &
+                          qm_gho_info_c%norbhb,                      &
+                          qm_gho_info_c%FBHBwrk,Q,IWORK,EB,qm_gho_info_c%CBHB,INFO,.false.)
            else
-              call square(FB,qm_scf_main_r%FBwork,qm_main_r%norbs,dim_norbs,dim_linear_norbs,.false.)
-              call evvrsp(qm_main_r%norbs,qm_main_r%norbs,dim_norbs,           &
-                          qm_scf_main_r%FBwork,Q,IWORK,EB,CB,INFO,.false.)
+              call square(FB,qm_scf_main_c%FBwork,qm_main_c%norbs,dim_norbs,dim_linear_norbs,.false.)
+              call evvrsp(qm_main_c%norbs,qm_main_c%norbs,dim_norbs,           &
+                          qm_scf_main_c%FBwork,Q,IWORK,EB,CB,INFO,.false.)
            end if
            ! Error section:
-           if(info.ne.0 .and. prnlev.ge.2) write(6,405) info
+           if(info /= 0 .and. prnlev >= 2) write(6,405) info
         end if
         ! error
-        if(info.ne.0) then
-           if(ndiis.gt.0) ndiis=ndiis-1
-           if(prnlev.ge.2) write(6,410)
+        if(info /= 0) then
+           if(ndiis > 0) ndiis=ndiis-1
+           if(prnlev >= 2) write(6,410)
            Cycle Scfloop     ! main iteration do loop
         end if
      end if
@@ -736,150 +640,146 @@ module qm1_scf_module
 
      ! COMPUTE THE DENSITY MATRIX AND EXTRAPOLATE, IF POSSIBLE.
      ! for GHO:
-     if (qm_gho_info_r%q_gho) then
+     if (qm_gho_info_c%q_gho) then
         if(UHF) then
-           call cal_density_matrix(qm_gho_info_r%CAHB,qm_gho_info_r%DAHB,     &
-                                   qm_gho_info_r%PAHB,qm_gho_info_r%FAHBwrk,PL,  &
-                                   qm_gho_info_r%norbhb,                      &
-                                   qm_gho_info_r%lin_norbhb,                  &
-                                   qm_gho_info_r%norbhb,qm_main_r%NALPHA,     &
-                                   0,0, niter,kext,nstart,nstep)
-           call cal_density_matrix(qm_gho_info_r%CBHB,qm_gho_info_r%DBHB,     &
-                                   qm_gho_info_r%PBHB,qm_gho_info_r%FBHBwrk,PM,  &
-                                   qm_gho_info_r%norbhb,                      &
-                                   qm_gho_info_r%lin_norbhb,                  &
-                                   qm_gho_info_r%norbhb,qm_main_r%NBETA ,     &
-                                   0,0,niter,kext,nstart,nstep)
-           if(PM.GT.PL) PL=PM
+           call cal_density_matrix(qm_gho_info_c%CAHB,qm_gho_info_c%DAHB,     &
+                                   qm_gho_info_c%PAHB,qm_gho_info_c%FAHBwrk,PL,  &
+                                   qm_gho_info_c%norbhb,                      &
+                                   qm_gho_info_c%lin_norbhb,                  &
+                                   qm_gho_info_c%norbhb,qm_main_c%NALPHA,     &
+                                   0,0, niter,kext,nstart,nstep,              &
+                                   mstart_a_dens,mstop_a_dens)
+           call cal_density_matrix(qm_gho_info_c%CBHB,qm_gho_info_c%DBHB,     &
+                                   qm_gho_info_c%PBHB,qm_gho_info_c%FBHBwrk,PM,  &
+                                   qm_gho_info_c%norbhb,                      &
+                                   qm_gho_info_c%lin_norbhb,                  &
+                                   qm_gho_info_c%norbhb,qm_main_c%NBETA ,     &
+                                   0,0,niter,kext,nstart,nstep,               &
+                                   mstart_b_dens,mstop_b_dens)
+           if(PM > PL) PL=PM
  
            ! do the GHO expansion
-           call GHO_expansion(qm_gho_info_r%norbhb,qm_gho_info_r%naos,     &
-                              qm_gho_info_r%lin_naos,qm_gho_info_r%nqmlnk, &
-                              qm_gho_info_r%lin_norbhb,dim_norbs,          &
-                              dim_linear_norbs,qm_gho_info_r%mqm16,        &
+           call GHO_expansion(qm_gho_info_c%norbhb,qm_gho_info_c%naos,     &
+                              qm_gho_info_c%lin_naos,qm_gho_info_c%nqmlnk, &
+                              qm_gho_info_c%lin_norbhb,dim_norbs,          &
+                              dim_linear_norbs,qm_gho_info_c%mqm16,        &
                               PL,PM,PA,PB,                                 &
-                              qm_gho_info_r%PAHB,qm_gho_info_r%PBHB,       &
-                              qm_gho_info_r%PAOLD,qm_gho_info_r%PBOLD,     &
-                              qm_gho_info_r%QMATMQ,qm_gho_info_r%BT,qm_gho_info_r%BTM, &
-                              qm_scf_main_r%indx,UHF)
+                              qm_gho_info_c%PAHB,qm_gho_info_c%PBHB,       &
+                              qm_gho_info_c%PAOLD,qm_gho_info_c%PBOLD,     &
+                              qm_gho_info_c%QMATMQ,qm_gho_info_c%BT,qm_gho_info_c%BTM, &
+                              qm_scf_main_c%indx,UHF)
         else
-           call cal_density_matrix(qm_gho_info_r%CAHB,qm_gho_info_r%DAHB,     &
-                                   qm_gho_info_r%PAHB,qm_gho_info_r%FAHBwrk,PL,  &
-                                   qm_gho_info_r%norbhb,                      &
-                                   qm_gho_info_r%lin_norbhb,                  &
-                                   qm_gho_info_r%norbhb,qm_main_r%numb,       &
-                                   qm_main_r%iodd,qm_main_r%jodd,niter,kext,nstart,nstep)
+           call cal_density_matrix(qm_gho_info_c%CAHB,qm_gho_info_c%DAHB,     &
+                                   qm_gho_info_c%PAHB,qm_gho_info_c%FAHBwrk,PL,  &
+                                   qm_gho_info_c%norbhb,                      &
+                                   qm_gho_info_c%lin_norbhb,                  &
+                                   qm_gho_info_c%norbhb,qm_main_c%numb,       &
+                                   qm_main_c%iodd,qm_main_c%jodd,niter,kext,nstart,nstep, &
+                                   mstart_a_dens,mstop_a_dens)
 
            ! do the GHO-expasion.
-           call GHO_expansion(qm_gho_info_r%norbhb,qm_gho_info_r%naos,     &
-                              qm_gho_info_r%lin_naos,qm_gho_info_r%nqmlnk, &
-                              qm_gho_info_r%lin_norbhb,dim_norbs,          &
-                              dim_linear_norbs,qm_gho_info_r%mqm16,        &
+           call GHO_expansion(qm_gho_info_c%norbhb,qm_gho_info_c%naos,     &
+                              qm_gho_info_c%lin_naos,qm_gho_info_c%nqmlnk, &
+                              qm_gho_info_c%lin_norbhb,dim_norbs,          &
+                              dim_linear_norbs,qm_gho_info_c%mqm16,        &
                               PL,PM,PA,PA,                                 &
-                              qm_gho_info_r%PAHB,qm_gho_info_r%PAHB,       &
-                              qm_gho_info_r%PAOLD,qm_gho_info_r%PAOLD,     &
-                              qm_gho_info_r%QMATMQ,qm_gho_info_r%BT,qm_gho_info_r%BTM, &
-                              qm_scf_main_r%indx,UHF)
+                              qm_gho_info_c%PAHB,qm_gho_info_c%PAHB,       &
+                              qm_gho_info_c%PAOLD,qm_gho_info_c%PAOLD,     &
+                              qm_gho_info_c%QMATMQ,qm_gho_info_c%BT,qm_gho_info_c%BTM, &
+                              qm_scf_main_c%indx,UHF)
         end if
      else          ! q_gho
         if(UHF) then
-           call cal_density_matrix(CA,DA,PA,qm_scf_main_r%FAwork,PL,     &
+           call cal_density_matrix(CA,DA,PA,qm_scf_main_c%FAwork,PL,     &
                                    dim_norbs,dim_linear_norbs,           &
-                                   qm_main_r%norbs,qm_main_r%nalpha,     &
-                                   0,0,niter,kext,nstart,nstep)
-           call cal_density_matrix(CB,DB,PB,qm_scf_main_r%FAwork,PM,     &
+                                   qm_main_c%norbs,qm_main_c%nalpha,     &
+                                   0,0,niter,kext,nstart,nstep,          &
+                                   mstart_a_dens,mstop_a_dens)
+           call cal_density_matrix(CB,DB,PB,qm_scf_main_c%FAwork,PM,     &
                                    dim_norbs,dim_linear_norbs,           &
-                                   qm_main_r%norbs,qm_main_r%nbeta ,     &
-                                   0,0,niter,kext,nstart,nstep)
-           if(PM.GT.PL) PL=PM
+                                   qm_main_c%norbs,qm_main_c%nbeta ,     &
+                                   0,0,niter,kext,nstart,nstep,          &
+                                   mstart_b_dens,mstop_b_dens)
+           if(PM > PL) PL=PM
         else
-           call cal_density_matrix(CA,DA,PA,qm_scf_main_r%FAwork,PL,     &
+           call cal_density_matrix(CA,DA,PA,qm_scf_main_c%FAwork,PL,     &
                                    dim_norbs,dim_linear_norbs,           &
-                                   qm_main_r%norbs,qm_main_r%numb,       &
-                                   qm_main_r%iodd,qm_main_r%jodd,niter,kext,nstart,nstep)
+                                   qm_main_c%norbs,qm_main_c%numb,       &
+                                   qm_main_c%iodd,qm_main_c%jodd,niter,kext,nstart,nstep, &
+                                   mstart_a_dens,mstop_a_dens)
         end if
      end if        ! q_gho
-     !!if(mynod==0) write(6,'(A17,F12.5)')'Time (DENSITY  )=',(t2-t1)*1000.0d0
+     !!!if(mynod==0) write(6,'(A17,F12.5)')'Time (DENSITY  )=',(t2-t1)*1000.0d0
   End do Scfloop   ! main iteration loop
   ! END OF SCF LOOP.
   !++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
   !++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
   ! for Fock matrix dynamics (ref: ).
-  if(qm_control_r%q_fockmd .and. qm_control_r%md_run) then
+  if(qm_control_c%q_fockmd .and. qm_control_c%md_run) then
      ! save it for the next md step.
-     qm_fockmd_diis_r%FA_sv(1:msize) = FA(mstart:mstop)
+     qm_fockmd_diis_c%FA_sv(1:msize) = FA(mstart:mstop)
   end if
   !if(mynod==0) write(6,*) 'SCF Final: ',niter,E_scf
 
-  ! Specific line for CPMD-CURVy-MTS-LN.
-  ! q_cpmd_bomd =.true.: scf_iter is called to determined density only.
-  !                      in this case, after reaching the scf, the density
-  !                      does not have to be copied to old one...
-  !                      in particular, GHO case..
-  if(.not.q_cpmd_bomd) then
-     ! for GHO method: since CA is not explicitly used within the scf cycle. So,
-     ! transform orbitals to AO basis here, used by Mulliken analysis.
-     if(qm_gho_info_r%q_gho) then
-        ! this CTRASF appears not to be necessary.
-        call CTRASF(qm_main_r%norbs,qm_gho_info_r%nqmlnk,qm_gho_info_r%mqm16, &
-                    qm_gho_info_r%norbhb,qm_gho_info_r%naos,                  &
-                    qm_gho_info_r%BT,qm_gho_info_r%CAHB,CA)
-        if(UHF) then
-           ! for UHF:
-           call CTRASF(qm_main_r%norbs,qm_gho_info_r%nqmlnk,qm_gho_info_r%mqm16, &
-                       qm_gho_info_r%norbhb,qm_gho_info_r%naos,                  &
-                       qm_gho_info_r%BT,qm_gho_info_r%CBHB,CB)
-           ! store the density for gho-related derivative calculation.
-           do i=1,dim_linear_norbs
-              qm_gho_info_r%PHO(i) = qm_gho_info_r%PAHB(i)
-              qm_gho_info_r%PBHO(i)= qm_gho_info_r%PBHB(i)
-           end do
-        else
-           ! for RHF: it only needs to be done here, not in the GHO_expansion.
-           ! store the density for gho-related derivative calculation (density in HB N+4 basis).
-           qm_gho_info_r%PHO(1:dim_linear_norbs)=qm_gho_info_r%PAHB(1:dim_linear_norbs)*two
-        end if
-     end if
-
-     ! special for cpmd preparation.
-     if(qm_control_r%cpmd .and. qm_control_r%md_run) then
-        ! PAHB is broken after GHO_expansion. So, we should reconstruct it.
-        if(qm_gho_info_r%q_gho) then
-           ii = qm_gho_info_r%lin_norbhb
-           qm_gho_info_r%PAHB(1:ii)=qm_gho_info_r%PAOLD(1:ii)
-           if(UHF) qm_gho_info_r%PBHB(1:ii)=qm_gho_info_r%PBOLD(1:ii)
-        end if
+  ! for GHO method: since CA is not explicitly used within the scf cycle. So,
+  ! transform orbitals to AO basis here, used by Mulliken analysis.
+  if(qm_gho_info_c%q_gho) then
+     ! this CTRASF appears not to be necessary.
+     call CTRASF(qm_main_c%norbs,qm_gho_info_c%nqmlnk,qm_gho_info_c%mqm16, &
+                 qm_gho_info_c%norbhb,qm_gho_info_c%naos,                  &
+                 qm_gho_info_c%BT,qm_gho_info_c%CAHB,CA)
+     if(UHF) then
+        ! for UHF:
+        call CTRASF(qm_main_c%norbs,qm_gho_info_c%nqmlnk,qm_gho_info_c%mqm16, &
+                    qm_gho_info_c%norbhb,qm_gho_info_c%naos,                  &
+                    qm_gho_info_c%BT,qm_gho_info_c%CBHB,CB)
+        ! store the density for gho-related derivative calculation.
+        do i=1,dim_linear_norbs
+           qm_gho_info_c%PHO(i) = qm_gho_info_c%PAHB(i)
+           qm_gho_info_c%PBHO(i)= qm_gho_info_c%PBHB(i)
+        end do
+     else
+        ! for RHF: it only needs to be done here, not in the GHO_expansion.
+        ! store the density for gho-related derivative calculation (density in HB N+4 basis).
+        qm_gho_info_c%PHO(1:dim_linear_norbs)=qm_gho_info_c%PAHB(1:dim_linear_norbs)*two
      end if
   end if
+
   ! Scf convergence has been achieved
   if(scf_succeed) then
      ! if successful at 2nd attempt for scf using Diis.
-     if(icall.eq.-1 .and. qm_control_r%q_diis) then 
-        if(prnlev.ge.2) write(6,580)
+     if(icall == -1 .and. qm_control_c%q_diis) then 
+        if(prnlev >= 2) write(6,580)
         icall = 0
      end if
   else       ! scf, failed?
      ! no scf convergence.
-     if(prnlev.ge.2) then
+     if(prnlev >= 2) then
         write(6,560) 'SCF_ITER routine'
         write(6,520)
-        if(qm_control_r%q_diis) then
+        if(qm_control_c%q_diis) then
            write(6,505)
-           do i=1,MIN(niter,qm_scf_main_r%KITSCF)
+           do i=1,MIN(niter,qm_scf_main_c%KITSCF)
               write(6,510) i,EES(i),ERS(i),PLS(i),MXS(i),MFS(i),EDS(i)
            end do
            write(6,530) NITER,E_scf,E_error,PL,EDMAX
         else
            write(6,500)
-           do i=1,MIN(niter,qm_scf_main_r%KITSCF)
+           do i=1,MIN(niter,qm_scf_main_c%KITSCF)
               write(6,510) i,EES(i),ERS(i),PLS(i),MXS(i),MFS(i)
            end do
            write(6,530) NITER,E_scf,E_error,PL
         end if
-        write(6,540) qm_scf_main_r%SCFCRT,qm_scf_main_r%PLCRT
+        write(6,540) qm_scf_main_c%SCFCRT,qm_scf_main_c%PLCRT
      end if
      icall  = -1  !  indicates failure to reach SCF convergence.
+  end if
+
+  ! specific for qm/mm-Ewald part. deallocate local memory
+  if(mm_main_c%LQMEWD) then
+     if(allocated(empot_all))   deallocate(empot_all)
+     if(allocated(empot_local)) deallocate(empot_local)
   end if
 
   400 FORMAT(1X,'Full diagonalization: Failed in alpha with error code ',I6,'.')
@@ -901,21 +801,121 @@ module qm1_scf_module
 
   return
 
-  ! contains
-  !====================================================================!
-  !=====================beginning of contains =========================!
-  !
-  !========================= end of contains ==========================!
-  !====================================================================!
+  contains
+     subroutine setup_array_index(gho_use)
+        !
+        ! index/variables for parallelizations
+        ! 
+        implicit none
+        logical :: gho_use
 
+        ! Prepare array for vector allgather calls using VDGBRE
+        ! mapping for each node (Hard weird).
+#if KEY_PARALLEL==1
+        JPARPT_local(0)=0
+        KPARPT_local(0)=0
+        do i=1,numnod
+           JPARPT_local(i)= dim_linear_norbs*i/numnod ! for linear vector
+           KPARPT_local(i)= numat*i/numnod
+        end do
+        mstart = JPARPT_local(mynod)+1
+        mstop  = JPARPT_local(mynod+1)                ! for dim_linear_norbs (also LM4 in fockx)
+        msize  = (mstop-mstart)+1
+
+        mkstart= KPARPT_local(mynod)+1                ! for numat
+        mkstop = KPARPT_local(mynod+1) 
+
+        JPARPT_fock(0)=0
+        do i=1,numnod
+           JPARPT_fock(i)= dim_linear_fock*i/numnod
+        end do
+        fstart = JPARPT_fock(mynod)+1                 !
+        fstop  = JPARPT_fock(mynod+1)                 ! for fockx call (LM6)
+
+        ! used in function escf
+        kkmax  = (dim_norbs*(dim_norbs+1))/2          ! indx(dim_norbs)+dim_norbs
+        kstart = kkmax*mynod/numnod + 1
+        kstop  = kkmax*(mynod+1)/numnod
+
+        kmstart= dim_norbs*mynod/numnod + 1
+        kmstop = dim_norbs*(mynod+1)/numnod
+
+        ! used in diis
+        if(gho_use) then
+           JPARPT_diis(0)=0
+           do i=1,numnod
+              JPARPT_diis(i) = qm_gho_info_c%lin_norbhb*i/numnod
+           end do
+        else
+           JPARPT_diis(0)=0
+           do i=1,numnod
+              JPARPT_diis(i) = dim_linear_norbs*i/numnod
+           end do
+        end if
+        mstart_diis = JPARPT_diis(mynod)+1
+        mstop_diis  = JPARPT_diis(mynod+1)
+
+        ! used in cal_density_matrix
+        if(UHF) then
+           mstart_a_dens = qm_main_c%nalpha*mynod/numnod + 1
+           mstop_a_dens  = qm_main_c%nalpha*(mynod+1)/numnod
+
+           mstart_b_dens = qm_main_c%nbeta*mynod/numnod + 1
+           mstop_b_dens  = qm_main_c%nbeta*(mynod+1)/numnod
+        else
+           mstart_a_dens = qm_main_c%numb*mynod/numnod + 1
+           mstop_a_dens  = qm_main_c%numb*(mynod+1)/numnod
+        end if
+#else
+        mstart = 1
+        mstop  = dim_linear_norbs
+        msize  = (mstop-mstart)+1
+
+        mkstart= 1
+        mkstop = numat
+
+        fstart = 1
+        fstop  = dim_linear_fock
+
+        ! used in function escf
+        kstart = 1
+        kstop  = (dim_norbs*(dim_norbs+1))/2
+
+        kmstart= 1
+        kmstop = dim_norbs
+
+        ! used in diis
+        if(gho_use) then
+           mstart_diis = 1
+           mstop_diis  = qm_gho_info_c%lin_norbhb
+        else
+           mstart_diis = 1
+           mstop_diis  = dim_linear_norbs
+        end if
+
+        ! used in cal_density_matrix
+        if(UHF) then
+           mstart_a_dens = 1
+           mstop_a_dens  = qm_main_c%nalpha
+
+           mstart_b_dens = 1
+           mstop_b_dens  = qm_main_c%nbeta
+        else
+           mstart_a_dens = 1
+           mstop_a_dens  = qm_main_c%numb
+        end if
+#endif
+        return
+     end subroutine setup_array_index
   end subroutine scf_iter
 
 
-  subroutine calc_mulliken(numat,nat,nfirst,num_orbs,Q,mul_chg,  &
+  subroutine calc_mulliken(numat,num_orbs,core,Q,mul_chg,             &
+                           mstart,mstop,                              &
 #if KEY_PARALLEL==1
-                           nnumnod,    &
+                           KPARPT_local,                              &
 #endif
-                           dim_linear_fock)
+                           indx_local)
   !
   ! Calculates the Mulliken charges on QM atoms from QM/MM calculations 
   !
@@ -925,43 +925,34 @@ module qm1_scf_module
   !
   use chm_kinds
   use number,only : zero
-  use qm1_parameters,only : CORE
-  use parallel, only : mynod,MAXNODE
+  use parallel, only : mynod,numnod
 
   implicit none
   !
   integer, intent(in) :: numat
+  integer             :: mstart,mstop
 #if KEY_PARALLEL==1
-  integer, intent(in) :: nnumnod
+  integer, intent(in) :: KPARPT_local(0:numnod)
 #endif
-  integer, intent(in) :: nat(numat),nfirst(numat),num_orbs(numat)
-  integer, intent(in) :: dim_linear_fock
+  integer, intent(in) :: num_orbs(numat)
+  real(chm_real),intent(in) :: core(*)
   real(chm_real),intent(in) :: Q(*)
   real(chm_real),intent(out):: mul_chg(numat)
+  integer, intent(in) :: indx_local(*)
 
   ! local variables
-  integer :: i,j,ia,KL,KL2,iorbs
+  integer :: i,j,KL,KL2,iorbs
   real(chm_real) :: ch_local
-  integer, save :: old_N = 0
-  integer, save :: mstart,mstop
-#if KEY_PARALLEL==1
-  integer,save  :: JPARPT_local(0:MAXNODE)
-#endif
-
-  if(old_N .ne. numat) then
-     old_N = numat
-     mstart= 1
-     mstop = numat
-     !
-#if KEY_PARALLEL==1
-     JPARPT_local(0)=0
-     do i=1,nnumnod
-        JPARPT_local(i)= numat*i/nnumnod ! for linear vector
-     end do
-     mstart = JPARPT_local(mynod)+1
-     mstop  = JPARPT_local(mynod+1)
-#endif
-  end if
+!!  integer, save :: mstart,mstop
+!!
+!!  !
+!!#if KEY_PARALLEL==1
+!!  mstart = KPARPT_local(mynod)+1
+!!  mstop  = KPARPT_local(mynod+1)
+!!#else
+!!  mstart= 1
+!!  mstop = numat
+!!#endif
 
   KL = 1
 #if KEY_PARALLEL==1
@@ -971,34 +962,33 @@ module qm1_scf_module
   end do
 #endif
   do i=mstart,mstop
-     iorbs= num_orbs(i)
-     ia  = NFIRST(i)
-     KL2 = KL
-     ch_local = Q(KL2)
-     if(iorbs.ge.9) then
+     iorbs    = num_orbs(i)
+     !KL2      = KL
+     ch_local = Q(KL)  ! Q(KL2); KL2 = KL
+     if(iorbs >= 9) then
         do j=1,8
-           KL2    = KL + indx_local(j+1) + j
-           ch_local  = ch_local + Q(KL2)
+           !!KL2     = KL + indx_local(j+1) + j
+           ch_local= ch_local + Q(KL+indx_local(j+1)+j) ! Q(KL2)
         end do
-     else if(iorbs.ge.4) then
+     else if(iorbs >= 4) then
         do j=1,3
-           KL2    = KL + indx_local(j+1) + j
-           ch_local  = ch_local + Q(KL2)
+           !KL2     = KL + indx_local(j+1) + j
+           ch_local= ch_local + Q(KL+indx_local(j+1)+j) ! Q(KL2)
         end do
      end if
      ! core is taken cared together (see also fockx routine). 
-     mul_chg(i) = CORE(nat(i)) - ch_local
+     mul_chg(i) = core(i) - ch_local
      KL         = KL + indx_local(iorbs) + iorbs
   end do
 #if KEY_PARALLEL==1
-  if(nnumnod>1) call VDGBRE(mul_chg,JPARPT_local)
+  if(numnod>1) call VDGBRE(mul_chg,KPARPT_local)
 #endif
 
   return
   end subroutine calc_mulliken
 
 
-  real(chm_real) function escf(N,P,F,H,dim_linear_norbs)
+  real(chm_real) function escf(N,P,F,H,mstart,mstop,kstart,kstop,dim_linear_norbs)
   !
   ! Compute contributions to the electronic energy.
   !
@@ -1017,52 +1007,41 @@ module qm1_scf_module
 
   integer :: N, dim_linear_norbs
   real(chm_real):: P(dim_linear_norbs),F(dim_linear_norbs),H(dim_linear_norbs)
-#if KEY_PARALLEL==1
-  integer       :: ISTRT_CHECK    ! external function
-#endif
+  integer :: mstart,mstop,kstart,kstop
+
   real(chm_real):: ddot1d_mn ! external function
 
   ! local variables
   integer :: KMAX,I,J,IORBS,jmax
   real(chm_real):: EE,EEDIAG
   !
-  integer,save :: old_N = 0
-  integer,save :: kstart,kstop,mstart,mstop,nnumnod
-
-  !
-  kmax = indx_local(n)+n  ! (N*(N+1))/2
-#if KEY_PARALLEL==1
-  nnumnod = numnod
-#else
-  nnumnod = 1
-#endif
-
-  if(old_N .ne. dim_linear_norbs) then
-     old_N = dim_linear_norbs
-     kstart= 1
-     kstop = kmax
-     mstart= 1
-     mstop = n
-#if KEY_PARALLEL==1
-     if(nnumnod>1) then    ! nnumnod defined above
-        kstart = ISTRT_CHECK(kstop,kmax)
-        mstart = ISTRT_CHECK(mstop,n)
-     end if
-#endif
-  end if
+!!  integer,save :: old_N = 0
+!!  integer,save :: nnumnod
+!!
+!! the followings are defined in subroutine scf_iter
+!!  kmax = (n*(n+1))/2 !  indx_local(n)+n  ! (N*(N+1))/2
+!!#if KEY_PARALLEL==1
+!!  !nnumnod = numnod
+!!  ! mstart= n*mynod/numnod+1
+!!  ! mstop = n*(munod+1)/numnod
+!!  ! kstart= kmax*mynod/numnod+1
+!!  ! kstop = kmax*(munod+1)/numnod
+!!#else
+!!  !nnumnod = 1
+!!  ! mstart= 1
+!!  ! mstop = n
+!!  ! kstart= 1
+!!  ! kstop = kmax
+!!#endif
 
   !EE = DOT_PRODUCT(P(kstart:kstop),F(kstart:kstop)) + DOT_PRODUCT(P(kstart:kstop),H(kstart:kstop))
   EE   = ddot1d_mn(kstop-kstart+1,P(kstart:kstop),1,F(kstart:kstop),H(kstart:kstop),1,.true.)
 
   ! for diagonal term:
   EEdiag = zero
-#if KEY_PARALLEL==1
-  j = (mstart*(mstart-1))/2
-#else
-  j = 0
-#endif
+  j=(mstart*(mstart-1))/2  ! counter update
   do i=mstart,mstop   ! 1,n
-     j      = j+i   !  = indx_local(i)+i = (i*(i+1))/2
+     j      = j+i     ! = qm_scf_main_c%INDX(i)+i = (i*(i+1))/2
      EEdiag = EEdiag + P(j)*(F(j)+H(j))
   end do
 
@@ -1080,6 +1059,7 @@ module qm1_scf_module
   !
   use chm_kinds
   use qm1_constant
+  use qm1_info, only : qm_scf_indx_c
 #if KEY_PARALLEL==1
   use parallel
 #endif
@@ -1097,38 +1077,23 @@ module qm1_scf_module
   real(chm_real) :: ewdpot
   real(chm_real),parameter :: ev_a0 = EV*A0 ! convert (electrons/angstrom) to (eV/Bohr)
   integer :: nnumnod,istart
-#if KEY_PARALLEL==1
-  integer,save         :: old_N = 0
-  logical,save,pointer :: q_do_atom(:)=>Null()
-  logical,save  :: q_first_ewd=.true.
-#endif
 
   ! parallelization is synchronized with calc_mulliken routine
   !                    to avoid broad casting.
 #if KEY_PARALLEL==1
   nnumnod = numnod
   istart  = mynod+1
+
+  if(.not.qm_scf_indx_c%q_do_atom_setup) call fill_q_do_atom(qm_scf_indx_c%q_do_atom_setup)
 #else
   nnumnod = 1
   istart  = 1
 #endif
 
-#if KEY_PARALLEL==1
-  if(old_N .ne. numat) then
-     old_N = numat
-     if(associated(q_do_atom)) deallocate(q_do_atom)
-     allocate(q_do_atom(numat))
-
-     q_first_ewd=.true.
-     call fill_q_do_atom(q_first_ewd)
-  end if
-#endif
-  
-
   ! add Empot+Eslf contribution to the diagonal elements of the fock matrix
   do i = istart, numat
 #if KEY_PARALLEL==1
-     if(q_do_atom(i)) then
+     if(qm_scf_indx_c%q_do_atom(i)) then
 #endif
         ia = nfirst(i)
         LL = indx(ia)+ia
@@ -1136,12 +1101,12 @@ module qm1_scf_module
         ewdpot = empot_all(i)*ev_a0   ! conversion here.
         iorbs  = num_orbs(i)
         fock_matrix(LL)= fock_matrix(LL)-ewdpot
-        if(iorbs.ge.9) then
+        if(iorbs >= 9) then
            do j=1,8
               LL             = INDX(j+ia)+j+ia
               fock_matrix(LL)= fock_matrix(LL)-ewdpot
            end do
-        else if(iorbs.ge.4) then
+        else if(iorbs >= 4) then
            do j=1,3
               LL             = INDX(j+ia)+j+ia
               fock_matrix(LL)= fock_matrix(LL)-ewdpot
@@ -1165,46 +1130,46 @@ module qm1_scf_module
      logical :: q_ewd
      integer :: fstart,fstop
 
-     if(.not.q_ewd) return
+     if(q_ewd) return    ! if .true., it is setup.
 
      fstart = dim_linear_norbs*(mynod)  /numnod + 1
      fstop  = dim_linear_norbs*(mynod+1)/numnod
 
      loopII: do i = istart, numat
-        q_do_atom(i) =.false.
+        qm_scf_indx_c%q_do_atom(i) =.false.
         ia = nfirst(i)
         LL = indx(ia)+ia
         if(LL>=fstart .and. LL<=fstop) then
-           q_do_atom(i) =.true.
+           qm_scf_indx_c%q_do_atom(i) =.true.
            cycle loopII
         end if
         iorbs  = num_orbs(i)
-        if(iorbs.ge.9) then
+        if(iorbs >= 9) then
            do j=1,8
               LL             = INDX(j+ia)+j+ia
               if(LL>=fstart .and. LL<=fstop) then
-                 q_do_atom(i) =.true.
-                cycle loopII
+                 qm_scf_indx_c%q_do_atom(i) =.true.
+                 cycle loopII
               end if
            end do
-        else if(iorbs.ge.4) then
+        else if(iorbs >= 4) then
            do j=1,3
               LL             = INDX(j+ia)+j+ia
               if(LL>=fstart .and. LL<=fstop) then
-                 q_do_atom(i) =.true.
+                 qm_scf_indx_c%q_do_atom(i) =.true.
                  cycle loopII
               end if
            end do
         end if
      end do loopII
-     q_ewd =.false.
+     q_ewd =.true. 
      return
      end subroutine fill_q_do_atom
 #endif
   END SUBROUTINE qm_ewald_add_fock
 
 
-  real(chm_real) function qm_ewald_correct_ee(numat,nfirst,num_orbs,indx,p)
+  real(chm_real) function qm_ewald_correct_ee(numat,nfirst,num_orbs,mstart,mstop,indx,p)
   !
   ! Up to this poiint, the energy for the Ewald sum only included half of the term
   ! from MM atoms, and half from the QM image atoms. The QM atoms should contribute
@@ -1224,35 +1189,23 @@ module qm1_scf_module
   ! Passed in
   integer, intent(in) :: numat
   integer, intent(in) :: nfirst(numat),num_orbs(numat),indx(*)
+  integer             :: mstart,mstop
   real(chm_real),intent(in) :: P(*)
-  !!!real(chm_real),intent(in) :: empot_local(numat)
 
   ! Local variables
   integer        :: i,i1,ia,ib,i2,iorbs,j,LL
   real(chm_real) :: etemp
   real(chm_real),parameter :: ev_a0 = EV*A0 ! convert (electrons/angstrom) to (eV/Bohr)
 
-#if KEY_PARALLEL==1
-  integer :: ISTRT_CHECK           ! for external function
-#endif
-  !
-  integer,save :: old_N = 0
-  integer,save :: mstart,mstop
-
-  ! for parallelization
-  if(old_N .ne. numat) then
-     old_N =numat
-     mstart=1
-     mstop =numat
-#if KEY_PARALLEL==1
-     if(numnod>1) mstart = ISTRT_CHECK(mstop,numat)
-  !else
-  !   if(QMPI) then
-  !      mstart=1
-  !      mstop =numat
-  !   end if
-#endif
-  end if
+!!  !
+!!  integer,save :: mstart,mstop
+!!
+!!  ! for parallelization
+!!  mstart=1
+!!  mstop =numat
+!!#if KEY_PARALLEL==1
+!!  if(numnod>1) mstart = ISTRT_CHECK(mstop,numat)
+!!#endif
 
   etemp    = zero
   do i = mstart,mstop                     ! 1, numat
@@ -1260,12 +1213,12 @@ module qm1_scf_module
      LL   = indx(ia)+ia
      iorbs= num_orbs(i)
      etemp= etemp-empot_local(i)*P(LL)
-     if(iorbs.ge.9) then
+     if(iorbs >= 9) then
         do j=1,8
            LL    = indx(j+ia)+j+ia
            etemp = etemp -empot_local(i)*P(LL)
         end do
-     else if(iorbs.ge.4) then
+     else if(iorbs >= 4) then
         do j=1,3
            LL    = indx(j+ia)+j+ia
            etemp = etemp -empot_local(i)*P(LL)
@@ -1281,7 +1234,8 @@ module qm1_scf_module
   subroutine cal_density_matrix(C,D,P,PN,PL,                         &
                                 dim_norbs,dim_linear_norbs,          &
                                 N,NOCC,                              &
-                                IODD,JODD,NITER,KEXT,NSTART,NSTEP)
+                                IODD,JODD,NITER,KEXT,NSTART,NSTEP,   &
+                                mstart,mstop)
   !
   ! CALCULATION OF DENSITY MATRIX.
   ! OPTIONALLY COMBINED WITH EXTRAPOLATION OR DAMPING.
@@ -1317,15 +1271,9 @@ module qm1_scf_module
   ! NSTART.LT.0  -  NO EXTRAPOLATION OR DAMPING, PL STILL EVALUATED.
   ! NITER .LT.0  -  NO EXTRAPOLATION OR DAMPING, PL NOT EVALUATED.
   !
-  !use chm_kinds 
-  !use qm1_info, only : qm_main_r,qm_scf_main_r
-  !use number
-  !use qm1_constant
+  use qm1_info, only : qm_scf_indx_c
 #if KEY_PARALLEL==1
   use parallel
-!#if KEY_MNDOOPENMP==1  /*OpenMP specific*/
-!  use omp_lib
-!#endif                 /*OpenMP specific*/
 #endif
 
   implicit none
@@ -1335,6 +1283,7 @@ module qm1_scf_module
   real(chm_real):: C(dim_norbs,dim_norbs),D(dim_linear_norbs), &
                    P(dim_linear_norbs),PL, &
                    PN(dim_linear_norbs) ! PN(dim_norbs*dim_norbs)
+  integer:: mstart,mstop
 
   ! local variables
   integer :: I,J,K,II,IJ
@@ -1342,40 +1291,18 @@ module qm1_scf_module
   real(chm_real), save :: YL
   real(chm_real) :: YCRIT=0.06D0
   !
-  integer :: nnumnod,mmynod,id,nb2
-  integer, save :: old_N = 0
-  integer, save :: mstart,mstop,istart,istop
-  real(chm_real),save,allocatable,dimension(:) :: pn_diag
-#if KEY_PARALLEL==1
-  integer :: ISTRT_CHECK       ! external function
-  integer,save  :: JPARPT_local(0:MAXNODE)
-#endif
 
-  ! for parallelization
-#if KEY_PARALLEL==1
-  mmynod  = mynod
-  nnumnod = numnod
-#else
-  nnumnod = 1
-#endif
-  if(old_N .ne. dim_linear_norbs) then
-     old_N  = dim_linear_norbs
-     mstart = 1
-     mstop  = nocc
-#if KEY_PARALLEL==1
-     !if(nnumnod>1) mstart = ISTRT_CHECK(mstop,nocc)
-     JPARPT_local(0)=0
-     do i=1,nnumnod
-        JPARPT_local(i)= nocc*i/nnumnod ! for linear vector
-     end do
-     mstart = JPARPT_local(mynod)+1
-     mstop  = JPARPT_local(mynod+1)
-#endif
-  end if
-
+  !!  ! for parallelization
+  !!#if KEY_PARALLEL==1
+  !!  mstart  = nocc*mynod/numnod + 1
+  !!  mstop   = nocc*(mynod+1)/numnod
+  !!#else
+  !!  mstart  = 1
+  !!  mstop   = nocc
+  !!#endif
 
   ! so, if diis is on, 
-  if(NSTART.LT.0) then  ! meaning, Diis is on.
+  if(NSTART < 0) then  ! meaning, Diis is on.
      ! simplified code without extrapolation or damping.
      !
      ! calculate density matrix by matrix multiplication.
@@ -1386,99 +1313,57 @@ module qm1_scf_module
      !call linear (PN,PN,N,dim_norbs,dim_linear_norbs)
      !
      ! only do a lower diagonal, as C:=A*B'
-     if(allocated(pn_diag) .and. (size(pn_diag) < n)) deallocate(pn_diag)
-     if(.not.allocated(pn_diag)) allocate(pn_diag(n))
      ii = 0
      do i=1,n
-        ii = ii + i
-        pn_diag(i) = p(ii)
+        ii         = ii + i
+        qm_scf_indx_c%pn_diag(i) = p(ii)
      end do
 
-#if KEY_MNDOOPENMP==1  /*OpenMP specific*/
-     nb2 = (mstop-mstart+1)/2 + mstart
-!$omp parallel private(k,ij,i,c_tmp,id) NUM_THREADS(2)
-!$omp do
-     do i=1,dim_linear_norbs
-        p(i) = zero
-        pn(i)= zero
-     end do
-!$omp end do
-!$omp barrier
-     id = OMP_get_thread_num()
-     if(id == 0) then
-        do k=mstart,nb2 ! mstart,mstop              ! 1,nocc
-           ij=0
-           do i=1,n
-              c_tmp=c(i,k)
-              p(ij+1:ij+i)=p(ij+1:ij+i)+c_tmp*c(1:i,k)
-              ij=ij+i
-           end do
-        end do
-     else
-        do k=nb2+1,mstop ! mstart,mstop              ! 1,nocc
-           ij=0
-           do i=1,n
-              c_tmp=c(i,k)
-              pn(ij+1:ij+i)=pn(ij+1:ij+i)+c_tmp*c(1:i,k)
-              ij=ij+i
-           end do
-        end do
-     end if
-!$omp barrier
-!$omp do
-     do i=1,dim_linear_norbs
-        p(i) = p(i) + pn(i)
-     end do
-!$omp end do
-!$omp end parallel
-
-#else  /*OpenMP specific*/
      p(1:dim_linear_norbs) = zero
      do k=mstart,mstop              ! 1,nocc
-        ij=0
+        ij = 0
         do i=1,n
-           c_tmp=c(i,k)
+           c_tmp       =c(i,k)
            p(ij+1:ij+i)=p(ij+1:ij+i)+c_tmp*c(1:i,k)
-           ij=ij+i
+           ij          =ij+i
         end do
      end do
-#endif /*OpenMP specific*/
 
      ! as cal_density_matrix is called mostly with iodd=0, jodd=0. So, do not worry much now.
      ! this part is of concern for UHF or multiplicity larger than 1.
-     if(iodd.gt.0) then
+     if(iodd > 0) then
         if(iodd >= mstart .and. iodd <=mstop) then
-           ij  = 0
+           ij = 0
            do i=1,n
-              c_tmp=PT5*C(i,iodd)
+              c_tmp       =PT5*C(i,iodd)
               P(ij+1:ij+i)=P(ij+1:ij+i)-c_tmp*C(1:i,iodd)
-              ij=ij+i
+              ij          =ij+i
            end do
         end if
-        if(jodd.gt.0) then
+        if(jodd > 0) then
            if(jodd >= mstart .and. jodd <=mstop) then
-             ij  = 0
+             ij = 0
              do i=1,n
-                c_tmp=PT5*C(i,jodd)
+                c_tmp       =PT5*C(i,jodd)
                 P(ij+1:ij+i)=P(ij+1:ij+i)-c_tmp*C(1:i,jodd)
-                ij=ij+i
+                ij          =ij+i
              end do
            end if
         end if
      end if
 
 #if KEY_PARALLEL==1
-     if(nnumnod>1) call gcomb(p(1:dim_linear_norbs),dim_linear_norbs)
+     if(numnod>1) call gcomb(p(1:dim_linear_norbs),dim_linear_norbs)
 #endif
 
      ! calculate maximum change in diagonal matrix elements.
-     if(niter.ge.0 .and. nstart.lt.0) then
+     if(niter >= 0 .and. nstart < 0) then
         PL  = zero
         ii  = 0
         do i=1,n
-           ii  = ii + i  ! =indx_local(i)+i  ! I*(I+1)/2
-           !if(ABS(P(ii)-pn_diag(i)).gt.PL) PL=ABS(P(ii)-pn_diag(i))
-           PL = max(ABS(P(ii)-pn_diag(i)),PL)
+           ii = ii + i  ! =qm_scf_main_c%INDX(i)+i  ! I*(I+1)/2
+           !if(ABS(P(ii)-qm_scf_indx_c%pn_diag(i)) > PL) PL=ABS(P(ii)-qm_scf_indx_c%pn_diag(i))
+           PL = max(ABS(P(ii)-qm_scf_indx_c%pn_diag(i)),PL)
         end do
      end if
 
@@ -1488,7 +1373,7 @@ module qm1_scf_module
      ! with some auxiliary variables.
      !
      ! initialization:
-     if(niter.eq.1) then
+     if(niter == 1) then
         YL  = zero
         d(1:dim_linear_norbs)=zero
      end if
@@ -1504,55 +1389,55 @@ module qm1_scf_module
      ! only do a lower diagonal part, as C:=A*B'
      pn(1:dim_linear_norbs) = zero
      do k=mstart,mstop              ! 1,nocc
-        ij=0
+        ij = 0
         do i=1,n
-           c_tmp=c(i,k)
+           c_tmp        =c(i,k)
            pn(ij+1:ij+i)=pn(ij+1:ij+i)+c_tmp*c(1:i,k)
-           ij=ij+i
+           ij           =ij+i
         end do
      end do
 
      ! iodd=0; jodd=0 for default
-     if(iodd.gt.0) then
+     if(iodd > 0) then
         if(iodd >= mstart .and. iodd <=mstop) then
-           ij  = 0
+           ij = 0
            do i=1,n
-              c_tmp=PT5*C(i,iodd)
+              c_tmp        =PT5*C(i,iodd)
               PN(ij+1:ij+i)=PN(ij+1:ij+i)-c_tmp*C(1:i,iodd)
-              ij=ij+i
+              ij           =ij+i
            end do
         end if
-        if(jodd.gt.0) then
+        if(jodd > 0) then
           if(jodd >= mstart .and. jodd <=mstop) then
-             ij  = 0
+             ij = 0
              do i=1,n
-                c_tmp=PT5*C(i,jodd)
+                c_tmp        =PT5*C(i,jodd)
                 PN(ij+1:ij+i)=PN(ij+1:ij+i)-c_tmp*C(1:i,jodd)
-                ij=ij+i
+                ij           =ij+i
              end do
           end if
         end if
      end if
 #if KEY_PARALLEL==1
-     if(nnumnod>1) call gcomb(pn(1:dim_linear_norbs),dim_linear_norbs)
+     if(numnod>1) call gcomb(pn(1:dim_linear_norbs),dim_linear_norbs)
 #endif
 
      ! downgraded (not parallized).
      do ij=1,dim_linear_norbs
-        DKPI   = PN(ij)-P(ij)
-        DKI    = D(ij)
-        DEN1   = DEN1 +DKI *DKI
-        DEN2   = DEN2 +DKPI*DKPI
-        YLAMB  = YLAMB+DKI*DKPI
-        D(ij)  = DKPI
-        P(ij)  = PN(ij)
+        DKPI  = PN(ij)-P(ij)
+        DKI   = D(ij)
+        DEN1  = DEN1 +DKI *DKI
+        DEN2  = DEN2 +DKPI*DKPI
+        YLAMB = YLAMB+DKI*DKPI
+        D(ij) = DKPI
+        P(ij) = PN(ij)
      end do
 
      ! calculate maximum change in diagonal matrix elements.
      ii = 0
      do i=1,n
-        ii     = ii + i  ! =indx_local(i)+i  ! I*(I+1)/2
-        PL     = MAX(abs(D(ii)),PL)
+        ii    = ii + i  ! =qm_scf_main_c%INDX(i)+i  ! I*(I+1)/2
+        PL    = MAX(abs(D(ii)),PL)
      end do
 
      ! check for exrapolation or damping.
@@ -1560,35 +1445,35 @@ module qm1_scf_module
      ! D(i)  holds the difference between the new and old density matrix.
      !
      ! return if Kext is negative (see argument list).
-     if(kext.lt.0) return   ! meaning, it is converged density.
+     if(kext < 0) return   ! meaning, it is converged density.
 
-     kext   = 0
-     if(nstep.gt.0) then
+     kext = 0
+     if(nstep > 0) then
         ! for extrapolation
-        if(niter.ge.nstart) then
-           ii  = niter-nstart
-           ii  = ii-(ii/nstep)*nstep
-           if(ii.eq.0) kext=1
+        if(niter >= nstart) then
+           ii = niter-nstart
+           ii = ii-(ii/nstep)*nstep
+           if(ii == 0) kext=1
         end if
-        if(niter.lt.2 .or. den1.eq.zero .or. den2.eq.zero) then
+        if((niter < 2) .or. (den1 == zero) .or. (den2 == zero)) then
            kext = 0
         else
            YLAMB = YLAMB/DEN1
-           if(ABS(YLAMB).ge.one) YLAMB=YLAMB*DEN1/DEN2
-           if(ABS(YLAMB-YL).gt.YCRIT) kext=0
-           if(YLAMB.eq.one) kext=0
-           YL = YLAMB
+           if(ABS(YLAMB) >= one)     YLAMB=YLAMB*DEN1/DEN2
+           if(ABS(YLAMB-YL) > YCRIT) kext=0
+           if(YLAMB == one)          kext=0
+           YL    = YLAMB
         end if
-        if(kext.eq.1) FAC = one/(one-YLAMB)-one
-     else if(nstep.lt.0) then
+        if(kext == 1) FAC = one/(one-YLAMB)-one
+     else if(nstep < 0) then
         ! for damping
-        if(niter.ge.nstart .and. niter.gt.1) then
+        if(niter >= nstart .and. niter > 1) then
            kext = 2
            fac  = DBLE(MIN(-nstep,9))*PT1   ! /10.0D0
         end if
      end if
      ! update of density matrix 
-     if(kext.gt.0) P(1:dim_linear_norbs)=P(1:dim_linear_norbs)+fac*D(1:dim_linear_norbs)
+     if(kext>0) P(1:dim_linear_norbs)=P(1:dim_linear_norbs)+fac*D(1:dim_linear_norbs)
   end if      ! (NSTART.LT.0)
 
   return
@@ -1602,8 +1487,8 @@ module qm1_scf_module
   !
   ! For now, only assume RHO.
   !
-  use qm1_info, only : qm_control_r,qm_main_r
-  use qm1_parameters,only : CORE
+  use qm1_info, only : qm_control_c,qm_main_c,qm_param_c
+  !!use qm1_parameters,only : CORE
   use stream,only : prnlev
 
   implicit none
@@ -1612,9 +1497,9 @@ module qm1_scf_module
 
   integer :: i,j,ia,ib,ja,jb,ii,ij,jj,n_size,iunit
   real(chm_real):: x_tmp,y_tmp
-  real(chm_real),pointer:: qm_charge(:)=>NUll(), &
-                           qmqm_bond(:)=>Null(), &
-                           PA_sq(:,:)=>Null()
+  real(chm_real),allocatable:: qm_charge(:), &
+                               qmqm_bond(:), &
+                               PA_sq(:,:)
 
   n_size = numat*(numat+1)/2  ! size or array.
   allocate(qm_charge(numat))
@@ -1634,12 +1519,12 @@ module qm1_scf_module
   ! now
   ij = 0
   do i=1,numat
-     ia = qm_main_r%nfirst(i)
-     ib = qm_main_r%nlast(i)
+     ia = qm_main_c%nfirst(i)
+     ib = qm_main_c%nlast(i)
      do j=1,i
         ij = ij + 1
-        ja = qm_main_r%nfirst(j)
-        jb = qm_main_r%nlast(j)
+        ja = qm_main_c%nfirst(j)
+        jb = qm_main_c%nlast(j)
         x_tmp = zero
         do ii = ia,ib
            do jj = ja,jb
@@ -1655,11 +1540,11 @@ module qm1_scf_module
         y_tmp = y_tmp + pa_sq(ii,ii)
      end do
      qmqm_bond(ij) = x_tmp
-     qm_charge(i)  =-y_tmp*two+CORE(qm_main_r%nat(i))
+     qm_charge(i)  =-y_tmp*two+qm_param_c%CORE(i)
   end do
 
   ! now printing..
-  iunit = qm_control_r%ianal_unit
+  iunit = qm_control_c%ianal_unit
   if(prnlev >= 2) then
      ! bond order and mulliken charges
      write(iunit,120)
@@ -1668,10 +1553,10 @@ module qm1_scf_module
         ib = ia + i - 1
         ii = ib - ia + 1
         if(ii<=25) then
-           write(iunit,250) qm_control_r%qminb(i),qm_charge(i),(qmqm_bond(ij),ij=ia,ib)
+           write(iunit,250) qm_control_c%qminb(i),qm_charge(i),(qmqm_bond(ij),ij=ia,ib)
         else 
            jj = ia + 25 - 1
-           write(iunit,250) qm_control_r%qminb(i),qm_charge(i),(qmqm_bond(ij),ij=ia,jj)
+           write(iunit,250) qm_control_c%qminb(i),qm_charge(i),(qmqm_bond(ij),ij=ia,jj)
            do 
               ia = jj + 1
               ii = ib - ia + 1
@@ -1696,15 +1581,21 @@ module qm1_scf_module
   260 format(   20X,25F9.4)
 
   ! free memory.
-  if(associated(qm_charge)) deallocate(qm_charge)
-  if(associated(qmqm_bond)) deallocate(qmqm_bond)
-  if(associated(pa_sq))     deallocate(pa_sq)
+  if(allocated(qm_charge)) deallocate(qm_charge)
+  if(allocated(qmqm_bond)) deallocate(qmqm_bond)
+  if(allocated(pa_sq))     deallocate(pa_sq)
 
   return
   end subroutine bond_analysis
 
 
-  subroutine fockx(F,PA,PB,Q,W,LM4,LM6,UHF,numat,nfirst,nlast,num_orbs,NW)
+  subroutine fockx(F,PA,PB,Q,W,LM4,LM6,UHF,numat,nfirst,nlast,num_orbs,NW,indx_local,   &
+                   mstart,mstop,fstart,fstop,                                           &
+#if KEY_PARALLEL==1
+                   JPARPT_fock,                                                         &
+#endif
+                   ip_local,ip_check,                                                   &
+                   ip1_local,ip2_local,jp1_local,jp2_local,jp3_local,jx_local)
   !
   ! TWO-ELECTRON CONTRIBUTIONS TO MNDO-TYPE FOCK MATRIX.
   ! SCALAR CODE FOR TWO-CENTER EXCHANGE CONTRIBUTIONS.
@@ -1716,23 +1607,23 @@ module qm1_scf_module
   ! Q(LM6)    SCRATCH ARRAY FOR ONE-CENTER PAIR TERMS (S).
   ! W(LM6,*)  TWO-ELECTRON INTEGRALS (I).
   !
-  !use chm_kinds
-  !use number
-  !use qm1_constant
-  !use qm1_info, only : qm_main_r 
+  use qm1_info, only : qm_scf_indx_c
 #if KEY_PARALLEL==1
   use parallel 
-!#if KEY_MNDOOPENMP==1  /*OpenMP specific*/
-!  use omp_lib
-!#endif                 /*OpenMP specific*/
 #endif
 
   implicit none
 
   integer :: LM4,LM6,numat
   real(chm_real):: F(LM4),PA(LM4),PB(LM4),Q(LM6),W(LM6,LM6)
-  logical :: UHF
+  logical :: UHF,ip_check(*)
   integer :: nfirst(numat),nlast(numat),num_orbs(numat),NW(numat)
+  integer :: indx_local(*),ip_local(*),ip1_local(*),ip2_local(*), &
+             jp1_local(*),jp2_local(*),jp3_local(*),jx_local(*)
+  integer :: mstart,mstop,fstart,fstop
+#if KEY_PARALLEL==1
+  integer :: JPARPT_fock(0:numnod)
+#endif
 
   ! local variables
   integer :: i,j,K,L,N
@@ -1747,16 +1638,7 @@ module qm1_scf_module
   integer,parameter :: IWW(4,4)=reshape( (/1,2,4,7, 2,3,5,8, &
                                   4,5,6,9, 7,8,9,10/),(/4,4/))
   integer       :: mmynod,nnumnod,iicnt
-  integer, save :: old_N = 0
-  integer, save :: mstart,mstop,fstart,fstop
-#if KEY_PARALLEL==1
-  !integer       :: ISTRT_CHECK           ! external function
-  integer,save  :: JPARPT_local(0:MAXNODE),KPARPT_local(0:MAXNODE)
-  logical,save,pointer :: q_mynod_fock(:)=>Null()
-  logical,save  :: q_first_fock=.true.
-#endif
   real(chm_real):: ddot_mn ! external function
-  integer :: tid,nb2,fst1,fst2,fsta,ist,ift,iskip
 
   ! for parallelization
 #if KEY_PARALLEL==1
@@ -1766,156 +1648,82 @@ module qm1_scf_module
   nnumnod= 1
   mmynod = 0
 #endif
-  if(old_N .ne. LM6) then
-     old_N  = LM6
-     mstart = 1
-     mstop  = LM6
-
-     fstart = 1
-     fstop  = LM4
-#if KEY_PARALLEL==1
-     JPARPT_local(0)=0
-     do i=1,nnumnod
-        JPARPT_local(i)= LM6*i/nnumnod ! for linear vector
-     end do
-     mstart = JPARPT_local(mynod)+1
-     mstop  = JPARPT_local(mynod+1)
-
-     KPARPT_local(0)=0
-     do i=1,nnumnod
-        KPARPT_local(i)= LM4*i/nnumnod ! for linear vector
-     end do
-     fstart = KPARPT_local(mynod)+1
-     fstop  = KPARPT_local(mynod+1)
-
-     if(associated(q_mynod_fock)) deallocate(q_mynod_fock)
-     allocate(q_mynod_fock(numat*(numat+1)/2))
-#endif
-  end if
 
 
   ! Coulomb contributions:
   ! one-center exchange contributions are implicitly included for RHF.
   !
-  ! Note: when use parallel, Q contains only terms between mstart and mstop. 
+  ! Note: when use parallel, Q contains only terms between fstart and fstop. 
   !       Then, it is broadcasted. (Should be synchronized with calc_mulliken routine.)
   !
   ! LM6: dim_linear_fock: one center AO pairs (see determine_qm_scf_arrray_size)
   !      so this is much smaller than fock size.
   if(UHF) then
-     do KL=mstart,mstop  ! 1,LM6
-        ! Q(KL)  = (PA(IP_local(KL))+PB(IP_local(KL)))
-        ! if(IP1_local(KL).ne.IP2_local(KL)) Q(KL)=Q(KL)*TWO
+     do KL=fstart,fstop  ! 1,LM6
+        ! Q(KL)  = (PA(ip_local(KL))+PB(ip_local(KL)))
+        ! if(ip1_local(KL).ne.ip2_local(KL)) Q(KL)=Q(KL)*TWO
         if(ip_check(kl)) then
-           Q(KL)= two*(PA(IP_local(KL))+PB(IP_local(KL)))
+           Q(KL)= two*(PA(ip_local(KL))+PB(ip_local(KL)))
         else
-           Q(KL)= (PA(IP_local(KL))+PB(IP_local(KL)))
+           Q(KL)= (PA(ip_local(KL))+PB(ip_local(KL)))
         end if
      end do
   else
-     do KL=mstart,mstop  ! 1,LM6
-        ! Q(KL)  = two*PA(IP_local(KL))
-        ! if(IP1_local(KL).ne.IP2_local(KL)) Q(KL)=Q(KL)*TWO
+     do KL=fstart,fstop  ! 1,LM6
+        ! Q(KL)  = two*PA(ip_local(KL))
+        ! if(ip1_local(KL).ne.ip2_local(KL)) Q(KL)=Q(KL)*TWO
         ! see below in define_pair_index for ip_check defintion.
         if(ip_check(kl)) then
-           Q(KL)= two*(PA(IP_local(KL))+PA(IP_local(KL)))
+           Q(KL)= two*(PA(ip_local(KL))+PA(ip_local(KL)))
         else
-           Q(KL)= (PA(IP_local(KL))+PA(IP_local(KL)))
+           Q(KL)= (PA(ip_local(KL))+PA(ip_local(KL)))
         end if
      end do
   end if
 #if KEY_PARALLEL==1
-  if(nnumnod>1) call VDGBRE(Q,JPARPT_local)
-#endif
-  !
-#if KEY_PARALLEL==1
+  if(nnumnod>1) call VDGBRE(Q,JPARPT_fock)
+
   ! fill the q_mynod_fock array.
-  call fill_q_mynod_fock(q_first_fock)
+  call fill_q_mynod_fock(qm_scf_indx_c%q_mynod_fock_setup) 
 #endif
 
   ! for serial
   !F(ip_local(1:lm6))=F(ip_local(1:lm6))+MATMUL(Q(1:LM6),W(1:LM6,1:LM6))
   !
   ! now with parallel
-#if KEY_MNDOOPENMP==1  /*OpenMP specific*/
-  nb2 = ((fstop-fstart)+1)/2
-  fst1= fstart+nb2
-  fst2= fst1+1
-  fsta= numat/2 - 1
-!$omp parallel private(ij,ik,tid) NUM_THREADS(2)
-  tid = OMP_get_thread_num()
-  if(tid==0) then
-     do ij=1,LM6
-        ik = ip_local(ij)
-        !if(ik>=fstart .and. ik<=fstop) then
-        if(ik>=fstart .and. ik<=fst1) then
-!           F(ik) = F(ik) + ddot_mn(LM6,Q(1:LM6),1,W(1:LM6,ij),1)
-           F(ik) = F(ik) + DOT_PRODUCT(Q(1:LM6),W(1:LM6,ij))
-        end if
-     end do
-  else
-     do ij=1,LM6
-        ik = ip_local(ij)
-        !if(ik>=fstart .and. ik<=fstop) then
-        if(ik>=fst2 .and. ik<=fstop) then
-           !F(ik) = F(ik) + ddot_mn(LM6,Q(1:LM6),1,W(1:LM6,ij),1)
-           F(ik) = F(ik) + DOT_PRODUCT(Q(1:LM6),W(1:LM6,ij))
-        end if
-     end do
-  end if
-!$omp end parallel
-#else  /*OpenMP specific*/
   !do ij=1,LM6
-  !   F(ip_local(ij))=F(ip_local(ij)) + ddot_mn(mstop-mstart+1,Q(mstart:mstop),1,W(mstart:mstop,ij),1)
+  !   F(ip_local(ij))=F(ip_local(ij)) + ddot_mn(fstop-fstart+1,Q(fstart:fstop),1,W(fstart:fstop,ij),1)
   !end do
   do ij=1,LM6
      ik = ip_local(ij)
-     if(ik>=fstart .and. ik<=fstop) then
+     if(ik>=mstart .and. ik<=mstop) then
         F(ik) = F(ik) + ddot_mn(LM6,Q(1:LM6),1,W(1:LM6,ij),1)
      end if
   end do
-#endif /*OpenMP specific*/
 
   ! two-center exchange contibutions: offdiagonal two-center terms (ij,kl).
-#if KEY_MNDOOPENMP==1  /*OpenMP specific*/
-!$omp parallel NUM_THREADS(2) &
-!$omp & private(iicnt,tid,i,k,ii,jj,ia,ib,ic,iorbs,iw,ij,ja,jb,jorbs,jw,KL,is,ix,iy,iz,ijs,kls)  &
-!$omp & private(PA_tmp,F_tmp,ks,kx,ky,kz,ijk,ka,ijw,klw,ik,sum,sum2,temp,temp2,iL,jL,L,jk,ist,iskip)
-  tid = OMP_get_thread_num()
-  if(tid==0) then
-     ist   = 2
-     iskip = 2
-  else
-     ist   = 3
-     iskip = 2
-  end if
-#else  /*OpenMP specific*/
-  ist   = 2
-  iskip = 1
-#endif /*OpenMP specific*/
-  !
-  loopII: do ii=ist,numat,iskip  ! 1,NUMAT
+  loopII: do ii=2,numat  ! 1,NUMAT
      iicnt  = ((ii-1)*(ii-2))/2
      ia     = NFIRST(ii)
      ib     = NLAST(ii)
-     ic     = INDX_local(ia)
+     ic     = indx_local(ia)
      iorbs  = num_orbs(ii)
-     iw     = INDX_local(iorbs)+iorbs
+     iw     = indx_local(iorbs)+iorbs
      ij     = NW(ii)-1
      loopJJ: do jj=1,ii-1
         ja     = NFIRST(jj)
         jb     = NLAST(jj)
         jorbs  = num_orbs(jj)
-        jw     = INDX_local(jorbs)+jorbs
+        jw     = indx_local(jorbs)+jorbs
         KL     = NW(jj)-1
 #if KEY_PARALLEL==1
         iicnt  = iicnt + 1
-        if(.not.q_mynod_fock(iicnt)) cycle loopJJ
+        if(qm_scf_indx_c%q_mynod_fock(iicnt)) cycle loopJJ
 #endif
-        if(iw.eq.1 .and. jw.eq.1) then
+        if(iw==1 .and. jw==1) then
            is   = ic+ja
            F(is)= F(is)-PA(is)*W(ij+1,KL+1)
-        else if(iw.eq.1 .and. jw.eq.10) then
+        else if(iw==1 .and. jw==10) then
            is  = ic+ja
            ix  = is+1
            iy  = is+2
@@ -1929,11 +1737,11 @@ module qm1_scf_module
            F(ix) = F(ix) - (PA_tmp(1)*W(kl+2,ijs)+PA_tmp(2)*W(kl+3,ijs)+PA_tmp(3)*W(kl+5,ijs)+PA_tmp(4)*W(kl+ 8,ijs))
            F(iy) = F(iy) - (PA_tmp(1)*W(kl+4,ijs)+PA_tmp(2)*W(kl+5,ijs)+PA_tmp(3)*W(kl+6,ijs)+PA_tmp(4)*W(kl+ 9,ijs))
            F(iz) = F(iz) - (PA_tmp(1)*W(kl+7,ijs)+PA_tmp(2)*W(kl+8,ijs)+PA_tmp(3)*W(kl+9,ijs)+PA_tmp(4)*W(kl+10,ijs))
-        else if(iw.eq.10 .and. jw.eq.1) then
+        else if(iw==10 .and. jw==1) then
            is  = ic+ja
-           ix  = INDX_local(ia+1)+ja
-           iy  = INDX_local(ia+2)+ja
-           iz  = INDX_local(ia+3)+ja
+           ix  = indx_local(ia+1)+ja
+           iy  = indx_local(ia+2)+ja
+           iz  = indx_local(ia+3)+ja
            kls = KL+1
            PA_tmp(1)= PA(is)
            PA_tmp(2)= PA(ix)
@@ -1943,15 +1751,15 @@ module qm1_scf_module
            F(ix) = F(ix) - (PA_tmp(1)*W(ij+2,kls)+PA_tmp(2)*W(ij+3,kls)+PA_tmp(3)*W(ij+5,kls)+PA_tmp(4)*W(ij+ 8,kls))
            F(iy) = F(iy) - (PA_tmp(1)*W(ij+4,kls)+PA_tmp(2)*W(ij+5,kls)+PA_tmp(3)*W(ij+6,kls)+PA_tmp(4)*W(ij+ 9,kls))
            F(iz) = F(iz) - (PA_tmp(1)*W(ij+7,kls)+PA_tmp(2)*W(ij+8,kls)+PA_tmp(3)*W(ij+9,kls)+PA_tmp(4)*W(ij+10,kls))
-        else if(iw.eq.10 .and. jw.eq.10) then
+        else if(iw==10 .and. jw==10) then
            do i=1,4
-              is  = INDX_local(ia+i-1)+ja
+              is  = indx_local(ia+i-1)+ja
               ix  = is+1
               iy  = is+2
               iz  = is+3
               F_tmp(1:4)=zero
               do k=1,4
-                 ks  = INDX_local(ia+k-1)+ja
+                 ks  = indx_local(ia+k-1)+ja
                  kx  = ks+1
                  ky  = ks+2
                  kz  = ks+3
@@ -1974,8 +1782,8 @@ module qm1_scf_module
            ! General code   - also valid for D-orbitals.
            ! contributions from (ii,kl)
            loopI1: do i=ia,ib
-              ka  = INDX_local(i)
-              ijw = ij+INDX_local(i-ia+2)
+              ka  = indx_local(i)
+              ijw = ij+indx_local(i-ia+2)
               klw = kl
               do k=ja,jb
                  ik   = ka+k
@@ -1995,10 +1803,10 @@ module qm1_scf_module
            end do loopI1
            ! contribution from (ij,kl) with i.ne.j
            loopI2: do i=ia+1,ib
-              ka = INDX_local(i)
+              ka = indx_local(i)
               do j=ia,i-1
-                 kb  = INDX_local(j)
-                 ijw = ij+INDX_local(i-ia+1)+j-ia+1
+                 kb  = indx_local(j)
+                 ijw = ij+indx_local(i-ia+1)+j-ia+1
                  klw = kl
                  do k=ja,jb
                     ik    = ka+k
@@ -2029,9 +1837,6 @@ module qm1_scf_module
         end if
      end do loopJJ
   end do loopII
-#if KEY_MNDOOPENMP==1  /*OpenMP specific*/
-!$omp end parallel
-#endif /*OpenMP specific*/
 
   ! one-center exchange contributions for UHF.
   ! offdiagonal one-center terms (ii,kk) for SP-basis.
@@ -2039,11 +1844,11 @@ module qm1_scf_module
      do i=mmynod+1,NUMAT, nnumnod            ! if not parallel, mmynod=0,nnumnod=1
         ia     = NFIRST(I)
         iorbs  = num_orbs(i)
-        if(iorbs.eq.4) then
+        if(iorbs==4) then
            ij     = NW(i)-1
-           ixs    = INDX_local(ia+1)+ia
-           iys    = INDX_local(ia+2)+ia
-           izs    = INDX_local(ia+3)+ia
+           ixs    = indx_local(ia+1)+ia
+           iys    = indx_local(ia+2)+ia
+           izs    = indx_local(ia+3)+ia
            iyx    = iys+1
            izx    = izs+1
            izy    = izs+2
@@ -2056,16 +1861,16 @@ module qm1_scf_module
         end if
      end do
      ! diagonal one-center terms (ij,ij), general code.
-     do ij=mstart,mstop  ! 1,LM6
-        i2    =IP_local(ij)
-        i     = IP1_local(ij)
-        j     = IP2_local(ij)
+     do ij=fstart,fstop  ! 1,LM6
+        i2    = ip_local(ij)
+        i     = ip1_local(ij)
+        j     = ip2_local(ij)
         temp  = W(ij,ij)
 
         F(i2) = F(i2) - PA(i2)*temp
-        if(i.ne.j) then
-           ii    = INDX_local(i)+i
-           jj    = INDX_local(j)+j
+        if(i /= j) then
+           ii    = indx_local(i)+i
+           jj    = indx_local(j)+j
            F(ii) = F(ii)-PA(jj)*temp
            F(jj) = F(jj)-PA(ii)*temp
         end if
@@ -2078,31 +1883,30 @@ module qm1_scf_module
      loopN: do n=1,NUMAT
         ia     = NFIRST(n)
         iorbs  = num_orbs(n)
-        if(iorbs.gt.4) then
-           klmin  = JX_local(n)
+        if(iorbs > 4) then
+           klmin  = jx_local(n)
            klmax  = klmin+iorbs*iorbs-1
-           kstart = JP1_local(klmin)
+           kstart = jp1_local(klmin)
            loopKL: do kl=klmin,klmax
 #if KEY_PARALLEL==1
               iicnt  = iicnt + 1
-              if(mmynod .ne. mod(iicnt-1,nnumnod)) cycle loopKL
+              if(mmynod /= mod(iicnt-1,nnumnod)) cycle loopKL
 #endif
-              !
-              k      = JP1_local(kl)
-              l      = JP2_local(kl)
+              k      = jp1_local(kl)
+              l      = jp2_local(kl)
               ! only elements F(ik) wiht i.ge.k are needed. therefore, 
               ! the loop over ij can start at ijmin.ge.klmin.
               ijmin  = klmin+iorbs*(k-kstart)
-              j2     = JP3_local(kl)
+              j2     = jp3_local(kl)
               loopIJ: do ij=ijmin,klmax
                  ! diagonal terms have been included above also for an SPD-basis.
-                 if(JP3_local(ij) .ne. j2) then
-                    wijkl  = W(JP3_local(ij),j2)
-                    if(wijkl.ne.zero) then
-                       i   = JP1_local(ij)
-                       j   = JP2_local(ij)
-                       ik  = INDX_local(i)+k
-                       jl  = INDX_local(MAX(j,l))+MIN(j,l)
+                 if(jp3_local(ij) /= j2) then
+                    wijkl  = W(jp3_local(ij),j2)
+                    if(wijkl /= zero) then
+                       i   = jp1_local(ij)
+                       j   = jp2_local(ij)
+                       ik  = indx_local(i)+k
+                       jl  = indx_local(MAX(j,l))+MIN(j,l)
                        F(ik) = F(ik)-PA(jl)*WIJKL
                     end if
                  end if
@@ -2124,54 +1928,55 @@ module qm1_scf_module
      implicit none
      logical :: q_fock
 
-     if(.not.q_fock) return
+     if(q_fock) return
 
      ! two-center exchange contibutions: offdiagonal two-center terms (ij,kl).
-     ! this routine loops over and check if elements belongs mynod (fstart <= ii <=fstop)
+     ! this routine loops over and check if elements belongs mynod (mstart <= ii <=mstop)
      iicnt  = 0
      loopII: do ii=1,NUMAT
         ia     = NFIRST(ii)
         ib     = NLAST(ii)
-        ic     = INDX_local(ia)
+        ic     = indx_local(ia)
         iorbs  = num_orbs(ii)
-        iw     = INDX_local(iorbs)+iorbs
+        iw     = indx_local(iorbs)+iorbs
         loopJJ: do jj=1,ii-1
            ja     = NFIRST(jj)
            jb     = NLAST(jj)
            jorbs  = num_orbs(jj)
-           jw     = INDX_local(jorbs)+jorbs
+           jw     = indx_local(jorbs)+jorbs
            iicnt  = iicnt + 1
-           q_mynod_fock(iicnt) =.false.
-           if(iw.eq.1 .and. jw.eq.1) then
+           qm_scf_indx_c%q_mynod_fock(iicnt) =.true.   ! .true. : skip iicnt
+                                                       ! .false.: do calculate iicnt
+           if(iw == 1 .and. jw == 1) then
               is   = ic+ja
-              if(is>=fstart .and. is<=fstop) q_mynod_fock(iicnt) =.true.
-           else if(iw.eq.1 .and. jw.eq.10) then
+              if(is>=mstart .and. is<=mstop) qm_scf_indx_c%q_mynod_fock(iicnt) =.false.
+           else if(iw == 1 .and. jw == 10) then
               is  = ic+ja
               ix  = is+1
               iy  = is+2
               iz  = is+3
-              if( (is>=fstart .and. is<=fstop) .or. (ix>=fstart .and. ix<=fstop) .or. &
-                  (iy>=fstart .and. iy<=fstop) .or. (iz>=fstart .and. iz<=fstop)) then
-                 q_mynod_fock(iicnt) =.true.
+              if( (is>=mstart .and. is<=mstop) .or. (ix>=mstart .and. ix<=mstop) .or. &
+                  (iy>=mstart .and. iy<=mstop) .or. (iz>=mstart .and. iz<=mstop)) then
+                 qm_scf_indx_c%q_mynod_fock(iicnt) =.false.
               end if
-           else if(iw.eq.10 .and. jw.eq.1) then
+           else if(iw == 10 .and. jw == 1) then
               is  = ic+ja
-              ix  = INDX_local(ia+1)+ja
-              iy  = INDX_local(ia+2)+ja
-              iz  = INDX_local(ia+3)+ja
-              if( (is>=fstart .and. is<=fstop) .or. (ix>=fstart .and. ix<=fstop) .or. &
-                  (iy>=fstart .and. iy<=fstop) .or. (iz>=fstart .and. iz<=fstop)) then
-                 q_mynod_fock(iicnt) =.true.
+              ix  = indx_local(ia+1)+ja
+              iy  = indx_local(ia+2)+ja
+              iz  = indx_local(ia+3)+ja
+              if( (is>=mstart .and. is<=mstop) .or. (ix>=mstart .and. ix<=mstop) .or. &
+                  (iy>=mstart .and. iy<=mstop) .or. (iz>=mstart .and. iz<=mstop)) then
+                 qm_scf_indx_c%q_mynod_fock(iicnt) =.false.
               end if
-           else if(iw.eq.10 .and. jw.eq.10) then
+           else if(iw == 10 .and. jw == 10) then
               do i=1,4
-                 is  = INDX_local(ia+i-1)+ja
+                 is  = indx_local(ia+i-1)+ja
                  ix  = is+1
                  iy  = is+2
                  iz  = is+3
-                 if( (is>=fstart .and. is<=fstop) .or. (ix>=fstart .and. ix<=fstop) .or. &
-                     (iy>=fstart .and. iy<=fstop) .or. (iz>=fstart .and. iz<=fstop)) then
-                    q_mynod_fock(iicnt) =.true.
+                 if( (is>=mstart .and. is<=mstop) .or. (ix>=mstart .and. ix<=mstop) .or. &
+                     (iy>=mstart .and. iy<=mstop) .or. (iz>=mstart .and. iz<=mstop)) then
+                    qm_scf_indx_c%q_mynod_fock(iicnt) =.false.
                     cycle loopJJ
                  end if
               end do
@@ -2179,17 +1984,17 @@ module qm1_scf_module
               ! General code   - also valid for D-orbitals.
               ! contributions from (ii,kl)
               loopI1: do i=ia,ib
-                 ka  = INDX_local(i)
+                 ka  = indx_local(i)
                  do k=ja,jb
                     ik   = ka+k
-                    if(ik>=fstart .and. ik<=fstop) then
-                       q_mynod_fock(iicnt) =.true.
+                    if(ik>=mstart .and. ik<=mstop) then
+                       qm_scf_indx_c%q_mynod_fock(iicnt) =.false.
                        cycle loopJJ
                     end if
                     do l=ja,k-1
                        il    = ka+l
-                       if(il>=fstart .and. il<=fstop) then
-                          q_mynod_fock(iicnt) =.true.
+                       if(il>=mstart .and. il<=mstop) then
+                          qm_scf_indx_c%q_mynod_fock(iicnt) =.false.
                           cycle loopJJ
                        end if
                     end do
@@ -2198,21 +2003,21 @@ module qm1_scf_module
    
               ! contribution from (ij,kl) with i.ne.j
               loopI2: do i=ia+1,ib
-                 ka = INDX_local(i)
+                 ka = indx_local(i)
                  do j=ia,i-1
-                    kb  = INDX_local(j)
+                    kb  = indx_local(j)
                     do k=ja,jb
                        ik    = ka+k
                        jk    = kb+k
-                       if((ik>=fstart .and. ik<=fstop) .or. (jk>=fstart .and. jk<=fstop)) then
-                          q_mynod_fock(iicnt) =.true.
+                       if((ik>=mstart .and. ik<=mstop) .or. (jk>=mstart .and. jk<=mstop)) then
+                          qm_scf_indx_c%q_mynod_fock(iicnt) =.false.
                           cycle loopJJ
                        end if
                        do l=ja,k-1
                           il   = ka+l
                           jl   = kb+l
-                          if((il>=fstart .and. il<=fstop) .or. (jl>=fstart .and. jl<=fstop)) then
-                             q_mynod_fock(iicnt) =.true.
+                          if((il>=mstart .and. il<=mstop) .or. (jl>=mstart .and. jl<=mstop)) then
+                             qm_scf_indx_c%q_mynod_fock(iicnt) =.false.
                              cycle loopJJ
                           end if
                        end do
@@ -2223,14 +2028,14 @@ module qm1_scf_module
         end do loopJJ
      end do loopII
 
-     q_fock =.false.
+     q_fock =.true.   ! qm_scf_indx_c%q_mynod_fock is setup.
      return
      end subroutine fill_q_mynod_fock
 #endif
   end subroutine fockx
 
 
-  subroutine q_construct(PA,PB,Q,LM4,LM6,UHF)
+  subroutine q_construct(PA,PB,Q,ip_local,ip_check,LM4,LM6,UHF)
   !
   ! Construct Q= PA+PB  (see fockx subroutine)
   !
@@ -2246,33 +2051,29 @@ module qm1_scf_module
 
   integer :: LM4,LM6,numat
   real(chm_real):: PA(LM4),PB(LM4),Q(LM6)
-  logical :: UHF
+  integer :: ip_local(*)
+  logical :: UHF,ip_check(*)
 
   ! local variables
   integer :: KL,i
-  integer, save :: old_N = 0
-  integer, save :: mstart,mstop
+  integer :: mstart,mstop
 #if KEY_PARALLEL==1
-  !integer       :: ISTRT_CHECK           ! external function
-  integer,save  :: JPARPT_local(0:MAXNODE)
+  integer :: JPARPT_qstrt(0:numnod)
 #endif
   real(chm_real),parameter ::ev_a0=EV*A0
 
   ! for parallelization
-  if(old_N .ne. LM6) then
-     old_N  = LM6
 #if KEY_PARALLEL==1
-     JPARPT_local(0)=0
-     do i=1,numnod
-        JPARPT_local(i)= LM6*i/numnod ! for linear vector
-     end do
-     mstart = JPARPT_local(mynod)+1
-     mstop  = JPARPT_local(mynod+1)
+  JPARPT_qstrt(0)=0
+  do i=1,numnod
+     JPARPT_qstrt(i)= LM6*i/numnod ! for linear vector
+  end do
+  mstart = JPARPT_qstrt(mynod)+1
+  mstop  = JPARPT_qstrt(mynod+1)
 #else
-     mstart = 1
-     mstop  = LM6
+  mstart = 1
+  mstop  = LM6
 #endif
-  end if
 
   ! Note: when use parallel, Q contains only terms between mstart and mstop. 
   !       So care should be given in particular at calc_mulliken subroutine.
@@ -2282,22 +2083,22 @@ module qm1_scf_module
   if(UHF) then
      do KL=mstart,mstop  ! 1,LM6
         if(ip_check(kl)) then
-           Q(KL)= two*(PA(IP_local(KL))+PB(IP_local(KL)))
+           Q(KL)= two*(PA(ip_local(KL))+PB(ip_local(KL)))
         else
-           Q(KL)= (PA(IP_local(KL))+PB(IP_local(KL)))
+           Q(KL)= (PA(ip_local(KL))+PB(ip_local(KL)))
         end if
      end do
   else
      do KL=mstart,mstop  ! 1,LM6
         if(ip_check(kl)) then
-           Q(KL)= two*(PA(IP_local(KL))+PA(IP_local(KL)))
+           Q(KL)= two*(PA(ip_local(KL))+PA(ip_local(KL)))
         else
-           Q(KL)= (PA(IP_local(KL))+PA(IP_local(KL)))
+           Q(KL)= (PA(ip_local(KL))+PA(ip_local(KL)))
         end if
      end do
   end if
 #if KEY_PARALLEL==1
-  if(numnod>1) call VDGBRE(Q,JPARPT_local)
+  if(numnod>1) call VDGBRE(Q,JPARPT_qstrt)
 #endif
   return
   end subroutine q_construct
@@ -2306,6 +2107,10 @@ module qm1_scf_module
   subroutine diis(FA,FB,PA,PB,FAwork,FBwork,PAwork,PBwork,            &
                   FDA,FDB,Ediis,Adiis,Bdiis,Xdiis,                    &
                   dim_norbs,dim_linear_norbs,N,NDIIS,mxdiis,          &
+#if KEY_PARALLEL==1
+                  JPARPT_diis,                                        &
+#endif
+                  mstart,mstop,                                       &
                   iwork_diis,EDMAX,qprint,UHF)
   !
   ! Diis convergence acceleration.
@@ -2350,22 +2155,17 @@ module qm1_scf_module
   ! INDEX KDIIS, AND THE DIIS EXTRAPOLATION IS DONE USING THE
   ! LATEST MXDIIS ITERATIONS.
   !
-  !use chm_kinds
-  !use qm1_info, only : qm_scf_main_r
-  !use number, only : zero,one,two
+  use qm1_info, only : qm_scf_diis_c
 #if KEY_PARALLEL==1
   use parallel
-!#if KEY_MNDOOPENMP==1  /*OpenMP specific*/
-!  use omp_lib
-!#endif                 /*OpenMP specific*/
 #if KEY_MPI==1  /*MPI run*/
-  use mpi
+  use mpi_f08
 #endif /*MPI run*/
 #endif
 
   implicit none
   !
-  integer :: dim_norbs,dim_linear_norbs,N,NDIIS,mxdiis
+  integer       :: dim_norbs,dim_linear_norbs,N,NDIIS,mxdiis
   real(chm_real):: FA(dim_linear_norbs),PA(dim_linear_norbs), &
                    FB(dim_linear_norbs),PB(dim_linear_norbs)
   real(chm_real):: FAwork(dim_norbs,dim_norbs),PAwork(dim_norbs,dim_norbs), &
@@ -2375,30 +2175,27 @@ module qm1_scf_module
   real(chm_real):: EDMAX
   integer       :: iwork_diis(*) 
   logical       :: qprint,UHF
+#if KEY_PARALLEL==1
+  integer       :: JPARPT_diis(0:numnod)
+#endif
+  integer       :: mstart,mstop
 
   ! local variables
-  integer :: i,j,k,M,ij,KD,NEW,MX1,KX1P,KDIIS,IEDMAX,info
+  integer       :: i,j,k,M,ij,KD,NEW,MX1,KX1P,KDIIS,IEDMAX,info,iidim
   real(chm_real):: CX,cx1,aa,bb
   real(chm_real):: Ediis_kd(dim_linear_norbs)
   real(chm_real),parameter :: SCALE=1.02D0
   integer       :: idamax_mn           ! external function
   real(chm_real):: ddot_mn,ddot2d_mn   ! external function
-  real(chm_real),save,pointer :: bdiis_local(:)=>Null()
 
-  integer, save :: old_N = 0
-  integer, save :: mstart,mstop,iidim,iistart,iiend
 #if KEY_PARALLEL==1
-  integer :: ISTRT_CHECK       ! external function
-  integer,save  :: JPARPT_local(0:MAXNODE),KPARPT_local(0:MAXNODE)
   real(chm_real):: edmax_local
-  logical,       save,pointer :: q_ij_pair(:)=>Null()
 #if KEY_MPI==1
   integer*4 :: IERR
 #endif
 #endif
   integer :: nnumnod,mmynod
   real(chm_real):: s_aux
-  integer :: tid,nb2,mst1,mst2
 
   ! for parallelization
 #if KEY_PARALLEL==1
@@ -2408,94 +2205,42 @@ module qm1_scf_module
   nnumnod = 1
   mmynod  = 0
 #endif
-  if(old_N .ne. dim_linear_norbs) then
-     old_N  = dim_linear_norbs
-     mstart = 1
-     mstop  = dim_linear_norbs
-     iistart= 1
-     iiend  = n
+  iidim  = mstop - mstart + 1  ! dimension
+
 #if KEY_PARALLEL==1
-     if(nnumnod>1) then
-        !mstart = ISTRT_CHECK(mstop,dim_linear_norbs)
-        iistart= ISTRT_CHECK(iiend,n)
-
-        ! Prepare array for vector allgather calls using VDGBRE
-        ! mapping for each node (Hard weird).
-        JPARPT_local(0)=0
-        do i=1,nnumnod
-           JPARPT_local(i)= dim_linear_norbs*i/nnumnod ! for linear vector
-        end do
-        mstart = JPARPT_local(mynod)+1
-        mstop  = JPARPT_local(mynod+1)
-     end if
-     if(associated(bdiis_local)) deallocate(bdiis_local)
-     allocate(bdiis_local(mxdiis))
-
-     ! for logical array.
-     if(associated(q_ij_pair)) deallocate(q_ij_pair)
-     allocate(q_ij_pair(n))
+  if(.not. qm_scf_diis_c%q_ij_pair_setup) then
      ij=0
-     q_ij_pair(1:n)=.false.
+     qm_scf_diis_c%q_ij_pair(1:n)=.false.
      do i=1,n
         do j=1,i
            ij = ij + 1
            if(ij >= mstart .and. ij <=mstop) then
-              q_ij_pair(i) =.true.
-              q_ij_pair(j) =.true.
+              qm_scf_diis_c%q_ij_pair(i) =.true.
+              qm_scf_diis_c%q_ij_pair(j) =.true.
            end if
         end do
      end do
-#endif
-     iidim  = mstop - mstart + 1  ! dimension
+     qm_scf_diis_c%q_ij_pair_setup =.true.
   end if
+#endif
 
   ! initialization.
   ndiis  = ndiis+1
   kdiis  = MOD(ndiis-1,mxdiis) + 1
 
   ! Compute the error matrix ED = F*P - P*F, using linearly packed matrices.
-  ! in principle, Ework(1:n,1:n)= MATMUL(FAwork(1:n,1:n),PAwork(1:n,1:n)) -MATMUL(PAwork(1:n,1:n),FAwork(1:n,1:n))
+  ! in principle, Ework(1:n,1:n)= MATMUL(FAwork(1:n,1:n),PAwork(1:n,1:n)) &
+  !                              -MATMUL(PAwork(1:n,1:n),FAwork(1:n,1:n))
   ! after each matrix has been squared form.
   !
   call square2(FA,FAwork,PA,PAwork,N,dim_norbs,dim_linear_norbs &
 #if KEY_PARALLEL==1
-              ,q_ij_pair  &
+              ,qm_scf_diis_c%q_ij_pair  &
 #endif
                )
   !
   ! using a lower diagonal part, C:=A*B-B*A, where FA and PA are symmetric matrices.
   !Ediis_kd(mstart:mstop) = zero
-#if KEY_MNDOOPENMP==1  /*OpenMP specific*/
-  nb2 = ((mstop-mstart)+1)/2
-  mst1= mstart + nb2
-  mst2= mst1   + 1
-!$omp parallel private(i,j,ij,tid) NUM_THREADS(2)
-  tid = OMP_get_thread_num()
-  if(tid==0) then 
-     do i=1,n
-        do j=1,i
-           ij = i*(i-1)/2 + j
-           if(ij >= mstart .and. ij <= mst1) then
-              ! .false. do minus.
-!              Ediis_kd(ij)= ddot2d_mn(n,FAwork(1:n,j),PAwork(1:n,j),1,PAwork(1:n,i),FAwork(1:n,i),1,.false.)
-               Ediis_kd(ij)=DOT_PRODUCT(FAwork(1:n,j),PAwork(1:n,i)) - DOT_PRODUCT(PAwork(1:n,j),FAwork(1:n,i))
-           end if
-        end do
-     end do
-  else
-     do i=1,n
-        do j=1,i
-           ij = i*(i-1)/2 + j
-           if(ij >= mst2 .and. ij <= mstop) then
-              ! .false. do minus.
-!              Ediis_kd(ij)= ddot2d_mn(n,FAwork(1:n,j),PAwork(1:n,j),1,PAwork(1:n,i),FAwork(1:n,i),1,.false.)
-               Ediis_kd(ij)=DOT_PRODUCT(FAwork(1:n,j),PAwork(1:n,i)) - DOT_PRODUCT(PAwork(1:n,j),FAwork(1:n,i))
-           end if
-        end do
-     end do
-  end if
-!$omp end parallel
-#else  /*OpenMP specific*/
   ij=0
   do i=1,n
      do j=1,i
@@ -2506,16 +2251,16 @@ module qm1_scf_module
            !Ediis_kd(ij)= ddot_mn(n,FAwork(1:n,j),1,PAwork(1:n,i),1) &
            !             -ddot_mn(n,PAwork(1:n,j),1,FAwork(1:n,i),1)
            ! .false. do minus.
-           Ediis_kd(ij)= ddot2d_mn(n,FAwork(1:n,j),PAwork(1:n,j),1,PAwork(1:n,i),FAwork(1:n,i),1,.false.) 
+           Ediis_kd(ij)= ddot2d_mn(n,FAwork(1:n,j),PAwork(1:n,j),1,  &
+                                     PAwork(1:n,i),FAwork(1:n,i),1,.false.) 
         end if
      end do
   end do
-#endif /*OpenMP specific*/
 
   if(UHF) then
      call square2(FB,FBwork,PB,PBwork,N,dim_norbs,dim_linear_norbs &
 #if KEY_PARALLEL==1
-                 ,q_ij_pair  &
+                 ,qm_scf_diis_c%q_ij_pair  &
 #endif
                   )
      ! using a lower diagonal part, C:=A*B-B*A, where FB and PB are symmetric matrices.
@@ -2527,7 +2272,8 @@ module qm1_scf_module
               !Ediis_kd(ij)=Ediis_kd(ij)+ ddot_mn(n,FBwork(1:n,j),1,PBwork(1:n,i),1) &
               !                         - ddot_mn(n,PBwork(1:n,j),1,FBwork(1:n,i),1)
               ! .false. do minus.
-              Ediis_kd(ij)=Ediis_kd(ij)+ddot2d_mn(n,FBwork(1:n,j),PBwork(1:n,j),1,PBwork(1:n,i),FBwork(1:n,i),1,.false.)
+              Ediis_kd(ij)=Ediis_kd(ij)+ddot2d_mn(n,FBwork(1:n,j),PBwork(1:n,j),1, &
+                                                    PBwork(1:n,i),FBwork(1:n,i),1,.false.)
            end if
         end do
      end do
@@ -2535,7 +2281,7 @@ module qm1_scf_module
 
 !!#if KEY_PARALLEL==1
 !!  ! broadcast.
-!!  if(nnumnod>1) call VDGBRE(Ediis_kd(1:dim_linear_norbs),JPARPT_local)
+!!  if(nnumnod>1) call VDGBRE(Ediis_kd(1:dim_linear_norbs),JPARPT_diis)
 !!#endif
 
 
@@ -2565,40 +2311,40 @@ module qm1_scf_module
   !   kdiis and ldiis, respectively.  ED is antisymmetric and zero on the
   !   diagonal, hene this scalar product can be computed as twice the dot-product
   !   of linearly packted matrices (ED). Standard case, DIIS iteractions 1...MXDIIS.
-  if(kdiis.eq.ndiis) then
+  if(kdiis == ndiis) then
      mx1 = kdiis+1
   else
      mx1 = mxdiis+1  ! case of overflow, ndiis > mxdiis
   end if
-  kd        = (kdiis+1)*kdiis/2 + 1  ! =INDX_local(kdiis+1)+1
+  kd        = (kdiis+1)*kdiis/2 + 1  ! =indx_local(kdiis+1)+1
   Bdiis(1)  = zero
   Bdiis(kd) =-one
   Ediis(mstart:mstop,kdiis)=Ediis_kd(mstart:mstop)
 #if KEY_PARALLEL==1
   if(nnumnod>1) then
-!$omp parallel do private(i) NUM_THREADS(2)
      do i=1,mx1-1
-        bdiis_local(i)=-two*ddot_mn(mstop-mstart+1,Ediis(mstart:mstop,i),1,Ediis_kd(mstart:mstop),1)
+        qm_scf_diis_c%bdiis_local(i)=-two*ddot_mn(mstop-mstart+1,Ediis(mstart:mstop,i),1, &
+                                                  Ediis_kd(mstart:mstop),1)
      end do
-!omp end parallel do
-     call gcomb(bdiis_local(1:mx1-1),mx1-1) 
+     call gcomb(qm_scf_diis_c%bdiis_local(1:mx1-1),mx1-1) 
      do i=1,mx1-1
-        if(kdiis.ge.i) then
+        if(kdiis >= i) then
            new = kd+i
         else
-           new = (i+1)*i/2 + 1 + kdiis ! =INDX_local(I+1)+1+kdiis
+           new = (i+1)*i/2 + 1 + kdiis ! =indx_local(I+1)+1+kdiis
         end if
-        Bdiis(new)=bdiis_local(i)
+        Bdiis(new)=qm_scf_diis_c%bdiis_local(i)
      end do
   else
 #endif
      do i=1,mx1-1
-        if(kdiis.ge.i) then
+        if(kdiis >= i) then
            new = kd+i
         else
-           new = (i+1)*i/2 + 1 + kdiis ! =INDX_local(I+1)+1+kdiis
+           new = (i+1)*i/2 + 1 + kdiis ! =indx_local(I+1)+1+kdiis
         end if
-        Bdiis(new)=-two*ddot_mn(dim_linear_norbs,Ediis(1:dim_linear_norbs,i),1,Ediis_kd(1:dim_linear_norbs),1)
+        Bdiis(new)=-two*ddot_mn(dim_linear_norbs,Ediis(1:dim_linear_norbs,i),1,  &
+                                Ediis_kd(1:dim_linear_norbs),1)
      end do
 #if KEY_PARALLEL==1
   end if
@@ -2607,10 +2353,10 @@ module qm1_scf_module
   Bdiis(kd+kdiis)=Bdiis(kd+kdiis)*SCALE
 
   ! now, do the diis-extrapolation
-  if(ndiis.ne.1) then
+  if(ndiis /= 1) then
      ! copy coefficients from BD(mx1p) to AD(mx1p) & scratch array will be
      ! overwritten by dspsv_mn.
-     kx1p         = mx1*(mx1-1)/2+mx1 ! =INDX_local(mx1)+mx1
+     kx1p         = mx1*(mx1-1)/2+mx1 ! =indx_local(mx1)+mx1
      Adiis(1:kx1p)= Bdiis(1:kx1p)
 
      ! define rhs vector of linear equations.
@@ -2619,7 +2365,7 @@ module qm1_scf_module
 
      ! solve the system of linear equations.
      call dspsv_mn('U',mx1,1,Adiis,iwork_diis,Xdiis,mx1,info)
-     if(info.ne.0) then
+     if(info /= 0) then
         if(qprint) write(6,500) info
         ndiis  = 0
         return
@@ -2641,8 +2387,8 @@ module qm1_scf_module
         end do
 #if KEY_PARALLEL==1
         if(nnumnod>1) then
-           call VDGBRE(FA,JPARPT_local)
-           call VDGBRE(FB,JPARPT_local)
+           call VDGBRE(FA,JPARPT_diis)
+           call VDGBRE(FB,JPARPT_diis)
         end if
 #endif
      else
@@ -2653,31 +2399,6 @@ module qm1_scf_module
         !end do
         !
         ! equivalent to above.
-#if KEY_MNDOOPENMP==1  /*OpenMP specific*/
-        nb2 = ((mstop-mstart)+1)/2 + mstart
-        cx1 = Xdiis(2)
-!$omp parallel private(m,cx,tid) NUM_THREADS(2)
-        tid = OMP_get_thread_num()
-        if(tid==0) then
-           FA(mstart:nb2) = cx1*FDA(mstart:nb2,1)
-           if(mx1>=3) then
-              do m=3,mx1
-                 cx     = Xdiis(m)
-                 FA(mstart:nb2) = FA(mstart:nb2) + cx*FDA(mstart:nb2,m-1)
-              end do
-           end if
-        else
-           FA(nb2+1:mstop) = cx1*FDA(nb2+1:mstop,1)
-           if(mx1>=3) then
-              do m=3,mx1
-                 cx     = Xdiis(m)
-                 FA(nb2+1:mstop) = FA(nb2+1:mstop) + cx*FDA(nb2+1:mstop,m-1)
-              end do
-           end if
-        end if
-!$omp end parallel
-#else  /*OpenMP specific*/
-        !
         cx = Xdiis(2)
         FA(mstart:mstop) = cx*FDA(mstart:mstop,1)
         if(mx1>=3) then
@@ -2686,10 +2407,9 @@ module qm1_scf_module
               FA(mstart:mstop) = FA(mstart:mstop) + cx*FDA(mstart:mstop,m-1)
            end do
         end if
-#endif /*OpenMP specific*/
 #if KEY_PARALLEL==1
         ! broadcast here, as FA was a complete matrix before this routine.
-        if(nnumnod>1) call VDGBRE(FA,JPARPT_local)
+        if(nnumnod>1) call VDGBRE(FA,JPARPT_diis)
 #endif
      end if
   end if
@@ -2749,7 +2469,8 @@ module qm1_scf_module
 
 
   subroutine fock_diis(FA,FDA,dim_linear_norbs,mxfdiis_local,msize_local, &
-                       ifock_option,ifockmd_counter,fockmd_on)
+                       ifock_option,ifockmd_counter,fockmd_on,            &
+                       mstart,mstop,mmynod,nnumnod)
   !
   ! Fock matrix extrapolation, based on the Taylor expansion.
   !
@@ -2762,6 +2483,7 @@ module qm1_scf_module
   integer :: dim_linear_norbs,mxfdiis_local,msize_local,ifockmd_counter,ifock_option
   real(chm_real):: FA(msize_local),FDA(mxfdiis_local,msize_local)
   logical       :: fockmd_on
+  integer :: mstart,mstop,mmynod,nnumnod    ! for parallelization
 
   ! local variables
   integer :: i,j
@@ -2787,35 +2509,10 @@ module qm1_scf_module
                               r_3120=(1.0d0/(3.0d0*120.0d0)) ! 1/(3*120)
                        
 
-  integer, save :: old_N = 0
-  integer, save :: mstart,mstop
-  integer :: nnumnod,mmynod
-
-  ! for parallelization
-#if KEY_PARALLEL==1
-  nnumnod = numnod
-  mmynod  = mynod
-#else
-  nnumnod = 1
-  mmynod  = 0
-#endif
-  if(old_N .ne. dim_linear_norbs) then
-     old_N  = dim_linear_norbs
-     mstart = 1
-     mstop  = dim_linear_norbs
-#if KEY_PARALLEL==1
-     if(nnumnod>1) then
-        mstart = dim_linear_norbs*(mynod)/nnumnod + 1
-        mstop  = dim_linear_norbs*(mynod+1)/nnumnod
-     end if
-#endif
-  end if
-
-  ! now, do the fock extrapolation.
+  ! do the fock extrapolation.
   if(ifockmd_counter >= (mxfdiis_local+1)) then
      if(mxfdiis_local==5) then
         if(ifock_option == 1) then
-!$omp parallel do private(i,j,fval,alpha_1,alpha_2,f_n2p,f_n2m,f_n3p,df_n2p,df_n2m) NUM_THREADS(2)
            ! Based on the extrapolation plus cubic fit.
            do i=1,msize_local ! mstart,mstop
               ! copy data points first.
@@ -2841,10 +2538,7 @@ module qm1_scf_module
               !
               FA(i) = fval(3)+3.0d0*alpha_1+ 9.0d0*alpha_2+27.0d0*alpha_3+ 81.0d0*alpha_4
            end do
-!$omp end parallel do
-
         else
-!$omp parallel do private(i,j,fval,alpha_1,alpha_2,f_n2p,f_n2m,f_n3p,df_n2p,df_n2m) NUM_THREADS(2)
            !
            ! do the Verlet integration, F(n+1) = 2F(n)-F(n-1) + dt^2 * a(F(n)),
            ! in which a(F(n)) was determined by the Taylor expansion of F(n+i) around F(n),
@@ -2875,11 +2569,9 @@ module qm1_scf_module
               ! 1: F_n-4, 2: F_n-3, 3: F_n-2, 4: F_n-1, 5: F_n 
               FA(i) = 2.0d0*FDA(5,i)-FDA(4,i)+dt2an
            end do
-!$omp end parallel do
         end if
      else if(mxfdiis_local==7) then
         if(ifock_option == 1) then
-!$omp parallel do private(i,j,fval,alpha_1,alpha_2,alpha_3,alpha_4,f_n3p,f_n3m,f_n4p,df_n3p,df_n3m) NUM_THREADS(2)
            do i=1,msize_local ! mstart,mstop
               ! copy data points first.
               do j=1,mxfdiis_local-1
@@ -2920,10 +2612,7 @@ module qm1_scf_module
               FA(i) = fval(4)+4.0d0*alpha_1+16.0d0*alpha_2+64.0d0*alpha_3+256.0d0*alpha_4+ &
                               1024.0d0*alpha_5+4096.0d0*alpha_6
            end do
-!$omp end parallel do
-
         else
-!$omp parallel do private(i,j,fval,alpha_1,alpha_2,alpha_3,alpha_4,f_n3p,f_n3m,df_n3p,df_n3m,dt2an3p) NUM_THREADS(2)
            ! Based on the extrapolation and 6-th order Taylor expansion.
            do i=1,msize_local ! mstart,mstop
               ! copy data points first.
@@ -2948,23 +2637,20 @@ module qm1_scf_module
               ! F(n+1) = 2*F(n) - F(n-1) + (dt)^2*a(n)
               FA(i) = 2.0d0*FDA(7,i)-FDA(6,i)+dt2an
            end do
-!$omp end parallel do
         end if
      else
           call wrndie(-1,'<FOCK DIIS>','Wrong extrapolation order.')
      end if
      fockmd_on=.true.
   else
-     ! only copy...
+     ! copy...
      ! n-2,n-1,n,n+1,n+2 data points.
-!$omp parallel do private(i,j) NUM_THREADS(2)
      do i=1,msize_local  ! mstart,mstop
         do j=1,mxfdiis_local-1
            FDA(j,i) = FDA(j+1,i)
         end do
         FDA(mxfdiis_local,i)    = FA(i)        ! copy a new value.
      end do
-!$omp end parallel do
   end if
   !
   return
@@ -2988,34 +2674,33 @@ module qm1_scf_module
   ! NW(LM1)   1st  coulumb  pair index for given atom
   !
 
-  use qm1_info, only : qm_main_r, qm_scf_main_r
+  use qm1_info, only : qm_main_c, qm_scf_main_c, qm_scf_indx_c, &
+                       allocate_pair_index !, qm_gho_info_c
 
+  implicit none
   ! local variables
-  integer :: i,j,ii,k,ia,ib,id,nwii
+  integer :: i,j,ii,k,ia,ib,id,nwii,i4,j4
 
   ! set memory allocation and check.
-  call allocate_pair_index(qm_scf_main_r%dim_numat,qm_main_r%uhf)
-
-  ! copy local copy.
-  indx_local(1:qm_main_r%norbs)=qm_scf_main_r%INDX(1:qm_main_r%norbs)
+  call allocate_pair_index(qm_scf_indx_c,qm_scf_main_c%dim_numat,qm_main_c%norbs,qm_main_c%uhf)
 
   ! define pair indices and pair factors
-  if(.not. qm_main_r%uhf) then
+  if(.not. qm_main_c%uhf) then
      ! Coulomb part.
      k      = 0
-     do ii=1,qm_main_r%NUMAT
-        qm_scf_main_r%NW(ii) = k+1    ! lower triangle of a given block.
-        ia     = qm_main_r%NFIRST(ii) ! at
-        ib     = qm_main_r%NLAST(ii)
+     do ii=1,qm_main_c%NUMAT
+        qm_scf_main_c%NW(ii) = k+1    ! lower triangle of a given block.
+        ia     = qm_main_c%NFIRST(ii) ! at
+        ib     = qm_main_c%NLAST(ii)
         do i=ia,ib
-           id     = indx_local(i) ! qm_scf_main_r%INDX(i)
+           id     = qm_scf_main_c%INDX(i)
            do j=ia,i
               k      = k+1
-              IP_local(k)  = id+j ! location in the linear Fock matrix.
-              if(i.eq.j) then
-                 ip_check(k)=.false.
+              qm_scf_indx_c%ip_local(k)  = id+j ! location in the linear Fock matrix.
+              if(i == j) then
+                 qm_scf_indx_c%ip_check(k)=.false.
               else
-                 ip_check(k)=.true.  ! used in fockx
+                 qm_scf_indx_c%ip_check(k)=.true.  ! used in fockx
               end if
            end do
         end do
@@ -3026,21 +2711,21 @@ module qm1_scf_module
 
      ! Coulomb part.
      k      = 0
-     do ii=1,qm_main_r%NUMAT
-        qm_scf_main_r%NW(ii) = k+1    ! lower triangle of a given block.
-        ia     = qm_main_r%NFIRST(ii) ! at
-        ib     = qm_main_r%NLAST(ii)
+     do ii=1,qm_main_c%NUMAT
+        qm_scf_main_c%NW(ii) = k+1    ! lower triangle of a given block.
+        ia     = qm_main_c%NFIRST(ii) ! at
+        ib     = qm_main_c%NLAST(ii)
         do i=ia,ib
-           id     = indx_local(i) ! qm_scf_main_r%INDX(i)
+           id     = qm_scf_main_c%INDX(i)
            do j=ia,i
               k      = k+1
-              IP_local(k)  = id+j ! location in the linear Fock matrix.
-              IP1_local(k) = i    ! i,j mapping in the Fock matrix.
-              IP2_local(k) = j    ! (in the form of the square matrix)
-              if(i.eq.j) then
-                 ip_check(k)=.false.
+              qm_scf_indx_c%ip_local(k)  = id+j ! location in the linear Fock matrix.
+              qm_scf_indx_c%ip1_local(k) = i    ! i,j mapping in the Fock matrix.
+              qm_scf_indx_c%ip2_local(k) = j    ! (in the form of the square matrix)
+              if(i == j) then
+                 qm_scf_indx_c%ip_check(k)=.false.
               else
-                 ip_check(k)=.true.  ! used in fockx
+                 qm_scf_indx_c%ip_check(k)=.true.  ! used in fockx
               end if
            end do
         end do
@@ -3048,85 +2733,33 @@ module qm1_scf_module
 
      ! Exchange part. 
      k    = 0
-     do ii=1,qm_main_r%NUMAT
-        JX_local(ii) = k+1       ! square matrix of a given block.
-        nwii   = qm_scf_main_r%NW(ii)-1  ! 
-        ia     = qm_main_r%NFIRST(ii)
-        ib     = qm_main_r%NLAST(ii)
+     do ii=1,qm_main_c%NUMAT
+        qm_scf_indx_c%jx_local(ii) = k+1       ! square matrix of a given block.
+        nwii   = qm_scf_main_c%NW(ii)-1  ! 
+        ia     = qm_main_c%NFIRST(ii)
+        ib     = qm_main_c%NLAST(ii)
         do i=ia,ib
-           i4     = i-ia+1
+           i4        = i-ia+1
            do j=ia,i
               k      = k+1
               j4     = j-ia+1
-              JP1_local(k) = i  ! mapping for lower triangle.
-              JP2_local(k) = j
-              !JP3_local(k) = nwii+qm_scf_main_r%INDX(i4)+j4   ! I.GE.J
-              JP3_local(k) = nwii+indx_local(i4)+j4
+              qm_scf_indx_c%jp1_local(k) = i  ! mapping for lower triangle.
+              qm_scf_indx_c%jp2_local(k) = j
+              qm_scf_indx_c%jp3_local(k) = nwii+qm_scf_main_c%INDX(i4)+j4   ! I.GE.J
            end do
            do j=i+1,ib
               k      = k+1
               j4     = j-ia+1
-              JP1_local(k) = i  ! mapping for upper triangle.
-              JP2_local(k) = j
-              !JP3_local(k) = nwii+qm_scf_main_r%INDX(j4)+i4  ! I.LT.J
-              JP3_local(k) = nwii+nwii+indx_local(j4)+i4
+              qm_scf_indx_c%jp1_local(k) = i  ! mapping for upper triangle.
+              qm_scf_indx_c%jp2_local(k) = j
+              qm_scf_indx_c%jp3_local(k) = nwii+qm_scf_main_c%INDX(j4)+i4  ! I.LT.J
            end do
         end do
      end do
   end if
-  JXLAST_local = k
+  qm_scf_indx_c%jxlast_local = k
 
   return
-  !
-  contains
-     subroutine allocate_pair_index(dim_numat,uhf)
-     !
-     !
-     !
-     implicit none
-
-     integer :: LMI,LME,norbs,dim_numat
-     integer,save :: numat_old=-1
-     integer :: ier=0
-     logical :: uhf
-
-     ! check quick return, if arrays are allocated previously.
-     if(numat_old.eq.dim_numat) return
-
-     numat_old = dim_numat
-     norbs     = 9*dim_numat
-     LMI       = 45*dim_numat
-     LME       = 81*dim_numat
-
-     ! deallocate memory.
-     if(associated(IP_local))   deallocate(IP_local,stat=ier)
-     if(associated(IP1_local))  deallocate(IP1_local,stat=ier)
-     if(associated(IP2_local))  deallocate(IP2_local,stat=ier)
-     if(associated(JP1_local))  deallocate(JP1_local,stat=ier)
-     if(associated(JP2_local))  deallocate(JP2_local,stat=ier)
-     if(associated(JP3_local))  deallocate(JP3_local,stat=ier)
-     if(associated(JX_local))   deallocate(JX_local,stat=ier)
-     if(associated(indx_local)) deallocate(indx_local,stat=ier)
-     if(associated(ip_check))   deallocate(ip_check,stat=ier)
-
-     ! allocate memory.
-     ! for integer arrays:
-     allocate(IP_local(LMI),stat=ier)
-     allocate(indx_local(norbs),stat=ier)
-     allocate(ip_check(LMI),stat=ier)
-     if(uhf) then
-        allocate(IP1_local(LMI),stat=ier)
-        allocate(IP2_local(LMI),stat=ier)
-
-        allocate(JP1_local(LME),stat=ier)
-        allocate(JP2_local(LME),stat=ier)
-        allocate(JP3_local(LME),stat=ier)
-        allocate(JX_local(dim_numat),stat=ier)
-     end if
-
-     return
-     end subroutine allocate_pair_index
-     !
   end subroutine define_pair_index
 
   !

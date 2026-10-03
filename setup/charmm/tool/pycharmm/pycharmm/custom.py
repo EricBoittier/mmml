@@ -19,7 +19,7 @@ Set a python function to run during dynamics
 """
 
 import ctypes
-import pycharmm.lib as lib
+from pycharmm.loader import lib
 
 
 class CustomDynam:
@@ -33,11 +33,15 @@ class CustomDynam:
         `vx`, `vy`, `vz`: double precision floating point arrays of atom velocities  
         `x_new`, `y_new`, `z_new`: double precision floating point arrays of atom positions  
         `x_old`, `y_old`, `z_old`: double precision floating point arrays of atom positions  
+        `x`, `y`, `z`: double precision floating point arrays of atom positions  
 
         Inside the py_func function, the array arguments must be updated element by element
         since they are passed at C pointers. Slicing on the left hand side of an equal sign
         will not work for updating elements. List comprehensions on the right hand side
         probably will not either.
+
+        The return argument from the py_func if set to 0.0 will cause the dynamics to stop and
+        exit gracefully.
 
         Parameters
         ----------
@@ -49,6 +53,9 @@ class CustomDynam:
         self.func_type = ctypes.CFUNCTYPE(ctypes.c_double,
                                           ctypes.c_int,
                                           ctypes.c_int,
+                                          ctypes.POINTER(ctypes.c_double),
+                                          ctypes.POINTER(ctypes.c_double),
+                                          ctypes.POINTER(ctypes.c_double),
                                           ctypes.POINTER(ctypes.c_double),
                                           ctypes.POINTER(ctypes.c_double),
                                           ctypes.POINTER(ctypes.c_double),
@@ -76,13 +83,17 @@ class CustomDynam:
         `vx`, `vy`, `vz`: double precision floating point arrays of atom velocities  
         `x_new`, `y_new`, `z_new`: double precision floating point arrays of atom positions  
         `x_old`, `y_old`, `z_old`: double precision floating point arrays of atom positions  
+        `x`, `y`, `z`: double precision floating point arrays of atom positions  
 
         Inside the py_func function, the array arguments must be updated element by element
         since they are passed at C pointers. Slicing on the left hand side of an equal sign
         will not work for updating elements. List comprehensions on the right hand side
         probably will not either.
 
-        Parameters
+         The return argument from the py_func if set to 0.0 will cause the dynamics to stop and
+        exit gracefully.
+        
+       Parameters
         ----------
         py_func : callable
             the function to run during dynamics
@@ -90,10 +101,10 @@ class CustomDynam:
         if py_func:
             self.dynam_func = self.func_type(py_func)
 
-        lib.charmm.custom_dynam_set(self.dynam_func)
+        lib.custom_dynam_set(self.dynam_func)
         self.is_set = True
 
     def unset_func(self):
         """Do not run a python function during dynamics"""
-        lib.charmm.custom_dynam_unset()
+        lib.custom_dynam_unset()
         self.is_set = False

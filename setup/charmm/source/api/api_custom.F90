@@ -7,7 +7,8 @@ module api_custom
      function callback(current_step, natoms, &
           vx, vy, vz, &
           xnew, ynew, znew, &
-          xold, yold, zold) result(ret_val) bind(c)
+          xold, yold, zold, &
+          x, y, z) result(ret_val) bind(c)
        use, intrinsic :: iso_c_binding, only: c_double, c_int
        implicit none
        integer(c_int), value :: current_step, natoms
@@ -15,7 +16,8 @@ module api_custom
        real(c_double), dimension(*) :: &
             vx, vy, vz, &
             xnew, ynew, znew, &
-            xold, yold, zold
+            xold, yold, zold, &
+            x, y, z
      end function callback
   end interface
 
@@ -42,7 +44,8 @@ contains
   function custom_dynam_call(current_step, natoms, &
             vx, vy, vz, &
             xnew, ynew, znew, &
-            xold, yold, zold) result(ret_val) bind(c)
+            xold, yold, zold, &
+            x, y, z) result(ret_val) bind(c)
     use, intrinsic :: iso_c_binding, only: c_double, c_int
     implicit none
     integer(c_int), value :: current_step, natoms
@@ -50,12 +53,14 @@ contains
     real(c_double), dimension(*) :: &
          vx, vy, vz, &
          xnew, ynew, znew, &
-         xold, yold, zold
+         xold, yold, zold, &
+         x, y, z
 
     ret_val = dynam_func(current_step, natoms, &
          vx, vy, vz, &
          xnew, ynew, znew, &
-         xold, yold, zold)
+         xold, yold, zold, &
+         x,y,z)
   end function custom_dynam_call
 
   logical function custom_dynam_is_set()

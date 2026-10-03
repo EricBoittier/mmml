@@ -32,8 +32,8 @@ extern void OpenMMGBMV_GBMVForce_setParticleParameters(OpenMMGBMV_GBMVForce* tar
 extern int OpenMMGBMV_GBMVForce_addCphmdParameters(OpenMMGBMV_GBMVForce* target, int titrateResID, double refChargeState1, double refChargeState2, double chargeState1, double chargeState2);
 extern void OpenMMGBMV_GBMVForce_getCphmdParameters(const OpenMMGBMV_GBMVForce* target, int index, int* titrateResID, double* refChargeState1, double* refChargeState2, double* chargeState1, double* chargeState2);
 extern void OpenMMGBMV_GBMVForce_setCphmdParameters(OpenMMGBMV_GBMVForce* target, int index, int titrateResID, double refChargeState1, double refChargeState2, double chargeState1, double chargeState2);
-extern char* OpenMMGBMV_GBMVForce_getLambdaOutputFile(const OpenMMGBMV_GBMVForce* target);
-extern void OpenMMGBMV_GBMVForce_setLambdaOutputFile(OpenMMGBMV_GBMVForce* target, char* tmp);
+extern const char* OpenMMGBMV_GBMVForce_getLambdaOutputFile(const OpenMMGBMV_GBMVForce* target);
+extern void OpenMMGBMV_GBMVForce_setLambdaOutputFile(OpenMMGBMV_GBMVForce* target, const char* tmp);
 extern double OpenMMGBMV_GBMVForce_getSystemPH(const OpenMMGBMV_GBMVForce* target);
 extern void OpenMMGBMV_GBMVForce_setSystemPH(OpenMMGBMV_GBMVForce* target, double tmp);
 extern double OpenMMGBMV_GBMVForce_getThetaTemp(const OpenMMGBMV_GBMVForce* target);

@@ -13,12 +13,38 @@ module energym
 !  LENENV - Maximum number of pressure/virial terms.
 !
 !  !!WARNING!!: These lengths need to be changed carefully.  The dynamic
-!               restart file will be modified when these are changed.
-!               LENENP and LENENT may be increased (not decreased), but
-!               neither may exceed 120.  LENENV should remain at 50.
-!               Examine the code in dynamc/dynio.src(READYN).
+!               restart file format depends on them, so raising either one
+!               changes that format.  LENENP and LENENT may be increased
+!               (never decreased -- decreasing would orphan existing term
+!               indices).  LENENV should remain at 50.
 !
-      integer, parameter :: LENENP = 60, LENENT = 128, LENENV = 50
+!               Raising LENENP or LENENT requires THREE coordinated edits,
+!               in two places that each duplicate the restart-file logic:
+!                 1. the values here;
+!                 2. the '(<n>L1)' formats that write QEPROP/QETERM --
+!                    dynamc/dynio.F90(WRIDYN) and dynamc/tamd.F90(writadyn).
+!                    The repeat count must be >= LENENT, otherwise Fortran
+!                    format reversion splits the flags across a second record
+!                    and every later read in the file is off by one record;
+!                 3. the "character(len=...) LINE" buffers that read those
+!                    flag lines back -- dynamc/dynio.F90(READYN) and
+!                    dynamc/tamd.F90(readtadyn).  READYN infers the writing
+!                    version's LENENT from the TRIMmed length of that line,
+!                    so a buffer shorter than LENENT truncates the line and
+!                    the length check silently mis-detects the version.
+!                    (dynamc/tamd.F90(ReadTree) also has a LINE buffer, but
+!                    it reads tree data, not energy flags -- leave it alone.)
+!               Examine the code in dynamc/dynio.F90(READYN).
+!
+!               Backward compatible: READYN's "ILENEP >= 50" branch reads a
+!               restart file written with smaller LENENP/LENENT correctly.
+!               NOT forward compatible: a CHARMM built with smaller values
+!               truncates the longer flag line, so it mis-detects the file as
+!               its own size and desynchronises -- silently, because there is
+!               no upper-bound IVERS check.  Restart files are therefore not
+!               readable by earlier CHARMM once these are raised.
+!
+      integer, parameter :: LENENP = 96, LENENT = 192, LENENV = 50
 !
 !=======================================================================
 ! . Energy array indexes.
@@ -254,6 +280,9 @@ module energym
 #if KEY_SSNMR==1
       integer,PARAMETER :: ECS = 105
 #endif
+#if KEY_MODELLER==1
+      integer,PARAMETER :: EMD = 113
+#endif
 #if KEY_RDC==1
       integer,PARAMETER :: ERDC = 106
 #endif
@@ -269,7 +298,40 @@ module energym
       integer, parameter :: LJREC = 109
       integer, parameter :: LJEXC = 110
 #endif
+#if KEY_OMMTORCH == 1
+      integer, parameter :: NNPO = 114
+#endif
+#if KEY_MLMM==1
+integer, parameter       :: MLPS   = 124   ! eemlp
+#endif
+      ! MLpot (pyCHARMM machine-learning potential, api_func/user_mlpot).
+      ! Unguarded on purpose: there is no KEY_MLPOT keyword -- MLpot is always
+      ! compiled and is enabled at runtime by registering a model, so
+      ! mlpot_is_set() is the only gate.  CETERM(MLPO)/CETERM(MLEL) are
+      ! therefore assigned LAZILY on first use (see energy.F90) rather than in
+      ! ENERIN, so a run that never registers an MLpot model does not advertise
+      ! these terms in the SKIPE listing and does not print them in the energy
+      ! table.  Before this, MLpot borrowed USER and ELEC, which made the ML
+      ! contributions inseparable from a genuine user term and from ordinary MM
+      ! electrostatics.
+      integer, parameter :: MLPO = 125 ! MLpot internal ML atom potential
+      integer, parameter :: MLEL = 126 ! MLpot ML-charge/MM-charge electrostatics
       integer, parameter :: PCHARM = 112 ! principal component harmonic restraints
+#if KEY_OPENMM == 1
+      ! Per-bucket energy terms for user-added OpenMM custom forces
+      ! (populated from omm_ecomp on demand; see fstore_setup).
+      integer, parameter :: CFINT = 115  ! Custom internal: BOND/ANGLE/TORSION
+      integer, parameter :: CFNON = 116  ! Custom nonbonded: NONBONDED/GB
+      integer, parameter :: CFEXT = 117  ! Custom external:  EXTERNAL
+      integer, parameter :: CFMNY = 118  ! Custom many-body: COMPOUND_BOND/CENTROID_BOND/H_BOND/MANY_PARTICLE
+      integer, parameter :: CFCV  = 119  ! Custom collective: CV/VOLUME/RMSD/RG
+#endif
+#if KEY_BLOCK==1
+      integer, parameter :: LDBV = 120
+      integer, parameter :: THBV = 121
+      integer, parameter :: CGBV = 122
+      integer, parameter :: CATS = 123
+#endif
 !
       integer,PARAMETER :: VEXX =  1, VEXY =  2, VEXZ =  3, VEYX =  4, &
                   VEYY =  5, VEYZ =  6, VEZX =  7, VEZY =  8, &
@@ -477,6 +539,17 @@ module energym
 !AP/MF
 !      (DEFE) = 'DEFE' - DHDGB implicit membrane deformation energy
 #endif
+#if KEY_BLOCK==1
+!     (LDBV) = 'LDBV' - lambda dynamics fixed and variable biases
+!     (THBV) = 'THBV' - lambda dynamics bias on theta
+!     (CGBV) = 'CGBV' - lambda dynamics charge bias
+!     (CATS) = 'CATS' - lambda dynamics constrained atom scaling
+#endif
+#if KEY_MLMM==1
+!     (MLPS)     = 'MLPS'  - Machine Learning Potential energy !eemlp
+#endif
+!     (MLPO)     = 'MLPO'  - MLpot internal ML atom potential energy
+!     (MLEL)     = 'MLEL'  - MLpot ML-charge/MM-charge electrostatic energy
 !
 ! Energy Pressure/Virial Terms:
 !     (External Virial   - VEXX) = 'VEXX'

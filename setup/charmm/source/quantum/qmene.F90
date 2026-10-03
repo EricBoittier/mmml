@@ -106,7 +106,7 @@ SUBROUTINE EAMPC2 (EQUANT,X,Y,Z,DX,DY,DZ,XI,YI,ZI,COORD,GRAD,DXM)
   use parallel       
 #endif
 #if KEY_PARALLEL==1 && KEY_MPI==1
-  use mpi            
+  use mpi_f08            
 #endif
   use memory
   !

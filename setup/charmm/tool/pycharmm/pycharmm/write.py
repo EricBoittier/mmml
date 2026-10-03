@@ -47,7 +47,8 @@ import pycharmm.script
 from pycharmm.charmm_file import c_api_path_buffer
 
 
-def _resolve_write_path(filename: str) -> tuple[str, object | None]:
+
+def _resolve_write_path(filename: str):
     try:
         from mmml.interfaces.pycharmmInterface.charmm_paths import charmm_fortran_path
     except ImportError:
@@ -55,29 +56,24 @@ def _resolve_write_path(filename: str) -> tuple[str, object | None]:
     return charmm_fortran_path(filename, for_write=True)
 
 
-def coor_pdb(filename, title='', **kwargs):
-    """write a coordinate set to a pdb file
+def coor_pdb(filename, title='', comp=False, official=False, model=0,
+             first=False, last=False, **kwargs):
+    """Write coordinates to a PDB file via the KEY_LIBRARY C API.
 
-    Parameters
-    ----------
-    filename : str
-        new file path to write
-    title: str
-        title to write at the beginning of the file
-    **kwargs: dict
-        extra settings to pass to the CHARMM command
+    Extra script-only options are ignored. Library builds do not link ``write``.
     """
+    del title, official, model, first, last, kwargs
     import pycharmm
-    import pycharmm.lib as lib
 
-    comparison = bool(kwargs.get("comparison", False))
+    comparison = bool(comp)
     fortran_path, alias = _resolve_write_path(filename)
     try:
         selection = pycharmm.SelectAtoms().all_atoms()
         buf, fn_len = c_api_path_buffer(fortran_path)
         c_comp = ctypes.c_int(1 if comparison else 0)
+        from pycharmm.loader import lib
         status = int(
-            lib.charmm.write_coor_pdb(
+            lib.write_coor_pdb(
                 buf,
                 ctypes.byref(fn_len),
                 selection.as_ctypes(),
@@ -94,17 +90,35 @@ def coor_pdb(filename, title='', **kwargs):
             alias.finalize()
 
 
-def coor_card(filename, title='', **kwargs):
-    """write a coordinate set to a CHARMM card *.chr format file
+def coor_mmcif(filename, title='', comp=False, model=0, **kwargs):
+    """Write coordinates to an mmCIF/PDBx file."""
+    for option in ('first', 'last', 'label'):
+        if option in kwargs:
+            raise ValueError(f"Unsupported mmCIF write option: {option}")
+    cmd_kwargs = {}
+    if comp:
+        cmd_kwargs['comp'] = True
+    if model != 0:
+        cmd_kwargs['model'] = model
 
-    Parameters
-    ----------
-    filename: str 
-        new file path to write
-    title :  str 
-        title to write at the beginning of the file
-    **kwargs: dict 
-        extra settings to pass to the CHARMM command
+    write_command = pycharmm.script.WriteScript(filename,
+                                                title,
+                                                coor='mmcif',
+                                                **cmd_kwargs,
+                                                **kwargs)
+    write_command.run()
+
+
+def coor_pdbx(filename, **kwargs):
+    """Alias for :func:`coor_mmcif`."""
+    return coor_mmcif(filename, **kwargs)
+
+
+def coor_card(filename, title='', comp=False, offset=0, **kwargs):
+    """Write a CHARMM card coordinate file.
+
+    Prefers mmml's coordinate writer when that package is installed. Otherwise
+    uses the script path with an uppercase ``CARD`` token.
     """
     try:
         from mmml.interfaces.pycharmmInterface.mlpot.setup import (
@@ -118,10 +132,16 @@ def coor_card(filename, title='', **kwargs):
 
     fortran_path, alias = _resolve_write_path(filename)
     try:
+        cmd_kwargs = {}
+        if comp:
+            cmd_kwargs['comp'] = True
+        if offset != 0:
+            cmd_kwargs['offset'] = offset
         write_command = pycharmm.script.WriteScript(
             fortran_path,
             title,
-            coor='card',
+            coor='CARD',
+            **cmd_kwargs,
             **kwargs,
         )
         write_command.run()
@@ -130,24 +150,18 @@ def coor_card(filename, title='', **kwargs):
             alias.finalize()
 
 
-def psf_card(filename, title='', **kwargs):
-    """write psf details in card format to a file
+def psf_card(filename, title='', xplor=False, **kwargs):
+    """Write a PSF card via the KEY_LIBRARY C API.
 
-    Parameters
-    ----------
-    filename: str
-        new file path to write
-    title: str
-        title to write at the beginning of the file
-    **kwargs: dict
-        extra settings to pass to the CHARMM command
+    ``title`` and ``xplor`` are accepted for call-site compatibility.
     """
-    import pycharmm.lib as lib
+    del title, xplor, kwargs
+    from pycharmm.loader import lib
 
     fortran_path, alias = _resolve_write_path(filename)
     try:
         buf, fn_len = c_api_path_buffer(fortran_path)
-        status = int(lib.charmm.write_psf_card(buf, ctypes.byref(fn_len)))
+        status = int(lib.write_psf_card(buf, ctypes.byref(fn_len)))
         if status != 1:
             raise RuntimeError(
                 f"write_psf_card failed for {filename!r} "
@@ -158,52 +172,3 @@ def psf_card(filename, title='', **kwargs):
             alias.finalize()
 
 
-# def coor_pdb(filename, selection=None, comparison=False):
-#     """write a coordinate set to a pdb file
-
-#     Parameters
-#     ----------
-#     filename : string
-#                new file path to write
-#     selection : SelectAtoms
-#                 a selection of atom indexes to write
-#     comparison : bool
-#                  if True, write from comparison set instead of main set
-
-#     Returns
-#     -------
-#     status : bool
-#              true if successful
-#     """
-#     if selection is None:
-#         selection = pycharmm.SelectAtoms().all_atoms()
-
-#     fn = ctypes.c_char_p(filename.encode())
-#     len_fn = ctypes.c_int(len(filename))
-#     c_comp = ctypes.c_int(comparison)
-
-#     status = lib.charmm.write_coor_pdb(fn, ctypes.byref(len_fn),
-#                                        selection.as_ctypes(),
-#                                        ctypes.byref(c_comp))
-#     status = bool(status)
-#     return status
-
-
-# def psf_card(filename):
-#     """write psf details in card format to a file
-
-#     Parameters
-#     ----------
-#     filename : string
-#                new file path to write
-
-#     Returns
-#     -------
-#     status : bool
-#              true if successful
-#     """
-#     fn = ctypes.c_char_p(filename.encode())
-#     len_fn = ctypes.c_int(len(filename))
-#     status = lib.charmm.write_psf_card(fn, ctypes.byref(len_fn))
-#     status = bool(status)
-#     return status

@@ -3,7 +3,6 @@ module api_image
   implicit none
 contains
 
-#if KEY_LIBRARY == 1
   !> @brief defines a cubic lattice and constants for a new crystal
   !
   !> param[in] center_x
@@ -26,7 +25,7 @@ contains
     use image, only: limcen, imxcen, imycen, imzcen
     use psf, only: natom
     use stream, only: outu, prnlev
-    
+
     implicit none
 
     ! result
@@ -45,7 +44,7 @@ contains
     imxcen = center_x
     imycen = center_y
     imzcen = center_z
-   
+
     if (mode < 0 .or. mode > 4) then
        call wrndie(-1, '<IMSPEC>', 'UNRECOGNIZED COMMAND')
     end if
@@ -53,7 +52,7 @@ contains
     do i = 1, natom
        if(selection(i) .gt. 0) then
           bimag%imcenf(i) = mode
-          limcen = .true.
+          if ( mode .ne. 0) limcen = .true.
        end if
     end do
 
@@ -152,7 +151,7 @@ contains
   !>         1 if success
   function image_setup_selection( &
        center_x, center_y, center_z, &
-       selection) &
+       selection, mode) &
        result(success) bind(c)
     use, intrinsic :: iso_c_binding, only: c_char, c_double, c_int
 
@@ -164,10 +163,11 @@ contains
     ! args
     real(c_double), intent(in) :: center_x, center_y, center_z
     integer(c_int), dimension(*), intent(in) :: selection
+    integer(c_int), intent(in) :: mode
 
-    success = image_setup_centering(center_x, center_y, center_z, selection, 4)
+    success = image_setup_centering(center_x, center_y, center_z, selection, mode)
   end function image_setup_selection
-  
+
   ! Addition Kai Toepfer May 2022
   !> @brief export a copy of xucell (unit cell parameter)
   !
@@ -178,27 +178,27 @@ contains
     use, intrinsic :: iso_c_binding, only: c_int, c_double
     use api_util, only: f2c_logical
     use image, only: xucell
-    
+
     implicit none
-    
+
     ! args
     real(c_double) :: out_ucell(*)
-    
+
     ! locals
     logical :: qsuccess
-    
+
     ! result
     integer(c_int) :: success
-    
+
     qsuccess = .false.
 
     out_ucell(1:6) = xucell(1:6)
 
     qsuccess = .true.
     success = f2c_logical(qsuccess)
-    
+
   end function image_get_ucell
-  
+
   !> @brief export a copy of number of image cells
   !
   !> @param[out] out_ntrans integer number of image transformations
@@ -208,28 +208,41 @@ contains
     use, intrinsic :: iso_c_binding, only: c_int
     use api_util, only: f2c_logical
     use image, only: ntrans
-    
+
     implicit none
-    
+
     ! args
     integer(c_int) :: out_ntrans
-    
+
     ! locals
     logical :: qsuccess
-    
+
     ! result
     integer(c_int) :: success
-    
+
     qsuccess = .false.
 
     out_ntrans = ntrans
 
     qsuccess = .true.
     success = f2c_logical(qsuccess)
-    
+
   end function image_get_ntrans
-  
-  
+
+
+  !> @brief Update image - primary atoms non bonded exclusion list
+  !
+  subroutine image_update_bimag() bind(c)
+    use, intrinsic :: iso_c_binding, only: c_int
+    use bases_fcm, only: bimag
+    use upimag_util, only: upimnb
+
+    implicit none
+
+    call upimnb(bimag)
+
+  end subroutine image_update_bimag
+
   !> @brief Export image nonbond exclusion list sizes (post-UPIMNB/MKIMNB).
   !
   !> Lets Python observe MKIMNB buffer use without parsing ``RESIZING`` logs.
@@ -421,20 +434,5 @@ contains
     out_count = c
     success = 1
   end function image_export_mic_pairs
-  
-  
-  !> @brief Update image - primary atoms non bonded exclusion list
-  !
-  subroutine image_update_bimag() bind(c)
-    use, intrinsic :: iso_c_binding, only: c_int
-    use bases_fcm, only: bimag
-    use upimag_util, only: upimnb
-    
-    implicit none
-    
-    call upimnb(bimag)
-    
-  end subroutine image_update_bimag
-  
-#endif /* KEY_LIBRARY */
+
 end module api_image

@@ -339,7 +339,7 @@
        subroutine cv_cvrms_list(i)
        use stream
        use multicom_aux;
-       use mpi
+       use mpi_f08
  character(len=132)::info(21)=(/'','','','','','','','','','','','','','','','','','','','',''/);! output buffer
 !
        integer :: i, j, jj

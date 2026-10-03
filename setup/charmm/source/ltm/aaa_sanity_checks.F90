@@ -93,14 +93,8 @@ module sanity_checks
 !-----------------------------------------------------------------
 !------------------------- COLFFT -------------------------------
 #if KEY_COLFFT==1 /*col*/
-#if KEY_IFN==1 || KEY_PARALLEL==1
- /* (pll) */
-#endif
 !  Kill the compile, COLFFT needs PARALLEL, column-fft is for parallel only
 !##ERROR ' COLFFT specified without PARALLEL, COLFFT is for parallel only'
-#if KEY_ENDIF==1
- /* (pll) */
-#endif
 #endif /* (col)*/
 
 !-----------------------------------------------------------------

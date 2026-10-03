@@ -201,6 +201,7 @@ SUBROUTINE MOLVCP(NQ,NIC,NIC0,IZMAX,MAXSYB,NGMAX,NBLMAX, &
   use memory
   use psf
   use stream
+  use parallel, only: mynod
   implicit none
   !
   ! .Passed variables.
@@ -358,15 +359,36 @@ SUBROUTINE MOLVCP(NQ,NIC,NIC0,IZMAX,MAXSYB,NGMAX,NBLMAX, &
   call chmalloc('molvco.src','MOLVCP','symb',maxsyb,ch8=symb)
   call chmalloc('molvco.src','MOLVCP','sped',nblmax,ch8=sped)
   !
-  ! ...Call MOLVIB
+  ! ...Call MOLVIB on the master rank only.
   !
-  call MOLVIB(NQ,NIC,NIC0,IZMAX,MAXSYB,NGMAX,NBLMAX,NAT,NAT3,NQM,ISTRM, &
-       OUTU,XM,AM,FX,IBMAT,IG,FS,ILS,ILX,IU1,IU2,IW1, &
-       IW2,IDD,IEXPF,ICALF,IV1,IV2,IV3,IV4,IV5, &
-       IV6,IV7,IPRIN,ITOMM,IICTYP,IIATI,IIATJ, &
-       IIATK,IIATL,IINDX,IMNAT,ILGRUP,IIGRUP,IKSYMB, &
-       IIPTA,IIPTB,IIBLOC,IQSEL,ATYP, &
-       SBLOC,SYMB,SPED)
+  ! MOLVIB has no MPI awareness (no PSND/PSNDC/MPI_BCAST calls anywhere
+  ! in source/molvib/).  Its input is read directly from ISTRM via
+  ! MOLINP, which on non-master ranks points at a unit positioned at
+  ! file-byte-0 -- the CHARMM input title block at the top of the
+  ! script -- not at the post-"MOLVIB ..." command position the master
+  ! is at.  Letting MOLVIB run on every rank therefore makes every
+  ! non-master misread the title block as MOLVIB section headers and
+  ! eventually bomb "MOLINP: CHECK INPUT" (LEVEL -4), which propagates
+  ! out as a job-killing ABNORMAL TERMINATION.  This is the cause of
+  ! the chronic c34test/pipf_vib failure on the misc pipeline-dev
+  ! config (and the various test-dev-misc / test-stable-misc jobs that
+  ! preceded it).
+  !
+  ! All of MOLVIB's outputs are diagnostic prints to OUTU; nothing the
+  ! caller (MOLVCP) needs after the call.  Restricting the call to
+  ! mynod==0 keeps the parallel command stream in sync (rdcmnd then
+  ! broadcasts the next command from the master's file position to all
+  ! ranks normally) and avoids the file-position drift that breaks the
+  ! non-master parse.
+  IF (MYNOD == 0) THEN
+     call MOLVIB(NQ,NIC,NIC0,IZMAX,MAXSYB,NGMAX,NBLMAX,NAT,NAT3,NQM,ISTRM, &
+          OUTU,XM,AM,FX,IBMAT,IG,FS,ILS,ILX,IU1,IU2,IW1, &
+          IW2,IDD,IEXPF,ICALF,IV1,IV2,IV3,IV4,IV5, &
+          IV6,IV7,IPRIN,ITOMM,IICTYP,IIATI,IIATJ, &
+          IIATK,IIATL,IINDX,IMNAT,ILGRUP,IIGRUP,IKSYMB, &
+          IIPTA,IIPTB,IIBLOC,IQSEL,ATYP, &
+          SBLOC,SYMB,SPED)
+  END IF
   !
   ! ...Free HEAP space
   !

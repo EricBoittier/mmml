@@ -807,6 +807,7 @@ contains
              ENDIF
           ENDIF
        ENDDO
+       !write(*,*)'From corman, phi, matrix',phi,u(1:3),u(3:6),u(7:9)
        IF(PRNLEV >= 3) WRITE(OUTU,61) U
 61     FORMAT(' ROTATION MATRIX'/,3(3F12.6/))
        CALL FNDROT(U,RN,PHI,LPRNT)

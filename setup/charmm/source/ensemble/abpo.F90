@@ -97,7 +97,7 @@ module abpo
          use comand, only: comlyn_save, comlen_save, sav_comlyn
          use coord, only: x, y, z
          use machio,only:vopen
-         use mpi
+         use mpi_f08
          !
          character(len=*) comlyn
          integer comlen
@@ -630,7 +630,7 @@ module abpo
       !Reading the inversed D tensor from invd.dat'
          use stream
          use machio,only:vopen
-         use mpi
+         use mpi_f08
          integer :: i, j, u
          logical :: qerr
          !
@@ -1598,18 +1598,19 @@ module abpo
          use dimens_fcm
          use parallel
 #if KEY_CMPI==0
-         use mpi      
+         use mpi_f08      
 #endif
          !
-         integer, intent(in) :: length, comm
+         integer, intent(in) :: length
+         TYPE(MPI_Comm), intent(in) :: comm
          real(chm_real), intent(inout), dimension(length) :: a, w
          integer :: status, nod0
-         ! 
+         !
          nod0 = 0
          call mpi_reduce(a, w, length, mpi_real8, mpi_sum, &
                nod0, comm, status)
          return
-      end subroutine asum_comm 
+      end subroutine asum_comm
 
       subroutine isum_comm(a, w, comm, length)
          !-----------------------------------------------------------------------
@@ -1622,10 +1623,11 @@ module abpo
          use dimens_fcm
          use parallel
 #if KEY_CMPI==0
-         use mpi      
+         use mpi_f08
 #endif
          !
-         integer, intent(in) :: length, comm
+         integer, intent(in) :: length
+         TYPE(MPI_Comm), intent(in) :: comm
          integer, intent(inout), dimension(length) :: a, w
          integer :: status, nod0
          ! 

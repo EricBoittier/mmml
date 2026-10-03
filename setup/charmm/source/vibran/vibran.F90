@@ -1062,7 +1062,7 @@ SUBROUTINE VIBRAN(X,Y,Z,WMAIN,XCOMP,YCOMP,ZCOMP, &
            FACD=1.0
            CALL SELCTA(COMLYN,COMLEN,ISLCT,X,Y,Z,WMAIN,.TRUE.)
            CALL MANMOD(NAT3,DDV,ISLCT, &
-                IDEST,ISOURC,FACD,FACS,'ADD ',0,0)
+                IDEST,ISOURC,FACD,FACS,'ADD ',DDEV,DDF)
         ELSE IF(WRD.EQ.'MOVE') THEN
 
            call vib_get_destination()
@@ -1072,7 +1072,7 @@ SUBROUTINE VIBRAN(X,Y,Z,WMAIN,XCOMP,YCOMP,ZCOMP, &
            FACD=0.0
            CALL SELCTA(COMLYN,COMLEN,ISLCT,X,Y,Z,WMAIN,.TRUE.)
            CALL MANMOD(NAT3,DDV,ISLCT, &
-                IDEST,ISOURC,FACD,FACS,'ADD ',0,0)
+                IDEST,ISOURC,FACD,FACS,'ADD ',DDEV,DDF)
         ELSE IF(WRD.EQ.'MULT') THEN
 
            call vib_get_source()
@@ -1081,7 +1081,7 @@ SUBROUTINE VIBRAN(X,Y,Z,WMAIN,XCOMP,YCOMP,ZCOMP, &
            FACD=0.0
            CALL SELCTA(COMLYN,COMLEN,ISLCT,X,Y,Z,WMAIN,.TRUE.)
            CALL MANMOD(NAT3,DDV,ISLCT, &
-                IDEST,ISOURC,FACD,FACS,'ADD ',0,0)
+                IDEST,ISOURC,FACD,FACS,'ADD ',DDEV,DDF)
         ELSE IF(WRD.EQ.'SET ') THEN
 
            call vib_get_source()
@@ -1089,7 +1089,7 @@ SUBROUTINE VIBRAN(X,Y,Z,WMAIN,XCOMP,YCOMP,ZCOMP, &
            IDEST=ISOURC
            CALL SELCTA(COMLYN,COMLEN,ISLCT,X,Y,Z,WMAIN,.TRUE.)
            CALL MANMOD(NAT3,DDV,ISLCT, &
-                IDEST,ISOURC,FACD,FACS,'SET ',0,0)
+                IDEST,ISOURC,FACD,FACS,'SET ',DDEV,DDF)
         ELSE IF(WRD.EQ.'NORM') THEN
 
            call vib_get_source()
@@ -1097,7 +1097,7 @@ SUBROUTINE VIBRAN(X,Y,Z,WMAIN,XCOMP,YCOMP,ZCOMP, &
            IDEST=ISOURC
            CALL SELCTA(COMLYN,COMLEN,ISLCT,X,Y,Z,WMAIN,.TRUE.)
            CALL MANMOD(NAT3,DDV,ISLCT, &
-                IDEST,ISOURC,FACD,FACS,'NORM',0,0)
+                IDEST,ISOURC,FACD,FACS,'NORM',DDEV,DDF)
         ELSE IF(WRD.EQ.'ZERO') THEN
 
            call vib_get_source()

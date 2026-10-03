@@ -47,11 +47,11 @@ SUBROUTINE EVDWQM (EVDW, X, Y, Z, DX, DY, DZ)
   ! ------------------------namkh 09/28/04
   Qimage =.FALSE.
   !----------------------------------------------------------------------
-  if(natom_check.ne.natom) then
-     if(allocated(dxm_qmmm)) call chmdealloc('qmevdw.src','EVDWQM','dxm_qmmm',size(dxm_qmmm),crl=dxm_qmmm)
-     natom_check=natom
-  end if
-  if(.not.allocated(dxm_qmmm))call chmalloc('qmevdw.src','EVDWQM','dxm_qmmm',3*natom,crl=dxm_qmmm)
+  !if(natom_check.ne.natom) then
+  !   if(allocated(dxm_qmmm)) call chmdealloc('qmevdw.src','EVDWQM','dxm_qmmm',size(dxm_qmmm),crl=dxm_qmmm)
+  !   natom_check=natom
+  !end if
+  if(.not.allocated(dxm_qmmm)) call chmalloc('qmevdw.src','EVDWQM','dxm_qmmm',3*natom,crl=dxm_qmmm)
   !
   !=======================================================================
   !
@@ -64,6 +64,7 @@ SUBROUTINE EVDWQM (EVDW, X, Y, Z, DX, DY, DZ)
   End if
   !
   !=======================================================================
+  if(allocated(dxm_qmmm)) call chmdealloc('qmevdw.src','EVDWQM','dxm_qmmm',size(dxm_qmmm),crl=dxm_qmmm)
   !
   RETURN
 END SUBROUTINE EVDWQM
@@ -114,19 +115,12 @@ SUBROUTINE EVDWQM2 (EVDW,X,Y,Z,DX,DY,DZ,DXM,DYM,DZM)
   !     Calculate the van der Waal's energies.
   !========================================================================
 
-  if(allocated(xyzg)) then
-     if(size(xyzg,1).lt.ngrp) call chmdealloc('qmevdw.src','EVDWQM2','xyzg',size(xyzg,1),3,crl=xyzg)
-  end if
-  if(allocated(qg_qmmm)) then
-     if(size(qg_qmmm).lt.ngrp) call chmdealloc('qmevdw.src','EVDWQM2','qg_qmmm',size(qg_qmmm),crl=qg_qmmm)
-  end if
-  if(allocated(ioff_qmmm)) then
-     if(size(ioff_qmmm).lt.natc) call chmdealloc('qmevdw.src','EVDWQM2','ioff_qmmm',size(ioff_qmmm),intg=ioff_qmmm)
-     natc_old=natc
-  end if
-  if(.not.allocated(xyzg))      call chmalloc('qmevdw.src','EVDWQM2','xyzg',ngrp,3,crl=xyzg)
-  if(.not.allocated(qg_qmmm))   call chmalloc('qmevdw.src','EVDWQM2','qg_qmmm',ngrp,crl=qg_qmmm)
-  if(.not.allocated(ioff_qmmm)) call chmalloc('qmevdw.src','EVDWQM2','ioff_qmmm',natc,intg=ioff_qmmm)
+  if(allocated(xyzg))      call chmdealloc('qmevdw.src','EVDWQM2','xyzg',size(xyzg,1),3,crl=xyzg)
+  if(allocated(qg_qmmm))   call chmdealloc('qmevdw.src','EVDWQM2','qg_qmmm',size(qg_qmmm),crl=qg_qmmm)
+  if(allocated(ioff_qmmm)) call chmdealloc('qmevdw.src','EVDWQM2','ioff_qmmm',size(ioff_qmmm),intg=ioff_qmmm)
+  call chmalloc('qmevdw.src','EVDWQM2','xyzg',ngrp,3,crl=xyzg)
+  call chmalloc('qmevdw.src','EVDWQM2','qg_qmmm',ngrp,crl=qg_qmmm)
+  call chmalloc('qmevdw.src','EVDWQM2','ioff_qmmm',natc,intg=ioff_qmmm)
 
   !
   evdw = zero
@@ -177,6 +171,11 @@ SUBROUTINE EVDWQM2 (EVDW,X,Y,Z,DX,DY,DZ,DXM,DYM,DZM)
   !
   ! go parallel, each node has different value, that will be summed up somewhere.
   evdw = evdwt
+
+  ! memory
+  call chmdealloc('qmevdw.src','EVDWQM2','xyzg',size(xyzg,1),3,crl=xyzg)
+  call chmdealloc('qmevdw.src','EVDWQM2','qg_qmmm',size(qg_qmmm),crl=qg_qmmm)
+  call chmdealloc('qmevdw.src','EVDWQM2','ioff_qmmm',size(ioff_qmmm),intg=ioff_qmmm)
   !========================================================================
   RETURN
 END SUBROUTINE EVDWQM2
@@ -229,20 +228,13 @@ SUBROUTINE EVDWQM3 (EVDW,X,Y,Z,DX,DY,DZ,DXM,DYM,DZM)
   !========================================================================
   !     Calculate the van der Waal's energies.
   !========================================================================
-
-  if(allocated(xyzg)) then
-     if(size(xyzg,1).lt.ngrp) call chmdealloc('qmevdw.src','EVDWQM3','xyzg',size(xyzg,1),3,crl=xyzg)
-  end if
-  if(allocated(qg_qmmm)) then
-     if(size(qg_qmmm).lt.ngrp) call chmdealloc('qmevdw.src','EVDWQM3','qg_qmmm',size(qg_qmmm),crl=qg_qmmm)
-  end if
-  if(allocated(ioff_qmmm)) then
-     if(size(ioff_qmmm).lt.natc) call chmdealloc('qmevdw.src','EVDWQM3','ioff_qmmm',size(ioff_qmmm),intg=ioff_qmmm)
-     natc_old=natc
-  end if
-  if(.not.allocated(xyzg))      call chmalloc('qmevdw.src','EVDWQM3','xyzg',ngrp,3,crl=xyzg)
-  if(.not.allocated(qg_qmmm))   call chmalloc('qmevdw.src','EVDWQM3','qg_qmmm',ngrp,crl=qg_qmmm)
-  if(.not.allocated(ioff_qmmm)) call chmalloc('qmevdw.src','EVDWQM3','ioff_qmmm',natc,intg=ioff_qmmm)
+  ! allocate memory
+  if(allocated(xyzg))      call chmdealloc('qmevdw.src','EVDWQM3','xyzg',size(xyzg,1),3,crl=xyzg)
+  if(allocated(qg_qmmm))   call chmdealloc('qmevdw.src','EVDWQM3','qg_qmmm',size(qg_qmmm),crl=qg_qmmm)
+  if(allocated(ioff_qmmm)) call chmdealloc('qmevdw.src','EVDWQM3','ioff_qmmm',size(ioff_qmmm),intg=ioff_qmmm)
+  call chmalloc('qmevdw.src','EVDWQM3','xyzg',ngrp,3,crl=xyzg)
+  call chmalloc('qmevdw.src','EVDWQM3','qg_qmmm',ngrp,crl=qg_qmmm)
+  call chmalloc('qmevdw.src','EVDWQM3','ioff_qmmm',natc,intg=ioff_qmmm)
 
   !
   evdw = Zero
@@ -297,6 +289,11 @@ SUBROUTINE EVDWQM3 (EVDW,X,Y,Z,DX,DY,DZ,DXM,DYM,DZM)
   !
   ! go parallel, each node has different value, that will be summed up somewhere.
   evdw = evdwt
+
+  ! dealocate memories
+  call chmdealloc('qmevdw.src','EVDWQM3','xyzg',size(xyzg,1),3,crl=xyzg)
+  call chmdealloc('qmevdw.src','EVDWQM3','qg_qmmm',size(qg_qmmm),crl=qg_qmmm)
+  call chmdealloc('qmevdw.src','EVDWQM3','ioff_qmmm',size(ioff_qmmm),intg=ioff_qmmm)
   !========================================================================
   RETURN
 END SUBROUTINE EVDWQM3

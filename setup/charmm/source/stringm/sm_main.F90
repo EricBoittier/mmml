@@ -61,7 +61,7 @@
        use ftsm_var, only: ftsm_initialized
 !
        use dimens_fcm ; use consta ; use stream ; use machio ; use exfunc ; use parallel ; use string ; use number ;
-       use mpi
+       use mpi_f08
        use multicom_aux;
 !
        implicit none
@@ -279,7 +279,7 @@
        use ftsm_var, only: ftsm_initialized
 !
        use dimens_fcm ; use consta ; use stream ; use machio ; use exfunc ; use parallel ; use string ; use number ;
-       use mpi
+       use mpi_f08
        use multicom_aux;
 !
        implicit none

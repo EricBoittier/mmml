@@ -2,7 +2,9 @@
 #define BLADE_IN_CHARMM
 // #include <cuda_runtime.h>
 #include <omp.h>
+#include <math.h>
 #include <string.h>
+#include <signal.h>
 
 #include "run/run.h"
 #include "system/system.h"
@@ -15,11 +17,83 @@
 #include "holonomic/rectify.h"
 #include "holonomic/holonomic.h"
 #include "domdec/domdec.h"
+#include "main/gpu_check.h"
 
 #if HAS_NVTX == 1
+/* NVTX moved under nvtx3/ and the old top-level header was removed in
+   CUDA 13.  Prefer the nvtx3 path where available (CUDA 10+), and fall
+   back to the old location on older toolkits. */
+#if defined(__has_include) && __has_include(<nvtx3/nvToolsExtCuda.h>)
+#include <nvtx3/nvToolsExtCuda.h>
+#else
 #include <nvToolsExtCuda.h>
 #endif
+#endif
 
+
+// Global interrupt flag for Ctrl+C handling
+volatile sig_atomic_t blade_interrupt_flag = 0;
+static struct sigaction blade_old_sigint_action;
+static bool blade_signal_handler_installed = false;
+static int blade_sigint_count = 0;
+static const int BLADE_FORCE_EXIT_COUNT = 3;
+
+// Signal handler for SIGINT (Ctrl+C)
+static void blade_sigint_handler(int signum) {
+  blade_sigint_count++;
+  blade_interrupt_flag = 1;
+
+  if (blade_sigint_count >= BLADE_FORCE_EXIT_COUNT) {
+    fprintf(stderr, "\n[BLaDE] %dx Ctrl+C - FORCE EXIT!\n", blade_sigint_count);
+    fflush(stderr);
+    // Restore default handler and re-raise to exit immediately
+    signal(SIGINT, SIG_DFL);
+    raise(SIGINT);
+    return;
+  }
+
+  int remaining = BLADE_FORCE_EXIT_COUNT - blade_sigint_count;
+  fprintf(stderr, "\n[BLaDE] SIGINT received, requesting graceful stop... "
+          "(press %dx more to force quit)\n", remaining);
+  fflush(stderr);
+}
+
+// Interrupt handling API functions
+extern "C"
+void blade_set_interrupt(int value)
+{
+  blade_interrupt_flag = value;
+}
+
+extern "C"
+int blade_check_interrupt()
+{
+  return blade_interrupt_flag;
+}
+
+extern "C"
+void blade_install_signal_handler()
+{
+  if (!blade_signal_handler_installed) {
+    struct sigaction new_action;
+    new_action.sa_handler = blade_sigint_handler;
+    sigemptyset(&new_action.sa_mask);
+    new_action.sa_flags = 0;
+    sigaction(SIGINT, &new_action, &blade_old_sigint_action);
+    blade_signal_handler_installed = true;
+    blade_interrupt_flag = 0;  // Reset flag when installing handler
+    blade_sigint_count = 0;    // Reset rapid Ctrl+C counter
+  }
+}
+
+extern "C"
+void blade_restore_signal_handler()
+{
+  if (blade_signal_handler_installed) {
+    sigaction(SIGINT, &blade_old_sigint_action, NULL);
+    blade_signal_handler_installed = false;
+  }
+}
 
 extern "C"
 void blade_set_step(System *system,int istep)
@@ -47,14 +121,14 @@ void blade_rectify_holonomic(System *system)
 }
 
 extern "C"
-void blade_get_force(System *system,int report_energy)
+void blade_get_force(System *system,int report_energy,int refill_random)
 {
   system+=omp_get_thread_num();
   system->run->freqNRG=1000;
   if(report_energy) {
     system->run->freqNRG=1;
   }
-  system->potential->calc_force(system->run->step,system);
+  system->potential->calc_force(system->run->step,system,refill_random);
   if(report_energy) {
     system->state->kinetic_energy(system);
   }
@@ -89,6 +163,64 @@ void blade_send_state(System *system)
 {
   system+=omp_get_thread_num();
   system->state->send_state();
+}
+
+static bool temperature_matches(double actual, double expected)
+{
+  return fabs(actual-expected) <= 1.0e-6*fmax(1.0,fabs(expected));
+}
+
+extern "C"
+int blade_exchange_temperature(System *system, double expected, double target)
+{
+  if (!system || expected <= 0.0 || target <= 0.0) return -2;
+
+  int systemCount=system->idCount > 0 ? system->idCount : 1;
+  for (int id=0; id<systemCount; id++) {
+    System *local=system+id;
+    if (!local->run || !local->state || !local->domdec ||
+        !local->state->leapParms1 || !local->state->leapParms2) {
+      return -2;
+    } else if (local->run->freqNPT > 0) {
+      return -3;
+    } else if (!temperature_matches(local->run->T,expected) ||
+               !temperature_matches(local->state->leapParms1->kT/kB,expected)) {
+      return -1;
+    }
+  }
+  if (target == expected) return 1;
+
+  double scale=sqrt(target/expected);
+  for (int id=0; id<systemCount; id++) {
+    System *local=system+id;
+    gpuCheck(cudaSetDevice(local->gpu));
+    State *state=local->state;
+    int count=3*state->atomCount;
+    gpuCheck(cudaMemcpy(state->velocityBuffer,state->velocityBuffer_d,
+                        count*sizeof(real_v),cudaMemcpyDeviceToHost));
+    for (int i=0; i<count; i++) state->velocityBuffer[i]*=scale;
+    gpuCheck(cudaMemcpy(state->velocityBuffer_d,state->velocityBuffer,
+                        count*sizeof(real_v),cudaMemcpyHostToDevice));
+
+    local->run->T=target;
+    state->leapParms1->kT=kB*target;
+    state->leapParms2->noise=sqrt(
+      (1-state->leapParms2->friction*state->leapParms2->friction)*kB*target);
+    local->domdec->cullPad*=scale;
+  }
+  return 1;
+}
+
+extern "C"
+void blade_send_coordinates(System *system)
+{
+  system+=omp_get_thread_num();
+  gpuCheck(cudaMemcpy(system->state->position_d,system->state->position,
+                      3*system->state->atomCount*sizeof(real_x),
+                      cudaMemcpyHostToDevice));
+  gpuCheck(cudaMemcpy(system->state->theta_d,system->state->theta,
+                      system->state->lambdaCount*sizeof(real_x),
+                      cudaMemcpyHostToDevice));
 }
 
 extern "C"
@@ -344,7 +476,6 @@ extern "C"
 void blade_dynamics_initialize(System *system)
 {
   system+=omp_get_thread_num();
-  system->run->domdecHeuristic=false; // Hard code this in here, it's the more stable option
   // Finish setting up MSLD
   system->msld->initialize(system);
 
@@ -371,14 +502,39 @@ void blade_dynamics_initialize(System *system)
   system->domdec=new Domdec();
   system->domdec->initialize(system);
 
-  // NYI check gpu
   cudaDeviceSynchronize();
 #pragma omp barrier
-  if (cudaPeekAtLastError() != cudaSuccess) {
-    cudaError_t err=cudaPeekAtLastError();
-    fatal(__FILE__,__LINE__,"GPU error code %d during run initialization of OMP rank %d\n%s\n",err,system->id,cudaGetErrorString(err));
-  }
+  gpuCheck(cudaPeekAtLastError());
 #pragma omp barrier
+}
+
+extern "C"
+int blade_minimizer(System *system,int nsteps,int mintype,double steplen)
+{
+  system+=omp_get_thread_num();
+  Run *r=system->run;
+  int status=0;
+  system->run->nsteps=nsteps;
+  system->run->minType=(EMin)mintype;
+  system->run->dxRMSInit=steplen;
+
+  system->state->min_init(system);
+  
+  for (r->step=0; r->step<r->nsteps; r->step++) {
+    if (r->minType!=esdmd || r->step==0) {
+      system->domdec->update_domdec(system,true); // true to always update neighbor list
+      system->potential->calc_force(0,system,false); // step 0 to always calculate energy
+    }
+    if (!system->state->min_move(r->step,r->nsteps,system)) {
+      status=1;
+      break;
+    }
+    // print_dynamics_output(step,system);
+    gpuCheck(cudaPeekAtLastError());
+  }
+  
+  system->state->min_dest(system);
+  return status;
 }
 
 extern "C"
@@ -399,4 +555,9 @@ void blade_range_end()
   nvtxRangePop();
 #endif
 }
+
+// C interface to write to CHARMM output stream
+extern "C"
+void blade_charmm_write_output(const char* message);
+
 #endif /* KEY_BLADE == 1 */

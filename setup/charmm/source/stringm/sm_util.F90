@@ -10,7 +10,7 @@
 !
       subroutine compute_work_fd(x,xbc0,xbc1,f,n,work)
       use multicom_aux;
-      use mpi
+      use mpi_f08
       use chm_kinds
 !
       implicit none
@@ -30,19 +30,19 @@
      & s_count(SIZE_STRNG), r_count(SIZE_STRNG) ! have to declare these as integer*4 -- it`s a problem!
 #if (KEY_PARALLEL==1)
 #if (KEY_SINGLE==1)
- integer :: mpifloat=MPI_REAL 
+ TYPE(MPI_Datatype) :: mpifloat=MPI_REAL 
 #endif
 #if (KEY_SINGLE==0)
- integer :: mpifloat=MPI_REAL8 
+ TYPE(MPI_Datatype) :: mpifloat=MPI_REAL8 
 #endif
 #if (KEY_INTEGER8==0)
- integer :: mpiint=MPI_INTEGER 
+ TYPE(MPI_Datatype) :: mpiint=MPI_INTEGER 
 #endif
 #if (KEY_INTEGER8==1)
- integer :: mpiint=MPI_INTEGER8 
+ TYPE(MPI_Datatype) :: mpiint=MPI_INTEGER8 
 #endif
- integer :: mpichar=MPI_CHARACTER
- integer :: mpibool=MPI_LOGICAL
+ TYPE(MPI_Datatype) :: mpichar=MPI_CHARACTER
+ TYPE(MPI_Datatype) :: mpibool=MPI_LOGICAL
 #endif
 ! begin
 ! bail if not a replica root; will syncronize slave nodes elsewhere
@@ -120,7 +120,7 @@
 ! number of CPUs in the ensemble)
 !
       use multicom_aux;
-      use mpi
+      use mpi_f08
       use chm_kinds
 !
       implicit none
@@ -149,19 +149,19 @@
       real(chm_real) :: dum, wrs
 #if (KEY_PARALLEL==1)
 #if (KEY_SINGLE==1)
- integer :: mpifloat=MPI_REAL 
+ TYPE(MPI_Datatype) :: mpifloat=MPI_REAL 
 #endif
 #if (KEY_SINGLE==0)
- integer :: mpifloat=MPI_REAL8 
+ TYPE(MPI_Datatype) :: mpifloat=MPI_REAL8 
 #endif
 #if (KEY_INTEGER8==0)
- integer :: mpiint=MPI_INTEGER 
+ TYPE(MPI_Datatype) :: mpiint=MPI_INTEGER 
 #endif
 #if (KEY_INTEGER8==1)
- integer :: mpiint=MPI_INTEGER8 
+ TYPE(MPI_Datatype) :: mpiint=MPI_INTEGER8 
 #endif
- integer :: mpichar=MPI_CHARACTER
- integer :: mpibool=MPI_LOGICAL
+ TYPE(MPI_Datatype) :: mpichar=MPI_CHARACTER
+ TYPE(MPI_Datatype) :: mpibool=MPI_LOGICAL
 #endif
 !
       interface ! to linear interpolation routine
@@ -316,7 +316,7 @@
 !
       use stream
       use multicom_aux;
-      use mpi
+      use mpi_f08
       use chm_kinds
       use number
       use consta
@@ -369,19 +369,19 @@
  character(len=132)::info(21)=(/'','','','','','','','','','','','','','','','','','','','',''/);! output buffer
 #if (KEY_PARALLEL==1)
 #if (KEY_SINGLE==1)
- integer :: mpifloat=MPI_REAL 
+ TYPE(MPI_Datatype) :: mpifloat=MPI_REAL 
 #endif
 #if (KEY_SINGLE==0)
- integer :: mpifloat=MPI_REAL8 
+ TYPE(MPI_Datatype) :: mpifloat=MPI_REAL8 
 #endif
 #if (KEY_INTEGER8==0)
- integer :: mpiint=MPI_INTEGER 
+ TYPE(MPI_Datatype) :: mpiint=MPI_INTEGER 
 #endif
 #if (KEY_INTEGER8==1)
- integer :: mpiint=MPI_INTEGER8 
+ TYPE(MPI_Datatype) :: mpiint=MPI_INTEGER8 
 #endif
- integer :: mpichar=MPI_CHARACTER
- integer :: mpibool=MPI_LOGICAL
+ TYPE(MPI_Datatype) :: mpichar=MPI_CHARACTER
+ TYPE(MPI_Datatype) :: mpibool=MPI_LOGICAL
 #endif
       character(len=len("INTERP_DRIVER_SCI>") ),parameter::whoami="INTERP_DRIVER_SCI>";!macro
 !
@@ -706,7 +706,7 @@
       use consta
       use stream
       use multicom_aux;
-      use mpi
+      use mpi_f08
       use chm_kinds
 !
       implicit none
@@ -757,19 +757,19 @@
  character(len=132)::info(21)=(/'','','','','','','','','','','','','','','','','','','','',''/);! output buffer
 #if (KEY_PARALLEL==1)
 #if (KEY_SINGLE==1)
- integer :: mpifloat=MPI_REAL 
+ TYPE(MPI_Datatype) :: mpifloat=MPI_REAL 
 #endif
 #if (KEY_SINGLE==0)
- integer :: mpifloat=MPI_REAL8 
+ TYPE(MPI_Datatype) :: mpifloat=MPI_REAL8 
 #endif
 #if (KEY_INTEGER8==0)
- integer :: mpiint=MPI_INTEGER 
+ TYPE(MPI_Datatype) :: mpiint=MPI_INTEGER 
 #endif
 #if (KEY_INTEGER8==1)
- integer :: mpiint=MPI_INTEGER8 
+ TYPE(MPI_Datatype) :: mpiint=MPI_INTEGER8 
 #endif
- integer :: mpichar=MPI_CHARACTER
- integer :: mpibool=MPI_LOGICAL
+ TYPE(MPI_Datatype) :: mpichar=MPI_CHARACTER
+ TYPE(MPI_Datatype) :: mpibool=MPI_LOGICAL
 #endif
       character(len=len("INTERP_DRIVER_SCI_ROOT>") ),parameter::whoami="INTERP_DRIVER_SCI_ROOT>";!macro
 !
@@ -1072,7 +1072,7 @@
      & r_bc_0, r_bc_1) ! provide additional arrays for fixed bc
 !
       use multicom_aux;
-      use mpi
+      use mpi_f08
       use multidiag ! tridiagonal inversion
       use chm_kinds
 !
@@ -1105,19 +1105,19 @@
 !
 #if (KEY_PARALLEL==1)
 #if (KEY_SINGLE==1)
- integer :: mpifloat=MPI_REAL 
+ TYPE(MPI_Datatype) :: mpifloat=MPI_REAL 
 #endif
 #if (KEY_SINGLE==0)
- integer :: mpifloat=MPI_REAL8 
+ TYPE(MPI_Datatype) :: mpifloat=MPI_REAL8 
 #endif
 #if (KEY_INTEGER8==0)
- integer :: mpiint=MPI_INTEGER 
+ TYPE(MPI_Datatype) :: mpiint=MPI_INTEGER 
 #endif
 #if (KEY_INTEGER8==1)
- integer :: mpiint=MPI_INTEGER8 
+ TYPE(MPI_Datatype) :: mpiint=MPI_INTEGER8 
 #endif
- integer :: mpichar=MPI_CHARACTER
- integer :: mpibool=MPI_LOGICAL
+ TYPE(MPI_Datatype) :: mpichar=MPI_CHARACTER
+ TYPE(MPI_Datatype) :: mpibool=MPI_LOGICAL
 #endif
 !
       character(len=len("INTERP_LINEAR_EXACT>") ),parameter::whoami="INTERP_LINEAR_EXACT>";!macro
@@ -1285,7 +1285,7 @@
      & r_bc_0, r_bc_1) ! provide additional arrays for fixed bc
 !
       use multicom_aux;
-      use mpi
+      use mpi_f08
       use chm_kinds
       implicit none
 !
@@ -1310,19 +1310,19 @@
       real(chm_real) :: wrs
 #if (KEY_PARALLEL==1)
 #if (KEY_SINGLE==1)
- integer :: mpifloat=MPI_REAL 
+ TYPE(MPI_Datatype) :: mpifloat=MPI_REAL 
 #endif
 #if (KEY_SINGLE==0)
- integer :: mpifloat=MPI_REAL8 
+ TYPE(MPI_Datatype) :: mpifloat=MPI_REAL8 
 #endif
 #if (KEY_INTEGER8==0)
- integer :: mpiint=MPI_INTEGER 
+ TYPE(MPI_Datatype) :: mpiint=MPI_INTEGER 
 #endif
 #if (KEY_INTEGER8==1)
- integer :: mpiint=MPI_INTEGER8 
+ TYPE(MPI_Datatype) :: mpiint=MPI_INTEGER8 
 #endif
- integer :: mpichar=MPI_CHARACTER
- integer :: mpibool=MPI_LOGICAL
+ TYPE(MPI_Datatype) :: mpichar=MPI_CHARACTER
+ TYPE(MPI_Datatype) :: mpibool=MPI_LOGICAL
 #endif
 ! begin
 ! bail if not a replica root; will synchronize slave nodes elsewhere
@@ -1523,7 +1523,7 @@
 !
        use multicom_aux;
        use stream
-       use mpi
+       use mpi_f08
        use chm_kinds
 !
        implicit none
@@ -1542,25 +1542,25 @@
      & rmsd1, rmsd2, rmsd3, rmsd4, mrmsd ! for rmsd alignment
        integer, pointer, dimension (:) :: ind0
        integer :: i, j, ii, jj, ibeg, iend, ncom
-       integer :: stat(MPI_STATUS_SIZE)
+       TYPE(MPI_Status) :: stat
        integer :: error
 !
  character(len=132)::info(21)=(/'','','','','','','','','','','','','','','','','','','','',''/);! output buffer
 #if (KEY_PARALLEL==1)
 #if (KEY_SINGLE==1)
- integer :: mpifloat=MPI_REAL 
+ TYPE(MPI_Datatype) :: mpifloat=MPI_REAL 
 #endif
 #if (KEY_SINGLE==0)
- integer :: mpifloat=MPI_REAL8 
+ TYPE(MPI_Datatype) :: mpifloat=MPI_REAL8 
 #endif
 #if (KEY_INTEGER8==0)
- integer :: mpiint=MPI_INTEGER 
+ TYPE(MPI_Datatype) :: mpiint=MPI_INTEGER 
 #endif
 #if (KEY_INTEGER8==1)
- integer :: mpiint=MPI_INTEGER8 
+ TYPE(MPI_Datatype) :: mpiint=MPI_INTEGER8 
 #endif
- integer :: mpichar=MPI_CHARACTER
- integer :: mpibool=MPI_LOGICAL
+ TYPE(MPI_Datatype) :: mpichar=MPI_CHARACTER
+ TYPE(MPI_Datatype) :: mpibool=MPI_LOGICAL
 #endif
 !
        character(len=len("FRAMES_ALIGN_STRING>") ),parameter::whoami="FRAMES_ALIGN_STRING>";!macro
@@ -1784,7 +1784,7 @@
      & frames_calc, frames_initialized
        use smcv_master, only : smcv_fill ! used for rmsd test
 !
-      use mpi
+      use mpi_f08
       use multicom_aux;
       use chm_kinds
 !
@@ -1799,19 +1799,19 @@
 !
 #if (KEY_PARALLEL==1)
 #if (KEY_SINGLE==1)
- integer :: mpifloat=MPI_REAL 
+ TYPE(MPI_Datatype) :: mpifloat=MPI_REAL 
 #endif
 #if (KEY_SINGLE==0)
- integer :: mpifloat=MPI_REAL8 
+ TYPE(MPI_Datatype) :: mpifloat=MPI_REAL8 
 #endif
 #if (KEY_INTEGER8==0)
- integer :: mpiint=MPI_INTEGER 
+ TYPE(MPI_Datatype) :: mpiint=MPI_INTEGER 
 #endif
 #if (KEY_INTEGER8==1)
- integer :: mpiint=MPI_INTEGER8 
+ TYPE(MPI_Datatype) :: mpiint=MPI_INTEGER8 
 #endif
- integer :: mpichar=MPI_CHARACTER
- integer :: mpibool=MPI_LOGICAL
+ TYPE(MPI_Datatype) :: mpichar=MPI_CHARACTER
+ TYPE(MPI_Datatype) :: mpibool=MPI_LOGICAL
 #endif
 !
        character(len=len("FRAME_ALIGN_RMSD>") ),parameter::whoami="FRAME_ALIGN_RMSD>";!macro
@@ -2029,7 +2029,7 @@ character(len=132)::info(21)=(/'','','','','','','','','','','','','','','','','
      & comm, error, rank, size)
 ! custom in-place all-gatherv
 !
-      use mpi
+      use mpi_f08
       use multicom_aux;
       use chm_kinds
 !
@@ -2037,10 +2037,12 @@ character(len=132)::info(21)=(/'','','','','','','','','','','','','','','','','
 !
       real(chm_real) :: message(*)
       integer :: error
-      integer*4 :: comm, rank, size, type, count(size), displ(size)
+      TYPE(MPI_Comm) :: comm
+      TYPE(MPI_Datatype) :: type
+      integer*4 :: rank, size, count(size), displ(size)
 ! local variables
       integer*4 :: step, partner, scount, sdispl, rcount, rdispl, ind
-      integer*4 :: stat(MPI_STATUS_SIZE)
+      TYPE(MPI_Status) :: stat
 !
       step=1
       do while (step.lt.size)

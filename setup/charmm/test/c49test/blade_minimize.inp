@@ -1,0 +1,138 @@
+* Test case for CHARMM/BLaDE interface minimizer
+* Created by Ryan Hayes
+* Adapted from CHARMM/OpenMM minimizer by Charles Brooks
+* 2024-12-26
+*
+
+if ?blade .ne. 1 then
+   echo "Test NOT performed. BLADE must be defined in pref.dat"
+   stop
+endif
+
+! BLaDE needs a GPU of its own for every OpenMP thread in every rank, and
+! all ranks on one node see the same devices -- so N ranks x T threads want
+! N*T GPUs.  ?NGPU honours CUDA_VISIBLE_DEVICES; ?NTHREAD is the OpenMP
+! team size.  Across several nodes this is conservative, each node bringing
+! its own GPUs, so it can skip a run that would in fact work -- a needless
+! skip beats aborting inside BLaDE, which is what happens when the counts
+! do not add up.  Reported as an explicit SKIP because the grader matches
+! "TESTCASE RESULT: SKIP" but not the mixed-case "Test NOT performed" this
+! guard printed before.
+calc bladegpu = ?numnode * ?nthread
+if ?ngpu .lt. @bladegpu then
+   echo BLADE_MINIMIZE TESTCASE RESULT: SKIP
+   stop
+endif
+
+stream datadir.def
+
+! read the topology and parameter files
+read rtf card name @0/top_all36_prot.rtf
+read param flex card name @0/par_all36_prot.prm ! blade requires flex parameters
+
+read sequ ala 2
+generate dala first ace last ct3 setup
+ic param
+ic seed 1 cay 1 cy 1 n
+ic build
+
+! Dimension of a box - blade requires periodic boundary conditions
+set a 40.0
+set theta 90.0
+crystal define cubic @a @a @a @theta @theta @theta
+open unit 1 read form name @0/cubic.xtl
+crystal read card unit 1
+close unit 1
+
+scalar x store 1
+scalar y store 2
+scalar z store 3
+coor copy comp
+nbonds cutnb 12 ctofnb 10 ctonnb 8 fswitch vfswitch
+update ! adding energy call requires update call for inexplicable reasons
+
+!**** TEST1
+energy blade
+set ebefore = ?ener
+prnlev 0
+mini blade sd nstep 20 step 0.005
+prnlev 5
+energy
+set eafter = ?ener
+! Minimization must bring the energy down to the expected minimum.
+! Reference captured on the GV100 CI host; tol 0.5 absorbs GPU
+! minimizer-path jitter while still catching a broken minimizer
+! (energy would stay near ebefore ~26.4) or a blow-up.
+@testcheck @eafter 10.1884403 -0.5 BLADE_MINIMIZE_SD
+
+!**** TEST2
+scalar x recall 1
+scalar y recall 2
+scalar z recall 3
+coor copy comp
+
+energy blade
+set ebefore = ?ener
+prnlev 0
+mini blade sdfd nstep 20 step 0.005
+prnlev 5
+energy
+set eafter = ?ener
+@testcheck @eafter 10.3530635 -0.5 BLADE_MINIMIZE_SDFD
+
+!**** TEST3
+! LBFG and SDMD trial paths can differ by GPU. Require a lower finite energy.
+scalar x recall 1
+scalar y recall 2
+scalar z recall 3
+coor copy comp
+
+energy blade
+set ebefore = ?ener
+prnlev 0
+mini blade lbfg nstep 20 step 0.005
+prnlev 5
+energy
+set eafter = ?ener
+set lowered 1
+if @eafter .lt. @ebefore then
+  set lowered 0
+endif
+@testcheck @lowered 0 -0.1 BLADE_MINIMIZE_LBFG
+
+!**** TEST4
+scalar x recall 1
+scalar y recall 2
+scalar z recall 3
+coor copy comp
+
+energy blade
+set ebefore = ?ener
+prnlev 0
+mini blade sdmd nstep 20 step 0.005
+prnlev 5
+energy
+set eafter = ?ener
+set lowered 1
+if @eafter .lt. @ebefore then
+  set lowered 0
+endif
+@testcheck @lowered 0 -0.1 BLADE_MINIMIZE_SDMD
+
+!**** TEST5: fallback preserves the requested zero step and restored coordinates
+scalar x recall 1
+scalar y recall 2
+scalar z recall 3
+coor copy comp
+
+energy blade
+set ebefore = ?ener
+prnlev 0
+mini blade sdmd nstep 1 step 0.0
+prnlev 5
+energy
+set eafter = ?ener
+@testcheck @eafter 26.4178317 -0.5 BLADE_MINIMIZE_SDMD_FALLBACK
+coor rms
+@testcheck ?rms 0.0 -0.0000001 BLADE_MINIMIZE_SDMD_FALLBACK_RMS
+stop

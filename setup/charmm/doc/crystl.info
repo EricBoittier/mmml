@@ -201,8 +201,8 @@ OCTAhedral   - a = b = c, alpha = beta = gamma = 109.4712206344907
                   (degrees of freedom = 1)
 
 RHDO (Rhombic Dodecahedron)
-             - a = b = c, alpha = gamma = 60.0 and beta = 90.0
-                  (example:  40.0 40.0 40.0 60.0 90.0 60.0 )
+             - a = b = c, beta = gamma = 120.0 and alpha = 90.0
+                  (example:  40.0 40.0 40.0 90.0 120.0 120.0 )
                   (volume = sqrt(0.5) * a**3 )
                   (truncated cube length = a * sqrt(2) )
                   (degrees of freedom = 1)

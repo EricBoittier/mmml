@@ -30,7 +30,7 @@
 #if (KEY_MULTICOM==1)
       use multicom_aux; 
 #endif
-      use mpi
+      use mpi_f08
       use parallel, only: psnd4, psnd8
 !
 !
@@ -68,9 +68,12 @@
        subroutine hypercube_allgatherv(message,count,displ,type, &
      & comm, ierror, rank, size)
       use chm_kinds
+      use mpi_f08
        real(chm_real) :: message(*)
        integer :: ierror
-       integer*4 :: comm, rank, size, type, count(size), displ(size)
+       TYPE(MPI_Comm) :: comm
+       TYPE(MPI_Datatype) :: type
+       integer*4 :: rank, size, count(size), displ(size)
        end subroutine hypercube_allgatherv
       end interface
 !
@@ -927,24 +930,24 @@
 #if (KEY_MULTICOM==1)
       use multicom_aux; 
 #endif
-      use mpi
+      use mpi_f08
       use number
 !
 #if (KEY_PARALLEL==1)
 #if (KEY_SINGLE==1)
- integer :: mpifloat=MPI_REAL 
+ TYPE(MPI_Datatype) :: mpifloat=MPI_REAL 
 #endif
 #if (KEY_SINGLE==0)
- integer :: mpifloat=MPI_REAL8 
+ TYPE(MPI_Datatype) :: mpifloat=MPI_REAL8 
 #endif
 #if (KEY_INTEGER8==0)
- integer :: mpiint=MPI_INTEGER 
+ TYPE(MPI_Datatype) :: mpiint=MPI_INTEGER 
 #endif
 #if (KEY_INTEGER8==1)
- integer :: mpiint=MPI_INTEGER8 
+ TYPE(MPI_Datatype) :: mpiint=MPI_INTEGER8 
 #endif
- integer :: mpichar=MPI_CHARACTER
- integer :: mpibool=MPI_LOGICAL
+ TYPE(MPI_Datatype) :: mpichar=MPI_CHARACTER
+ TYPE(MPI_Datatype) :: mpibool=MPI_LOGICAL
 #endif
 !
       real(chm_real) :: avforces(3,nstring), qcurv
@@ -993,23 +996,23 @@
 #if (KEY_MULTICOM==1)
       use multicom_aux; 
 #endif
-      use mpi
+      use mpi_f08
 !
 #if (KEY_PARALLEL==1)
 #if (KEY_SINGLE==1)
- integer :: mpifloat=MPI_REAL 
+ TYPE(MPI_Datatype) :: mpifloat=MPI_REAL 
 #endif
 #if (KEY_SINGLE==0)
- integer :: mpifloat=MPI_REAL8 
+ TYPE(MPI_Datatype) :: mpifloat=MPI_REAL8 
 #endif
 #if (KEY_INTEGER8==0)
- integer :: mpiint=MPI_INTEGER 
+ TYPE(MPI_Datatype) :: mpiint=MPI_INTEGER 
 #endif
 #if (KEY_INTEGER8==1)
- integer :: mpiint=MPI_INTEGER8 
+ TYPE(MPI_Datatype) :: mpiint=MPI_INTEGER8 
 #endif
- integer :: mpichar=MPI_CHARACTER
- integer :: mpibool=MPI_LOGICAL
+ TYPE(MPI_Datatype) :: mpichar=MPI_CHARACTER
+ TYPE(MPI_Datatype) :: mpibool=MPI_LOGICAL
 #endif
 !
       real(chm_real), dimension(:), intent(in) :: x, y, z, mass
@@ -1407,23 +1410,23 @@
 #if (KEY_MULTICOM==1)
       use multicom_aux; 
 #endif
-      use mpi
+      use mpi_f08
 !
 #if (KEY_PARALLEL==1)
 #if (KEY_SINGLE==1)
- integer :: mpifloat=MPI_REAL 
+ TYPE(MPI_Datatype) :: mpifloat=MPI_REAL 
 #endif
 #if (KEY_SINGLE==0)
- integer :: mpifloat=MPI_REAL8 
+ TYPE(MPI_Datatype) :: mpifloat=MPI_REAL8 
 #endif
 #if (KEY_INTEGER8==0)
- integer :: mpiint=MPI_INTEGER 
+ TYPE(MPI_Datatype) :: mpiint=MPI_INTEGER 
 #endif
 #if (KEY_INTEGER8==1)
- integer :: mpiint=MPI_INTEGER8 
+ TYPE(MPI_Datatype) :: mpiint=MPI_INTEGER8 
 #endif
- integer :: mpichar=MPI_CHARACTER
- integer :: mpibool=MPI_LOGICAL
+ TYPE(MPI_Datatype) :: mpichar=MPI_CHARACTER
+ TYPE(MPI_Datatype) :: mpibool=MPI_LOGICAL
 #endif
 !
       real(chm_real), dimension(:), intent(in) :: x, y, z

@@ -11,7 +11,7 @@ structures.  Energy minimization is done with constraints on center of mass
 translation, rotation and orthogonality of step to path vector.
 
 Reference   : Choi, C. and Elber, R., J. Chem. Phys. 94:751  (1991)
-Source Code : rxncor/lupopt.src
+Source Code : rxncor/lupopt.F90
 
                               Krzysztof Kuczera, 12-Mar-1997, Lawrence, KS.
 

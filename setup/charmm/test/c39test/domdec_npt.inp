@@ -91,12 +91,13 @@ goto run_dynamics
 label return_odyn1
 
 set name basic
-calc etol = 0.0001
-calc vtol = 0.0001
-calc ptol = 0.0001
-calc atol = 0.0001
-calc btol = 0.0001
-calc ctol = 0.0001
+set ckid oldbasic
+calc etol = -0.0001
+calc vtol = -0.0001
+calc ptol = -0.0001
+calc atol = -0.0001
+calc btol = -0.0001
+calc ctol = -0.0001
 set flag return_ocheck1
 goto check_results
 label return_ocheck1
@@ -119,6 +120,7 @@ goto run_dynamics
 label return_odyn2
 
 set name area
+set ckid oldarea
 set flag return_ocheck2
 goto check_results
 label return_ocheck2
@@ -149,9 +151,10 @@ set flag return_dyn1
 goto run_dynamics
 label return_dyn1
 
-calc etol = 0.0003
-calc vtol = 0.0002
-calc ptol = 0.0001
+set ckid ddbasic
+calc etol = -0.0003
+calc vtol = -0.0002
+calc ptol = -0.0001
 set flag return_check1
 goto check_results
 label return_check1
@@ -173,14 +176,13 @@ set flag return_dyn2
 goto run_dynamics
 label return_dyn2
 
-calc etol = 0.003
-calc vtol = 0.002
-calc ptol = 0.001
+set ckid ddarea
+calc etol = -0.003
+calc vtol = -0.002
+calc ptol = -0.001
 set flag return_check2
 goto check_results
 label return_check2
-
-echo "Test OK"
 
 stop
 
@@ -225,52 +227,12 @@ label check_results
 
 stream @9domdec_npt_ref@name.str
 
-calc val = ?ener
-calc diff = abs(@eref - @val)
-echo @diff
-if diff gt @etol then
-   echo "Test failed"
-   stop
-endif
-
-calc val = ?viri
-calc diff = abs(@viriref - @val)
-echo @diff
-if diff gt @vtol then
-   echo "Test failed"
-   stop
-endif
-
-calc val = ?prsi
-calc diff = abs(@pressiref - @val)
-echo @diff
-if diff gt @ptol then
-   echo "Test failed"
-   stop
-endif
-
-calc val = ?xtla
-calc diff = abs(@aref - @val)
-echo @diff
-if diff gt @atol then
-   echo "Test failed"
-   stop
-endif
-
-calc val = ?xtlb
-calc diff = abs(@bref - @val)
-echo @diff
-if diff gt @btol then
-   echo "Test failed"
-   stop
-endif
-
-calc val = ?xtlc
-calc diff = abs(@cref - @val)
-echo @diff
-if diff gt @ctol then
-   echo "Test failed"
-   stop
-endif
+! tolerances are stored as negative so @testcheck performs an absolute test
+@testcheck ?ener @eref @etol domdec_npt_@{ckid}_ener
+@testcheck ?viri @viriref @vtol domdec_npt_@{ckid}_viri
+@testcheck ?prsi @pressiref @ptol domdec_npt_@{ckid}_prsi
+@testcheck ?xtla @aref @atol domdec_npt_@{ckid}_xtla
+@testcheck ?xtlb @bref @btol domdec_npt_@{ckid}_xtlb
+@testcheck ?xtlc @cref @ctol domdec_npt_@{ckid}_xtlc
 
 goto @flag

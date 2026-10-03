@@ -33,6 +33,7 @@ Functions
 - `get_nictot` -- export a copy of nictot (nres for each seg)
 - `get_igpbs` -- export a copy of igpbs (pointer for 1st atom in each group)
 - `get_igptyp` -- export a copy of gptyp (code type of each group)
+- `hmr` -- do H mass repartition on requested non O2 segs for enhnaced sampling
 
 Examples
 ========
@@ -52,13 +53,15 @@ import ctypes
 import numpy
 
 import pycharmm
-import pycharmm.lib as lib
+from pycharmm.loader import lib
+from pycharmm.trace import traced
 import pycharmm.nbonds
 import pycharmm.image
 import pycharmm.write
 import pycharmm.settings
 import pycharmm.scalar
 import pycharmm.lingo
+import pycharmm.atom_info
 
 
 def get_natom():
@@ -69,7 +72,7 @@ def get_natom():
     n : integer
         current total number of atoms
     """
-    n = lib.charmm.psf_get_natom()
+    n = lib.psf_get_natom()
     return n
 
 
@@ -81,7 +84,7 @@ def get_nres():
     n : integer
         current total number of residues
     """
-    n = lib.charmm.psf_get_nres()
+    n = lib.psf_get_nres()
     return n
 
 
@@ -93,7 +96,7 @@ def get_nseg():
     n : integer
         current total number of segments
     """
-    n = lib.charmm.psf_get_nseg()
+    n = lib.psf_get_nseg()
     return n
 
 
@@ -105,7 +108,7 @@ def get_ngrp():
     n : integer
         current total number of groups
     """
-    n = lib.charmm.psf_get_ngrp()
+    n = lib.psf_get_ngrp()
     return n
 
 
@@ -118,7 +121,7 @@ def get_nbond():
         current total number of bonds
     """
 
-    n = lib.charmm.psf_get_nbond()
+    n = lib.psf_get_nbond()
     return n
 
 
@@ -135,7 +138,7 @@ def get_iac():
         return list()
 
     iac = (ctypes.c_int * n)(0)
-    lib.charmm.psf_get_iac(iac)
+    lib.psf_get_iac(iac)
     iac = [i - 1 for i in iac]
     return iac
 
@@ -153,7 +156,7 @@ def get_amass():
         return list()
 
     amass = (ctypes.c_double * n)(0)
-    lib.charmm.psf_get_amass(amass)
+    lib.psf_get_amass(amass)
     return list(amass)
 
 
@@ -170,7 +173,7 @@ def get_charges():
         return list()
 
     charges = (ctypes.c_double * n)(0)
-    lib.charmm.psf_get_charges(charges)
+    lib.psf_get_charges(charges)
     return list(charges)
 
 
@@ -184,7 +187,7 @@ def get_ibase():
     """
     n = get_nres()
     ibase = (ctypes.c_int * (n + 1))(0)
-    lib.charmm.psf_get_ibase(ibase)
+    lib.psf_get_ibase(ibase)
     return ibase
 
 
@@ -204,7 +207,7 @@ def get_atype():
     atype_pointers = (ctypes.c_char_p * n)(*map(ctypes.addressof,
                                                 atype_buffers))
 
-    lib.charmm.psf_get_atype(atype_pointers)
+    lib.psf_get_atype(atype_pointers)
     atype = [b.value.decode(errors='ignore') for b in atype_buffers[0:n]]
     return atype
 
@@ -224,7 +227,7 @@ def get_res():
     res_buffers = [ctypes.create_string_buffer(8) for _ in range(n)]
     res_pointers = (ctypes.c_char_p * n)(*map(ctypes.addressof, res_buffers))
 
-    lib.charmm.psf_get_res(res_pointers)
+    lib.psf_get_res(res_pointers)
     # res = [b[:].decode().strip() for b in res_buffers[0:n]]
     res = [b.value.decode(errors='ignore') for b in res_buffers]
     return res
@@ -270,7 +273,7 @@ def get_resid():
     resid_pointers = (ctypes.c_char_p * n)(*map(ctypes.addressof,
                                                 resid_buffers))
 
-    lib.charmm.psf_get_resid(resid_pointers)
+    lib.psf_get_resid(resid_pointers)
     resid = [b.value.decode(errors='ignore') for b in resid_buffers]
     return resid
 
@@ -291,7 +294,7 @@ def get_segid():
     segid_pointers = (ctypes.c_char_p * n)(*map(ctypes.addressof,
                                                 segid_buffers))
 
-    lib.charmm.psf_get_segid(segid_pointers)
+    lib.psf_get_segid(segid_pointers)
     segid = [b.value.decode(errors='ignore') for b in segid_buffers[0:n]]
     return segid
 
@@ -306,7 +309,7 @@ def get_nictot():
     """
     n = get_nseg()
     nictot = (ctypes.c_int * (n + 1))(0)
-    lib.charmm.psf_get_nictot(nictot)
+    lib.psf_get_nictot(nictot)
     return nictot
 
 
@@ -320,7 +323,7 @@ def get_igpbs():
     """
     n = get_ngrp()
     igpbs = (ctypes.c_int * (n + 1))(0)
-    lib.charmm.psf_get_igpbs(igpbs)
+    lib.psf_get_igpbs(igpbs)
     return igpbs
 
 
@@ -337,7 +340,7 @@ def get_igptyp():
         return list()
 
     igptyp = (ctypes.c_int * n)(0)
-    lib.charmm.psf_get_igptyp(igptyp)
+    lib.psf_get_igptyp(igptyp)
     return igptyp
 
 
@@ -351,17 +354,18 @@ def get_ib_jb():
     """
     n = get_nbond()
     if n <= 0:
-        return [], []
+        return list()
 
     # print(f'psf.py, get_ib_jb, n = {n}')
     ib = (ctypes.c_int * n)(0)
     jb = (ctypes.c_int * n)(0)
 
-    lib.charmm.psf_get_ib(ib)
-    lib.charmm.psf_get_jb(jb)
+    lib.psf_get_ib(ib)
+    lib.psf_get_jb(jb)
     return list(ib), list(jb)
 
 
+@traced('psf.delete_atoms')
 def delete_atoms(selection=None, psort=False):
     """Delete a selection of atoms from the psf
 
@@ -383,12 +387,13 @@ def delete_atoms(selection=None, psort=False):
     sel_c = selection.as_ctypes()
     isort = ctypes.c_int(psort)
 
-    status = lib.charmm.psf_delete_atoms(sel_c, ctypes.byref(isort))
+    status = lib.psf_delete_atoms(sel_c, ctypes.byref(isort))
 
     status = bool(status)
     return status
 
 
+@traced('psf.delete_bonds')
 def delete_bonds(iselect, jselect, psort=False):
     """Delete bonds between two selections from the psf
 
@@ -412,12 +417,13 @@ def delete_bonds(iselect, jselect, psort=False):
     jsel_c = jselect.as_ctypes()
     isort = ctypes.c_int(psort)
 
-    status = lib.charmm.psf_delete_bonds(isel_c, jsel_c, ctypes.byref(isort))
+    status = lib.psf_delete_bonds(isel_c, jsel_c, ctypes.byref(isort))
 
     status = bool(status)
     return status
 
 
+@traced('psf.delete_angles')
 def delete_angles(iselect, jselect, psort=False):
     """Delete angles between two selections from the psf
 
@@ -437,12 +443,13 @@ def delete_angles(iselect, jselect, psort=False):
     jsel_c = jselect.as_ctypes()
     isort = ctypes.c_int(psort)
 
-    status = lib.charmm.psf_delete_angles(isel_c, jsel_c, ctypes.byref(isort))
+    status = lib.psf_delete_angles(isel_c, jsel_c, ctypes.byref(isort))
 
     status = bool(status)
     return status
 
 
+@traced('psf.delete_dihedrals')
 def delete_dihedrals(iselect, jselect, psort=False):
     """Delete dihedrals between two selections from the psf
 
@@ -462,13 +469,14 @@ def delete_dihedrals(iselect, jselect, psort=False):
     jsel_c = jselect.as_ctypes()
     isort = ctypes.c_int(psort)
 
-    status = lib.charmm.psf_delete_dihedrals(isel_c, jsel_c,
+    status = lib.psf_delete_dihedrals(isel_c, jsel_c,
                                              ctypes.byref(isort))
 
     status = bool(status)
     return status
 
 
+@traced('psf.delete_impropers')
 def delete_impropers(iselect, jselect, psort=False):
     """Delete impropers between two selections from the psf
 
@@ -488,13 +496,14 @@ def delete_impropers(iselect, jselect, psort=False):
     jsel_c = jselect.as_ctypes()
     isort = ctypes.c_int(psort)
 
-    status = lib.charmm.psf_delete_impropers(isel_c, jsel_c,
+    status = lib.psf_delete_impropers(isel_c, jsel_c,
                                              ctypes.byref(isort))
 
     status = bool(status)
     return status
 
 
+@traced('psf.delete_cmaps')
 def delete_cmaps(iselect, jselect, psort=False):
     """Delete cmaps between two selections from the psf
 
@@ -514,12 +523,13 @@ def delete_cmaps(iselect, jselect, psort=False):
     jsel_c = jselect.as_ctypes()
     isort = ctypes.c_int(psort)
 
-    status = lib.charmm.psf_delete_cmaps(isel_c, jsel_c, ctypes.byref(isort))
+    status = lib.psf_delete_cmaps(isel_c, jsel_c, ctypes.byref(isort))
 
     status = bool(status)
     return status
 
 
+@traced('psf.delete_connectivity')
 def delete_connectivity(iselect, jselect, psort=False):
     """Delete all connectivity between two selections from the psf
 
@@ -541,7 +551,7 @@ def delete_connectivity(iselect, jselect, psort=False):
     jsel_c = jselect.as_ctypes()
     isort = ctypes.c_int(psort)
 
-    status = lib.charmm.psf_delete_conn(isel_c, jsel_c, ctypes.byref(isort))
+    status = lib.psf_delete_conn(isel_c, jsel_c, ctypes.byref(isort))
 
     status = bool(status)
     return status
@@ -556,10 +566,11 @@ def get_nnb():
     n : integer
         current number of non-bonded exclusions
     """
-    n = lib.charmm.psf_get_nnb()
+    n = lib.psf_get_nnb()
     return n
 
 
+@traced('psf.set_charge')
 def set_charge(new_charges):
     """Set a new atom charge array
 
@@ -574,7 +585,7 @@ def set_charge(new_charges):
 
     charges = (ctypes.c_double * n)(*new_charges)
 
-    lib.charmm.psf_set_charges(charges)
+    lib.psf_set_charges(charges)
 
     return
 
@@ -589,43 +600,33 @@ def get_iblo_inb():
     """
     natom = get_natom()
     nnb = get_nnb()
-    if natom <= 0:
-        return [], []
-    if nnb <= 0:
-        return [0] * natom, []
+    if natom <= 0 or nnb <= 0:
+        return list()
 
     iblo = (ctypes.c_int * natom)()
     inb = (ctypes.c_int * nnb)()
-    lib.charmm.psf_get_iblo_inb(iblo, inb)
+    lib.psf_get_iblo_inb(iblo, inb)
     return list(iblo), list(inb)
 
 
-def _set_iblo_inb_arrays(new_inblo, new_inb):
-  natom = get_natom()
-  if natom > 0:
-    iblo = (ctypes.c_int * natom)()
-    iblo[:] = new_inblo
-  else:
-    iblo = list()
-
-  nnb = len(new_inb)
-  if nnb > 0:
-    inb = (ctypes.c_int * nnb)()
-    inb[:] = new_inb
-  else:
-    inb = list()
-
-  #nnb = ctypes.c_int(nnb)  # Segmentation fault for single c_int parameter
-  nnb_arr = (ctypes.c_int * 1)(nnb)  # c_int array with one element: nnb
-  lib.charmm.psf_set_iblo_inb(nnb_arr, iblo, inb)
-  return int(get_nnb())
-
-
 def set_iblo_inb_no_update(new_inblo, new_inb):
-  """Set PSF exclusion lists without ``update_bnbnd`` / ``upinb`` (safe after MLpot)."""
-  return _set_iblo_inb_arrays(new_inblo, new_inb)
+    """Set PSF exclusion lists without ``update_bnbnd`` / ``upinb`` (safe after MLpot)."""
+    natom = get_natom()
+    if natom > 0:
+        iblo = (ctypes.c_int * natom)(*new_inblo)
+    else:
+        iblo = list()
+    nnb = len(new_inb)
+    if nnb > 0:
+        inb = (ctypes.c_int * nnb)(*new_inb)
+    else:
+        inb = list()
+    nnb_arr = (ctypes.c_int * 1)(nnb)
+    lib.psf_set_iblo_inb(nnb_arr, iblo, inb)
+    return get_nnb()
 
 
+@traced('psf.set_iblo_inb')
 def set_iblo_inb(new_inblo, new_inb):
     """Set non-bonded exclusion list
 
@@ -641,53 +642,150 @@ def set_iblo_inb(new_inblo, new_inb):
     nnb : int
           number of atom pairs in non-bonded exclusion list
     """
-    nnb = _set_iblo_inb_arrays(new_inblo, new_inb)
-    pycharmm.nbonds.update_bnbnd()
+    natom = get_natom()
+    if natom > 0:
+        iblo = (ctypes.c_int * natom)(*new_inblo)
+    else:
+        iblo = list()
+
+    nnb = len(new_inb)
+    if nnb > 0:
+        inb = (ctypes.c_int * nnb)(*new_inb)
+    else:
+        inb = list()
+    #nnb = ctypes.c_int(nnb)  # Segmentation fault for single c_int parameter
+    nnb = (ctypes.c_int * 1)(nnb)  # c_int array with one element: nnb
+
+    lib.psf_set_iblo_inb(nnb, iblo, inb)
+
+    nnb = get_nnb()
     pycharmm.image.update_bimag()
+    pycharmm.nbonds.update_bnbnd()
+
     return nnb
 
 
-def set_hmr(seg_ids=[], newpsf=''):
-    """
-    This function will create hydrogen mass repartitioning on
-    requested segments for use in enhnaced sampling. Normally,
-    all segments not comprising water or non-hydrogen
-    containing ions would be passed as segments for HMR
+def replica(selection=None,
+           segid='', nreplica=1,
+           setup=False, comp=False, reset=False):
+    """Replica runs the CHARMM replica command:  replicate part of current PSF
+
+    This function produces multiple (nreplica) copies of the selected part of
+    the current psf.
 
     Parameters
     ----------
-    seg_ids: list, default []
-             a comma separated list of strings of segments requested for HMR
-    newpsf: string, default ''
-            a string containing the mass-adjusted psf.
+    selection : pycharmm.selectAtoms
+          selection of atoms comprising atoms to be replicated
+    segid : str
+          base name for the replicated segments,
+          segments will be names base_name1 ... base_nameN
+          up to N = nreplica
+    nreplica : int
+          number of replica copies to make
+    setup : bool
+          if True setup ic tables for replicated segments
+    comp : bool
+          if True use comparison coordinate values for replicated segment atoms
+    reset : bool
+          if True the exclusions between replicated atoms is turned off
+
+    Returns
+    -------
+    segs = list of segment names for replicas
+       True indicates success
+    """
+    replica_command = ' '.join(['replica', segid])
+    replica_script = pycharmm.script.CommandScript(replica_command,
+                                                   selection=selection,
+                                                   nreplica=nreplica,
+                                                   setup=setup,
+                                                   comp=comp,
+                                                   reset=reset)
+    replica_script.run()
+    segids = []
+    if not reset:
+        for ids in range(1,nreplica+1):
+            segids.append(f'{segid}{ids}')
+
+    return segids
+
+def join(segid_1, segid_2='', renumber=False):
+   """Join two adjacent segments and optionally renumber them.
+
+   This function joins two adjacent segments of the current psf.
+
+   Parameters
+   ----------
+   segid_1 : str
+          name of first segid in the psf involved in the join
+   segid_2 : str
+          name of second segid in the psf involved in the join
+   renumber : bool
+
+   Returns
+   -------
+   bool
+       True indicates success
+   """
+   join_command = ' '.join(['join', segid_1, segid_2])
+   join_script = pycharmm.script.CommandScript(join_command, renumber=renumber)
+   return join_script.run()
+
+
+def hmr(resnames_exclude=None, newpsf=''):
+    """
+    This function will create hydrogen mass repartitioning on
+    requested non-water segments for use in enhnaced sampling. Normally,
+    all segments not comprising water or non-hydrogen
+    containing ions would be passed for HMR. However, if additional residue names
+    wish to be excluded they can be added to the list resnames_exclude
+
+    Parameters
+    ----------
+    resnames_exclude: list, default None
+                      a comma separated list of strings of resnames to exclude from HMR.
+                      If None, defaults to ['TIP3'] (i.e., waters are excluded).
+                      If an empty list is explicitly provided, no residues are excluded.
+    newpsf:           string, default ''
+                      a string containing the mass-adjusted psf - no string means new psf
+                      is not written
     Returns
     -------
     status : bool
              true if successful
     """
-    # Find hydrogen and heavy atoms in selected segids
-    selected_segs = pycharmm.SelectAtoms()
-    for seg_id in seg_ids:
-        selected_segs |= pycharmm.SelectAtoms(seg_id=seg_id.upper())
+    # HMR revisited
+    # Ensure water residues are excluded by default
+    if resnames_exclude is None:
+        resnames_exclude = ['TIP3']
 
-    hydrogens = selected_segs & pycharmm.SelectAtoms(hydrogens=True)
-    heavy_atoms = selected_segs & ~hydrogens
-    masses = numpy.array(pycharmm.scalar.get_masses())
-    ov = pycharmm.settings.set_verbosity(0)
-    wl = pycharmm.settings.set_warn_level(-5)
-    mass_incr = numpy.zeros(get_natom())
-    for indx in numpy.arange(0, get_natom())[list(heavy_atoms)]:
-        pycharmm.lingo.charmm_script(f'define ha_list select hydrogen .and. .bonded. bynu {indx+1}  end')
-        nsel = pycharmm.lingo.get_energy_value('NSEL')
-        if nsel > 0:
-            mass_incr[indx] += nsel * 2
-
-    pycharmm.settings.set_verbosity(ov)
-    pycharmm.settings.set_warn_level(wl)
-    masses[list(hydrogens)] += 2
-    masses -= mass_incr
+    # Get all the masses from the current atoms
+    masses = numpy.array(get_amass())
+    resnames = numpy.array(pycharmm.atom_info.get_res_names(numpy.arange(0, get_natom(), 1)))
+    #not_waters = numpy.arange(0, get_natom(), 1)
+    # Build a logical array of all the atoms which are not 'TIP3' waters or other exclusions
+    not_waters = ~numpy.isin(resnames, resnames_exclude)
+    # Build a logical array of all hydrogen atoms based on criterion m_H <= 2
+    hydrogens = masses <= 2
+    # Build a logical array of all hydrogen atoms not belonging to 'TIP3' waters
+    not_water_hydrogen = hydrogens * not_waters
+    # Augment each non-water hydrogen mass by 2x original hydrogen mass
+    masses += 2 * masses * not_water_hydrogen
+    # Process the bond array to find heavy atom - hydrogen bonds,
+    # reduce mass of heavy atom by 2*m_H
+    bonds = numpy.array(get_ib_jb())
+    for ibnd in range(bonds.shape[1]):
+        ib = bonds[0, ibnd] - 1
+        jb = bonds[1, ibnd] - 1
+        if not_water_hydrogen[ib] or not_water_hydrogen[jb]:
+            if not_water_hydrogen[ib]:
+                masses[jb] -= 2.016
+            else:
+                masses[ib] -= 2.016
+    # Reset masses to new values
     pycharmm.scalar.set_masses(masses)
-    if len(newpsf) > 0:
+    # Write the new psf if requested
+    if newpsf != '':
         pycharmm.write.psf_card(newpsf)
-
     return True

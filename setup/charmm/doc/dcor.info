@@ -6,7 +6,7 @@ Distance Correlation (DCOR)
 
 Distance correlation coefficient is a very useful and elegant alternative to the standard measures 
 of correlation and is based on several deep and non-trivial theoretical calculations developed by 
-Székely, Rizzo and Bakirov [1].  The main result is that a single, simple statistic DCOR(X,Y) can 
+Szekely, Rizzo and Bakirov [1].  The main result is that a single, simple statistic DCOR(X,Y) can 
 be used to assess whether two random vectors X and Y, of possibly different respective dimensions, 
 are dependent, linearly or non-linearly, based on an independent and identically distributed 
 (i.i.d.) sample.
@@ -29,14 +29,14 @@ only requirement is both the time series should be of equal length.
 
 setup trajectory file
 
-correl maxt ... maxa ... maxs …
+correl maxt ... maxa ... maxs ...
   setup first time series
   setup second time series
   traj trajectory sepcifications
   dcor time-series1 time-series2
 end
 
-DCOR can also be invoked from CORMAN as a part of “COORdinate COVAariance”, using the keyword DCOR 
+DCOR can also be invoked from CORMAN as a part of "COORdinate COVAariance", using the keyword DCOR 
 (DCOV), to calculate distance correlation (covariance) between positional fluctuation of two 
 selection of atoms. 
 
@@ -75,7 +75,7 @@ File: dcor, Node: Background, Up: Top, Next: References, Previous: Commands
 
 Introduction to Distance Correlation
 
-Among Pearson’s correlation coefficient (PCC), a generalized correlation coefficient (GCC) 16 and 
+Among Pearson's correlation coefficient (PCC), a generalized correlation coefficient (GCC) 16 and 
 distance correlation coefficient (DCOR), DCOR is the most appropriate parameter to find association 
 in atomic motions because it is least sensitive to angular dependence while reflecting variability in
 covariance. [2] Calculation of DCOR between two vector series is straightforward to implement. Let {A} 
@@ -83,14 +83,14 @@ and {B} be two vector series with m entries each and the ith entry in {A} is den
 calculate distance covariance between {A} and {B} the following five steps are needed.
 
 1) Calculate the m x m matrix, a, from {A}, where a_ij is the Euclidean distance between the ith
-and jth entries of {A}: a_ij = a_ji =| A i − A j |
+and jth entries of {A}: a_ij = a_ji =| A i - A j |
 2)  Average the rows of a: a_i. = 1/m sum_j(a_ij)
 3)  Average the columns of a: a_.j = 1/m sum_i(a_ij)
 4) Average all elements of a: a_.. = 1/(m*m) sum_ij(a_ij)
-5) Build the m x m matrix alpha from a where alpha_ij = a_ij − a_i. − a_. j + a_..
+5) Build the m x m matrix alpha from a where alpha_ij = a_ij - a_i. - a_. j + a_..
 
 Then the distance covariance is
-DCOV(A, B) ≡ sqrt(1/(m*m) sum_ij(alpha_ij * beta_ij))
+DCOV(A, B) = sqrt(1/(m*m) sum_ij(alpha_ij * beta_ij))
 where beta_ij is defined similarly from B.
 
 The distance correlation coefficient, DCOR, is defined as
@@ -105,12 +105,12 @@ File: dcor, Node: References, Up: Top, Next: Example, Previous: Background
                                References
 
  [1]  Measuring and testing dependence by correlation of distances
-        GJ Székely, ML Rizzo, NK Bakirov
+        GJ Szekely, ML Rizzo, NK Bakirov
         The Annals of Statistics 35.6 (2007): 2769-2794.
 
 [2]  Detection of Long-Range Concerted Motions in Protein by a Distance Covariance
         Amitava Roy and Carol Beth Post
-        J. Chem. Theory Comput., 2012, 8 (9), pp 3009–3014
+        J. Chem. Theory Comput., 2012, 8 (9), pp 3009-3014
  
 
 File: dcor, Node: Example, Up: Top, Next: Top, Previous: References
@@ -137,9 +137,9 @@ CORREL>    dcor a b
  CORREL>    end
 
 
-VAR1,VAR2 – distance variances
-COVAR – distance covariance between time series “a” and “b”
-CORR – distance correlation between time series “a” and “b”
+VAR1,VAR2 - distance variances
+COVAR - distance covariance between time series "a" and "b"
+CORR - distance correlation between time series "a" and "b"
 
 
 2) COORdinate COVAriance input for DCOR between positional fluctuations between all CA atoms:

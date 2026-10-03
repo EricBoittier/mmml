@@ -1,5 +1,8 @@
 module csacommmod
   use chm_kinds
+#if KEY_PARALLEL==1
+  use mpi_f08
+#endif
   implicit none
 #if KEY_CSA==1 || KEY_DISTENE==1 /*csa_data*/
   !
@@ -18,7 +21,7 @@ module csacommmod
   !
   integer, save,public :: mstlpr, mstproc, mstlinp, mstlout
   logical, save, public :: qcsa
-  integer(chm_int4),allocatable,dimension(:),save,public :: intercomm
+  TYPE(MPI_Comm),allocatable,dimension(:),save,public :: intercomm
   INTEGER, save, public :: NSUBS
   INTEGER, PARAMETER :: MAXREQS=15
   !
@@ -53,7 +56,7 @@ CONTAINS
   use parallel
     !
 #if KEY_PARALLEL==1
-  use mpi                   
+  use mpi_f08                   
 #endif
     !
     CHARACTER(len=*) COMLYN
@@ -70,7 +73,9 @@ CONTAINS
     !     We need integer*4 here, on -i8 or -fdefault-integer-8 compilations
     !     but no need for #INTEGER8 here :-)
     INTEGER(chm_int4) :: MAXPROCS
-    INTEGER(chm_int4) NPROC,MPIINFO4,MPICOMM4,ME4,MPISELF,MPIERRS(1)
+    INTEGER(chm_int4) NPROC,ME4,MPIERRS(1)
+    TYPE(MPI_Info) :: MPIINFO4
+    TYPE(MPI_Comm) :: MPICOMM4,MPISELF
     INTEGER(chm_int4) ME,NP,MPIDP,MEROOT,IONE,IERR,MPIVER,MPISUBVER
     !
     real(chm_real) RR
@@ -116,7 +121,6 @@ CONTAINS
   MPIINFO4=MPI_INFO_NULL
   !
   !     Here we could have one error per process for checking. Ignore for now!
-  MPIERRS(1)=MPI_ERRCODES_IGNORE(1)
   MPISELF=MPI_COMM_SELF
   MPICOMM4=COMM_CHARMM
   ME4=0
@@ -155,7 +159,7 @@ CONTAINS
      SARRARG(4)=ARRARG(1:NEWLEN)//'_'//NAMUNIQ
      !C         write(*,*)'MASTER>output name = ',sarrarg(4)(1:newlen+5)
      CALL MPI_COMM_SPAWN(COMNDS,SARRARG,MAXPROCS, &
-          MPIINFO4,ME4,MPICOMM4,INTERCOMM(I),MPIERRS,IERR)
+          MPIINFO4,ME4,MPICOMM4,INTERCOMM(I),MPI_ERRCODES_IGNORE,IERR)
      !
   ENDDO
   !
@@ -179,7 +183,7 @@ SUBROUTINE ETRAJ(COMLYN,COMLEN)
   use parallel
   use psf
   use cvio
-  use mpi
+  use mpi_f08
   !
   CHARACTER(len=*) COMLYN
   INTEGER   COMLEN
@@ -199,9 +203,10 @@ SUBROUTINE ETRAJ(COMLYN,COMLEN)
   !     MPI stuff (integer*4 - no need for ##INTEGER8)
   !
   !
-  INTEGER(chm_int4), allocatable, dimension(:) :: REQ1
-  INTEGER(chm_int4), allocatable, dimension(:,:) :: REQ2
-  INTEGER(chm_int4) :: WSTAT(MPI_STATUS_SIZE),JJ,MXX,IERR
+  TYPE(MPI_Request), allocatable, dimension(:) :: REQ1
+  TYPE(MPI_Request), allocatable, dimension(:,:) :: REQ2
+  TYPE(MPI_Status) :: WSTAT
+  INTEGER(chm_int4) :: JJ,MXX,IERR
   !
   LOGICAL :: QSYNCH
 #if KEY_CHEQ==1
@@ -489,7 +494,7 @@ SUBROUTINE SUBSENDC(IFRAME,ISUB,FLAG,X,Y,Z)
   use dimens_fcm
   use psf
   use parallel
-  use mpi
+  use mpi_f08
   !
   !     Input parameters:
   !     IFRAME - current frame at master, send it to the compute node
@@ -500,7 +505,10 @@ SUBROUTINE SUBSENDC(IFRAME,ISUB,FLAG,X,Y,Z)
   real(chm_real) X(*),Y(*),Z(*)
   !
   !
-  INTEGER(chm_int4) IERR,REQ,M_STAT(MPI_STATUS_SIZE),MTO,MMTYPE,MLEN,MINT
+  INTEGER(chm_int4) IERR,MTO,MMTYPE,MLEN
+  TYPE(MPI_Request) :: REQ
+  TYPE(MPI_Status) :: M_STAT
+  TYPE(MPI_Datatype) :: MINT
   INTEGER(chm_int4) :: BUF(3)
   !
   !     Send the flag to I-th set of compute servers
@@ -571,7 +579,7 @@ SUBROUTINE SUBRECE(I,FLAG,XETERM,XEPROP,REQ1,REQ2,M)
   !
   use energym
   use parallel
-  use mpi
+  use mpi_f08
   !
   INTEGER I,M,FLAG
   real(chm_real) XEPROP(*),XETERM(*)
@@ -579,8 +587,10 @@ SUBROUTINE SUBRECE(I,FLAG,XETERM,XEPROP,REQ1,REQ2,M)
   !
   !     MPI stuff (integer*4 - no need for ##INTEGER8)
   !
-  INTEGER(CHM_INT4) :: BUF,MLEN,MINT,MFROM,MMTYPE,MCOMM,REQ,IERR
-  INTEGER(CHM_INT4) :: M_STAT(MPI_STATUS_SIZE),REQ1(*),REQ2(NSUBS,*)
+  INTEGER(CHM_INT4) :: BUF,MLEN,MFROM,MMTYPE,IERR
+  TYPE(MPI_Datatype) :: MINT
+  TYPE(MPI_Request) :: REQ,REQ1(*),REQ2(NSUBS,*)
+  TYPE(MPI_Status) :: M_STAT
   !
   !     This code is good only for I/O stuff so there should be
   !     no global communication inside! It only posts the receive.
@@ -621,15 +631,17 @@ SUBROUTINE SUBRECES(I,FLAG,XETERM,XEPROP)
   !----------------------------------------------------------------------
   use energym
   use parallel
-  use mpi
+  use mpi_f08
 
   INTEGER I,FLAG
   real(chm_real) XEPROP(*),XETERM(*)
   !
   !     MPI stuff (integer*4 - no need for ##INTEGER8)
   !
-  INTEGER(CHM_INT4) :: BUF,MLEN,MINT,MFROM,MMTYPE,MCOMM,REQ,IERR
-  INTEGER(CHM_INT4) :: M_STAT(MPI_STATUS_SIZE)
+  INTEGER(CHM_INT4) :: BUF,MLEN,MFROM,MMTYPE,IERR
+  TYPE(MPI_Datatype) :: MINT
+  TYPE(MPI_Request) :: REQ
+  TYPE(MPI_Status) :: M_STAT
   !
   IF (MYNOD.EQ.0) THEN
      !
@@ -681,7 +693,7 @@ SUBROUTINE CALCRECE(COMLYN,COMLEN)
   use parallel
   use string
   !
-  use mpi
+  use mpi_f08
   !
   CHARACTER(len=*) COMLYN
   INTEGER   COMLEN
@@ -696,8 +708,12 @@ SUBROUTINE CALCRECE(COMLYN,COMLEN)
   !
   !     MPI stuff (integer*4 - no need for ##INTEGER8)
   !
-  INTEGER(CHM_INT4) :: MLEN,MINT,MFROM,MMTYPE,MCOMM,REQ,IERR
-  INTEGER(CHM_INT4) :: M_STAT(MPI_STATUS_SIZE), BUF(3)
+  INTEGER(CHM_INT4) :: MLEN,MFROM,MMTYPE,IERR
+  TYPE(MPI_Datatype) :: MINT
+  TYPE(MPI_Comm) :: MCOMM
+  TYPE(MPI_Request) :: REQ
+  TYPE(MPI_Status) :: M_STAT
+  INTEGER(CHM_INT4) :: BUF(3)
   !
   !     The original sintax is:
   !
@@ -851,7 +867,7 @@ SUBROUTINE CALCTRAN(COMLYN,COMLEN)
   use energym
   use parallel
   !
-  use mpi
+  use mpi_f08
   !
   CHARACTER(len=*) COMLYN
   INTEGER   COMLEN
@@ -861,8 +877,11 @@ SUBROUTINE CALCTRAN(COMLYN,COMLEN)
   !
   !     MPI stuff (integer*4 - no need for ##INTEGER8)
   !
-  INTEGER(CHM_INT4) :: MLEN,MINT,MTO,MMTYPE,MCOMM,REQ,IERR
-  INTEGER(CHM_INT4) :: M_STAT(MPI_STATUS_SIZE)
+  INTEGER(CHM_INT4) :: MLEN,MTO,MMTYPE,IERR
+  TYPE(MPI_Datatype) :: MINT
+  TYPE(MPI_Comm) :: MCOMM
+  TYPE(MPI_Request) :: REQ
+  TYPE(MPI_Status) :: M_STAT
   !
   !     Nothing to parse yet
   !

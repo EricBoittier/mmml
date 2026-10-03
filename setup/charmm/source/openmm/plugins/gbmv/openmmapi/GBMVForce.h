@@ -65,7 +65,7 @@ public:
      * @param outputFrequency  how many timesteps between recording lambda values
      */
     void addCPHMDForce( double pH, double T_theta, double mTheta, double ts_theta,
-        double beta, int outFreq, char* fileName ) {
+        double beta, int outFreq, const char* fileName ) {
         useCPHMD = true;
         globalPH = pH;
         tempTheta = T_theta;
@@ -247,13 +247,13 @@ public:
     /**
      * Get the name of the lambda output file
      */
-    char* getLambdaOutputFile() const {
+    const char* getLambdaOutputFile() const {
         return lambdaOutFile;
     }
     /**
      * Set the name of the lambda output file
      */
-    void setLambdaOutputFile( char* tmp ) {
+    void setLambdaOutputFile( const char* tmp ) {
         lambdaOutFile = tmp;
     }
     /**
@@ -645,7 +645,7 @@ private:
         HSX1_GBMV2, HSX2_GBMV2, ONX_GBMV2, OFFX_GBMV2, 
         P1_GBMV2, P2_GBMV2, P3_GBMV2, P6_GBMV2;
     int numAngles, numRadii, outputFrequency, CUTNUM_GBMV2;
-    char* lambdaOutFile;
+    const char* lambdaOutFile;
     std::vector<ParticleInfo> particles;
     std::vector<ParticleCphmdInfo> cphmdInfo;
     std::vector<TitratingGroupInfo> titratingGroups;

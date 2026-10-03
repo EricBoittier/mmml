@@ -18,10 +18,10 @@
 """
 
 import ctypes
+import pycharmm
+from pycharmm.loader import lib
 
 import numpy as np
-
-import pycharmm
 
 
 def _fail_closed(fn):
@@ -33,6 +33,11 @@ def _fail_closed(fn):
     except ImportError:
         return fn
     return fail_closed_callback(fn)
+
+
+def _zero_mlmm_elec():
+    """c52 always calls the ML–MM electrostatic callback; return 0 when unused."""
+    return 0.0
 
 
 class MLpot():
@@ -91,9 +96,9 @@ class MLpot():
             self.mlmm_charges[self.ml_indices] = 0.0
             _ = pycharmm.psf.set_charge(self.mlmm_charges)
 
-        # ML - set non-bond exclusion list for ML atom pairs
-        # When skip_iblo_inb_update, exclusions were already installed (or skipped for
-        # all-ML jax_mic); do not build an O(N²) list that is never written.
+        # ML - set non-bond exclusion list for ML atom pairs.
+        # When skip_iblo_inb_update, exclusions were already installed (or skipped
+        # for all-ML jax_mic); do not build an O(N^2) list that is never written.
         self.ml_iblo = np.zeros(self.Natoms, dtype=int)
         self.ml_inb = []
         if not skip_iblo_inb_update:
@@ -103,9 +108,6 @@ class MLpot():
                     self.ml_inb.append(jdx + 1)  # + 1 as CHARMM start at index 1
             self.ml_nnb = len(self.ml_inb)
             pycharmm.psf.set_iblo_inb(self.ml_iblo, self.ml_inb)
-
-            pycharmm.nbonds.update_bnbnd()  # Already executed in set_iblo_inb()
-            pycharmm.image.update_bimag()
         else:
             self.ml_nnb = 0
 
@@ -191,25 +193,29 @@ class MLpot():
                                                 # pointer (idxvp)
             )
 
-        # An exception escaping a ctypes callback is printed and 0 is returned
-        # to CHARMM, which then integrates with a zero USER energy and stale
-        # forces. mmml's guard terminates the process instead (exit 86).
+        self.mlmm_elec_type = ctypes.CFUNCTYPE(
+            ctypes.c_double,                    # ML-MM electrostatic energy
+            )
+
         self.energy_func = self.func_type(
             _fail_closed(self.calculator.calculate_charmm)
         )
+        elec = getattr(self.calculator, "mlmm_elec", None)
+        if not callable(elec):
+            elec = _zero_mlmm_elec
+        self.mlmm_elec_func = self.mlmm_elec_type(elec)
 
         ###################################################
         # END - Potential model dependent part
         ###################################################
 
-        pycharmm.lib.charmm.mlpot_set_func(self.energy_func)
+        lib.mlpot_set_func(
+            self.energy_func, self.mlmm_elec_func)
 
-        mlidx = (ctypes.c_int * self.ml_Natoms)()
-        mlidx[:] = self.ml_indices + 1
-        mlidz = (ctypes.c_int * self.ml_Natoms)()
-        mlidz[:] = ml_Z
+        mlidx = (ctypes.c_int * self.ml_Natoms)(*(self.ml_indices + 1))
+        mlidz = (ctypes.c_int * self.ml_Natoms)(*ml_Z)
         Nml = (ctypes.c_int * 1)(self.ml_Natoms)
-        pycharmm.lib.charmm.mlpot_set_properties(
+        lib.mlpot_set_properties(
             Nml, mlidx, mlidz)
 
         self.is_set = True
@@ -226,7 +232,7 @@ class MLpot():
         """
         Just store the function and do not run it during energy calculations
         """
-        pycharmm.lib.charmm.mlpot_unset()
+        lib.mlpot_unset()
         self.is_set = False
 
     def reattach_mlpot(self, *, force: bool = False):
@@ -240,20 +246,18 @@ class MLpot():
         """
         if self.is_set and not force:
             return
-        pycharmm.lib.charmm.mlpot_set_func(self.energy_func)
-        mlidx = (ctypes.c_int * self.ml_Natoms)()
-        mlidx[:] = self.ml_indices + 1
-        mlidz = (ctypes.c_int * self.ml_Natoms)()
-        mlidz[:] = self.ml_Z
+        lib.mlpot_set_func(self.energy_func, self.mlmm_elec_func)
+        mlidx = (ctypes.c_int * self.ml_Natoms)(*(self.ml_indices + 1))
+        mlidz = (ctypes.c_int * self.ml_Natoms)(*self.ml_Z)
         nml = (ctypes.c_int * 1)(self.ml_Natoms)
-        pycharmm.lib.charmm.mlpot_set_properties(nml, mlidx, mlidz)
+        lib.mlpot_set_properties(nml, mlidx, mlidz)
         self.is_set = True
 
 
 def get_mlpot_pair_counts():
     """Return ``(n_mlml, n_mlmm)`` from the last ``mlpot_update`` call."""
     try:
-        getter = pycharmm.lib.charmm.mlpot_get_pair_counts
+        getter = lib.mlpot_get_pair_counts
     except AttributeError:
         return None
     out_nmlp = (ctypes.c_int * 1)()
@@ -267,7 +271,7 @@ def get_mlpot_pair_counts():
 def export_mlpot_mlmm_pairs(*, max_pairs: int | None = None):
     """Export Fortran ``idxu/idxv`` (0-based) after ``mlpot_update``."""
     try:
-        exporter = pycharmm.lib.charmm.mlpot_export_mlmm_pairs
+        exporter = lib.mlpot_export_mlmm_pairs
     except AttributeError:
         return None
     _nmlp, nmlmmp = get_mlpot_pair_counts() or (0, 0)
@@ -287,7 +291,7 @@ def export_mlpot_mlmm_pairs(*, max_pairs: int | None = None):
 def export_mlpot_mlml_pairs(*, max_pairs: int | None = None):
     """Export Fortran ``idxi/idxj`` (0-based) after ``mlpot_update``."""
     try:
-        exporter = pycharmm.lib.charmm.mlpot_export_mlml_pairs
+        exporter = lib.mlpot_export_mlml_pairs
     except AttributeError:
         return None
     nmlp, _nmlmmp = get_mlpot_pair_counts() or (0, 0)

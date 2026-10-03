@@ -193,7 +193,7 @@ subroutine cscns(en,dx,dy,dz,x,y,z, &
    use stream
 #if KEY_ENSEMBLE==1
    use ensemble
-   use mpi
+   use mpi_f08
 #endif
 #if KEY_PARALLEL==1
    use parallel
@@ -1101,7 +1101,11 @@ subroutine cscns(en,dx,dy,dz,x,y,z, &
             nuens(1)=nu
             call chmalloc('ssnmr.src','NUBUF','NUBUF',nensem,crl=nubuf)
 
-            if (mynod == 0) then
+            ! Cross-replica averaging over comm_master only applies to a genuine
+            ! multi-replica ensemble; skip it otherwise.  In a plain domain-
+            ! decomposition run only the master reaches this barrier, so guarding
+            ! on mynod==0/lmasternode deadlocked (test hung until SIGXCPU).
+            if (lensactive .and. lmasternode) then
                call mpi_barrier(comm_master,ierror)
                call mpi_allgather( &
                   nuens, 1, mpi_double_precision, &
@@ -1171,7 +1175,11 @@ subroutine cscns(en,dx,dy,dz,x,y,z, &
             sii(3)=(s3z/s33)**2
 
             call chmalloc('ssnmr.src','SIIBUF','SIIBUF',3*nensem,crl=siibuf)
-            if (mynod == 0) then
+            ! Cross-replica averaging over comm_master only applies to a genuine
+            ! multi-replica ensemble; skip it otherwise.  In a plain domain-
+            ! decomposition run only the master reaches this barrier, so guarding
+            ! on mynod==0/lmasternode deadlocked (test hung until SIGXCPU).
+            if (lensactive .and. lmasternode) then
                call mpi_barrier(comm_master,ierror)
                call mpi_allgather( &
                   sii, 3, mpi_double_precision, &

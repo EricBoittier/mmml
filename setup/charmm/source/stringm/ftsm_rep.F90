@@ -29,7 +29,7 @@
 #if (KEY_MULTICOM==1)
       use multicom_aux; 
 #endif
-      use mpi
+      use mpi_f08
 !
       CHARACTER(LEN=*) :: COMLYN
       integer :: COMLEN
@@ -59,7 +59,7 @@
 #if (KEY_MULTICOM==1)
       use multicom_aux; 
 #endif
-      use mpi
+      use mpi_f08
       use stream
       use number
       use consta
@@ -77,24 +77,24 @@
       real(chm_real), pointer, dimension(:,:) :: ro, rf, ro1
       real(chm_real) :: w
       real(chm_real) :: weights(nforced,3) ! assuming nforced is reasonably defined
-      integer*4 :: stat(MPI_STATUS_SIZE)
+      TYPE(MPI_Status) :: stat
       integer :: i, ierror
 !
 #if (KEY_PARALLEL==1)
 #if (KEY_SINGLE==1)
- integer :: mpifloat=MPI_REAL 
+ TYPE(MPI_Datatype) :: mpifloat=MPI_REAL 
 #endif
 #if (KEY_SINGLE==0)
- integer :: mpifloat=MPI_REAL8 
+ TYPE(MPI_Datatype) :: mpifloat=MPI_REAL8 
 #endif
 #if (KEY_INTEGER8==0)
- integer :: mpiint=MPI_INTEGER 
+ TYPE(MPI_Datatype) :: mpiint=MPI_INTEGER 
 #endif
 #if (KEY_INTEGER8==1)
- integer :: mpiint=MPI_INTEGER8 
+ TYPE(MPI_Datatype) :: mpiint=MPI_INTEGER8 
 #endif
- integer :: mpichar=MPI_CHARACTER
- integer :: mpibool=MPI_LOGICAL
+ TYPE(MPI_Datatype) :: mpichar=MPI_CHARACTER
+ TYPE(MPI_Datatype) :: mpibool=MPI_LOGICAL
 #endif
 !
       interface
@@ -274,21 +274,21 @@
 !
 #if (KEY_PARALLEL==1)
 #if (KEY_SINGLE==1)
- integer :: mpifloat=MPI_REAL 
+ TYPE(MPI_Datatype) :: mpifloat=MPI_REAL 
 #endif
 #if (KEY_SINGLE==0)
- integer :: mpifloat=MPI_REAL8 
+ TYPE(MPI_Datatype) :: mpifloat=MPI_REAL8 
 #endif
 #if (KEY_INTEGER8==0)
- integer :: mpiint=MPI_INTEGER 
+ TYPE(MPI_Datatype) :: mpiint=MPI_INTEGER 
 #endif
 #if (KEY_INTEGER8==1)
- integer :: mpiint=MPI_INTEGER8 
+ TYPE(MPI_Datatype) :: mpiint=MPI_INTEGER8 
 #endif
- integer :: mpichar=MPI_CHARACTER
- integer :: mpibool=MPI_LOGICAL
+ TYPE(MPI_Datatype) :: mpichar=MPI_CHARACTER
+ TYPE(MPI_Datatype) :: mpibool=MPI_LOGICAL
 #endif
-      integer*4 :: stat(MPI_STATUS_SIZE)
+      TYPE(MPI_Status) :: stat
 !
       interface
         subroutine interp_driver_sci(rin,rout,wgt,n, &

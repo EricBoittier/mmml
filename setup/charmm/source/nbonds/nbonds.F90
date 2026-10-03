@@ -91,6 +91,13 @@ SUBROUTINE NBONDS(X,Y,Z,BNBNDX,BIMAGX)
   use nblist_builder,only:ns_xfast
   use domdec_common,only:q_domdec
 #endif 
+#if KEY_OPENMM==1
+    use omm_main, only: teardown_openmm, omm_invalidate
+#endif
+#if KEY_BLADE==1
+  use blade_main, only: system_dirty, dynamics_mode, DYN_CONTINUE
+  use blade_ctrl_module, only: blade_skip_cpu_nblist, blade_force_cpu_nblist
+#endif 
   use param_store, only: set_param
 !---   use nbutil_module,only:renbnd,getbnd,setbnd,prnbct
 !
@@ -774,6 +781,17 @@ SUBROUTINE NBONDS(X,Y,Z,BNBNDX,BIMAGX)
   !
   ! Allocate space for coordinates set: "since last update"
    call allocate_inbnd(natom)  
+#if KEY_OPENMM==1
+   ! Do not teardown or invalidate here.  check_nbopts() in
+   ! setup_openmm() compares nonbonded options and rebuilds the
+   ! context only when they actually change.  The previous
+   ! unconditional teardown caused unnecessary context rebuilds
+   ! on every energy call.
+#endif
+#if KEY_BLADE==1
+   ! UPDATE rebuilds the CPU list even when ABIC keeps BLaDE current.
+   if (dynamics_mode /= DYN_CONTINUE) system_dirty = .true.
+#endif 
 
   ! Allocate temporary work space
   ! --Edited and reconfigured this section, -RJP 4.7.00
@@ -1400,6 +1418,20 @@ SUBROUTINE NBONDS(X,Y,Z,BNBNDX,BIMAGX)
      !-----------------------------------------------------------------------
      !     Generate the list by cubes.
      !-----------------------------------------------------------------------
+#if KEY_BLADE==1
+     ! Skip CPU neighbor list building when BLaDE GPU is active
+     ! Unless CPUNB keyword was specified to force CPU neighbor list build
+     IF (blade_skip_cpu_nblist .AND. .NOT. blade_force_cpu_nblist) THEN
+        IF (PRNLEV >= 2) WRITE(OUTU,'(A)') &
+           ' NBONDS> Skipping CPU neighbor list build (BLaDE GPU active)'
+        nnnb = 0
+        nnnbg = 0
+        cmpltd = .true.
+        GOTO 9000  ! Skip to after neighbor list generation
+     ENDIF
+     ! Reset the force flag after checking (one-shot per NBONDS command)
+     blade_force_cpu_nblist = .false.
+#endif
 #if KEY_IMCUBES==1
      IF (LBYCBIM &
 #if KEY_DOMDEC==1
@@ -2265,7 +2297,10 @@ SUBROUTINE NBONDS(X,Y,Z,BNBNDX,BIMAGX)
   ENDIF                        
 #endif
 #if KEY_DOMDEC==1
-  endif                        
+  endif
+#endif
+#if KEY_BLADE==1
+9000 CONTINUE  ! Skip target for BLaDE - after all neighbor list processing
 #endif
   !
   !=======================================================================

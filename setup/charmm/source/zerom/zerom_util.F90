@@ -62,7 +62,7 @@ real(chm_real) :: etime,ctime,etime2,ctime2
   INTEGER NCURDF,NEWVAL
   integer :: NEWVALW 
   real(chm_real) RVALUE
-  INTEGER DALINE,I,KK,J,II,III
+  INTEGER DALINE,I,KK,J,II,III,IOS
   INTEGER LSTCNF
   INTEGER COUNTF,COUNTO
   LOGICAL STRDFC,DOLAST
@@ -98,28 +98,33 @@ real(chm_real) :: etime,ctime,etime2,ctime2
   !     & STATUS = 'OLD')
   !      ENDIF
   DOLAST = .FALSE.
-  read_loop: do while (.NOT.DOLAST)
-     read(UNIT=RDZUNI,FMT='(A)',END=11) LINE
-     if(len_trim(LINE) == 0) then
+  read_loop: do
+     if (.NOT.DOLAST) then
+        read(UNIT=RDZUNI,FMT='(A)',IOSTAT=IOS) LINE
+        if (IOS /= 0) then
+           DOLAST = .TRUE.
+        else
+           if(len_trim(LINE) == 0) then
 #if KEY_PARALLEL==1
-      if(MYNODP.eq.1) then 
+            if(MYNODP.eq.1) then
 #endif
-       write(6,*) 'blank line in conformer file'
+             write(6,*) 'blank line in conformer file'
 #if KEY_PARALLEL==1
-      endif 
+            endif
 #endif
-!      WRITE(6,*) 'cycling read_loop'
-      cycle read_loop
-     endif 
-     !       if(QONE) THEN
-     ! orig        READ(UNIT=RDZUNI,FMT=10,END=11) RSUBSP,RCONFO,RDOFRE,RVALUE
-!     READ(UNIT=RDZUNI,FMT=*,END=11) RSUBSP,RCONFO,RDOFRE,RVALUE
-     READ(LINE,FMT=*) RSUBSP,RCONFO,RDOFRE,RVALUE,RENERGY
-     !     & ' RDOFRE ',RDOFRE,' RVALUE ',RVALUE 
-     !       else
-     !        READ(UNIT=3,FMT=10,END=11) RSUBSP,RCONFO,RDOFRE,RVALUE
-     !       ENDIF
-5    CONTINUE
+!            WRITE(6,*) 'cycling read_loop'
+            cycle read_loop
+           endif
+           !       if(QONE) THEN
+           ! orig        READ(UNIT=RDZUNI,FMT=10,END=11) RSUBSP,RCONFO,RDOFRE,RVALUE
+!           READ(UNIT=RDZUNI,FMT=*,END=11) RSUBSP,RCONFO,RDOFRE,RVALUE
+           READ(LINE,FMT=*) RSUBSP,RCONFO,RDOFRE,RVALUE,RENERGY
+           !     & ' RDOFRE ',RDOFRE,' RVALUE ',RVALUE
+           !       else
+           !        READ(UNIT=3,FMT=10,END=11) RSUBSP,RCONFO,RDOFRE,RVALUE
+           !       ENDIF
+        endif
+     endif
      DALINE = DALINE+1
      !       WRITE(UNIT=2,FMT=10) RSUBSP,RCONFO,RDOFRE,RVALUE
 10   FORMAT(I14,I14,I14,F14.7,F14.7)
@@ -521,11 +526,8 @@ real(chm_real) :: etime,ctime,etime2,ctime2
      !       WRITE(6,*) 'ASSIGNING TMPs'
      !       WRITE(6,*) 'NCURDF ',NCURDF,' TDOF ',TMPDOF(NCURDF),
      !     &  ' TVAL ',TMPVAL(NCURDF) 
-  end do read_loop    !loop over datafile    
-11 if(.NOT.DOLAST) THEN
-     DOLAST = .TRUE.
-     GOTO 5
-  ENDIF
+     if (DOLAST) exit read_loop
+  end do read_loop    !loop over datafile
 20 CONTINUE
   !      NSUBSP = DSUBSP
   do I = 1,NSUBSP

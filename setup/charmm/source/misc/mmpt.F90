@@ -3424,9 +3424,6 @@ if(prnlev.ge.7) WRITE(outu,*) 'NBCORR > ',eu-eu1
 
 !      PASS COORDINATES TO POTENTIAL ROUTINE
 
-      R1=DSQRT((XA(HA)-XA(DA))**2+(YA(HA)-YA(DA))**2+(ZA(HA)-ZA(DA))**2)
-      R2=DSQRT((XA(HA)-XA(AA))**2+(YA(HA)-YA(AA))**2+(ZA(HA)-ZA(AA))**2)
-
       XA(1) = X(DA)
       YA(1) = Y(DA)
       ZA(1) = Z(DA)
@@ -4605,13 +4602,14 @@ if(prnlev.ge.7) WRITE(outu,*) 'NBCORR > ',eu-eu1
       RHO = (RDH - 0.8D0) / (RDA - 1.6D0)
 
 
+      THETA = DACOS(COSTHETA)
       IF(PRNLEV.GT.6) THEN
       write(outu,*) 'entering OHO angular dependent mmpt routine'
       WRITE(OUTU,*) 'MMPT>   RDA', RDA
       WRITE(OUTU,*) 'MMPT>   RDH', RDH
       WRITE(OUTU,*) 'MMPT>   RHO', RHO
       WRITE(OUTU,*) 'MMPT>   COS(THETA)', COSTHETA
-      WRITE(OUTU,*) 'MMPT>   THETA[RAD]', THETA*PI/180.D0
+      WRITE(OUTU,*) 'MMPT>   THETA[RAD]', THETA
 !      WRITE(OUTU,*) 'MMPT>   SIN(THETA)', SINTHETA 
 !      WRITE(OUTU,*) 'MMPT>   RRM', PRMOHO(1)
       ENDIF

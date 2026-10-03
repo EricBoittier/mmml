@@ -72,7 +72,7 @@ subroutine parstrt
   use chm_types
   use stream
   use number
-  use mpi
+  use mpi_f08
 #if KEY_MULTICOM==1
   ! VO string v
   use multicom, only: multicom_init, multicom_safe_reset
@@ -83,6 +83,10 @@ subroutine parstrt
 
 #ifdef _OPENMP
   use domdec_common, only: nthread
+  ! Also imported under KEY_PARALLEL above; this block is outside that
+  ! guard, so a serial OpenMP build needs its own import to publish
+  ! ?NTHREAD.  Repeating a USE in one scoping unit is fine.
+  use param_store, only: set_param
   use omp_lib, only: &
        omp_get_max_threads, &
        omp_set_num_threads
@@ -92,6 +96,7 @@ subroutine parstrt
 
 #if KEY_PARALLEL == 1
   integer :: i, status
+  integer :: plnod0_arr(1)
 
 #if KEY_MULTICOM==1 /*  VO string v */
   logical :: initialized_mpi=.false.
@@ -105,6 +110,9 @@ subroutine parstrt
   if (trim(nthreads_str) .eq. '') call omp_set_num_threads(1)
 
   nthread = omp_get_max_threads()
+  ! Tell scripts the team size, so an input file can check it against
+  ! ?NGPU before asking for something that needs a GPU per thread.
+  call set_param('NTHREAD', nthread)
 #endif /* _OPENMP */
 
 #if KEY_PARALLEL == 1
@@ -129,6 +137,11 @@ subroutine parstrt
   &                     ,initialized_mpi &               /* VO stringm*/
 #endif
   &                                     )
+  ! CMPI bypasses init_chm_groups (where charmm_owns_mpi is normally set),
+  ! but cmpi_init calls MPI_INIT itself, so CHARMM owns MPI here.  Set the
+  ! flag so PARFIN's guarded MPI_FINALIZE still runs (matches the historic
+  ! unconditional finalize for CMPI builds).
+  charmm_owns_mpi = .true.
 #else /* (pll_cmpi1)*/
 #if KEY_MULTICOM==1 /*  VO stringm v */
   call mpi_initialized(initialized_mpi, status)
@@ -146,7 +159,11 @@ subroutine parstrt
 #endif /* (pll_cmpi1)*/
   !
 #if KEY_MULTICOM==1 /*  VO stringm */
-  if (.not.initialized_mpi) then
+  ! Skip the string-method multicom setup for embedded pyCHARMM runs
+  ! (host-supplied communicator or per-rank-serial): those own their base
+  ! communicator via init_chm_groups and are not doing a string calculation.
+  if (.not.initialized_mpi .and. .not.pycharmm_user_comm_set &
+       .and. .not.q_pycharmm_embedded) then
    MPI_COMM_GLOBAL=MPI_COMM_WORLD;SIZE_GLOBAL=NUMNOD;ME_GLOBAL=MYNOD
    call multicom_safe_reset()
    call multicom_init()
@@ -185,7 +202,9 @@ subroutine parstrt
   if(ME_GLOBAL.ne.0) then ! VO : by default suppress output except on global root
   !
 #else /* (multicom)  VO stringm multicom ^ */
-  call gbor(plnod0,1)
+  plnod0_arr(1) = plnod0
+  call gbor(plnod0_arr,1)
+  plnod0 = plnod0_arr(1)
   if(mynod.ne.0) then
 #endif /*(multicom) */
   !
@@ -261,7 +280,7 @@ subroutine vdgsum(x,y,z,mode)
   use exfunc
   use memory
 #if KEY_CMPI==0
-  use mpi      
+  use mpi_f08      
 #endif
   !
   implicit none
@@ -331,7 +350,7 @@ SUBROUTINE RI1VDGBR(X)
   use parallel
   use memory
 #if KEY_MPI==1
-  use mpi      
+  use mpi_f08      
 #endif
   implicit none
   !
@@ -383,7 +402,7 @@ subroutine vdgbr(x,y,z,mode)
   use exfunc
   use memory
 #if KEY_CMPI==0
-  use mpi      
+  use mpi_f08      
 #endif
   !
   implicit none
@@ -462,7 +481,7 @@ SUBROUTINE VDGBRE(X,KPARPT)
   use exfunc
   use memory
 #if KEY_CMPI==0
-  use mpi      
+  use mpi_f08      
 #endif
 
   implicit none
@@ -514,7 +533,7 @@ subroutine gcombs(x,n)
   use exfunc
   use memory
 #if KEY_CMPI==0
-  use mpi      
+  use mpi_f08      
 #endif
   !
   implicit none
@@ -572,7 +591,7 @@ subroutine gcombsi(x,n)
   use exfunc
   use memory
 #if KEY_CMPI==0
-  use mpi      
+  use mpi_f08      
 #endif
   !
   implicit none
@@ -632,7 +651,7 @@ subroutine gcombr(x,n)
   use exfunc
   use memory
 #if KEY_CMPI==0
-  use mpi      
+  use mpi_f08      
 #endif
   !
   implicit none
@@ -681,7 +700,7 @@ subroutine gcombi(x,n)
   use exfunc
   use memory
 #if KEY_CMPI==0
-  use mpi      
+  use mpi_f08      
 #endif
   !
   implicit none
@@ -705,7 +724,7 @@ subroutine gcombi(x,n)
 #else /**/
   !     Uses compliant calls.
   call chmalloc('paral1.src','GCOMBI','W',N,intg=W)
-  call mpi_allreduce(x,w,n,mpi_double_precision,mpi_sum, &
+  call mpi_allreduce(x,w,n,mpi_integer,mpi_sum, &
        comm_charmm,status)
   x(1:n) = w(1:n)
   call chmdealloc('paral1.src','GCOMBI','W',N,intg=w)
@@ -723,7 +742,7 @@ subroutine comb_to_root(x, n)
   !
   use chm_kinds
   use memory
-  use mpi
+  use mpi_f08
   use parallel
   implicit none
   ! Input / Output
@@ -762,10 +781,10 @@ SUBROUTINE GCOMBMAX(X)
   use exfunc
   use memory
 #if KEY_CMPI==0
-  use mpi      
+  use mpi_f08      
 #endif
 #if KEY_STRINGM==1 && KEY_MPI==1 /*  VO stringm */
-  use mpi      
+  use mpi_f08      
 #endif
   !
   implicit none
@@ -818,7 +837,7 @@ SUBROUTINE IVDGBRE(X,KPARPT)
   use exfunc
   use memory
 #if KEY_CMPI==0
-  use mpi
+  use mpi_f08
 #endif
 
   implicit none
@@ -867,7 +886,7 @@ SUBROUTINE IGCOMB(X,N)
   use exfunc
   use memory
 #if KEY_CMPI==0
-  use mpi      
+  use mpi_f08      
 #endif
   !
   implicit none
@@ -912,7 +931,7 @@ SUBROUTINE GBOR(X,N)
   use exfunc
   use memory
 #if KEY_CMPI==0
-  use mpi      
+  use mpi_f08      
 #endif
   !
   implicit none
@@ -953,7 +972,7 @@ SUBROUTINE PSYNC()
   use parallel
   use memory
 #if KEY_CMPI==0
-  use mpi      
+  use mpi_f08      
 #endif
   implicit none
   INTEGER STATUS
@@ -1069,7 +1088,7 @@ SUBROUTINE PSNDC(ARRAY, LENGTH)
   use parallel,only: cmpi_byte,cmpi_comm_world
 #endif
 #if KEY_CMPI==0
-  use mpi      
+  use mpi_f08      
 #endif
   implicit none
   CHARACTER(len=*) ARRAY(*)
@@ -1102,7 +1121,7 @@ SUBROUTINE PSNDC2(ARRAY, LENGTH)
   use dimens_fcm
   use parallel
 #if KEY_CMPI==0
-  use mpi      
+  use mpi_f08      
 #endif
   implicit none
   CHARACTER(len=*) ARRAY(1000,1000)
@@ -1137,7 +1156,7 @@ SUBROUTINE PSND4m(ARRAY, LENGTH)
   use parallel,only: cmpi_byte,cmpi_comm_world
 #endif
 #if KEY_CMPI==0
-  use mpi
+  use mpi_f08
 #endif
   !
   implicit none
@@ -1167,7 +1186,7 @@ SUBROUTINE PSND4r(ARRAY, LENGTH)
   use parallel,only: cmpi_byte,cmpi_comm_world
 #endif
 #if KEY_CMPI==0
-  use mpi
+  use mpi_f08
 #endif
   !
   implicit none
@@ -1197,7 +1216,7 @@ SUBROUTINE PSND4s(variable, LENGTH)
   use parallel,only: cmpi_byte,cmpi_comm_world
 #endif
 #if KEY_CMPI==0
-  use mpi
+  use mpi_f08
 #endif
   !
   implicit none
@@ -1229,7 +1248,7 @@ SUBROUTINE PSND4l(variable, LENGTH)
   use parallel,only: cmpi_byte,cmpi_comm_world
 #endif
 #if KEY_CMPI==0
-  use mpi
+  use mpi_f08
 #endif
   !
   implicit none
@@ -1261,7 +1280,7 @@ SUBROUTINE PSND4lm(variable, LENGTH)
   use parallel,only: cmpi_byte,cmpi_comm_world
 #endif
 #if KEY_CMPI==0
-  use mpi
+  use mpi_f08
 #endif
   !
   implicit none
@@ -1289,12 +1308,13 @@ subroutine psnd4_comm(comm,array, length)
   use dimens_fcm
   use parallel
 #if KEY_CMPI==0
-  use mpi      
+  use mpi_f08      
 #endif
 
   implicit none
   integer array(*)
-  integer length,comm
+  integer length
+  TYPE(MPI_Comm) :: comm
   integer status,comm_size
 
   call mpi_comm_size(comm,comm_size,status)
@@ -1321,7 +1341,7 @@ SUBROUTINE PSND8m(ARRAY, LENGTH)
   use parallel,only: cmpi_byte,cmpi_comm_world
 #endif
 #if KEY_CMPI==0
-  use mpi      
+  use mpi_f08      
 #endif
   !
   implicit none
@@ -1351,7 +1371,7 @@ SUBROUTINE PSND8i(ARRAY, LENGTH)
   use parallel,only: cmpi_byte,cmpi_comm_world
 #endif
 #if KEY_CMPI==0
-  use mpi      
+  use mpi_f08      
 #endif
   !
   implicit none
@@ -1381,7 +1401,7 @@ SUBROUTINE PSND8s(ARRAY, LENGTH)
   use parallel,only: cmpi_byte,cmpi_comm_world
 #endif
 #if KEY_CMPI==0
-  use mpi      
+  use mpi_f08      
 #endif
   !
   implicit none
@@ -1408,10 +1428,11 @@ subroutine psnd8_comm(comm,array, length)
   !
   use dimens_fcm
   use parallel
-  use mpi      
+  use mpi_f08      
   !
   implicit none
-  integer,intent(in) :: length,comm
+  integer,intent(in) :: length
+  TYPE(MPI_Comm),intent(in) :: comm
   real(chm_real),intent(inout),dimension(length) :: array
   integer status,comm_size,nod0
 
@@ -1436,7 +1457,7 @@ SUBROUTINE PSYNC_WORLD()
   use ensemble, only: nensem
   use memory
 #if KEY_CMPI==0
-  use mpi      
+  use mpi_f08      
 #endif
   implicit none
   INTEGER STATUS
@@ -1466,7 +1487,7 @@ SUBROUTINE PSNDC_WORLD(ARRAY, LENGTH)
   use parallel
   use ensemble, only: nensem
 #if KEY_CMPI==0
-  use mpi      
+  use mpi_f08      
 #endif
   implicit none
   CHARACTER(len=*) ARRAY(*)
@@ -1498,7 +1519,7 @@ SUBROUTINE PSND4_WORLD(ARRAY, LENGTH)
   use parallel
   use ensemble, only: nensem
 #if KEY_CMPI==0
-  use mpi      
+  use mpi_f08      
 #endif
   !
   implicit none
@@ -1527,7 +1548,7 @@ SUBROUTINE PSND8_WORLD(ARRAY, LENGTH)
   use parallel
   use ensemble, only: nensem
 #if KEY_CMPI==0
-  use mpi      
+  use mpi_f08      
 #endif
   !
   implicit none
@@ -1585,7 +1606,7 @@ SUBROUTINE LOCINTCOM(TO,FROM,IS,IR)
   use chm_kinds
   use parallel
 #if KEY_MPI==1
-  use mpi      
+  use mpi_f08      
 #endif
   implicit none
   !
@@ -1596,9 +1617,13 @@ SUBROUTINE LOCINTCOM(TO,FROM,IS,IR)
   !     We need everything integer*4 here, so it works in
   !     all environments ie. 32 bit and 64 bit
   !
-  INTEGER*4 M_STAT(MPI_STATUS_SIZE,2),IERR,REQ(2),IX,TAG
+  TYPE(MPI_Status) :: M_STAT(2)
+  TYPE(MPI_Request) :: REQ(2)
+  INTEGER*4 IERR,IX,TAG
   INTEGER*4 LTO,LFROM,LIS,LIR
-  INTEGER*4 IONE,mpiint,mpicomw
+  INTEGER*4 IONE
+  TYPE(MPI_Datatype) :: mpiint
+  TYPE(MPI_Comm) :: mpicomw
   !
   TAG=1
   IONE=1
@@ -1642,7 +1667,7 @@ SUBROUTINE LOCSPACCOM(TO,FROM,LS,MS,XS,YS,ZS,LR,MR,XR,YR,ZR)
   use chm_kinds
   use parallel
 #if KEY_MPI==1
-  use mpi      
+  use mpi_f08      
 #endif
 #if KEY_MULTICOM==1 /*  VO stringm */
   use multicom_aux 
@@ -1657,8 +1682,12 @@ SUBROUTINE LOCSPACCOM(TO,FROM,LS,MS,XS,YS,ZS,LR,MR,XR,YR,ZR)
   !     We need everything integer*4 here, so it works in
   !     all environments ie. 32 bit and 64 bit
   !
-  INTEGER*4 M_STAT(MPI_STATUS_SIZE,2),IERR,REQ(2),IX,TAG
-  INTEGER*4 lto,lfrom,lls,llr,mpicomw,mpiint,mpidprec,i
+  TYPE(MPI_Status) :: M_STAT(2)
+  TYPE(MPI_Request) :: REQ(2)
+  INTEGER*4 IERR,IX,TAG
+  INTEGER*4 lto,lfrom,lls,llr,i
+  TYPE(MPI_Comm) :: mpicomw
+  TYPE(MPI_Datatype) :: mpiint,mpidprec
   integer*4,allocatable,dimension(:) :: lms,lmr
   !
   TAG=1
@@ -1761,7 +1790,7 @@ SUBROUTINE LOCFORCCOM(TO,FROM,LS,XS,YS,ZS,LR,XR,YR,ZR)
   use chm_kinds
   use parallel
 #if KEY_MPI==1
-  use mpi      
+  use mpi_f08      
 #endif
 #if KEY_MULTICOM==1 /*  VO stringm */
   use multicom_aux 
@@ -1776,8 +1805,12 @@ SUBROUTINE LOCFORCCOM(TO,FROM,LS,XS,YS,ZS,LR,XR,YR,ZR)
   !     We need everything integer*4 here, so it works in
   !     all environments ie. 32 bit and 64 bit
   !
-  INTEGER*4 M_STAT(MPI_STATUS_SIZE,2),IERR,REQ(2),IX,TAG
-  integer*4 lto,lfrom,lls,llr,mpidprec,mpicomw
+  TYPE(MPI_Status) :: M_STAT(2)
+  TYPE(MPI_Request) :: REQ(2)
+  INTEGER*4 IERR,IX,TAG
+  integer*4 lto,lfrom,lls,llr
+  TYPE(MPI_Datatype) :: mpidprec
+  TYPE(MPI_Comm) :: mpicomw
   !
   TAG=1
   mpidprec=MPI_DOUBLE_PRECISION
@@ -1868,7 +1901,7 @@ SUBROUTINE LOCMAPCOM(TO,FROM,LS,MS,LR,MR)
   use chm_kinds
   use parallel
 #if KEY_MPI==1
-  use mpi      
+  use mpi_f08      
 #endif
 #if KEY_MULTICOM==1 /*  VO stringm */
   use multicom_aux 
@@ -1882,8 +1915,12 @@ SUBROUTINE LOCMAPCOM(TO,FROM,LS,MS,LR,MR)
   !     We need everything integer*4 here, so it works in
   !     all environments ie. 32 bit and 64 bit
   !
-  INTEGER*4 M_STAT(MPI_STATUS_SIZE,2),IERR,REQ(2),IX,TAG
-  integer*4 lto,lfrom,lls,llr,mpiint,mpicomw
+  TYPE(MPI_Status) :: M_STAT(2)
+  TYPE(MPI_Request) :: REQ(2)
+  INTEGER*4 IERR,IX,TAG
+  integer*4 lto,lfrom,lls,llr
+  TYPE(MPI_Datatype) :: mpiint
+  TYPE(MPI_Comm) :: mpicomw
   integer*4,allocatable,dimension(:) :: lms,lmr
   !
   TAG=1
@@ -2065,14 +2102,21 @@ SUBROUTINE PARFIN
   use dimens_fcm
   use exfunc
   use psf
-  !use parallel,only:
+   use parallel, only: charmm_owns_mpi, pycharmm_user_comm_set, &
+        q_pycharmm_embedded
   use memory
+#if KEY_MPI==1
+  use mpi_f08, only: mpi_finalized, MPI_SUCCESS
+#endif
 #if KEY_MULTICOM==1 /*  VO stringm */
-  use multicom, only: multicom_cleanup            
+  use multicom, only: multicom_cleanup
 #endif
   !
   implicit none
   INTEGER STATUS
+#if KEY_MPI==1
+  LOGICAL QMPIDOWN
+#endif
 #if KEY_GAMESSUK==1
   INTEGER ISTATUS
 #endif 
@@ -2097,18 +2141,45 @@ SUBROUTINE PARFIN
 ! for DDI:  CALL DDI_PEND(STATUS)
 #else /* (gukmpi)*/
 #if KEY_MULTICOM==1 /*  VO stringm */
-  call multicom_cleanup()                  
+  if (.not.pycharmm_user_comm_set .and. .not.q_pycharmm_embedded) call multicom_cleanup()
 #endif
-  CALL MPI_FINALIZE(STATUS)
+  ! Same finalize race as the KEY_CMPI==0 branch below; kept identical so
+  ! the two do not drift.  (KEY_CMPI is not set by the CMake build, so this
+  ! branch is currently unreachable.)
+  CALL MPI_FINALIZED(QMPIDOWN, STATUS)
+  if (STATUS .ne. MPI_SUCCESS) QMPIDOWN = .true.
+  if (.not. QMPIDOWN .and. charmm_owns_mpi) CALL MPI_FINALIZE(STATUS)
 #endif /* (gukmpi)*/
 #else /* (mpilib)*/
   STATUS=0
 #endif /* (mpilib)*/
 #else /* (cmpilib)*/
 #if KEY_MULTICOM==1 /*  VO stringm */
-  call multicom_cleanup()                  
+  if (.not.pycharmm_user_comm_set .and. .not.q_pycharmm_embedded) call multicom_cleanup()
 #endif
-  CALL MPI_FINALIZE(STATUS)
+#if KEY_MPI==1
+  ! An embedded host may already have finalized MPI by the time we get
+  ! here: at interpreter shutdown the order of mpi4py's atexit handler and
+  ! the pyCHARMM loader's __del__ -> del_charmm -> stopch -> PARFIN is not
+  ! defined.  MPI_FINALIZE is an error once MPI is down, so ask first and
+  ! skip the teardown entirely if we lost that race.
+  !
+  ! Note what is deliberately NOT done here: CHARMM's private duplicate of
+  ! a host-supplied communicator (adopt_host_comm) is never freed.
+  ! MPI_Comm_free is collective over the communicator, and this runs from a
+  ! destructor whose timing differs per rank -- exactly the race guarded
+  ! against just above.  A rank that won that race would block in the free
+  ! waiting for a peer that had already finalized and will never call it,
+  ! turning shutdown into the hang this whole path exists to prevent.  The
+  ! duplicate costs one communicator for the remaining life of a process
+  ! that is already exiting, and MPI_Finalize reclaims it.  Leaking it is
+  ! the correct trade.
+  CALL MPI_FINALIZED(QMPIDOWN, STATUS)
+  if (STATUS .ne. MPI_SUCCESS) QMPIDOWN = .true.
+  if (.not. QMPIDOWN .and. charmm_owns_mpi) CALL MPI_FINALIZE(STATUS)
+#else /* (mpilib2)*/
+  if (charmm_owns_mpi) CALL MPI_FINALIZE(STATUS)
+#endif /* (mpilib2)*/
 #endif /* (cmpilib)*/
 !  ##ENDIF (ensemble)
   RETURN

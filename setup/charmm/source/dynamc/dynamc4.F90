@@ -15,6 +15,9 @@ contains
        QKUHEAD,RUNOK, &
        IEQ4, IHT4, TIN4, FSTT4, FNLT4, TWH4, TWL4, &
        ICH4, IASORS, ISCVEL, IASVEL &
+#if KEY_MIDSINR == 1
+      ,q_midsinr,v_1ij,v_2ij,L_val &
+#endif
        )
     !-----------------------------------------------------------------------
     !     PERFORMS MOLECULAR DYNAMICS INTEGRATION IN 4 DIMINSIONS
@@ -103,6 +106,11 @@ contains
     real(chm_real) JHTEMP,TOTTEMP,TOTVEL
     LOGICAL RUNOK,OK
     INTEGER IASORS,ISCVEL,IASVEL
+#if KEY_MIDSINR == 1  /* MID-SINR */
+    logical :: q_midsinr
+    integer :: L_val
+    real(chm_real) :: v_1ij(3,L_val,natomx),v_2ij(3,L_val,natomx)   ! should be passed in.
+#endif /* MID-SINR */
     !
 #if KEY_PARALLEL==1
     real(chm_real) GCARR(10),TIMMER
@@ -1076,6 +1084,9 @@ contains
 #endif
                         NPRIV,JHSTRT,NDEGF,NSTEP, &
                         NSAVC,NSAVV,ZERO,ZERO,0,-1 &
+#if KEY_MIDSINR == 1
+                       ,q_midsinr,v_1ij,v_2ij,L_val &
+#endif
 #if KEY_BLOCK==1 /*ldm*/
                         ,.FALSE., .FALSE., &
                         0, (/ ZERO /), (/ ZERO /), (/ ZERO /), 0 &

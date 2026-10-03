@@ -127,7 +127,7 @@ contains
     use lambdam,only:qmld, biflam, biflam2, nblock, ninter, bixlam, blcoep, msld_setblcoef
     use domdec_block,only:biflam_loc, biflam2_loc
 #endif
-    use mpi
+    use mpi_f08
     implicit none
     ! Input / Output
     real(chm_real), intent(in) :: x(*), y(*), z(*), charge(*)

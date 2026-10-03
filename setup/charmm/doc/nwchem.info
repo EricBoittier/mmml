@@ -13,7 +13,7 @@ File: Nwchem, Node: Top, Up: (doc/commands.info), Next: Description
 
         Ab initio program NWChem (http://www.nwchem-sw.org) is
 connected to CHARMM program in a QM/MM method.  The implementation is
-based on the gukini.src source file which already works for other ab
+based on the gukini.F90 source file which already works for other ab
 initio programs interfaced to CHARMM. Since this is more than 2 decades
 later than the first ab initio program interfaced to CHARMM (GAMESS in
 1993) some of the strategies are much cleaner and more easy to

@@ -193,7 +193,7 @@ module api_types
   !> @var real_val real the value of the found real
   !> @var bool_val integer the value of the found logical 0 = .false. and 1 = .true.
   type, bind(c) :: found_value
-     integer(kind(found_type)) :: is_found = bool_false
+     integer(c_int) :: is_found = bool_false
      integer(c_int) :: int_val = 0, bool_val = 0
      real(c_double) :: real_val = 0
   end type Found_Value

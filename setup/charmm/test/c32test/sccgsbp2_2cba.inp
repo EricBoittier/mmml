@@ -9,7 +9,7 @@ IF ?SCCDFTB .NE. 1 THEN
  STOP
 endif
 
-IF ?GSBP .NE. 1 THEN
+IF ?QGSBP .NE. 1 THEN
  echo "c32test/sccgsbp2_2cba> GSBP Test NOT performed."
  STOP
 endif
@@ -18,91 +18,68 @@ bomb -5
 
 ! variables
 stream datadir.def
-set j 2cba
-set k 2cba_gsbp
 
-OPEN UNIT 21 NAME @0top_ca.inp READ FORM
-READ RTF card UNIT 21
-CLOSE UNIT 21
+! SCC-DFTB needs SCCDFTB_DATA pointing at a directory holding this test's
+! parameter file.  `genv' on an unset variable is a level-0 warning, which is
+! fatal at the default BOMLEV, so lower BOMLEV across the call and self-skip
+! when the data has not been provisioned here.  The file check matters as
+! well: SCCDFTB_DATA can be set while this particular file is absent, and
+! CHARMM then dies part way through reading parameters with no termination
+! line at all.
+set sccdftbdir UNSET_SCCDFTB_DATA
+set oldbomlev ?bomlev
+bomlev -5
+genv sccdftbdir SCCDFTB_DATA
+bomlev @oldbomlev
+if @sccdftbdir eq UNSET_SCCDFTB_DATA then
+   echo SCCGSBP2_2CBA TESTCASE RESULT: SKIP
+   stop
+endif
+strc sccdat @sccdftbdir "/sccdftb_ONCH.dat"
+bomlev -5
+open unit 98 read form name @sccdat
+if ?iostat .ne. 1 then
+   echo SCCGSBP2_2CBA TESTCASE RESULT: SKIP
+   stop
+endif
+close unit 98
+bomlev @oldbomlev
+stream @0sccgsbp_system.str
 
-OPEN UNIT 22 NAME @0par_ca.inp READ FORM
-READ PARA card UNIT 22
-CLOSE UNIT 22
+! The regions this builds are stored in xcomp (reaction), ycomp (buffer) and
+! wcomp (outer), one flag per atom, so summing each gives its size.  Those
+! three are disjoint and cover everything, which is checkable without
+! reference to any captured number: they must add up to the atom count.
+! zcomp is the Langevin subset of the buffer region, so it is bounded by it.
+scalar xcomp stat
+set nreact = ?stot
+scalar ycomp stat
+set nbuffer = ?stot
+scalar zcomp stat
+set nlangevin = ?stot
+scalar wcomp stat
+set nouter = ?stot
 
-OPEN UNIT 3 NAME @0@j.psf READ  FORM
-READ  PSF CARD UNIT 3
-CLOSE UNIT 3
+calc npartition = @nreact + @nbuffer + @nouter
+@testcheck @npartition ?natom 0.000001 sccgsbp2_2cba_partition_covers_system
 
-OPEN UNIT 3 NAME @0@j.crd READ FORM
-READ  COOR CARD UNIT 3
-CLOSE UNIT 3
+! The Langevin set is the buffer region minus its hydrogens and waters, so it
+! has to be a non-empty proper subset.  Written as a comparison rather than a
+! captured size, and oriented so that a NaN fails it.
+set nonempty = FAIL
+if @nlangevin gt 0 then set nonempty = PASS
+echo SCCGSBP2_2CBA_LANGEVIN_NONEMPTY TESTCASE RESULT: @nonempty
 
-! add link atoms
-addl qqh1 2cba 92  cb 2cba 92  ca
-addl qqh2 2cba 94  cb 2cba 94  ca
-addl qqh3 2cba 117 cb 2cba 117 ca
+set subset = FAIL
+if @nlangevin lt @nbuffer then set subset = PASS
+echo SCCGSBP2_2CBA_LANGEVIN_WITHIN_BUFFER TESTCASE RESULT: @subset
 
-! -------------------------------------------------------------
-
-set 1 16.0    ! radius for fully mobile region
-set 2 20.0    ! radius of inner region
-set 3 18.0    ! radius of buffer region where Langevin dynamics will be used
-
-! delete solvent atoms outside 18 angstroms.
-! we want to delete outer region waters, but we also delete a 2A layer
-! in the inner region to account for the water exclusion radius.
-! (see test case /clongtest/gsbptest2.inp)
-dele atom sele .byres. (resname TIP3 .and. .not. - 
-                        ( point 0. 0. 0. cut @3 )) end
-
-scalar xcomp set 0.0
-scalar ycomp set 0.0
-scalar zcomp set 0.0
-scalar wcomp set 0.0
-
-! INNER, MOBILE REGION
-! residues with at least one atom within 16-A and
-!   with no main chain atoms outside of 18-A 
-scalar xcomp set 1.0 -
-        sele  ( .byres. ( point 0. 0. 0. cut @1 ) ) -
-        .and. .not. ( ( type C  .or. type O  .or. type N .or. - 
-                        type CA .or. type HA .or. type HN) -
-        .and. .not. ( point 0. 0. 0. cut @3 ) ) end
-scalar xcomp store 1
-
-! INITIAL BUFFER REGION
-! residues with at least one atom within 20-A,  but not already 
-!  included in the inner, mobile region
-scalar ycomp set 1.0 sele ( .byres. ( point 0. 0. 0. cut @2 ) ) -
-        .and. .not. recall 1 end
-scalar ycomp store 2
-
-! PROTEIN LANGEVIN ATOMS
-! all atoms, except hydrogens and waters in the buffer region
-scalar zcomp set 1.0 sele recall 2 .and. .not. -
-        ( hydrogen .or. lone .or. resname tip3 ) end
-scalar zcomp store 3
-
-! OUTER REGION ATOMS
-! any atom not in the inner or buffer regions
-scalar wcomp set 1.0 sele .not. (recall 1 .or. recall 2 ) end
-scalar wcomp store 4
-
-!write out the new psf and crd, as well as partition.
-open unit 11 write form name @9@k_sb.psf
-write psf unit 11 card
-
-open unit 12 write form name @9@k_sb.crd
-write coor unit 12 card
-
-open unit 13 write form name @9@k_sb.reg
-write coor card comp unit 13
-* 2cba:solv:bulk:16 A
-* column 1: reaction region 16 A by residue partioning
-* column 2: Buffer region atoms, any atoms (byres) within 20 A but
-*           not in 16 A plus all main chain atoms outside 18 A  
-* column 3: Protein Langenvin atoms (same as col. 2 but no H or tip3).
-* column 4: Outer region atoms
-*
+! and pin the sizes, so a change in how the selections are parsed shows up
+! here rather than as a number moving somewhere downstream
+@testcheck ?natom 4525 0.000001 sccgsbp2_2cba_natom
+@testcheck @nreact 2481 0.000001 sccgsbp2_2cba_reaction_region
+@testcheck @nbuffer 1469 0.000001 sccgsbp2_2cba_buffer_region
+@testcheck @nouter 575 0.000001 sccgsbp2_2cba_outer_region
 
 STOP
+

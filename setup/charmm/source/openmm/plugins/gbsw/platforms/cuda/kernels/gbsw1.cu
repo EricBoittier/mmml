@@ -853,25 +853,35 @@ extern "C" __global__ void calcBornR_hydrogen(
     quadPtX = quadPt.x + posq_XYZQ.x - tran.x;
     quadPtY = quadPt.y + posq_XYZQ.y - tran.y;
     quadPtZ = quadPt.z + posq_XYZQ.z - tran.z;
-    
+
 #ifdef USE_MEMBRANE
-    if ( abs(quadPtZ) > MEMBRANE_INNER_R ) {
-        
-    // is point is inside membrane's switching function?
-    if ( abs(quadPtZ) < MEMBRANE_OUTER_R ) {
-        
+    // Membrane boundaries are in absolute (lab-frame) coordinates centered
+    // at z=0, but quadPtZ is shifted by -tran.z for the periodic grid.
+    // Use the unshifted z for the membrane switching function.
+    {
+    float absZ = quadPt.z + posq_XYZQ.z;   // absolute z of quadrature point
+#ifdef USE_PERIODIC
+    // Apply minimum image convention: membrane is centered at z=0 but
+    // OpenMM may wrap positions into [0, Lz].
+    absZ -= floor(absZ * invbox.z + 0.5f) * box.z;
+#endif
+    if ( abs(absZ) > MEMBRANE_INNER_R ) {
+
+    // is point inside membrane's switching function?
+    if ( abs(absZ) < MEMBRANE_OUTER_R ) {
+
         // above or below the XY plane?
-        if ( quadPtZ > 0.0f ) {
-            r = quadPtZ - MEMBRANE_R;
+        if ( absZ > 0.0f ) {
+            r = absZ - MEMBRANE_R;
             sf = 0.5f + MEMBRANE_PRECALC1 * r - MEMBRANE_PRECALC2 * r * r * r;
         } else {
-            r = quadPtZ + MEMBRANE_R;
+            r = absZ + MEMBRANE_R;
             sf = 0.5f - MEMBRANE_PRECALC1 * r + MEMBRANE_PRECALC2 * r * r * r;
         }
         switchFn *= sf;
     }
 #endif
-    
+
     // convert to gridspace
     i = floor((quadPtX + DELTA_R * 0.5f) * INVERSE_DELTA_R);
     j = floor((quadPtY + DELTA_R * 0.5f) * INVERSE_DELTA_R);
@@ -968,8 +978,9 @@ extern "C" __global__ void calcBornR_hydrogen(
 #ifdef USE_MEMBRANE
     } else
         switchFn = 0.0f; // inside membrane
+    } // close absZ scope
 #endif
-    
+
 #else // periodic bounds check
     
     // generate quadrature point (quadX, quadY, quadZ)
@@ -1294,30 +1305,39 @@ extern "C" __global__ void calcBornR_heavy(
         quadPtX = quadPt.x + posq_XYZQ.x - tran.x;
         quadPtY = quadPt.y + posq_XYZQ.y - tran.y;
         quadPtZ = quadPt.z + posq_XYZQ.z - tran.z;
-        
+
 #ifdef USE_MEMBRANE
-    if ( abs(quadPtZ) > MEMBRANE_INNER_R ) {
-        
-    // is point is inside membrane's switching function?
-    if ( abs(quadPtZ) < MEMBRANE_OUTER_R ) {
-        
+    // Membrane boundaries are in absolute (lab-frame) coordinates centered
+    // at z=0; quadPtZ is shifted for the periodic grid.  Use unshifted z.
+    {
+    float absZ = quadPt.z + posq_XYZQ.z;   // absolute z of quadrature point
+#ifdef USE_PERIODIC
+    // Apply minimum image convention: membrane is centered at z=0 but
+    // OpenMM may wrap positions into [0, Lz].
+    absZ -= floor(absZ * invbox.z + 0.5f) * box.z;
+#endif
+    if ( abs(absZ) > MEMBRANE_INNER_R ) {
+
+    // is point inside membrane's switching function?
+    if ( abs(absZ) < MEMBRANE_OUTER_R ) {
+
         // above or below the XY plane?
-        if ( quadPtZ > 0.0f ) {
-            r = quadPtZ - MEMBRANE_R;
+        if ( absZ > 0.0f ) {
+            r = absZ - MEMBRANE_R;
             sf = 0.5f + MEMBRANE_PRECALC1 * r - MEMBRANE_PRECALC2 * r * r * r;
         } else {
-            r = quadPtZ + MEMBRANE_R;
+            r = absZ + MEMBRANE_R;
             sf = 0.5f - MEMBRANE_PRECALC1 * r + MEMBRANE_PRECALC2 * r * r * r;
         }
         switchFn *= sf;
     }
 #endif
-        
+
         // convert to gridspace
         i = floor((quadPtX + DELTA_R * 0.5f) * INVERSE_DELTA_R);
         j = floor((quadPtY + DELTA_R * 0.5f) * INVERSE_DELTA_R);
         k = floor((quadPtZ + DELTA_R * 0.5f) * INVERSE_DELTA_R);
-        
+
         // enforce periodic bounds
         if (i < 0) i += gdim.x; else if (i >= gdim.x) i -= gdim.x;
         if (j < 0) j += gdim.y; else if (j >= gdim.y) j -= gdim.y;
@@ -1408,8 +1428,9 @@ extern "C" __global__ void calcBornR_heavy(
 #ifdef USE_MEMBRANE
     } else
         switchFn = 0.0f; // inside membrane
+    } // close absZ scope
 #endif
-        
+
     } // check if atom is outside inner radius
     
 #else
@@ -1944,6 +1965,11 @@ extern "C" __global__ void computeGBSWForce(unsigned long long* __restrict__ for
 
 #ifdef USE_CUTOFF
     unsigned int numTiles = interactionCount[0];
+    // When the neighbor list is empty (e.g. NonbondedForce has zero
+    // charges/VDW), fall back to enumerating all tile pairs so that
+    // GBSW pairwise interactions are still computed.
+    if (numTiles == 0)
+        numTiles = maxTiles + 1;
     int pos = warp*(numTiles > maxTiles ? NUM_BLOCKS*(NUM_BLOCKS+1)/2 : numTiles)/totalWarps;
     int end = (warp+1)*(numTiles > maxTiles ? NUM_BLOCKS*(NUM_BLOCKS+1)/2 : numTiles)/totalWarps;
 #else

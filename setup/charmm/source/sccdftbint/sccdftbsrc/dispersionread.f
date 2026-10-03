@@ -25,7 +25,12 @@ CQC1  common /dispertmp/ A,B,C,r0,rv,C6,Rvdw
 !     QC: set a crap character to allow things to be read in
       character*2 crap
       lread = .false.
-      open(54,file="DISPERSION.INP",status="unknown")
+!     status='old': a missing file used to be created here, empty, so the
+!     read below hit EOF immediately and the code silently fell through to
+!     DISP.INP -- which was opened the same way, created empty in turn, and
+!     the run then failed somewhere else entirely.  Absent is now absent.
+!     disp_file is DISPERSION.INP unless the script gave DSPF a path.
+      open(54,file=disp_file,status='old',iostat=ios)
 !      read(54,*) A,B,C,rv,r0,scale
 !     parameters as in Elstner et al., JCP 2000
       A=7
@@ -42,6 +47,14 @@ CQC1  common /dispertmp/ A,B,C,r0,rv,C6,Rvdw
        write(*,*)  'Slater-Kirkwood dispersion switched on:'
       endif
 
+!     Jump to the DISP.INP path only here, once the parameters above have
+!     been set -- they are needed either way.
+      if (ios .ne. 0) goto 10
+!     rewind as gettab and chardkoread do: without it a second
+!     SCCDFTB ... DISP in one script reads from where the first stopped,
+!     hits EOF, and reports the file missing when it is not.
+      rewind 54
+
       do i=1,ntype 
       if ( scale .ge.0.0 ) then
 !      read(54,*,end=10) (h1(i,j),j=1,4),(h2(i,j),j=1,4),Ni0(i)
@@ -57,12 +70,20 @@ CQC1  common /dispertmp/ A,B,C,r0,rv,C6,Rvdw
      c '  read C6, Rvdw (eV,A) from DISPERSION.INP'
 !     open(15,file='DISP.CHEK')
       write(*,*) '  careful, parameter determined from # of H atoms'
+      close(54)
 
       goto 20
 10    continue
        lread = .true.
-       open(16,file='DISP.INP')
-         write(*,*) '  DISPERSION.INP empty, read from DISP.INP' 
+       open(16,file='DISP.INP',status='old',iostat=ios)
+       if (ios .ne. 0) then
+         write(*,*) '  DISP> cannot read ',trim(disp_file),
+     c        ' and no DISP.INP in the working directory'
+         call wrndie(-5,'<DISPERSIONREAD>',
+     c        'dispersion parameters (DISPERSION.INP or DISP.INP) '//
+     c        'not found')
+       endif
+         write(*,*) '  no DISPERSION.INP, read from DISP.INP'
 20    continue
 ! if we read from DISPERSION.INP:
 !  determine hybridization from number of Hydrogens

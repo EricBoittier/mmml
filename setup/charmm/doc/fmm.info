@@ -34,7 +34,7 @@ SYNTAX and DESCRIPTION
 The interface is based on the GRAPE interface because it uses the same
 parameter data layout for efficiency reasons. So the GRAPE interface
 provides all the necessary data to perform FMM calculations. All the
-interface code is thus in the grape.src file.
+interface code is thus in the grape.F90 file.
 
 To initialize the method use:
 

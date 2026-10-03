@@ -55,8 +55,9 @@ stream datadir.def
 ! Important energies are saved and forces on meoh are printed
 ! The difference between (1) and (2) has to equal the difference of the lambda=1
 ! energies computed with normal PERT (3) and CHEM PERT (4).
-! Energies are compared on the fly and grave discrepancies make the
-! script bomb. Forces need to be checked by hand!!
+! Energies are compared on the fly and reported with testcheck, so a
+! discrepancy shows up as a self-reported FAIL. Forces need to be
+! checked by hand!!
 !
 
 ! IMPORTANT!! We need to push the precision of internal calcs
@@ -80,13 +81,18 @@ label next_round
 
 ! setup the system (methanol in truncated octahedron of 250 waters)
 
+! Both levels have to carry @pnode.  Non-master ranks start with
+! PRNLEV=-1/WRNLEV=-5 so that only the master narrates; a bare `wrnlev'
+! is applied on every rank and puts the others back to work, so every
+! WRNDIE warning was emitted once per rank and the copies interleaved
+! with the master's output in a different order on every run.
 prnlev 0 @pnode
-wrnlev 0
+wrnlev 0 @pnode
 set pass a
 goto setup
 label from_setup_a
 prnlev 5 @pnode
-wrnlev 2
+wrnlev 2 @pnode
 
 ! get started
 
@@ -188,12 +194,12 @@ shake off
 ! setup the system (methanol in truncated octahedron of 250 waters) again
 
 prnlev 0 @pnode
-wrnlev 0
+wrnlev 0 @pnode
 set pass b
 goto setup
 label from_setup_b
 prnlev 5 @pnode
-wrnlev 2
+wrnlev 2 @pnode
 
 pert sele segi meoh end
 
@@ -252,12 +258,12 @@ shake off
 ! setup the system (methanol in truncated octahedron of 250 waters) again
 
 prnlev 0 @pnode
-wrnlev 0
+wrnlev 0 @pnode
 set pass c
 goto setup
 label from_setup_c
 prnlev 5 @pnode
-wrnlev 2
+wrnlev 2 @pnode
 
 pert chem sele segi meoh end
 
@@ -310,24 +316,22 @@ scalar xcomp sum 1
 scalar ycomp sum 2
 scalar zcomp sum 3
 
-! This one has to be zero (no effect at lamb = 0)!!!
-calc en1 = @en1a - @en2a 
-if @en1a .ae. @en2a then
-   ! seems OK
-else
-   goto problem
-endif
+! At lambda=0 the perturbed molecule is still fully coupled, so normal
+! PERT and CHEM PERT have to return the same energy.  Keep the tolerance
+! the `.ae.' operator used here before, which is ABS(a-b) < 1e-4
+! (PT0001); they agree to about 1e-12 on an energy near -2900, so there
+! is plenty of room without tightening what the author asked for.
+calc en1 = @en1a - @en2a
+@testcheck @en1a @en2a -0.0001 chempert1_lambda0_agrees_@options
 
 
-! Compare this to enfinal of companion script
-! Agreement is often not perfect because of roundoff error
+! The lambda=1 difference between normal PERT (3) and CHEM PERT (4) has
+! to equal the direct lambda=1/lambda=0 difference from part I.  The
+! author's 0.001 roundoff allowance is kept as-is; the observed gap is
+! about 1e-12.
 calc en2 = @en1b - @en2b
 calc diff = abs ( @en2 - @enfinal )
-if @diff .lt. 0.001 then ! .ae. too stringent
-   ! seems OK
-else
-   goto problem
-endif
+@testcheck @en2 @enfinal -0.001 chempert1_pert_matches_chempert_@options
 
 ! and similarly with forces
 ! these are usually done with full internal precision, i.e., better
@@ -1275,10 +1279,3 @@ read coor card
 
 goto  from_setup_@{pass}
 
-label problem
-
-!! something's fishy, so we die here
-
-die
-
-stop

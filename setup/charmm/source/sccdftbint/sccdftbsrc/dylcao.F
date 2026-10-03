@@ -106,7 +106,7 @@
         scfhelp= .true.
         chrr= .false.
         mode= 3
-        open(iunit,file='sccdftb.dat',status='old')
+        open(iunit,file=sccdat_file,status='old')
         rewind iunit
         writeout = 0
         nn=nscctc
@@ -197,7 +197,15 @@
          call wrndie(-5,'<DYLCAO>','LDEP not implemented in 
      &   connection with reading charges from CHR.DAT.')
       endif
-      open(37,file="CHR.DAT",status="unknown")
+!     status='old': CHR.DAT holds charges from a previous run.  A missing
+!     one used to be created here, empty, and the reads below then failed at
+!     EOF without saying which file was wanted.
+      open(37,file="CHR.DAT",status='old',iostat=ios)
+      if (ios .ne. 0) then
+        call wrndie(-5,'<DYLCAO>',
+     &       'asked to read charges from CHR.DAT, which is not '//
+     &       'readable in the working directory')
+      endif
       do23072 i=1,5 
       read(37,*) tmpchr
 23072 continue

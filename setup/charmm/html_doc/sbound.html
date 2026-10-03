@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Method and implementation of deformable boundary forces</title>
+<link rel="stylesheet" href="charmmdoc.css">
+</head>
+<body>
+<div class="page-header">
+<h1>Method and implementation of deformable boundary forces</h1>
+<div class="nav"><a href="index.html">Index</a><a href="charmm.html">CHARMM Home</a><a href="commands.html">Commands</a></div>
+</div>
+<pre>
+<a id="Top"></a>
+<div class="charmmdoc">
+           Method and implementation of deformable boundary forces
+
+        The use of deformable boundary forces is in studying small
+localized regions of solvent, say around an active site.  The boundary
+forces are applied to the atoms in the solvent and serve to contain
+the reaction zone.
+
+        Generally the boundary forces are computed from the deformable
+boundary method of C. L. Brooks III and M. Karplus, J. Chem. Phys., 79,
+6312(1983).  Following generation one must;
+
+    i) Generate the corresponding boundary potential
+
+   ii) Read the tabulated boundary potential into CHARMM
+
+  iii) Set-up the mapping CHARMM uses to connect table entries with
+       boundary constrained atoms
+
+Steps ii) and iii) ** MUST ** be done everytime the boundary forces are to be
+used.  For example, during the initial stages of a dynamics simulation and
+at all subsequent restarts.
+
+        The syntax for generating the potential and reading and setting up
+the table structure is given in the following mode.
+
+
+* <a href="#Syntax">Syntax</a> | Syntax for all the SBOUnd commands
+* <a href="support.html">support</a>: Boundary. Deformable boundary potential files
+
+</div>
+<a id="Syntax"></a>
+<div class="charmmdoc">
+<a href="#Top">Top</a>
+          &gt; SBOUnd POTEntial INPUt &lt;integer&gt; OUTPut &lt;integer&gt;
+
+
+  Integrates forces to get potential and generates cubic spline
+  approximation of the potential.
+
+          &gt; SBOUnd SET XREF &lt;real&gt; YREF &lt;real&gt; ZREF &lt;real&gt;
+                   ASSIgn &lt;table number&gt; &lt;selection-syntax&gt;
+
+  Solvent boundary routine to set boundary geometry
+  and specify the atoms referring to the tables.  Note the
+  assign must be repeated for each table entry.
+
+           &gt; SBOUnd READ UNIT &lt;integer&gt;
+
+  This routine reads in the boundary potential splines
+  for the boundary constraints.
+</div>
+</pre>
+</body>
+</html>

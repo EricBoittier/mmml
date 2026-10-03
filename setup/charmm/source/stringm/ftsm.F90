@@ -49,7 +49,7 @@
       use number
       use multicom_aux;
       use consta
-      use mpi
+      use mpi_f08
       use select, only : selcta, selrpn, nselct; use psf
       use coord; use coordc
       use dimens_fcm
@@ -88,22 +88,23 @@
 !
       logical :: qroot, qslave, qprint, qcomp, voronoi_check_map, ok, &
      & qangstrom
+      integer :: i_land, i_landg ! integer mirror for a portable logical-AND reduction
 !
 #if (KEY_PARALLEL==1)
 #if (KEY_SINGLE==1)
- integer :: mpifloat=MPI_REAL 
+ TYPE(MPI_Datatype) :: mpifloat=MPI_REAL 
 #endif
 #if (KEY_SINGLE==0)
- integer :: mpifloat=MPI_REAL8 
+ TYPE(MPI_Datatype) :: mpifloat=MPI_REAL8 
 #endif
 #if (KEY_INTEGER8==0)
- integer :: mpiint=MPI_INTEGER 
+ TYPE(MPI_Datatype) :: mpiint=MPI_INTEGER 
 #endif
 #if (KEY_INTEGER8==1)
- integer :: mpiint=MPI_INTEGER8 
+ TYPE(MPI_Datatype) :: mpiint=MPI_INTEGER8 
 #endif
- integer :: mpichar=MPI_CHARACTER
- integer :: mpibool=MPI_LOGICAL
+ TYPE(MPI_Datatype) :: mpichar=MPI_CHARACTER
+ TYPE(MPI_Datatype) :: mpibool=MPI_LOGICAL
 #endif
 !
       interface
@@ -255,12 +256,17 @@
        ivv2=indxa(comlyn, comlen, 'VV2')
        iorig=indxa(comlyn, comlen, 'ORIG')
        ileap=indxa(comlyn, comlen, 'LEAP')
-       if ((ivver+ivv2+iorig).gt.0) then
-        call wrndie(0,whoami,trim('ONLY LEAP-FROG DYNAMICS ARE SUPPORTED. NOTHING DONE'))
+       !if ((ivver+ivv2+iorig).gt.0) then
+       if ((ivv2+iorig).gt.0) then
+        call wrndie(0,whoami,trim('ONLY LEAP-FROG or VELOCITY VERLET DYNAMICS ARE SUPPORTED. NOTHING DONE'))
         return
        endif
-! force LEAP DYNAMICS
-       call joinwd(comlyn, mxcmsz, comlen, 'LEAP ', 5)
+! force LEAP or VELOCITY VERLET DYNAMICS
+       if(ileap > 0) then
+          call joinwd(comlyn, mxcmsz, comlen, 'LEAP ', 5)
+       else if (ivver > 0) then
+          call joinwd(comlyn, mxcmsz, comlen, 'VVER ', 5)
+       end if
 !================= CHECK THAT COORDINATE ARRAYS AND WEIGHTS HAVE BEEN ALLOCATED
        if (.not.((associated(r_o).and.associated(orientWeights).or..not.qorient).and.associated(r_f).and.associated(forcedWeights))) then
          call wrndie(0,whoami,trim('SOME FTSM COORDINATES NOT DEFINED. USE "FILL" or "READ". NOTHING DONE.')); return;
@@ -316,8 +322,12 @@
 ! compare me and whereami:
            if (qroot) then
             if(SIZE_STRNG.gt.1) then
-             call MPI_ALLREDUCE(me.eq.ftsm_voronoi_whereami, ok, &
-     & 1, mpibool, MPI_LAND, MPI_COMM_STRNG, ierror)
+! MPI_LAND on a logical trips strict-MPI (MPICH) op/datatype checks; reduce an
+! integer 0/1 flag with MPI_MIN (== logical AND across ranks) instead.
+             i_land=0; if (me.eq.ftsm_voronoi_whereami) i_land=1
+             call MPI_ALLREDUCE(i_land, i_landg, &
+     & 1, MPI_INTEGER, MPI_MIN, MPI_COMM_STRNG, ierror)
+             ok=(i_landg.eq.1)
             else
              ok=me.eq.ftsm_voronoi_whereami
             endif
@@ -910,7 +920,7 @@
            write(info(1),'(A," ============================================================================")') whoami
            write(info(2),'(A,"  STRING RANK:",I5,", LOCAL RANK:",I5,", GLOBAL RANK:",I5,"")') whoami, mestring, ME_LOCAL, ME_GLOBAL
            do i=1,2
-            write(info(i+2),'(A,3'//real_format//'F15.9)')                   &
+            write(info(i+2),'(A,3'//real_format//',F15.9)')                   &
      & whoami,fd_error(i,:)
            enddo
            i=3
@@ -922,7 +932,7 @@
            write(info(1),'(A," ============================================================================")') whoami
            write(info(2),'(A,"  STRING RANK:",I5,", LOCAL RANK:",I5,", GLOBAL RANK:",I5,"" )') whoami, mestring, ME_LOCAL, ME_GLOBAL
            i=2
-           write(info(i+1),'(A,3'//real_format//'F15.9)')                   &
+           write(info(i+1),'(A,3'//real_format//',F15.9)')                   &
      & whoami,fd_error(1,:)
           endif ! projection
 !
@@ -965,7 +975,7 @@
      & /A,'  DGRAD_X_MAX, DGRAD_Y_MAX, DGRAD_Z_MAX, VALUE', &
      & /A,' ============================================================================')
            do i=1, 2
-            write(info,'(A,4'//real_format//'F15.9)')                   &
+            write(info,'(A,4'//real_format//',F15.9)')                   &
      & whoami,fd_error(i,:) ; write(OUTU,'(A)') pack(info,info.ne.'');info='';
            enddo
           else ! not proj_on
@@ -973,7 +983,7 @@
  7010 format(/A,'  DISTANCE TO PATH POINT:', &
      & /A,'  DGRAD_X_MAX, DGRAD_Y_MAX, DGRAD_Z_MAX, VALUE', &
      & /A,' ============================================================================')
-            write(info,'(A,4'//real_format//'F15.9)')                   &
+            write(info,'(A,4'//real_format//',F15.9)')                   &
      & whoami,fd_error(1,:) ; write(OUTU,'(A)') pack(info,info.ne.'');info='';
           endif ! proj_on
          endif ! qprint
@@ -1635,7 +1645,7 @@
 #if (KEY_MULTICOM==1)
       use multicom_aux; 
 #endif
-      use mpi
+      use mpi_f08
       use number
       use ivector; use ivector_list; use rvector; use rvector_list
       use param_store, only: set_param
@@ -1645,19 +1655,19 @@
 !
 #if (KEY_PARALLEL==1)
 #if (KEY_SINGLE==1)
- integer :: mpifloat=MPI_REAL 
+ TYPE(MPI_Datatype) :: mpifloat=MPI_REAL 
 #endif
 #if (KEY_SINGLE==0)
- integer :: mpifloat=MPI_REAL8 
+ TYPE(MPI_Datatype) :: mpifloat=MPI_REAL8 
 #endif
 #if (KEY_INTEGER8==0)
- integer :: mpiint=MPI_INTEGER 
+ TYPE(MPI_Datatype) :: mpiint=MPI_INTEGER 
 #endif
 #if (KEY_INTEGER8==1)
- integer :: mpiint=MPI_INTEGER8 
+ TYPE(MPI_Datatype) :: mpiint=MPI_INTEGER8 
 #endif
- integer :: mpichar=MPI_CHARACTER
- integer :: mpibool=MPI_LOGICAL
+ TYPE(MPI_Datatype) :: mpichar=MPI_CHARACTER
+ TYPE(MPI_Datatype) :: mpibool=MPI_LOGICAL
 #endif
 
       integer :: ierror
@@ -1797,7 +1807,7 @@
 #if (KEY_MULTICOM==1)
       use multicom_aux; 
 #endif
-      use mpi
+      use mpi_f08
       use param_store, only: set_param
 !
       character(len=len("FTSM_DONE>") ),parameter::whoami="FTSM_DONE>";!macro
@@ -1962,7 +1972,7 @@
 #if (KEY_MULTICOM==1)
       use multicom_aux; 
 #endif
-      use mpi
+      use mpi_f08
       use stream
       use number
       use chm_types, only : nonbondDataStructure, imageDataStructure
@@ -2350,25 +2360,26 @@
       real(chm_real) :: orient_mass, wsum
       real(chm_real) :: u(3,3)=Id3
       real(chm_real) :: rcurrent_com(3)=(/zero,zero,zero/) ! COM vector
-      integer :: i, j, me, ncpu, ierror, stat(MPI_STATUS_SIZE)
+      integer :: i, j, me, ncpu, ierror
+      TYPE(MPI_Status) :: stat
       logical :: qroot, qslave
 !
 !
 #if (KEY_PARALLEL==1)
 #if (KEY_SINGLE==1)
- integer :: mpifloat=MPI_REAL 
+ TYPE(MPI_Datatype) :: mpifloat=MPI_REAL 
 #endif
 #if (KEY_SINGLE==0)
- integer :: mpifloat=MPI_REAL8 
+ TYPE(MPI_Datatype) :: mpifloat=MPI_REAL8 
 #endif
 #if (KEY_INTEGER8==0)
- integer :: mpiint=MPI_INTEGER 
+ TYPE(MPI_Datatype) :: mpiint=MPI_INTEGER 
 #endif
 #if (KEY_INTEGER8==1)
- integer :: mpiint=MPI_INTEGER8 
+ TYPE(MPI_Datatype) :: mpiint=MPI_INTEGER8 
 #endif
- integer :: mpichar=MPI_CHARACTER
- integer :: mpibool=MPI_LOGICAL
+ TYPE(MPI_Datatype) :: mpichar=MPI_CHARACTER
+ TYPE(MPI_Datatype) :: mpibool=MPI_LOGICAL
 #endif
 !
       character(len=len("FTSM_ORIENT>") ),parameter::whoami="FTSM_ORIENT>";!macro
@@ -2514,34 +2525,36 @@
 #endif
       use consta
       use number
-      use clcg_mod, only: random; use reawri, only: iseed
+      use clcg_mod, only: random ! ; use reawri, only: iseed
       use reawri
       use string
-      use mpi
+      use stream, only: outu, prnlev
+      use mpi_f08
       use param_store, only: set_param
       use parallel, only: psnd4, psnd8
 
 #if (KEY_PARALLEL==1)
 #if (KEY_SINGLE==1)
- integer :: mpifloat=MPI_REAL 
+ TYPE(MPI_Datatype) :: mpifloat=MPI_REAL 
 #endif
 #if (KEY_SINGLE==0)
- integer :: mpifloat=MPI_REAL8 
+ TYPE(MPI_Datatype) :: mpifloat=MPI_REAL8 
 #endif
 #if (KEY_INTEGER8==0)
- integer :: mpiint=MPI_INTEGER 
+ TYPE(MPI_Datatype) :: mpiint=MPI_INTEGER 
 #endif
 #if (KEY_INTEGER8==1)
- integer :: mpiint=MPI_INTEGER8 
+ TYPE(MPI_Datatype) :: mpiint=MPI_INTEGER8 
 #endif
- integer :: mpichar=MPI_CHARACTER
- integer :: mpibool=MPI_LOGICAL
+ TYPE(MPI_Datatype) :: mpichar=MPI_CHARACTER
+ TYPE(MPI_Datatype) :: mpibool=MPI_LOGICAL
 #endif
 !
       real(chm_real) :: x(:), y(:), z(:) ! mass(size(x,1))
       integer :: itime
 !
-      integer :: i, j, stat(MPI_STATUS_SIZE)
+      integer :: i, j
+      TYPE(MPI_Status) :: stat
       integer*4 :: ierror
       integer(KIND=MPI_ADDRESS_KIND) :: lb, extent
       logical :: deriv, qendpoint, qgrp, qvalid
@@ -2722,6 +2735,13 @@
 !
         nfiles=2
 ! can add others here
+! NOTE: blank the name buffers before INQUIRE. If a unit is not currently
+! connected (e.g. the trajectory unit has already been closed at the final
+! integration step), the Fortran standard leaves INQUIRE(...NAME=) undefined, so
+! these locals would otherwise hold garbage that gets shipped to the exchange
+! partner and later fed to OPEN(), crashing that rank and deadlocking the rest.
+        fnames = ''
+        new_fnames = ''
         if (iunwri.gt.0) &
 ! CHARMM VINQUIRE gives problems, did not bother to debug, since that code is obsolete anyway
      & INQUIRE(UNIT=iunwri, OPENED=openun(1), NAME=fnames(1))
@@ -2743,22 +2763,33 @@
 ! write(600+ME_STRNG,*) iunwri, new_fnames(1), &
 ! & iuncrd, new_fnames(2), openun(1:2)
 ! close(600+ME_STRNG)
+! NOTE: only re-open a unit under the partner`s file name if the partner
+! actually sent a non-blank name (i.e. its corresponding unit was open). A blank
+! name means the partner`s unit was closed for this exchange (typically the final
+! step of the run); swapping the file identity is then meaningless, so leave our
+! own unit as-is rather than OPEN('') and abort.
 ! assuming that the restart file is formatted (might change this later)
-        if (iunwri.gt.0.and.openun(1)) then
+        if (iunwri.gt.0.and.openun(1).and.len_trim(new_fnames(1)).gt.0) then
          close(iunwri)
          i=len(new_fnames(1))
          call trima(new_fnames(1), i)
          open(UNIT=iunwri, FILE=new_fnames(1)(1:i), FORM='FORMATTED', &
      & STATUS='OLD', ACCESS='SEQUENTIAL')
+        elseif (iunwri.gt.0.and.openun(1).and.prnlev.ge.3) then
+         write(outu,'(2A)') whoami, &
+     & ' PARTNER RESTART UNIT WAS CLOSED; SKIPPING RESTART FILE SWAP.'
         endif
 ! assuming that dcd file is unformatted
-        if (iuncrd.gt.0.and.openun(2)) then
+        if (iuncrd.gt.0.and.openun(2).and.len_trim(new_fnames(2)).gt.0) then
          close(iuncrd)
          i=len(new_fnames(2))
          call trima(new_fnames(2), i)
          open(UNIT=iuncrd, FILE=new_fnames(2)(1:i), FORM='UNFORMATTED', &
 ! & STATUS='OLD', ACCESS='APPEND')
      & STATUS='OLD', POSITION='APPEND')
+        elseif (iuncrd.gt.0.and.openun(2).and.prnlev.ge.3) then
+         write(outu,'(2A)') whoami, &
+     & ' PARTNER TRAJECTORY UNIT WAS CLOSED; SKIPPING TRAJECTORY FILE SWAP.'
         endif
 !#ifdef 1
 ! iolev=oldiol

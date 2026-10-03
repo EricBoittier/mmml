@@ -197,8 +197,8 @@ int ocl_device_init(void ** fortran_devices) {
   ocl_check_status(stat);
 
   // now get all the platform IDs
-  cl_platform_id platforms[numPlatforms];
-  stat = clGetPlatformIDs(numPlatforms, platforms, NULL);
+  std::vector<cl_platform_id> platforms(numPlatforms);
+  stat = clGetPlatformIDs(numPlatforms, platforms.data(), NULL);
   ocl_check_status(stat);
 
   size_t totalDevices = 0;
@@ -210,8 +210,8 @@ int ocl_device_init(void ** fortran_devices) {
     ocl_check_status(stat);
 
     // now get all the device IDs
-    cl_device_id devices[numPlatDevs];
-    stat = clGetDeviceIDs(platforms[0], CL_DEVICE_TYPE_ALL, numPlatDevs, devices,
+    std::vector<cl_device_id> devices(numPlatDevs);
+    stat = clGetDeviceIDs(platforms[0], CL_DEVICE_TYPE_ALL, numPlatDevs, devices.data(),
                           NULL);
     ocl_check_status(stat);
 
@@ -333,7 +333,13 @@ int ocl_begin_session(void * in_dev,
 
   status = CL_SUCCESS;
   cl_command_queue * queue = new cl_command_queue();
+#ifdef __APPLE__
+  // macOS only supports OpenCL 1.2; clCreateCommandQueueWithProperties requires 2.0
   *queue = clCreateCommandQueue(*context, dev_id, 0, &status);
+#else
+  cl_queue_properties props[] = {0};
+  *queue = clCreateCommandQueueWithProperties(*context, dev_id, props, &status);
+#endif
   ocl_check_status(status);
   if (status == CL_SUCCESS) {
     *out_q = static_cast<void *>(queue);

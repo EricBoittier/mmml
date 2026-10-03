@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>ATOM SELECTION</title>
+<link rel="stylesheet" href="charmmdoc.css">
+</head>
+<body>
+<div class="page-header">
+<h1>ATOM SELECTION</h1>
+<div class="nav"><a href="index.html">Index</a><a href="charmm.html">CHARMM Home</a><a href="commands.html">Commands</a></div>
+</div>
+<pre>
+<a id="Top"></a>
+<div class="charmmdoc">
+                            ATOM SELECTION
+
+        Atom selection is used for many commands within CHARMM.
+Its existance is one of the main factors in the versatility of CHARMM.
+
+
+* <a href="#Syntax">Syntax</a> | Syntax of the sequential selection
+* <a href="#Double">Double</a> | Double atom selections
+* <a href="#Function">Function</a> | Descriptions of the various sequential options
+</div>
+<a id="Syntax"></a>
+<div class="charmmdoc">
+<a href="#Top">Top</a>
+                    Recursive Atom Selection Syntax
+
+[SYNTAX SELEction]
+
+....     SELEction   &lt;factor&gt;   [SHOW]  END    ....
+
+
+          Listed in priority order (low to high)
+(operators not separated by a blank line are processed sequentially)
+
+   &lt;factor&gt;:==  &lt;factor&gt; .OR. &lt;factor&gt;
+
+                &lt;factor&gt; .AND. &lt;factor&gt;
+
+                &lt;factor&gt; .AROUND. &lt;real&gt;
+                &lt;factor&gt; .SUBSET. &lt;int*&gt;
+                &lt;factor&gt; .SUBSET. &lt;int1&gt; : &lt;int2&gt;
+
+                .NOT. &lt;factor&gt;
+                .BONDED. &lt;factor&gt;
+                .BYRES. &lt;factor&gt;
+                .BYGROUP. &lt;factor&gt;
+
+                (  &lt;factor&gt;  )
+
+                &lt;token&gt;
+
+                &lt;keyname&gt;
+
+     &lt;token&gt;::= SEGId &lt;segid&gt;*
+                SEGId &lt;segid1&gt; : &lt;segid2&gt;
+                ISEG  &lt;segnum1&gt; : &lt;segnum2&gt;
+                RESId &lt;resid&gt;*
+                RESId &lt;resid1&gt; : &lt;resid2&gt;
+                IRES  &lt;resnum1&gt; : &lt;resnum2&gt;
+                RESName &lt;resname&gt;*
+                RESName &lt;resn1&gt; : &lt;resn2&gt;
+                IGROup  &lt;grpnum1&gt; : &lt;grpnum2&gt;
+                TYPE &lt;type&gt;*
+                TYPE &lt;type1&gt; : &lt;type2&gt;
+                CHEMical &lt;chem&gt;*
+                CHEMical &lt;chem1&gt; : &lt;chem2&gt;
+                ATOM &lt;segid&gt;* &lt;resid&gt;* &lt;type&gt;*
+                PROPerty [ABS]&lt;prop&gt;&lt;.LT.|.GT.|.EQ.|.NE.|.GE.|.LE.|.AE.&gt;&lt;real&gt;
+                POINt &lt;x-coor&gt;&lt;y-coor&gt;&lt;z-coor&gt; [CUT &lt;rmax&gt;] [PERIodic]
+                BYNUnumber &lt;int&gt;*
+                BYNU &lt;int1&gt; : &lt;int2&gt;
+                INITial
+                LONE
+                HYDRogen
+                USER
+                PREVious
+                RECAll &lt;integer&gt;
+                ALL
+                NONE
+
+     where '*' allows wildcard specifications:
+      *  matches any string of characters (including none),
+      %  matches any single character,
+      #  matches any string of digits (including none),
+      +  matches any single digit.
+
+</div>
+<a id="Double"></a>
+<div class="charmmdoc">
+<a href="#Top">Top</a>
+                Double atom selections
+
+        Some commands allow (or require) a double atom selection.
+
+SYNTAX:
+
+command ...  SELE first-selection-spec END  [ SELE second-selection-spec END ]
+
+        If no atom selection is passed, both selection arrays have all
+atoms selected.
+        If only one atom selection is specified, both selection arrays
+will contain that atom selection.
+        If an error is found, both atoms selections will have no atoms
+selected, and the appropriate error processing will occur.
+</div>
+<a id="Function"></a>
+<div class="charmmdoc">
+<a href="#Top">Top</a>
+                  Description of Atom Selection Features
+
+------------------------------------------------------------------------------
+1) Wildcard specification
+      *  matches any string of characters (including none),
+      %  matches any single character,
+      #  matches any string of digits (including none),
+      +  matches any single digit.
+
+------------------------------------------------------------------------------
+2) Range specification
+     Ranges are indicated by ':' and are defined by the lexigraphical
+     of SEGID's, RESNames, TYPEs, a combination of numerical
+     and lexigraphical order for RESId's (see routine SPLITI) and
+     by numerical order for BYNUmber specifications.
+
+------------------------------------------------------------------------------
+3) Keyname option
+     The user may specify keynames with the DEFIne command (see MISCOM).
+     Each keyname corresponds to a particular atom selection. Keynames
+     are processed before tokens, so if there is a naming conflict, the
+     keyname will prevail. Keynames may not be abreviated.  Whenever
+     the PSF is modified and the number of atoms changes ALL keynames
+     are removed.
+
+------------------------------------------------------------------------------
+4) User specified selection
+     USER represents a user selection which should be defined in the
+     user subroutine USRSEL.
+
+------------------------------------------------------------------------------
+5) Around atom specification
+     The operation &lt;factor&gt; .AROund. &lt;real&gt; finds all atoms within a
+     distance &lt;real&gt; around the atoms specified in &lt;factor&gt;. For this
+     operation it must be (QCOOR = .TRUE.) and all coordinates should
+     be known. Otherwise a warning message is printed.
+
+------------------------------------------------------------------------------
+6) Around a spatial point option
+     The token POINt &lt;xcoor&gt;&lt;ycoor&gt;&lt;zcoor&gt; CUT &lt;rmax&gt; selects all
+     atoms within a sphere around point (x,y,z) with radius rmax.
+     The default value for rmax is 8.0.  If the keyword PERIodic
+     is present AND simple periodic boundary conditions are in effect
+     through the use of the MIPB command, the selection reflects
+     the appropriate periodic boundaries.  See <a href="images.html">MIPB</a>
+
+------------------------------------------------------------------------------
+7) Selection by residues as a whole
+     The function &lt;factor&gt; .BYRes. includes all atoms in a residue
+     which contains at least one atom selected in &lt;factor&gt;.
+
+------------------------------------------------------------------------------
+8) Selection based on atom properties
+     The token INITial selects all atoms with known coordinates.
+     The token LONE selects all lone pairs (based on a mass selection).
+     The token HYDRogen selects all hydrogens (based on a mass selection).
+     These selections use the CHARMM intrinsic routines INITIAL, HYDROG
+     and LONE.
+
+------------------------------------------------------------------------------
+9) Use of previous selection
+     The token PREVious will start from the current contents of the
+     atom selection array. This feature only works for commands
+     where atom selection storage is permanent, and is usally local
+     to a specific command type.  For example, the PREVious token within
+     graphics will be the last atom selection previously used in
+     graphics, even if an atom selection was requested later in a non
+     graphics application.  At some point, this command will be made to
+     be consistant, but for now, use it if it works.  If not, the DEFINE
+     command is better.
+
+------------------------------------------------------------------------------
+10) Selecting based on connectivity
+     Atoms can be selected based on connectivity.  For example
+     if one wants to spin a methyl group by 30 degrees, the following
+     command sequence may be used:
+
+        DEFINE CARBON SELE selected-carbon-atom END
+        DEFINE TOMOVE SELE TYPE H* .AND .BONDED. CARBON END
+        IF ?NSEL .NE. 3 GOTO ERROR
+        DEFINE SECOND SELE .NOT. TYPE H* .AND. .BONDED. CARBON END
+        IF ?NSEL .NE. 1 GOTO ERROR
+        COOR AXIS SELE CARBON END SELE SECOND END
+        COOR ROTATE AXIS SELE TOMOVE END PHI 30.0
+
+     Note that the .BONDED. option can also considers image bonds 
+     up to 1-4 from primary atoms, as with the COOR ... IMAGE ... commands.
+     Image bonds beyond 1-4 from the primary atoms cannot be considered.
+
+------------------------------------------------------------------------------
+11) Selecting subsets of atoms by index.
+      Atoms may be selected by index on a subselection.  For example,
+      if one wants to analyze a set of interesting atoms, the sequence
+      might be:
+
+        DEFINE INTERESTING SELE interesting-atoms END
+        SET N ?NSEL
+        SET I 0
+        LABEL LOOP
+        INCREMENT I BY 1
+        COOR DIST SELE INTERESTING .SUBSET. @I END SELE ALL END ...
+        IF @I .LT. @N GOTO LOOP
+
+------------------------------------------------------------------------------
+12) Selection based on atom properties
+     The token PROPerty &lt;prop&gt; : selects all atoms which have
+     the specified property relative to a selected value.
+     The allowed properties are: "1" and &lt;keyname&gt;
+
+   "1"     - The active weighting array (WMAIN or WCOMP)
+         (This old construct works only when properties are actually present)
+   keyname - An array keyname (from the SCALar command syntax)
+   The currently allowed keynames include:
+ X        Y        Z        WMAIn    XCOMp    YCOMp    ZCOMp    WCOMp   
+ DX       DY       DZ       ECONt    EPCOnt   MASS     CHARge   CONStrai
+ XREF     YREF     ZREF     FBETa    MOVE     TYPE     IGNOre   ASPValue
+ VDWSurfa ALPHa    EFFEct   RADIus   RSCAle   FDIM     FDCOns   FDEQ
+ SCA1     SCA2     SCA3     SCA4     SCA5     SCA6     SCA7     SCA8
+ SCA9     ZERO     ONE
+
+------------------------------------------------------------------------------
+13) Atom selection substitution parameters
+
+During each invocation of the atom-selection, the following substitution
+parameters are specified:
+
+   'NSEL'    - Number of selected atoms from the most recent atom selection.
+   'SELATOM' - Atom number of first selected atom
+   'SELCHEM' - Chemical type of first selected atom
+   'SELIRES' - Residue number of first selected atom
+   'SELISEG' - Segment number of first selected atom
+   'SELRESI' - Resid of first selected atom
+   'SELRESN' - Residue type of first selected atom
+   'SELSEGI' - Segid of first selected atom
+   'SELTYPE' - Atom name of first selected atom
+
+These may be used in any subsequent CHARMM command (NOT in the current command).
+These definitions remain valid up to and including the next CHARMM command
+that includes an atom selection.  For commands with a double atom selection
+the variables are defined by the final atom selection.
+
+------------------------------------------------------------------------------
+Some examples of atom selections:
+
+sele atom * * CA end    !will include all C alphas in the list.
+
+sele .not. type H* end  !will include all atoms that are not hydrogens.
+
+sele atom MAIN 1 * .around. 5.0 end
+                        !will include all atoms that are within a sphere
+                        of radius 5.0 around any atom of the residue
+                        MAIN 1.
+
+sele bynu 1 : 100 end   !will include atoms number 1 to 100.
+
+sele resid 1 : 10 .and. segid. MAIN -
+     .and. .not. ( type H .or. type N .or. type O ) end
+                        !will include all the atoms of reside 1 to 10
+                        in the segment MAIN except atoms H, N, and O.
+
+sele bynu 1 .or. bynu 3 .or. bynu 5 .or. bynu 7 .or. bynu 8 -
+     bynu 11 .or. bynu 13 .or. bynu 15 .or. segid SOLV end
+                       !will include atoms number 1, 3, 5, 7, 8, 11, 13,
+                        and 15, and the SOLV segment.
+
+! to select side chain atoms in the polygen all atom parameter set
+! where mb is the myoglobin protein 
+sele segid mb .and. .not. ( type n .or. type ca .or. type c .or. - 
+       type o .or. type oct* .or. type ha* .or. type hn .or. type ht* ) end 
+
+sele prop abs charge .gt. 0.5 end
+                ! select all atoms with charge &gt; 0.5 or charge &lt; -0.5
+
+sele prop radius .gt. 3.0 end  ! select all large atoms (radius&gt;3.0).
+
+</div>
+</pre>
+</body>
+</html>

@@ -1,7 +1,35 @@
 module parallel
   use chm_kinds
   use dimens_fcm
+#if KEY_MPI==1
+  use mpi_f08, only: MPI_Comm
+#endif
   implicit none
+
+  ! Set true by init_charmm() (the pyCHARMM/embedded entry point) so the
+  ! parallel startup gives each rank an independent single-rank CHARMM on
+  ! MPI_COMM_SELF instead of joining MPI_COMM_WORLD.  The standalone charmm
+  ! executable never calls init_charmm, so it keeps the normal COMM_WORLD
+  ! parallel behavior.  Declared outside the serial/parallel #if so it is
+  ! visible in every build.
+  logical, save :: q_pycharmm_embedded = .false.
+
+  ! Optional base communicator for an embedded run, as a Fortran MPI handle
+  ! (e.g. mpi4py's comm.py2f()), set via set_charmm_comm() before init.
+  ! When pycharmm_user_comm_set is true, CHARMM adopts pycharmm_user_comm as
+  ! its base communicator, so N mpi4py groups of M ranks give an
+  ! N x (M-node CHARMM) layout.  Takes precedence over the embedded/COMM_SELF
+  ! default.  A dedicated flag (rather than a sentinel value) avoids any
+  ! collision with a valid handle such as MPI_COMM_WORLD's (often 0).
+  logical, save :: pycharmm_user_comm_set = .false.
+  integer, save :: pycharmm_user_comm = 0
+
+  ! True only if CHARMM itself called MPI_Init (standalone executable, or an
+  ! embedded run imported before the host initialized MPI).  PARFIN finalizes
+  ! MPI only when this is set, so an embedded host (e.g. mpi4py) that owns MPI
+  ! is left to finalize it -- avoiding a double MPI_Finalize that otherwise
+  ! hangs multi-rank embedded runs at shutdown.
+  logical, save :: charmm_owns_mpi = .false.
 
   ! silencing warnings in F90 and above
   interface psnd4
@@ -92,7 +120,7 @@ contains
 
   ! COMM_CHARMM - Communicator for this CHARMM instance
   !
-  integer COMM_CHARMM
+  TYPE(MPI_Comm) :: COMM_CHARMM
   integer comm_charmm_index
   integer MASTER_NODE
 
@@ -252,7 +280,7 @@ contains                  !CONTAINS
 ! for DDI:     MNOD = DDI_ME
     !
 #if KEY_MPI==1 /*socket1*/
-    use mpi
+    use mpi_f08
     INTEGER STATUS
     CALL MPI_COMM_RANK(COMM_CHARMM,MNOD,STATUS)
 #endif /* (socket1)*/
@@ -270,7 +298,7 @@ contains                  !CONTAINS
 ! for DDI:     NNOD = DDI_NP
     !
 #if KEY_MPI==1
-    use mpi
+    use mpi_f08
     INTEGER STATUS
     CALL MPI_COMM_SIZE(COMM_CHARMM,NNOD,STATUS)
 #endif

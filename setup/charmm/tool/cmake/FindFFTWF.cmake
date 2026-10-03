@@ -1,11 +1,12 @@
-# - Find the FFTWF library
+# - Find the FFTWF library (single-precision FFTW)
 #
 # Usage:
 #   find_package(FFTWF [REQUIRED] [QUIET] )
-#     
+#
 # It sets the following variables:
-#   FFTWF_FOUND               ... true if fftw is found on the system
-#   FFTWF_LIBRARIES           ... full path to fftw library
+#   FFTWF_FOUND               ... true if fftwf is found on the system
+#   FFTWF_LIBRARIES           ... full path to fftwf library
+#   FFTWF_INCLUDES            ... fftwf include directory
 #
 # The following environment variables will be checked by the function
 #   FFTW_HOME, FFTWDIR
@@ -17,6 +18,14 @@ find_library(
   NAMES "fftw3f"
   HINTS "$ENV{FFTWDIR}" "$ENV{FFTW_HOME}"
   PATH_SUFFIXES "lib" "lib64"
+)
+
+#find includes
+find_path(
+  FFTWF_INCLUDES
+  NAMES "fftw3.f03"
+  HINTS "$ENV{FFTWDIR}" "$ENV{FFTW_HOME}"
+  PATH_SUFFIXES "include"
 )
 
 if(FFTWF_LIB)

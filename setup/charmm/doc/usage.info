@@ -598,7 +598,7 @@ incorporated into the system without threatening its integrity.
         There are six "hooks" into the CHARMM which have been
 specially provided for casual modifiers. For detailed descriptions of
 each of these hooks, consult the routine in
-        ~/charmm/source/main/usersb.src 
+        ~/charmm/source/charmm/usersb.F90 
 
 
 1) USERSB

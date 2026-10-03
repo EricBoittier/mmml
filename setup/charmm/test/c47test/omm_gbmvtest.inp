@@ -179,9 +179,18 @@ update atom cdie switch vdw vswitch cutnb @cut ctofnb @cut ctonnb @cut -
 echo ------------------------------------------------------------------- 
 
 echo running dynamics with CHARMM-GBMV
-echo 
+echo
 
-set nsteps = 50 
+! nsteps reduced 50 -> 10: this is a CHARMM-GBMV vs OpenMM-GBMV
+! agreement check, not a production trajectory.  The CHARMM-side
+! reference GBMV force is CPU-only and costs ~0.4 s/step with this
+! quadrature (WTYP 2 NPHI 38 CUTNUM 100), so 50 steps x 2 cutoff
+! cases dominated runtime (~44 s) and blew the test.com 5-min cputime
+! limit under the parallel pipeline's CPU contention (-> SIGXCPU /
+! "NO TERMINATION" in pipeline-dev #29).  10 steps is ample to detect
+! any CHARMM/OpenMM divergence (and agrees more tightly, before chaos
+! amplifies); the OpenMM-GBMV side is GPU-accelerated and fast.
+set nsteps = 10
 set temp = 298
 
 shake fast bonh tol 1.0e-7 para
@@ -244,7 +253,7 @@ update atom cdie switch vdw vswitch cutnb @cut ctofnb @cut ctonnb @cut -
 
 omm platform @platform
 
-set nsteps = 50 
+set nsteps = 10   ! match the CHARMM-GBMV reference run above
 set temp = 298
 
 dynamics leap start -

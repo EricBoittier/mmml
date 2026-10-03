@@ -4,7 +4,8 @@ module rmsdyn_mod
   implicit none
 
   real(chm_real),allocatable,dimension(:,:),save :: ID
-  integer :: siz_id
+  integer :: siz_id,offst
+  logical,save :: qdiag
 
 contains
 
@@ -120,12 +121,27 @@ contains
        IF(NP <= 0) CALL WRNDIE(-3,'<RMSDYN>','BEGIN  >  STOP ???')
        IF(NP2 <= 0) CALL WRNDIE(-3,'<RMSDYN>','BEG2  >  STP2 ???')
        outrms=gtrmi(comlyn,comlen,'IWRI',-1)
+       qdiag = .false.
+       if(indxa(comlyn,comlen,'DIAG') > 0) qdiag=.true.
+       offst=GTRMI(COMLYN,COMLEN,'OFFS',0)
+       if((offst.ne.0).and..not.qdiag) then
+         CALL WRNDIE(-3,'<RMSDYN>','offsets only work with DIAG')
+       endif
+       if(abs(real(offst)).ge.NP2) then
+         CALL WRNDIE(-3,'<RMSDYN>','offset is too large')
+       endif
        if(prnlev >= 2)then
           write(outu,220) firstu,secndu,begin,skip,stop
 220       FORMAT(' TRAJ: INITIATING READ OF TRAJECTORIES, OPTIONS;'/, &
                '    FIRSTU = ',I3,' SECNDU = ',I3,' BEGIN = ',I10, &
                ' SKIP=',I7,' STOP = ',I10)
           if(lnoro) write(outu,*) 'ORIENTING USING TRANSLATIONS ONLY'
+          if(qdiag) then
+            write(outu,*) 'WRITING ONLY DIAGONAL MAT ELEMENTS: frame-by-frame comp to unit ',outrms
+            if(offst.ne.0) then
+              write(outu,*) 'with second trajectory offset by ',offst,' skip chunks '
+            endif
+          endif
        endif 
 
        ! Since this command just prints results, don't execute on a slave.
@@ -361,11 +377,12 @@ contains
 
     integer i,j,jj,k,nposit,k1,j1,ks
     real(chm_real) rmsr,pqrange,xi,yi,zi,xci,yci,zci,xij,yij,zij,xcij,ycij,zcij,rij,rcij,totrms
-    integer npar,nsig,maxfn,iopt,ier,pqs1,iout,nbpair
+    integer npar,nsig,maxfn,iopt,ier,pqs1,iout,nbpair,np2s,num2
     logical lprint
     character(len=20) matfmt
 
     lprint=(prnlev >= 8)
+    if(qdiag) np2s = np2
     pqs1=pqseed
     totrms=zero
     if(lmatrix) d=zero
@@ -377,6 +394,12 @@ contains
        enddo
        ks=1
        if(lsymm) ks=j+1
+       if(qdiag) then
+         num2 = j+offst
+         if(num2.gt.np2s.or.num2.lt.1) cycle
+         ks = num2
+         np2 = ks
+       endif
        do k= ks,np2
           do i=1,natom+nslct2
              xcomp(i)=x2(1,i,k)
@@ -458,7 +481,7 @@ contains
           else
              if(prnlev >= 2) write(outrms,1314)j,k,rmsr
           endif
-1314      format(1x,2i5,f12.5)
+1314      format(2(1X,i10),1X,f12.5)
 !
           if(prnlev > 8) then
              if(lnoro) then

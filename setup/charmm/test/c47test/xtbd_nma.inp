@@ -177,26 +177,76 @@ read coor card
 
 !-----------EXTBOND MODULE-----------------------------------------------!
 
-energy 
+energy
+set eharm = ?ener
 
 ! 1- naive subistute the original values with themselves
-!xtbd repl HARM 931.963 1.222  sele bynu 3 end sele bynu 5 end 
+!xtbd repl HARM 931.963 1.222  sele bynu 3 end sele bynu 5 end
 ! 2- Example of Morse potential  (roughly estimated)
 !xtbd repl mors 222.6704 1.200 1.7035 sele bynu 3 end sele bynu 5 end
 ! 3- Kernel implementation
  xtbd repl RKHS @0xtbd_pes 0  222.6704 sele bynu 3 end sele bynu 5 end
-! 4- xtbd reading an external file 
+! 4- xtbd reading an external file
 !open unit 40 read card name @0xtbd_nma.para
-!xtbd read  unit 40 
+!xtbd read  unit 40
 
 energy
+set erkhs = ?ener
+set grms0 = ?grms
 
-mini sd nstep 100 
+! Replacing the C1-O bond term with the RKHS kernel has to change the
+! energy: if the kernel were silently ignored the two energies would be
+! identical, which is the failure this test existed to catch but never
+! actually checked.
+calc ediff = abs ( @erkhs - @eharm )
+if @ediff lt 0.000001 then
+   echo xtbd_nma_repl_took_effect TESTCASE RESULT: FAIL
+else
+   echo xtbd_nma_repl_took_effect TESTCASE RESULT: PASS
+endif
+
+! The kernel supplies its own analytic gradient, so check it against a
+! finite-difference gradient over every atom.  TESTFD counts a component
+! OK when its deviation is under TOL relative to max(|analytic|,1), and
+! ?NOK is that count -- one per Cartesian component of each free atom.
+! The worst component here sits at 1.2e-3, which is ordinary
+! finite-difference error on a kernel-interpolated surface rather than a
+! gradient defect; 1e-2 still catches a sign error, a factor of two or a
+! dropped term, all of which give order-one relative deviations.
+! nfd is derived from the same atom count the force test covers, so pin
+! it: this test builds one 12-atom LIG residue, and a short PSF would
+! otherwise make the ?NOK check pass on fewer components than intended.
+@testcheck ?natom 12 -0.5 xtbd_nma_natom
+calc nfd = 3 * ?natom
+test first tol 0.01 sele all end
+@testcheck ?nok @nfd -0.5 xtbd_nma_rkhs_dfirst
+
+mini sd nstep 100
 mini abnr nstep 10
+set emin = ?ener
+set grms1 = ?grms
 
+! Minimization cannot raise the energy and has to reduce the gradient.
+! Note that 100 SD plus 10 ABNR steps do not reach a stationary point
+! here -- the RMS gradient is still near 1 -- so the VIBRAN frequencies
+! below are not those of a minimum.  Checking that the gradient shrank
+! is therefore the honest assertion; requiring it to vanish would fail.
+calc edrop = @erkhs - @emin
+if @edrop lt 0 then
+   echo xtbd_nma_mini_lowers_energy TESTCASE RESULT: FAIL
+else
+   echo xtbd_nma_mini_lowers_energy TESTCASE RESULT: PASS
+endif
+
+calc gdrop = @grms0 - @grms1
+if @gdrop lt 0 then
+   echo xtbd_nma_mini_lowers_gradient TESTCASE RESULT: FAIL
+else
+   echo xtbd_nma_mini_lowers_gradient TESTCASE RESULT: PASS
+endif
 
 VIBRAN NMOD
 DIAG
- 
-stop 
+
+stop
 

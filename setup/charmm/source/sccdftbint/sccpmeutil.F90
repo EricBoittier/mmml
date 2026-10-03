@@ -613,7 +613,7 @@ contains
   use parallel
 #if KEY_PARALLEL==1 /*pll*/
 #if KEY_CMPI==0
-    use mpi    
+    use mpi_f08    
 #endif
     integer transbufsiz
 #endif /* (pll)*/
@@ -764,7 +764,7 @@ contains
     use parallel
 #if KEY_PARALLEL==1 /*pll*/
 #if KEY_CMPI==0
-    use mpi     
+    use mpi_f08     
 #endif
     integer transbufsiz
 #endif /* (pll)*/
@@ -1065,7 +1065,7 @@ contains
     use parallel
     use stream
 #if KEY_MPI==1
-    use mpi     
+    use mpi_f08     
 #endif
   
     integer tmpsiz
@@ -1179,7 +1179,7 @@ contains
   subroutine xy_zx_tr_rcv(targ,ldx,n3,buf,ktask)
     use parallel
 #if KEY_MPI==1
-    use mpi 
+    use mpi_f08 
 #endif
     logical flag
     real(chm_real) :: targ(*), buf(*)
@@ -1188,8 +1188,9 @@ contains
     integer istart, iend
 
 #if KEY_MPI==1
-    integer status(mpi_status_size),ierr
-#endif 
+    TYPE(MPI_Status) :: status
+    integer ierr
+#endif
 
 
 #if KEY_MPI==1 /*mpi*/
@@ -1228,7 +1229,7 @@ contains
   subroutine zx_xy_transp(targ,src,ldx,n3,buf,bufsiz)
     use parallel
 #if KEY_MPI==1
-    use mpi     
+    use mpi_f08     
 #endif
     integer bufsiz
     real(chm_real) :: targ(*), src(*), buf(bufsiz,2)
@@ -1237,9 +1238,7 @@ contains
     INTEGER check,kex(0:128,0:128)
     integer ierr
 
-#if KEY_MPIFFT==1
-    integer ireq,isnd_stat(MPI_STATUS_SIZE)         
-#endif
+!     ireq, isnd_stat removed: dead declarations, MPI_STATUS_SIZE undefined in mpi_f08
     integer jjtask
 
     if(numnod > MAX_PME_NODES)                    &
@@ -1356,7 +1355,7 @@ contains
   subroutine zx_trans_recv(targ,src,ldx,n3,buf,ktask)
     use parallel
 #if KEY_MPI==1
-    use mpi     
+    use mpi_f08     
 #endif
     logical flag
 
@@ -1366,8 +1365,9 @@ contains
     integer istart, iend
 
 #if KEY_MPI==1
-    integer status(mpi_status_size),ierr
-#endif 
+    TYPE(MPI_Status) :: status
+    integer ierr
+#endif
 
     numval = 2*ldx*nxyslab(mynod)*nxzslab(ktask)
 

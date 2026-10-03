@@ -1,0 +1,64 @@
+* Test for the extended-Adaptive Biasing Force (eABF) Method
+* End-to-end Stretching of Decalanine using a Distance Collective Variable
+* S. L. Austin & H. L. Woodcock, 2024
+
+if ?eabf .ne. 1 then
+   echo "Test NOT performed. eABF not detected in CHARMM executable"
+   stop
+endif
+
+stream datadir.def
+
+!Read topology,parameters,PSF and coordinates for Decalanine
+open read card unit 10 name @0top_all36_prot.rtf
+read  rtf card unit 10
+
+open read card unit 20 name @0par_all36_prot.prm
+read para card unit 20 flex
+
+open read unit 10 card name @0deca_alanine.psf
+read psf  unit 10 card
+
+open read unit 10 card name @0deca_alanine.crd
+read coor unit 10 card
+close unit 10
+
+ENERgy
+
+scalar fbeta set 5.0 sele .not. ( type H* ) show end
+
+SHAKE BONH PARAm TOL 1.0e-6
+
+nbonds atom vatom vswitch -
+       ctonnb 10.0 ctofnb 12.0 cutnb 16.0 -
+       inbfrq -1 wmin 1.0 cdie eps 1.0
+
+open write unit 11 file name eabf_dynamics.dcd
+open write unit 12 form name eabf_dynamics.rst
+
+!Set dynamics parameters
+set temp 300      !system temp
+set nprint 1000   !dynamics print frequency
+set nsavc 5000    !coordinate save frequency
+set nstep 10000   !number of dynamics steps; setting nstep larger will enable thorough sampling along the distance defined below
+set resfrq 10000  !restart save frequency
+
+!Initilize eABF
+ABFP PRNT 100 SCUT 2000 SORD 0 REFR @resfrq REST 0 NUMP 1 LBIN 100
+
+ABFC DIST -
+LMIN 11.8 LMAX 33.0 LBIN 100 LBND 5000.0 -
+TLAM @temp MLAM 500.0 KLAM 5000.0 LFRC 1.0 -
+!Make DIST Selections
+select segid PROA .and. resid 1 .and. type CA show end -
+select segid PROA .and. resid 10 .and. type CA show end
+
+dynamics  lang leap start timestep 0.001 nstep @nstep -
+     firstt @temp finalt @temp twindl -10.0 twindh 10.0 -
+     iasvel 5 iasors 5 iunr -8 iunwri 12 -
+     nsavc @nsavc nsavv 0 nprint @nprint -
+     ilbfrq 1000 rbuffer 0.0 ntrfrq 1000 iprfrq 1000 -
+     tbath @temp -
+     iuncrd 11 iunvel -1 isvfrq @resfrq 
+
+stop

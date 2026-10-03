@@ -8,84 +8,105 @@ module qmmmewald_module
   implicit none
   !
   TYPE, PUBLIC :: qmmm_ewald
-  ! Store information related with QM/MM-Ewald sum calculations.
-  logical            :: ewald_startup        ! .True. if this is the very first MD step and
-                                             !        we are doing qmewald
-  !integer            :: Ewmode = 1    ! Ewald mode options
-  !                                    !     1 : QM/MM-Ewald such that MM in cutoff do
-  !                                    !         interact with QM density as regular
-  !                                    !         QM/MM potential
-  integer            :: Erfmod         ! Mode for Error function evaluation in CHARMM
-                                       ! It is just copied here to use later in routines.
-  integer            :: kmaxqx,         & ! Maximu K space vector to be summed in x-dir
-                        kmaxqy,         & ! Maximu K space vector to be summed in y-dir
-                        kmaxqz,         & ! Maximu K space vector to be summed in z-dir
-                        ksqmaxq           ! Maximu K space vector square for spherical cutoff in K space
-  integer            :: totkq          ! Total number of K space vectors summed
-  integer            :: natom          ! Total number of Namtom, copied here by
-                                       ! qm_mm convenience
+    ! Store information related with QM/MM-Ewald sum calculations.
+    logical            :: ewald_startup               ! .True. if this is the very first MD step and
+                                                      !        we are doing qmewald
+    !integer            :: Ewmode = 1                 ! Ewald mode options
+    !                                                 !     1 : QM/MM-Ewald such that MM in cutoff do
+    !                                                 !         interact with QM density as regular
+    !                                                 !         QM/MM potential
+    integer            :: Erfmod                      ! Mode for Error function evaluation in CHARMM
+                                                      ! It is just copied here to use later in routines.
+    integer            :: kmaxqx, &                   ! Maximu K space vector to be summed in x-dir
+                          kmaxqy, &                   ! Maximu K space vector to be summed in y-dir
+                          kmaxqz, &                   ! Maximu K space vector to be summed in z-dir
+                          ksqmaxq                     ! Maximu K space vector square for spherical cutoff in K space
+    integer            :: totkq                       ! Total number of K space vectors summed
+    integer            :: natom                       ! Total number of Namtom, copied here by
+                                                      ! qm_mm convenience
 
-  integer            :: iastrt         ! to be used for parallel calculations.
-  integer            :: iafinl         ! numnod=1; iastrt=1, and iafinl=natom
-  integer            :: iatotl         !           iatotl=natom
-                                       ! numnod=n; iastrt: starting of natom loop.
-                                       !           iafinl: ending of natom loop.
-                                       !           iatotl: total term in mynod.
-  integer            :: nexl_atm       ! Total number of MM excluded atoms from
-                                       ! QM-MM interaction, such as MM atoms
-                                       ! connected to QM atoms (IGMSEL(i)=5)
-  integer, POINTER   :: nexl_index(:) => NULL()       ! Index of pointing MM position in CHARMM main
+    integer            :: iastrt                      ! to be used for parallel calculations.
+    integer            :: iafinl                      ! numnod=1; iastrt=1, and iafinl=natom
+    integer            :: iatotl                      !           iatotl=natom
+                                                      ! numnod=n; iastrt: starting of natom loop.
+                                                      !           iafinl: ending of natom loop.
+                                                      !           iatotl: total term in mynod.
+    integer            :: nexl_atm                    ! Total number of MM excluded atoms from
+                                                      ! QM-MM interaction, such as MM atoms
+                                                      ! connected to QM atoms (IGMSEL(i)=5)
+    integer, allocatable   :: nexl_index(:)           ! Index of pointing MM position in CHARMM main
                                                       ! coordinates for excluded MM atoms from
                                                       ! QM-MM interaction
-  real(chm_real)           :: kappa                   ! Kappa in CHARMM for width of gaussians
-  real(chm_real)           :: volume                  ! Volume of system
-  real(chm_real)           :: Recip(6)                ! Symmetric Reciprocal space Lattice vector
-  real(chm_real)           :: ewald_core              ! Ewald potential with QM core charges
+    real(chm_real)           :: kappa                 ! Kappa in CHARMM for width of gaussians
+    real(chm_real)           :: volume                ! Volume of system
+    real(chm_real)           :: Recip(6)              ! Symmetric Reciprocal space Lattice vector
+    real(chm_real)           :: ewald_core            ! Ewald potential with QM core charges
                                                       ! - energy in eV.
-  real(chm_real), POINTER  :: exl_xyz(:,:)=>NULL()    ! Coordinates for MM atoms excluded from
+    real(chm_real), allocatable  :: exl_xyz(:,:)      ! Coordinates for MM atoms excluded from
                                                       ! QM-MM interactions (3,:) in x,y,z,...
-  real(chm_real), POINTER  :: exl_chg(:)=>Null()      ! Charges for MM atoms excluded from QM-MM int.
-  real(chm_real), POINTER  :: dexl_xyz(:,:)=>NULL()   ! Save gradient contributions from
+    real(chm_real), allocatable  :: exl_chg(:)        ! Charges for MM atoms excluded from QM-MM int.
+    real(chm_real), allocatable  :: dexl_xyz(:,:)     ! Save gradient contributions from
                                                       ! excluded MM atoms
-  !real(chm_real), POINTER  :: scf_mchg(:)=> NULL()    ! Mulliken charge of QM atoms
-  !real(chm_real), POINTER  :: scf_mchg_2(:)=>NULL()   ! Mulliken charge of QM atoms for gradient.
-  real(chm_real), POINTER  :: kvec(:)=> NULL()        ! Array storing K vectors (totkq long)
-  real(chm_real), POINTER  :: ktable(:,:,:)=>NULL()   ! Table for storing complex exp(ik,r[j])
+    !real(chm_real), allocatable  :: scf_mchg(:)      ! Mulliken charge of QM atoms
+    !real(chm_real), allocatable  :: scf_mchg_2(:)    ! Mulliken charge of QM atoms for gradient.
+    real(chm_real), allocatable  :: kvec(:)           ! Array storing K vectors (totkq long)
+    real(chm_real), allocatable  :: ktable(:,:,:)     ! Table for storing complex exp(ik,r[j])
                                                       ! dimension = 6, natom, totkq
                                                       ! 1,x,y = x_cos      2,x,y = x_sin
                                                       ! 3,x,y = y_cos      4,x,y = y_sin
                                                       ! 5,x,y = z_cos      6,x,y = z_sin
-  real(chm_real), POINTER  :: qmktable(:,:,:)=>NULL() ! As Ktable but stores the qmatom copies
+    real(chm_real), allocatable  :: qmktable(:,:,:)   ! As Ktable but stores the qmatom copies
                                                       ! a linear 1->nquant fashion
-  real(chm_real), POINTER  :: structfac_mm(:,:)=>Null() ! Sin and Cos functions in the structure
-                                                        ! factor from MM chages; 2,totkq
-  real(chm_real), dimension(:),allocatable  :: empot  ! Nquant long, stores the potential at each
-                                                ! QM atom due to the MM field.
-  real(chm_real), dimension(:,:),allocatable :: eslf ! Stores the self energy of the QM atoms to
-                                                ! avoid double counting.
-                                                ! Nquant,Nquant matrix
-  real(chm_real), dimension(:),allocatable  :: empot_pme  ! Nquant long, stores the PME component of 
+    real(chm_real), allocatable  :: structfac_mm(:,:) ! Sin and Cos functions in the structure
+                                                      ! factor from MM chages; 2,totkq
+    real(chm_real), allocatable  :: empot(:)          ! Nquant long, stores the potential at each
+                                                      ! QM atom due to the MM field.
+    real(chm_real), allocatable :: eslf(:,:)          ! Stores the self energy of the QM atoms to
+                                                      ! avoid double counting.
+                                                      ! Nquant,Nquant matrix
+    real(chm_real), allocatable  :: empot_pme(:)      ! Nquant long, stores the PME component of 
                                                       ! potential at each QM atom due to the MM field.
-  real(chm_real), dimension(:),allocatable  :: empot_qm_pme ! QM-QM part of PME components 
-  real(chm_real), POINTER  :: d_ewald_mm(:,:)=>NULL() ! Gradients on MM atoms due to reciprocal
+    real(chm_real), allocatable  :: empot_qm_pme(:)   ! QM-QM part of PME components 
+    real(chm_real), allocatable  :: d_ewald_mm(:,:)   ! Gradients on MM atoms due to reciprocal
                                                       ! QM-MM interactions for Virial correction.
                                                       ! (3,natom)
-  real(chm_real), POINTER  :: qmqmerfcx_data(:)=>NULL()
-                                                ! Stores 1: (-drfc+(one-erfcx)/rij)/rij^2
-  real(chm_real), POINTER  :: qmmmerfcx_data(:)=>NULL()
-                                                ! Stores 1: (-drfc+(one-erfcx)/rij)/rij^2
+    real(chm_real), allocatable  :: qmqmerfcx_data(:) ! Stores 1: (-drfc+(one-erfcx)/rij)/rij^2
+    real(chm_real), allocatable  :: qmmmerfcx_data(:) ! Stores 1: (-drfc+(one-erfcx)/rij)/rij^2
 
-  ! copied from qm_main and mm_main types
-  real(chm_real),pointer :: rijdata_qmqm(:,:)=>Null()  ! incore data, rij, 1/rij.
-  real(chm_real),pointer :: rijdata_qmmm(:,:)=>NUll()  ! incore data, rij, 1/rij.
-
-  !
+    ! copied from qm_main and mm_main types
+    real(chm_real), allocatable :: rijdata_qmqm(:,:)  ! incore data, rij, 1/rij.
+    real(chm_real), allocatable :: rijdata_qmmm(:,:)  ! incore data, rij, 1/rij.
   END TYPE qmmm_ewald
 
   ! assign
-  TYPE(qmmm_ewald),  save :: qmmm_ewald_r
+  TYPE(qmmm_ewald), target,allocatable,save :: qmmm_ewald_r(:)
+  TYPE(qmmm_ewald),pointer,save :: qmmm_ewald_c=>null()
 
   contains
+
+  !=====================================================================
+  subroutine qmmm_ewald_memory_init(nrepl,qallocate)
+  !
+  ! allocate type memories
+  !
+  implicit none
+  integer :: nrepl
+  logical :: qallocate
+
+  ! first pointers, nullify
+  if(associated(qmmm_ewald_c))     nullify(qmmm_ewald_c)
+
+  ! deallocate memories
+  if(allocated(qmmm_ewald_r))     deallocate(qmmm_ewald_r)
+
+  ! allocagte memories
+  allocate(qmmm_ewald_r(nrepl))
+
+  ! pointers, as a default, num_qm_system=1, i.e., a single system
+  qmmm_ewald_c    =>qmmm_ewald_r(1)
+
+  return
+  end subroutine qmmm_ewald_memory_init
 
   subroutine allocate_deallocate_qmmm_ewald(qm_numat,mm_natom,mm_PMEwald, &
                                             qmmm_ewald_l,qallocate)
@@ -113,18 +134,18 @@ module qmmmewald_module
   totkq      =qmmm_ewald_l%totkq
   nexl_atm   =MAX(1,qmmm_ewald_l%nexl_atm)  ! either 1 or nexl_atm
 
-  ! deallocate if arrays are associated.
-  !if(associated(qmmm_ewald_l%scf_mchg))       deallocate(qmmm_ewald_l%scf_mchg,stat=ier)
+  ! deallocate if arrays are allocated.
+  !if(allocated(qmmm_ewald_l%scf_mchg))       deallocate(qmmm_ewald_l%scf_mchg,stat=ier)
   !   if(ier.ne.0) call Aass(0,'allocate_deallocate_qmmm_ewald','scf_mchg')
-  !if(associated(qmmm_ewald_l%scf_mchg_2))     deallocate(qmmm_ewald_l%scf_mchg_2,stat=ier)
+  !if(allocated(qmmm_ewald_l%scf_mchg_2))     deallocate(qmmm_ewald_l%scf_mchg_2,stat=ier)
   !   if(ier.ne.0) call Aass(0,'allocate_deallocate_qmmm_ewald','scf_mchg_2')
-  if(associated(qmmm_ewald_l%kvec))           deallocate(qmmm_ewald_l%kvec,stat=ier)
+  if(allocated(qmmm_ewald_l%kvec))           deallocate(qmmm_ewald_l%kvec,stat=ier)
      if(ier.ne.0) call Aass(0,'allocate_deallocate_qmmm_ewald','kvec')
-  if(associated(qmmm_ewald_l%ktable))         deallocate(qmmm_ewald_l%ktable,stat=ier)
+  if(allocated(qmmm_ewald_l%ktable))         deallocate(qmmm_ewald_l%ktable,stat=ier)
      if(ier.ne.0) call Aass(0,'allocate_deallocate_qmmm_ewald','ktable')
-  if(associated(qmmm_ewald_l%qmktable))       deallocate(qmmm_ewald_l%qmktable,stat=ier)
+  if(allocated(qmmm_ewald_l%qmktable))       deallocate(qmmm_ewald_l%qmktable,stat=ier)
      if(ier.ne.0) call Aass(0,'allocate_deallocate_qmmm_ewald','qmktable')
-  if(associated(qmmm_ewald_l%structfac_mm))   deallocate(qmmm_ewald_l%structfac_mm,stat=ier)
+  if(allocated(qmmm_ewald_l%structfac_mm))   deallocate(qmmm_ewald_l%structfac_mm,stat=ier)
      if(ier.ne.0) call Aass(0,'allocate_deallocate_qmmm_ewald','structfac_mm')
   if(allocated(qmmm_ewald_l%empot))          deallocate(qmmm_ewald_l%empot,stat=ier)
      if(ier.ne.0) call Aass(0,'allocate_deallocate_qmmm_ewald','empot')
@@ -134,16 +155,16 @@ module qmmmewald_module
      if(ier.ne.0) call Aass(0,'allocate_deallocate_qmmm_ewald','empot_pme')
   if(allocated(qmmm_ewald_l%empot_qm_pme))   deallocate(qmmm_ewald_l%empot_qm_pme,stat=ier)
      if(ier.ne.0) call Aass(0,'allocate_deallocate_qmmm_ewald','empot_qm_pme')
-  if(associated(qmmm_ewald_l%d_ewald_mm))     deallocate(qmmm_ewald_l%d_ewald_mm,stat=ier)
+  if(allocated(qmmm_ewald_l%d_ewald_mm))     deallocate(qmmm_ewald_l%d_ewald_mm,stat=ier)
      if(ier.ne.0) call Aass(0,'allocate_deallocate_qmmm_ewald','d_ewald_mm')
   !
-  if(associated(qmmm_ewald_l%nexl_index))     deallocate(qmmm_ewald_l%nexl_index,stat=ier)
+  if(allocated(qmmm_ewald_l%nexl_index))     deallocate(qmmm_ewald_l%nexl_index,stat=ier)
      if(ier.ne.0) call Aass(0,'allocate_deallocate_qmmm_ewald','nexl_index')
-  if(associated(qmmm_ewald_l%exl_xyz))        deallocate(qmmm_ewald_l%exl_xyz,stat=ier)
+  if(allocated(qmmm_ewald_l%exl_xyz))        deallocate(qmmm_ewald_l%exl_xyz,stat=ier)
      if(ier.ne.0) call Aass(0,'allocate_deallocate_qmmm_ewald','exl_xyz')
-  if(associated(qmmm_ewald_l%exl_chg))        deallocate(qmmm_ewald_l%exl_chg,stat=ier)
+  if(allocated(qmmm_ewald_l%exl_chg))        deallocate(qmmm_ewald_l%exl_chg,stat=ier)
      if(ier.ne.0) call Aass(0,'allocate_deallocate_qmmm_ewald','exl_chg')
-  if(associated(qmmm_ewald_l%dexl_xyz))       deallocate(qmmm_ewald_l%dexl_xyz,stat=ier)
+  if(allocated(qmmm_ewald_l%dexl_xyz))       deallocate(qmmm_ewald_l%dexl_xyz,stat=ier)
      if(ier.ne.0) call Aass(0,'allocate_deallocate_qmmm_ewald','dexl_xyz')
 
   ! now, allocate memory, only if qallocate==.true.
@@ -182,6 +203,7 @@ module qmmmewald_module
         if(ier.ne.0) call Aass(1,'allocate_deallocate_qmmm_ewald','d_ewald_mm')
      !
      ! to exclude MM atoms from QM-MM interactions (igmsel(i)=5).
+     ! if nexl_atm == 0, it will be "1"
      allocate(qmmm_ewald_l%nexl_index(nexl_atm),stat=ier)
         if(ier.ne.0) call Aass(1,'allocate_deallocate_qmmm_ewald','nexl_index')
      allocate(qmmm_ewald_l%exl_xyz(3,nexl_atm),stat=ier)
@@ -217,26 +239,26 @@ module qmmmewald_module
 
   ! Calculate the total number of K space vectors
   do kx = 0, kmaxqx
-    if (kx .EQ. 0) then
+    if (kx == 0) then
         ksy = 0
     else
         ksy = -kmaxqy
     end if
     do ky = ksy, kmaxqy
-       if (kx .EQ. 0 .and. ky .EQ. 0) then
+       if (kx == 0 .and. ky == 0) then
           ksz = 1
        else
           ksz = -kmaxqz
        end if
        do kz = ksz, kmaxqz
           ksq = kx*kx + ky*ky + kz*kz
-          if (ksq .LE. ksqmaxq .and. ksq .NE. 0) totkq = totkq + 1
+          if (ksq <= ksqmaxq .and. ksq /= 0) totkq = totkq + 1
        end do
     end do
   end do
 
   !
-  if (totkq .LE. 0) then
+  if (totkq <= 0) then
      write(6,*)'qm_ewald_setup> ','Invalie number of Total Kspace vectors.'
      write(6,*)'TOTKQ needs to be greater than 0, but now is ',totkq
 
@@ -334,7 +356,7 @@ module qmmmewald_module
 
                     mkv(1:3)         = rkx(1:3) + rky(1:3) + rkz(1:3)
                     rksq             = mkv(1)**2 + mkv(2)**2 + mkv(3)**2
-                    qmmm_ewald_r%kvec(loop_count) = vfact*exp(-beta*rksq)/rksq
+                    qmmm_ewald_c%kvec(loop_count) = vfact*exp(-beta*rksq)/rksq
 
                  end if
               end do
@@ -372,7 +394,7 @@ module qmmmewald_module
 #endif
                        mkv(1:3)         = rkx(1:3) + rky(1:3) + rkz(1:3)
                        rksq             = mkv(1)**2 + mkv(2)**2 + mkv(3)**2
-                       qmmm_ewald_r%kvec(loop_count) = vfact*exp(-beta*rksq)/rksq
+                       qmmm_ewald_c%kvec(loop_count) = vfact*exp(-beta*rksq)/rksq
 #if KEY_PARALLEL==1
                     end if
 #endif
@@ -405,7 +427,9 @@ module qmmmewald_module
   ! Setup K-table array for K-space Ewald summation.
   !
   use qm1_constant
-  use parallel  !##PARALLEL
+#if KEY_PARALLEL==1
+  use parallel
+#endif
 
   implicit none
 
@@ -426,8 +450,8 @@ module qmmmewald_module
 #if KEY_PARALLEL==1
   integer :: mmynod, nnumnod
 
-  mmynod  = mynod     !##PARALLEL
-  nnumnod = numnod    !##PARALLEL
+  mmynod  = mynod
+  nnumnod = numnod
 #endif
 
   !
@@ -479,23 +503,23 @@ module qmmmewald_module
 
                     ! Cache the values for doing a vectored cos ( and sin(x)=cos(x-(pi/2)) )
                     !   X coordinates
-                    qmmm_ewald_r%Ktable(1,inner_loop,loop_count) = xyz(1)
-                    qmmm_ewald_r%Ktable(2,inner_loop,loop_count) = xyz(1) - HALFPI
+                    qmmm_ewald_c%Ktable(1,inner_loop,loop_count) = xyz(1)
+                    qmmm_ewald_c%Ktable(2,inner_loop,loop_count) = xyz(1) - HALFPI
 
                     !   Y coordinates
-                    qmmm_ewald_r%Ktable(3,inner_loop,loop_count) = xyz(2)
-                    qmmm_ewald_r%Ktable(4,inner_loop,loop_count) = xyz(2) - HALFPI
+                    qmmm_ewald_c%Ktable(3,inner_loop,loop_count) = xyz(2)
+                    qmmm_ewald_c%Ktable(4,inner_loop,loop_count) = xyz(2) - HALFPI
 
                     !   Z coordinates
-                    qmmm_ewald_r%Ktable(5,inner_loop,loop_count) = xyz(3)
-                    qmmm_ewald_r%Ktable(6,inner_loop,loop_count) = xyz(3) - HALFPI
+                    qmmm_ewald_c%Ktable(5,inner_loop,loop_count) = xyz(3)
+                    qmmm_ewald_c%Ktable(6,inner_loop,loop_count) = xyz(3) - HALFPI
 
-                    qmmm_ewald_r%Ktable(1:6,inner_loop,loop_count)=cos(qmmm_ewald_r%Ktable(1:6,inner_loop,loop_count))
+                    qmmm_ewald_c%Ktable(1:6,inner_loop,loop_count)=cos(qmmm_ewald_c%Ktable(1:6,inner_loop,loop_count))
                  end do
                  ! Do a vectored cosine -> since we subtracted pi/2 from
                  ! every other x,y,z value so we will end up with cos,sin,cos,sin...
-                 !call vdcos(6,iatotl,qmmm_ewald_r%Ktable(1,1,loop_count), &
-                 !                    qmmm_ewald_r%Ktable(1,1,loop_count))  ! iatotl=Natom
+                 !call vdcos(6,iatotl,qmmm_ewald_c%Ktable(1,1,loop_count), &
+                 !                    qmmm_ewald_c%Ktable(1,1,loop_count))  ! iatotl=Natom
               end if
 
               ! Cache the qm atom values for use later so we can access them linearly in memory
@@ -509,17 +533,17 @@ module qmmmewald_module
                  xyz(1) = mkv(1)*X(qmid)
                  xyz(2) = mkv(2)*Y(qmid)
                  xyz(3) = mkv(3)*Z(qmid)
-                 qmmm_ewald_r%qmKtable(1,i,loop_count) = xyz(1)
-                 qmmm_ewald_r%qmKtable(2,i,loop_count) = xyz(1)-HALFPI
-                 qmmm_ewald_r%qmKtable(3,i,loop_count) = xyz(2)
-                 qmmm_ewald_r%qmKtable(4,i,loop_count) = xyz(2)-HALFPI
-                 qmmm_ewald_r%qmKtable(5,i,loop_count) = xyz(3)
-                 qmmm_ewald_r%qmKtable(6,i,loop_count) = xyz(3)-HALFPI
+                 qmmm_ewald_c%qmKtable(1,i,loop_count) = xyz(1)
+                 qmmm_ewald_c%qmKtable(2,i,loop_count) = xyz(1)-HALFPI
+                 qmmm_ewald_c%qmKtable(3,i,loop_count) = xyz(2)
+                 qmmm_ewald_c%qmKtable(4,i,loop_count) = xyz(2)-HALFPI
+                 qmmm_ewald_c%qmKtable(5,i,loop_count) = xyz(3)
+                 qmmm_ewald_c%qmKtable(6,i,loop_count) = xyz(3)-HALFPI
 
-                 qmmm_ewald_r%qmKtable(1:6,i,loop_count)=cos(qmmm_ewald_r%qmKtable(1:6,i,loop_count))
+                 qmmm_ewald_c%qmKtable(1:6,i,loop_count)=cos(qmmm_ewald_c%qmKtable(1:6,i,loop_count))
               end do
-              !call vdcos(6,numat,qmmm_ewald_r%qmKtable(1,1,loop_count), &
-              !                   qmmm_ewald_r%qmKtable(1,1,loop_count))
+              !call vdcos(6,numat,qmmm_ewald_c%qmKtable(1,1,loop_count), &
+              !                   qmmm_ewald_c%qmKtable(1,1,loop_count))
            end if
         end do loopkz                              ! kz = ksz, kmaxqz
      end do    loopky                              ! ky = ksy, kmaxqy
@@ -528,7 +552,7 @@ module qmmmewald_module
   ! just in case. will check later for .not.QNoPMEwald case.
 #if KEY_PARALLEL==1
   if(nnumnod>1.and.QNoPMEwald) &
-     call gcombr(qmmm_ewald_r%qmKtable,6*numat*totkq)
+     call gcombr(qmmm_ewald_c%qmKtable,6*numat*totkq)
 #endif
                                
   return
@@ -565,8 +589,8 @@ module qmmmewald_module
   use qm1_constant
   use psf, only : CG
   use erfcd_mod,only: erfcd
-  use qm1_info, only : mm_main_r    ! for incore part.
-  use nbndqm_mod, only: map_qmatom_to_group,map_mmatom_to_group
+  use qm1_info, only : mm_main_c    ! for incore part.
+  use nbndqm_mod, only: map_grp_c
 #if KEY_PARALLEL==1
   use parallel
 #endif
@@ -595,61 +619,56 @@ module qmmmewald_module
   real(chm_real)         :: ktgs(8), ksum, mmchg, sfact,rtmp_local(2),sin_sum,cos_sum
   integer  :: mstart,mstop
   integer  :: ido_switching
-#if KEY_PARALLEL==1
-  integer  :: ISTRT_CHECK                 ! for external function
-#endif
 
   !
   ! initialization
-  mstart = 1
-  mstop  = numatm
-  qmmm_ewald_r%structfac_mm(1:2,1:itotkq)=zero     ! initialization
+  !qmmm_ewald_c%structfac_mm(1:2,1:itotkq)=zero     ! initialization
+  qmmm_ewald_c%structfac_mm = zero
   !
 #if KEY_PARALLEL==1
-  if(numnod>1) mstart = ISTRT_CHECK(mstop,numatm)
+  mstart = numatm*mynod/numnod+1
+  mstop  = numatm*(mynod+1)/numnod
+#else
+  mstart = 1
+  mstop  = numatm
 #endif
 
   !1) Calculate Real space potential at QM atom position:
   !   compute the distance between QM-MM paris
-  Erfmod_local= qmmm_ewald_r%Erfmod
-  kappa_local = qmmm_ewald_r%kappa
-  if(mm_main_r%rij_mm_incore) then
+  Erfmod_local= qmmm_ewald_c%Erfmod
+  kappa_local = qmmm_ewald_c%kappa
+  if(mm_main_c%rij_mm_incore) then
      icnt_mm = 0
      do i = 1, numat
         empottmp = zero
-        if(mm_main_r%q_cut_by_group .or. mm_main_r%q_switch) irs_qm = map_qmatom_to_group(i)
+        if(mm_main_c%q_switch) irs_qm = map_grp_c%map_qmatom_to_group(i)
         do j = mstart,mstop
            icnt_mm  = icnt_mm + 1
-           Rij      = qmmm_ewald_r%rijdata_qmmm(1,icnt_mm)  ! rij value
-           oneRIJ   = qmmm_ewald_r%rijdata_qmmm(2,icnt_mm)  ! one/rij value.
+           Rij      = qmmm_ewald_c%rijdata_qmmm(1,icnt_mm)  ! rij value
+           oneRIJ   = qmmm_ewald_c%rijdata_qmmm(2,icnt_mm)  ! one/rij value.
 
            ! group-by-group-based cutoff case, skip the pair if its distance is longer than cutoff.
            ! otherwise (default group-based case), include all mm atoms (default).
-           if(mm_main_r%q_cut_by_group) then
-              irs_mm = map_mmatom_to_group(j)
-              if(.not.mm_main_r%q_mmgrp_qmgrp_cut(irs_mm,irs_qm)) cycle
-           else if(mm_main_r%q_switch) then
-              irs_mm = map_mmatom_to_group(j)
-           end if
+           if(mm_main_c%q_switch) irs_mm = map_grp_c%map_mmatom_to_group(j)
 
            Call ERFCD(Rij,kappa_local,erfcx,drfc,Erfmod_local)
            !
            ! save erfcd data for gradient: (-drfc+(one-erfcx)/rij)/rij^2 value.
            rtmp     = (one-erfcx)*oneRIJ
            oneRIJ2  = oneRIJ*oneRIJ
-           qmmm_ewald_r%qmmmerfcx_data(icnt_mm) = (-drfc+rtmp)*oneRIJ2  
+           qmmm_ewald_c%qmmmerfcx_data(icnt_mm) = (-drfc+rtmp)*oneRIJ2  
            !
 
-           if(mm_main_r%q_diag_coulomb) then
+           if(mm_main_c%q_diag_coulomb) then
               rtmp = rtmp - oneRIJ  ! full range.
            else
               ! contribution by switching function. in fact, (1-Sw(rij))*c_j/rij
-              if(mm_main_r%q_switch) then
-                 ido_switching = mm_main_r%q_mmgrp_qmgrp_swt(irs_mm,irs_qm)
+              if(mm_main_c%q_switch) then
+                 ido_switching = mm_main_c%q_mmgrp_qmgrp_swt(irs_mm,irs_qm)
                  ! apply switching function contribution
                  if(ido_switching>0) then
                     ! see below for the negative sign when adding to empottmp
-                    rtmp = rtmp - (one-mm_main_r%sw_val(ido_switching))*oneRIJ
+                    rtmp = rtmp - (one-mm_main_c%sw_val(ido_switching))*oneRIJ
                  end if
               end if
            end if
@@ -663,19 +682,14 @@ module qmmmewald_module
   else
      do i = 1, numat
         empottmp = zero
-        if(mm_main_r%q_cut_by_group .or. mm_main_r%q_switch) irs_qm = map_qmatom_to_group(i)
+        if(mm_main_c%q_switch) irs_qm = map_grp_c%map_qmatom_to_group(i)
         do j = mstart,mstop
            vec(1:3) = qm_coords(1:3,i)-mm_coord(1:3,j)
            r2       = vec(1)**2 + vec(2)**2 + vec(3)**2
 
            ! group-by-group-based cutoff case, skip the pair if its distance is longer than cutoff.
            ! otherwise (default group-based case), include all mm atoms (default).
-           if(mm_main_r%q_cut_by_group) then
-              irs_mm = map_mmatom_to_group(j)
-              if(.not.mm_main_r%q_mmgrp_qmgrp_cut(irs_mm,irs_qm)) cycle
-           else if(mm_main_r%q_switch) then
-              irs_mm = map_mmatom_to_group(j)
-           end if
+           if(mm_main_c%q_switch) irs_mm = map_grp_c%map_mmatom_to_group(j)
 
            oneRIJ   = one/sqrt(r2)
            RIJ      = r2*oneRIJ                         ! one/oneRIJ
@@ -683,16 +697,16 @@ module qmmmewald_module
 
            !
            rtmp     = (one-erfcx)*oneRIJ
-           if(mm_main_r%q_diag_coulomb) then
+           if(mm_main_c%q_diag_coulomb) then
               rtmp = rtmp - oneRIJ  ! full range.
            else
               ! contribution by switching function. in fact, (1-Sw(rij))*c_j/rij
-              if(mm_main_r%q_switch) then
-                 ido_switching = mm_main_r%q_mmgrp_qmgrp_swt(irs_mm,irs_qm)
+              if(mm_main_c%q_switch) then
+                 ido_switching = mm_main_c%q_mmgrp_qmgrp_swt(irs_mm,irs_qm)
                  ! apply switching function contribution
                  if(ido_switching>0) then
                     ! see below for the negative sign when adding to empottmp
-                    rtmp = rtmp - (one-mm_main_r%sw_val(ido_switching))*oneRIJ
+                    rtmp = rtmp - (one-mm_main_c%sw_val(ido_switching))*oneRIJ
                  end if
               end if
            end if
@@ -736,12 +750,12 @@ module qmmmewald_module
                 do j = iastrt,iafinl              ! 1, natom
                    ! loop throught all atoms, as mmchg will be zero for QM atoms:
                    inner_loop = inner_loop + 1
-                   xyz_cos(1) = qmmm_ewald_r%ktable(1,inner_loop,loop_count)
-                   xyz_sin(1) = qmmm_ewald_r%ktable(2,inner_loop,loop_count)
-                   xyz_cos(2) = qmmm_ewald_r%ktable(3,inner_loop,loop_count)
-                   xyz_sin(2) = qmmm_ewald_r%ktable(4,inner_loop,loop_count)
-                   xyz_cos(3) = qmmm_ewald_r%ktable(5,inner_loop,loop_count)
-                   xyz_sin(3) = qmmm_ewald_r%ktable(6,inner_loop,loop_count)
+                   xyz_cos(1) = qmmm_ewald_c%ktable(1,inner_loop,loop_count)
+                   xyz_sin(1) = qmmm_ewald_c%ktable(2,inner_loop,loop_count)
+                   xyz_cos(2) = qmmm_ewald_c%ktable(3,inner_loop,loop_count)
+                   xyz_sin(2) = qmmm_ewald_c%ktable(4,inner_loop,loop_count)
+                   xyz_cos(3) = qmmm_ewald_c%ktable(5,inner_loop,loop_count)
+                   xyz_sin(3) = qmmm_ewald_c%ktable(6,inner_loop,loop_count)
 
                    !mmchg   = CG(j)
                    ktgs(1) = ktgs(1) + cg(j)*xyz_cos(1)*xyz_cos(2)*xyz_cos(3)
@@ -764,19 +778,19 @@ module qmmmewald_module
   ! do virial part
   ! now, note that it is not complete when parallel, since it is sum over
   ! only iastrt,iafinl. Thus, in the end, it will be combined from all nodes.
-                qmmm_ewald_r%structfac_mm(1,loop_count)=sin_sum
-                qmmm_ewald_r%structfac_mm(2,loop_count)=cos_sum
+                qmmm_ewald_c%structfac_mm(1,loop_count)=sin_sum
+                qmmm_ewald_c%structfac_mm(2,loop_count)=cos_sum
 
   ! Now loop over quantum atoms: this has to be done for qm atoms.
   !                              so, when parallel, all qmktable is needed.
                 do j = 1, numat
                    ksum = zero
-                   xyz_cos(1) = qmmm_ewald_r%qmktable(1,j,loop_count)
-                   xyz_sin(1) = qmmm_ewald_r%qmktable(2,j,loop_count)
-                   xyz_cos(2) = qmmm_ewald_r%qmktable(3,j,loop_count)
-                   xyz_sin(2) = qmmm_ewald_r%qmktable(4,j,loop_count)
-                   xyz_cos(3) = qmmm_ewald_r%qmktable(5,j,loop_count)
-                   xyz_sin(3) = qmmm_ewald_r%qmktable(6,j,loop_count)
+                   xyz_cos(1) = qmmm_ewald_c%qmktable(1,j,loop_count)
+                   xyz_sin(1) = qmmm_ewald_c%qmktable(2,j,loop_count)
+                   xyz_cos(2) = qmmm_ewald_c%qmktable(3,j,loop_count)
+                   xyz_sin(2) = qmmm_ewald_c%qmktable(4,j,loop_count)
+                   xyz_cos(3) = qmmm_ewald_c%qmktable(5,j,loop_count)
+                   xyz_sin(3) = qmmm_ewald_c%qmktable(6,j,loop_count)
 
                    ksum = ksum + xyz_cos(1)*xyz_cos(2)*xyz_cos(3)*ktgs(1)
                    ksum = ksum + xyz_sin(1)*xyz_sin(2)*xyz_sin(3)*ktgs(2)
@@ -787,7 +801,7 @@ module qmmmewald_module
                    ksum = ksum + xyz_sin(1)*xyz_cos(2)*xyz_sin(3)*ktgs(7)
                    ksum = ksum + xyz_sin(1)*xyz_cos(2)*xyz_cos(3)*ktgs(8)
 
-                   empot(j) = empot(j) + sfact*ksum*qmmm_ewald_r%kvec(loop_count)
+                   empot(j) = empot(j) + sfact*ksum*qmmm_ewald_c%kvec(loop_count)
                 end do
              end if
 
@@ -796,7 +810,7 @@ module qmmmewald_module
     end do
     ! now, distribute the structure_factor to collect all MM atom information.
 #if KEY_PARALLEL==1
-    if(numnod.gt.1) call GCOMBR(qmmm_ewald_r%structfac_mm,2*itotkq)
+    if(numnod > 1) call GCOMBR(qmmm_ewald_c%structfac_mm,2*itotkq)
 #endif
   end if       ! QNoPMEwald=.true.
 
@@ -839,22 +853,22 @@ module qmmmewald_module
 
   ! for parallel: only the master node run this.
 
-  if (qmmm_ewald_r%nexl_atm .gt. 0) then
-     Erfmod_local = qmmm_ewald_r%Erfmod
-     kappa_local  = qmmm_ewald_r%kappa
+  if (qmmm_ewald_c%nexl_atm .gt. 0) then
+     Erfmod_local = qmmm_ewald_c%Erfmod
+     kappa_local  = qmmm_ewald_c%kappa
 #if KEY_PARALLEL==1
      if(mynod==0) then
 #endif
         do i = 1, numat
            empottmp = zero
-           do j = 1, qmmm_ewald_r%nexl_atm
-              vec(1:3) = qm_coords(1:3,i)-qmmm_ewald_r%exl_xyz(1:3,j)
+           do j = 1, qmmm_ewald_c%nexl_atm
+              vec(1:3) = qm_coords(1:3,i)-qmmm_ewald_c%exl_xyz(1:3,j)
               r2       = vec(1)**2 + vec(2)**2 + vec(3)**2
               oneRIJ   = one/sqrt(r2)
               RIJ      = r2*oneRIJ                         ! one/oneRIJ
               Call ERFCD(RIJ,kappa_local,erfcx,drfc,Erfmod_local)
 
-              empottmp = empottmp - qmmm_ewald_r%exl_chg(j)*(one-erfcx)*oneRIJ
+              empottmp = empottmp - qmmm_ewald_c%exl_chg(j)*(one-erfcx)*oneRIJ
            end do
            empot(i) = empot(i) + empottmp
         end do
@@ -880,7 +894,7 @@ module qmmmewald_module
   !
   use erfcd_mod,only: erfcd
   use qm1_constant
-  use qm1_info, only : qm_control_r,qm_main_r
+  use qm1_info, only : qm_control_c,qm_main_c
 #if KEY_PARALLEL==1
   use parallel
 #endif
@@ -917,8 +931,8 @@ module qmmmewald_module
 
   ! Initialization
   eslf = zero
-  Erfmod_local = qmmm_ewald_r%erfmod
-  kappa_local  = qmmm_ewald_r%kappa
+  Erfmod_local = qmmm_ewald_c%erfmod
+  kappa_local  = qmmm_ewald_c%kappa
 
   !1) Self energy term
   esfact = -two*kappa_local*INVSQRTPI
@@ -937,7 +951,7 @@ module qmmmewald_module
 #if KEY_PARALLEL==1
   icnt = 0 
 #endif
-  if(qm_main_r%rij_qm_incore) then
+  if(qm_main_c%rij_qm_incore) then
      icnt_qm = 0
      loopi1: do i = 2, numat
         loopj1: do j = 1, i-1
@@ -947,8 +961,8 @@ module qmmmewald_module
 #endif
               icnt_qm  = icnt_qm + 1 ! the counter used.
 
-              Rij      = qmmm_ewald_r%rijdata_qmqm(1,icnt_qm)       ! rij value
-              oneRIJ   = qmmm_ewald_r%rijdata_qmqm(2,icnt_qm)       ! one/rij value.
+              Rij      = qmmm_ewald_c%rijdata_qmqm(1,icnt_qm)       ! rij value
+              oneRIJ   = qmmm_ewald_c%rijdata_qmqm(2,icnt_qm)       ! one/rij value.
               Call ERFCD(RIJ,kappa_local,erfcx,drfc,Erfmod_local)
               !
               empottmp  = (one-erfcx)*oneRIJ
@@ -957,7 +971,7 @@ module qmmmewald_module
               !
               ! save erfcd data for gradient: (-drfc+(one-erfcx)/rij)/rij^2 value.
               oneRIJ2   = oneRIJ*oneRIJ
-              qmmm_ewald_r%qmqmerfcx_data(icnt_qm) = (-drfc+empottmp)*oneRIJ2
+              qmmm_ewald_c%qmqmerfcx_data(icnt_qm) = (-drfc+empottmp)*oneRIJ2
 #if KEY_PARALLEL==1
            end if
 #endif
@@ -988,7 +1002,6 @@ module qmmmewald_module
      end do    loopii
   end if
 
-  if(.not.( qm_control_r%q_do_cpmd_pme )) then
   !3) K space potentail between QM atoms
   loop_count = 0
   loopkx: do kx = 0, kmaxqx
@@ -1014,33 +1027,33 @@ module qmmmewald_module
 #endif
                 ktgs(1:3)  = zero
                 do i = 1, numat
-                   xyz_cos(1) = qmmm_ewald_r%qmktable(1,i,loop_count)
-                   xyz_sin(1) = qmmm_ewald_r%qmktable(2,i,loop_count)
-                   xyz_cos(2) = qmmm_ewald_r%qmktable(3,i,loop_count)
-                   xyz_sin(2) = qmmm_ewald_r%qmktable(4,i,loop_count)
-                   xyz_cos(3) = qmmm_ewald_r%qmktable(5,i,loop_count)
-                   xyz_sin(3) = qmmm_ewald_r%qmktable(6,i,loop_count)
+                   xyz_cos(1) = qmmm_ewald_c%qmktable(1,i,loop_count)
+                   xyz_sin(1) = qmmm_ewald_c%qmktable(2,i,loop_count)
+                   xyz_cos(2) = qmmm_ewald_c%qmktable(3,i,loop_count)
+                   xyz_sin(2) = qmmm_ewald_c%qmktable(4,i,loop_count)
+                   xyz_cos(3) = qmmm_ewald_c%qmktable(5,i,loop_count)
+                   xyz_sin(3) = qmmm_ewald_c%qmktable(6,i,loop_count)
 
                    do j = 1, i-1
-                      ktgs(1) = xyz_cos(1)*qmmm_ewald_r%qmktable(1,j,loop_count) &
-                               +xyz_sin(1)*qmmm_ewald_r%qmktable(2,j,loop_count)
-                      ktgs(2) = xyz_cos(2)*qmmm_ewald_r%qmktable(3,j,loop_count) &
-                               +xyz_sin(2)*qmmm_ewald_r%qmktable(4,j,loop_count)
-                      ktgs(3) = xyz_cos(3)*qmmm_ewald_r%qmktable(5,j,loop_count) &
-                               +xyz_sin(3)*qmmm_ewald_r%qmktable(6,j,loop_count)
-                      ksum    = sfact*ktgs(1)*ktgs(2)*ktgs(3)*qmmm_ewald_r%kvec(loop_count)
+                      ktgs(1) = xyz_cos(1)*qmmm_ewald_c%qmktable(1,j,loop_count) &
+                               +xyz_sin(1)*qmmm_ewald_c%qmktable(2,j,loop_count)
+                      ktgs(2) = xyz_cos(2)*qmmm_ewald_c%qmktable(3,j,loop_count) &
+                               +xyz_sin(2)*qmmm_ewald_c%qmktable(4,j,loop_count)
+                      ktgs(3) = xyz_cos(3)*qmmm_ewald_c%qmktable(5,j,loop_count) &
+                               +xyz_sin(3)*qmmm_ewald_c%qmktable(6,j,loop_count)
+                      ksum    = sfact*ktgs(1)*ktgs(2)*ktgs(3)*qmmm_ewald_c%kvec(loop_count)
 
                       eslf(j,i) = eslf(j,i) + ksum
                       eslf(i,j) = eslf(i,j) + ksum
                    end do
                    ! for i=j
-                   ktgs(1) = xyz_cos(1)*qmmm_ewald_r%qmktable(1,i,loop_count) &
-                            +xyz_sin(1)*qmmm_ewald_r%qmktable(2,i,loop_count)
-                   ktgs(2) = xyz_cos(2)*qmmm_ewald_r%qmktable(3,i,loop_count) &
-                            +xyz_sin(2)*qmmm_ewald_r%qmktable(4,i,loop_count)
-                   ktgs(3) = xyz_cos(3)*qmmm_ewald_r%qmktable(5,i,loop_count) &
-                            +xyz_sin(3)*qmmm_ewald_r%qmktable(6,i,loop_count)
-                   ksum    = sfact*ktgs(1)*ktgs(2)*ktgs(3)*qmmm_ewald_r%kvec(loop_count)
+                   ktgs(1) = xyz_cos(1)*qmmm_ewald_c%qmktable(1,i,loop_count) &
+                            +xyz_sin(1)*qmmm_ewald_c%qmktable(2,i,loop_count)
+                   ktgs(2) = xyz_cos(2)*qmmm_ewald_c%qmktable(3,i,loop_count) &
+                            +xyz_sin(2)*qmmm_ewald_c%qmktable(4,i,loop_count)
+                   ktgs(3) = xyz_cos(3)*qmmm_ewald_c%qmktable(5,i,loop_count) &
+                            +xyz_sin(3)*qmmm_ewald_c%qmktable(6,i,loop_count)
+                   ksum    = sfact*ktgs(1)*ktgs(2)*ktgs(3)*qmmm_ewald_c%kvec(loop_count)
                    eslf(i,i) = eslf(i,i) + ksum
                 end do
 #if KEY_PARALLEL==1
@@ -1051,7 +1064,6 @@ module qmmmewald_module
        end do loopkz
     end do    loopky
   end do      loopkx
-  end if
 
 ! This is done in scf_energy routine.
 
@@ -1059,86 +1071,73 @@ module qmmmewald_module
   END SUBROUTINE qm_ewald_qm_pot
 
 
-  SUBROUTINE qm_ewald_prepare_fock(numat,empot_all,empot_local,qm_charges)
+  SUBROUTINE qm_ewald_prepare_fock(numat,empot_all,empot_local,   &
+                                   mstart,mstop,                  &
+#if KEY_PARALLEL==1
+                                   KPARPT_local,                  &
+#endif
+                                   qm_charges)
   !
   ! 1) Compute Eslf contribution + Empot contribution at QM atom
   !    to preapare correction for Fock matrix in diagonal elements
   ! 2) also copy empot to empot_local
   !
-  use qm1_info, only       : qm_control_r
+  use qm1_info, only       : qm_control_c
   use qm1_constant
 #if KEY_PARALLEL==1
-  use parallel,only : mynod,numnod,MAXNODE
+  use parallel,only : mynod,numnod
 #endif
 
   implicit none
 
   ! Passed in
-  integer, intent(in)    :: numat
+  integer, intent(in)         :: numat
   real(chm_real),intent(inout):: empot_all(numat),empot_local(numat)
   real(chm_real),intent(in)   :: qm_charges(numat)
+  integer                     :: mstart,mstop
+#if KEY_PARALLEL==1
+  integer, intent(in) :: KPARPT_local(0:numnod)
+#endif
   !!!real(chm_real),intent(in)   :: empot(numat), eslf(numat,numat)
 
   ! Local variables
   integer        :: i
   real(chm_real) :: ewdpot
   !!!real(chm_real),parameter :: ev_a0 = EV*A0 ! convert (electrons/angstrom) to (eV/Bohr)
-  integer, save :: old_N = 0
-  integer, save :: mstart,mstop
-#if KEY_PARALLEL==1
-  integer, save :: JPARPT_local(0:MAXNODE)
-#endif
-
 
   ! parallelization is synchronized with calc_mulliken routine and broad casting.
-  if(old_N .ne. numat) then
-     old_N = numat
-     mstart= 1
-     mstop = numat
-     !
-#if KEY_PARALLEL==1
-     JPARPT_local(0)=0
-     do i=1,numnod
-        JPARPT_local(i)= numat*i/numnod ! for linear vector
-     end do
-     mstart = JPARPT_local(mynod)+1
-     mstop  = JPARPT_local(mynod+1)
-#endif
-  end if
+!!#if KEY_PARALLEL==1
+!!  mstart = KPARPT_local(mynod)+1
+!!  mstop  = KPARPT_local(mynod+1)
+!!#else
+!!  mstart= 1
+!!  mstop = numat
+!!#endif
 
   ! compute Empot+Eslf contribution for the diagonal elements of the fock matrix
   ! conversion to ev_a0 is done in the qm_ewald_add_fock routine.
-  if(qm_control_r%q_do_cpmd_pme) then
-     do i = mstart,mstop
-        ewdpot = DOT_PRODUCT(qmmm_ewald_r%eslf(1:numat,i),qm_charges(1:numat))
-        empot_all(i) = (qmmm_ewald_r%empot(i) + qmmm_ewald_r%empot_qm_pme(i) + ewdpot) !!!!* ev_a0
-     end do
-  else
-     do i = mstart,mstop
-        ewdpot = DOT_PRODUCT(qmmm_ewald_r%eslf(1:numat,i),qm_charges(1:numat))
-        empot_all(i) = (qmmm_ewald_r%empot(i) + ewdpot) !!!!* ev_a0
-     end do
-  end if
+  do i = mstart,mstop
+     ewdpot = DOT_PRODUCT(qmmm_ewald_c%eslf(1:numat,i),qm_charges(1:numat))
+     empot_all(i) = (qmmm_ewald_c%empot(i) + ewdpot) !!!!* ev_a0
+  end do
 #if KEY_PARALLEL==1
-  if(numnod>1) call VDGBRE(empot_all,JPARPT_local)
+  if(numnod>1) call VDGBRE(empot_all,KPARPT_local)
 #endif
 
   ! copy empot to empot_local
-  empot_local(1:numat)=qmmm_ewald_r%empot(1:numat)
+  empot_local(1:numat)=qmmm_ewald_c%empot(1:numat)
 
   return
   END SUBROUTINE qm_ewald_prepare_fock
 
 
-  real(chm_real) function qm_ewald_core(numat,nat,qm_charges) 
+  real(chm_real) function qm_ewald_core(numat,core,qm_charges) 
   !
   ! Computes the interaction of the Ewald potenital with CORE in QM atoms. 
   ! Ewald_core in electron volts
   !               Ewald_core = Sum(Core(i)*V(i))
   !
-  use qm1_info, only       : qm_control_r
   use qm1_constant
-  use qm1_parameters, only : CORE
 #if KEY_PARALLEL==1
   use parallel
 #endif
@@ -1147,7 +1146,7 @@ module qmmmewald_module
 
   ! Passed in
   integer, intent(in) :: numat
-  integer, intent(in) :: nat(numat)
+  real(chm_real),intent(in) :: core(numat)
   real(chm_real),intent(in) :: qm_charges(numat)
   !!!real(chm_real),intent(in) :: empot(numat),eslf(numat,numat)
   real(chm_real),parameter :: ev_a0 = EV*A0 ! convert (electrons/angstrom) to (eV/Bohr)
@@ -1155,41 +1154,27 @@ module qmmmewald_module
   ! Local variables
   integer        :: i
   real(chm_real) :: ewdtmp, ewdpot, ewald_core
-  integer,save :: old_N = 0
-  integer,save :: mstart,mstop
-#if KEY_PARALLEL==1
-  integer      :: ISTRT_CHECK   ! external function
-#endif
+  integer        :: mstart,mstop
 
   ! for parallelization
-  if(old_N .ne. numat) then
-     old_N =numat
-     mstart=1
-     mstop =numat
 #if KEY_PARALLEL==1
-     if(numnod>1) mstart = ISTRT_CHECK(mstop,numat)
-  !else
-  !   if(QMPI) then
-  !      mstart=1
-  !      mstop =numat
-  !   end if
+  mstart = numat*mynod/numnod + 1
+  mstop  = numat*(mynod+1)/numnod
+  ! if(QMPI) then
+  !    mstart=1
+  !    mstop =numat
+  ! end if
+#else
+  mstart = 1
+  mstop  = numat
 #endif
-  end if
 
-  ewald_core     = zero
-  if(qm_control_r%q_do_cpmd_pme) then
-     do i = mstart,mstop                     ! 1, numat
-        ewdtmp    = DOT_PRODUCT(qmmm_ewald_r%eslf(1:numat,i),qm_charges(1:numat))
-        ewdpot    = qmmm_ewald_r%empot(i) + half*(ewdtmp + qmmm_ewald_r%empot_qm_pme(i))
-        ewald_core= ewald_core + ewdpot*CORE(nat(i))
-     end do
-  else
-     do i = mstart,mstop                     ! 1, numat
-        ewdtmp    = DOT_PRODUCT(qmmm_ewald_r%eslf(1:numat,i),qm_charges(1:numat))
-        ewdpot    = qmmm_ewald_r%empot(i)   + half*ewdtmp 
-        ewald_core= ewald_core + ewdpot*CORE(nat(i))
-     end do
-  end if
+  ewald_core   = zero
+  do i = mstart,mstop                     ! 1, numat
+     ewdtmp    = DOT_PRODUCT(qmmm_ewald_c%eslf(1:numat,i),qm_charges(1:numat))
+     ewdpot    = qmmm_ewald_c%empot(i)   + half*ewdtmp 
+     ewald_core= ewald_core + ewdpot*core(i) 
+  end do
   ! energy conversion will be done later.
   qm_ewald_core = ewald_core * ev_a0
      
@@ -1219,31 +1204,24 @@ module qmmmewald_module
   ! Local variables
   integer        :: i
   real(chm_real) :: ewald_corr
-  integer,save   :: old_N = 0
-  integer,save   :: mstart,mstop
-#if KEY_PARALLEL==1
-  integer        :: ISTRT_CHECK   ! external function
-#endif
+  integer        :: mstart,mstop
 
   ! for parallelization
-  if(old_N .ne. numat) then
-     old_N =numat
-     mstart=1
-     mstop =numat
 #if KEY_PARALLEL==1
-     if(numnod>1) mstart = ISTRT_CHECK(mstop,numat)
-  !else
+  mstart = numat*mynod/numnod + 1
+  mstop  = numat*(mynod+1)/numnod
   !   if(QMPI) then
   !      mstart=1
   !      mstop =numat
   !   end if
+#else
+  mstart = 1
+  mstop  = numat
 #endif
-  end if
 
-  ewald_corr     = zero
+  ewald_corr   = zero
   do i = mstart,mstop                     ! 1, numat
-     !write(6,'(I4,2F12.5)') i,qmmm_ewald_r%empot_pme(i),qmmm_ewald_r%empot_qm_pme(i)
-     ewald_corr= ewald_corr + (qmmm_ewald_r%empot_pme(i)+half*qmmm_ewald_r%empot_qm_pme(i))*qm_charges(i) 
+     ewald_corr= ewald_corr + (qmmm_ewald_c%empot_pme(i)+half*qmmm_ewald_c%empot_qm_pme(i))*qm_charges(i) 
   end do
   ! energy conversion will be done later. : kcal/mol = ev_a0*EVcal = ccelec (for the consistency with PME routine.)
   qm_pme_energy_corr = ewald_corr !  * ev_a0
@@ -1267,10 +1245,10 @@ module qmmmewald_module
   ! c) QM-exclude MM real space contribution 
   !    (refer qm_ewald_real_space_gradient_exl routine)
   !
-  use erfcd_mod,only: erfcd
-  use qm1_info, only : qm_main_r,mm_main_r
+  use erfcd_mod,only  : erfcd
+  use qm1_info, only  : qm_main_c,mm_main_c
   use qm1_constant
-  use nbndqm_mod, only: map_qmatom_to_group,map_mmatom_to_group
+  use nbndqm_mod, only: map_grp_c
 #if KEY_PARALLEL==1
   use parallel 
 #endif
@@ -1293,29 +1271,28 @@ module qmmmewald_module
   real(chm_real)          :: vec(3),xyz_i(3),df_xyz(3),erfcx,drfc,kappa_local
   real(chm_real)          :: sw_scale,dxyz_sw(3),rtmp
   real(chm_real),parameter:: sfact=EVCAL*EV*A0
-  integer  :: ISTRT_CHECK                 ! for external function
 
+  !
+  ! do some initialization
+  Erfmod_local = qmmm_ewald_c%erfmod
+  kappa_local  = qmmm_ewald_c%kappa
 #if KEY_PARALLEL==1
+  mstart  = numatm*mynod/numnod+1
+  mstop   = numatm*(mynod+1)/numnod
+
   mmynod  = mynod
   nnumnod = numnod
 #else
+  mstart  = 1
+  mstop   = numatm
+
   mmynod  = 0
   nnumnod = 1
 #endif
 
-  ! do some initialization
-  mstart = 1
-  mstop  = numatm
-  Erfmod_local = qmmm_ewald_r%erfmod
-  kappa_local  = qmmm_ewald_r%kappa
-  !
-#if KEY_PARALLEL==1
-  if(nnumnod>1) mstart = ISTRT_CHECK(mstop,numatm)
-#endif
-
   !Step 1) do QM atoms with MM atoms in the cutoff list
   !        We need to calculate the distance between QM-MM pairs on the fly.
-  if(mm_main_r%rij_mm_incore) then
+  if(mm_main_c%rij_mm_incore) then
      icnt_mm = 0
      do i = 1, numat
         inner_loop_count = 1
@@ -1324,117 +1301,63 @@ module qmmmewald_module
 #if KEY_PARALLEL==1
         inner_loop_count=inner_loop_count+3*(mstart-1)
 #endif
-        ! group-by-group-based cutoff case, skip the pair if its distance is longer than cutoff.
-        ! otherwise (default group-based case), include all mm atoms (default).
-        if(mm_main_r%q_cut_by_group) then
-           irs_qm = map_qmatom_to_group(i)
-           do j = mstart,mstop
-              icnt_mm       = icnt_mm + 1
-              irs_mm        = map_mmatom_to_group(j)
-              if(mm_main_r%q_switch) then
-                 ido_switching = mm_main_r%q_mmgrp_qmgrp_swt(irs_mm,irs_qm)
+        !
+        if(mm_main_c%q_switch) irs_qm = map_grp_c%map_qmatom_to_group(i)
+
+        ! default group-based case, include all mm atoms (default).
+        do j = mstart,mstop
+           icnt_mm    = icnt_mm + 1
+           vec(1:3)   = qm_coords(1:3,i)-mm_coord(1:3,j)
+
+           if(mm_main_c%q_switch) then
+              irs_mm        = map_grp_c%map_mmatom_to_group(j)
+              ido_switching = mm_main_c%q_mmgrp_qmgrp_swt(irs_mm,irs_qm)
+           else
+              ido_switching = -1
+           end if
+
+           if(mm_main_c%q_diag_coulomb) then
+              ! d(1/r_ij)/dx_j = - (1/r_ij)^3*(x_j-x_i)
+              ! d(1/r_ij)/dx_i =   (1/r_ij)^3*(x_j-x_i)
+              onerij   = qmmm_ewald_c%rijdata_qmmm(2,icnt_mm)  ! one/rij value.
+              sw_scale =-onerij*onerij*onerij
+           else
+              ! contribution by switching function. in fact, (1-Sw(rij))*c_j/rij
+              ! d(1-Sw(rij))/drij = - dSw(rij)/drij...
+              if(ido_switching > 0) then
+                 ! apply switching function contribution
+                 sw_scale = one - mm_main_c%sw_val(ido_switching)
+                 onerij   = qmmm_ewald_c%rijdata_qmmm(2,icnt_mm)  ! one/rij value.
+                 ! d(r_ij)^-1 / dx_j = - (1/r_ij)^3*(x_j-x_i)
+                 ! d(r_ij)^-1 / dx_i =   (1/r_ij)^3*(x_j-x_i)
+                 sw_scale =-sw_scale*onerij*onerij*onerij
+
+                 rtmp     = mm_chrgs(j)*qmmulik_chg*onerij        ! q_mm*q_qm/rij
+                 dxyz_sw(1:3) =-rtmp*mm_main_c%dsw_val(1:3,ido_switching)
+                 ! for qm atoms: since the qm group for which the switching function is computed
+                 !               could be different from irs_qm.
+                 irs_qm2         = mm_main_c%q_mmgrp_point_swt(irs_mm)
+                 ido_switching_2 = mm_main_c%q_backmap_dxyz_sw(ido_switching)
+                 mm_main_c%dxyz_sw2(1:3,ido_switching_2)= mm_main_c%dxyz_sw2(1:3,ido_switching_2)  &
+                                                         +dxyz_sw(1:3)*mm_main_c%r_num_atom_qm_grp(irs_qm2)
+                 ! for mm atoms.
+                 mm_main_c%dxyz_sw2(4:6,ido_switching_2)= mm_main_c%dxyz_sw2(4:6,ido_switching_2)  &
+                                                         -dxyz_sw(1:3)*mm_main_c%r_num_atom_mm_grp(irs_mm)
               else
-                 ido_switching = -1
+                 sw_scale = zero
               end if
-              !
-              if(mm_main_r%q_mmgrp_qmgrp_cut(irs_mm,irs_qm)) then
-                 vec(1:3)   = qm_coords(1:3,i)-mm_coord(1:3,j)
+           end if
 
-                 if(mm_main_r%q_diag_coulomb) then
-                    ! d(1/r_ij)/dx_j = - (1/r_ij)^3*(x_j-x_i)
-                    ! d(1/r_ij)/dx_i =   (1/r_ij)^3*(x_j-x_i)
-                    onerij   = qmmm_ewald_r%rijdata_qmmm(2,icnt_mm)  ! one/rij value.
-                    sw_scale =-onerij*onerij*onerij
-                 else
-                    ! contribution by switching function. in fact, (1-Sw(rij))*c_j/rij
-                    ! d(1-Sw(rij))/drij = - dSw(rij)/drij...
-                    if(ido_switching > 0) then
-                       ! apply switching function contribution
-                       sw_scale = one - mm_main_r%sw_val(ido_switching)
-                       onerij   = qmmm_ewald_r%rijdata_qmmm(2,icnt_mm)  ! one/rij value.
-                       ! d(r_ij)^-1 / dx_j = - (1/r_ij)^3*(x_j-x_i)
-                       ! d(r_ij)^-1 / dx_i =   (1/r_ij)^3*(x_j-x_i) 
-                       sw_scale =-sw_scale*onerij*onerij*onerij
+           ! since qmmmerfcx_data = (-drfc+(one-erfcx)*oneRIJ)*oneRIJ2
+           df_qmmm    = mm_chrgs(j)*(qmmm_ewald_c%qmmmerfcx_data(icnt_mm) + sw_scale)
+           df_xyz(1:3)= vec(1:3)*df_qmmm*qmmulik_chg
 
-                       rtmp     = mm_chrgs(j)*qmmulik_chg*onerij        ! q_mm*q_qm/rij
-                       dxyz_sw(1:3) =-rtmp*mm_main_r%dsw_val(1:3,ido_switching)
-                       ! for qm atoms.
-                       mm_main_r%dxyz_sw2(1:3,ido_switching) = mm_main_r%dxyz_sw2(1:3,ido_switching)  &
-                                                     +dxyz_sw(1:3)*mm_main_r%r_num_atom_qm_grp(irs_qm)
-                       ! for mm atoms.
-                       mm_main_r%dxyz_sw2(4:6,ido_switching) = mm_main_r%dxyz_sw2(4:6,ido_switching)  &
-                                                     -dxyz_sw(1:3)*mm_main_r%r_num_atom_mm_grp(irs_mm)
-                    else
-                       sw_scale = zero
-                    end if
-                 end if
+           kk              = inner_loop_count
+           dxyzqm(1:3,i)   = dxyzqm(1:3,i)  + df_xyz(1:3)
+           dxyzcl(kk:kk+2) = dxyzcl(kk:kk+2)- df_xyz(1:3)
 
-                 ! since qmmmerfcx_data = (-drfc+(one-erfcx)*oneRIJ)*oneRIJ2
-                 df_qmmm    = mm_chrgs(j)*(qmmm_ewald_r%qmmmerfcx_data(icnt_mm) + sw_scale)
-                 df_xyz(1:3)= vec(1:3)*df_qmmm*qmmulik_chg
-
-                 kk = inner_loop_count
-                 dxyzqm(1:3,i)  = dxyzqm(1:3,i)  + df_xyz(1:3)
-                 dxyzcl(kk:kk+2)= dxyzcl(kk:kk+2)- df_xyz(1:3)
-              end if
-              inner_loop_count = inner_loop_count + 3
-           end do                                    ! j=1,four_numatm,4
-        else
-           if(mm_main_r%q_switch) irs_qm = map_qmatom_to_group(i)
-           do j = mstart,mstop
-              icnt_mm    = icnt_mm + 1
-              vec(1:3)   = qm_coords(1:3,i)-mm_coord(1:3,j)
-
-              if(mm_main_r%q_switch) then
-                 irs_mm        = map_mmatom_to_group(j)
-                 ido_switching = mm_main_r%q_mmgrp_qmgrp_swt(irs_mm,irs_qm)
-              else
-                 ido_switching = -1
-              end if
-
-              if(mm_main_r%q_diag_coulomb) then
-                 ! d(1/r_ij)/dx_j = - (1/r_ij)^3*(x_j-x_i)
-                 ! d(1/r_ij)/dx_i =   (1/r_ij)^3*(x_j-x_i)
-                 onerij   = qmmm_ewald_r%rijdata_qmmm(2,icnt_mm)  ! one/rij value.
-                 sw_scale =-onerij*onerij*onerij
-              else
-                 ! contribution by switching function. in fact, (1-Sw(rij))*c_j/rij
-                 ! d(1-Sw(rij))/drij = - dSw(rij)/drij...
-                 if(ido_switching > 0) then
-                    ! apply switching function contribution
-                    sw_scale = one - mm_main_r%sw_val(ido_switching)
-                    onerij   = qmmm_ewald_r%rijdata_qmmm(2,icnt_mm)  ! one/rij value.
-                    ! d(r_ij)^-1 / dx_j = - (1/r_ij)^3*(x_j-x_i)
-                    ! d(r_ij)^-1 / dx_i =   (1/r_ij)^3*(x_j-x_i)
-                    sw_scale =-sw_scale*onerij*onerij*onerij
-
-                    rtmp     = mm_chrgs(j)*qmmulik_chg*onerij        ! q_mm*q_qm/rij
-                    dxyz_sw(1:3) =-rtmp*mm_main_r%dsw_val(1:3,ido_switching)
-                    ! for qm atoms: since the qm group for which the switching function is computed
-                    !               could be different from irs_qm.
-                    irs_qm2         = mm_main_r%q_mmgrp_point_swt(irs_mm)
-                    ido_switching_2 = mm_main_r%q_backmap_dxyz_sw(ido_switching)
-                    mm_main_r%dxyz_sw2(1:3,ido_switching_2) = mm_main_r%dxyz_sw2(1:3,ido_switching_2)  &
-                                                  +dxyz_sw(1:3)*mm_main_r%r_num_atom_qm_grp(irs_qm2)
-                    ! for mm atoms.
-                    mm_main_r%dxyz_sw2(4:6,ido_switching_2) = mm_main_r%dxyz_sw2(4:6,ido_switching_2)  &
-                                                  -dxyz_sw(1:3)*mm_main_r%r_num_atom_mm_grp(irs_mm)
-                 else
-                    sw_scale = zero
-                 end if
-              end if
-
-              ! since qmmmerfcx_data = (-drfc+(one-erfcx)*oneRIJ)*oneRIJ2
-              df_qmmm    = mm_chrgs(j)*(qmmm_ewald_r%qmmmerfcx_data(icnt_mm) + sw_scale)
-              df_xyz(1:3)= vec(1:3)*df_qmmm*qmmulik_chg
-
-              kk             = inner_loop_count
-              dxyzqm(1:3,i)  = dxyzqm(1:3,i)  + df_xyz(1:3)
-              dxyzcl(kk:kk+2)= dxyzcl(kk:kk+2)- df_xyz(1:3)
-
-              inner_loop_count = inner_loop_count + 3
-           end do                                    ! j=1,four_numatm,4
-        end if
+           inner_loop_count= inner_loop_count + 3
+        end do                                    ! j=1,four_numatm,4
      end do                                       ! i=1,numat
   else
      do i = 1, numat
@@ -1444,118 +1367,62 @@ module qmmmewald_module
 #if KEY_PARALLEL==1
         inner_loop_count=inner_loop_count+3*(mstart-1)
 #endif
-        ! group-by-group-based cutoff case, skip the pair if its distance is longer than cutoff.
-        ! otherwise (default group-based case), include all mm atoms (default).
-        if(mm_main_r%q_cut_by_group) then
-           irs_qm = map_qmatom_to_group(i)
-           do j = mstart,mstop
-              irs_mm = map_mmatom_to_group(j)
-              if(mm_main_r%q_mmgrp_qmgrp_cut(irs_mm,irs_qm)) then
-                 vec(1:3)   = qm_coords(1:3,i)-mm_coord(1:3,j)
-                 r2         = vec(1)*vec(1)+vec(2)*vec(2)+vec(3)*vec(3)
-                 if(mm_main_r%q_switch) then
-                    ido_switching = mm_main_r%q_mmgrp_qmgrp_swt(irs_mm,irs_qm)
-                 else
-                    ido_switching = -1
-                 end if
+        !
+        if(mm_main_c%q_switch) irs_qm = map_grp_c%map_qmatom_to_group(i)
 
-                 oneRIJ     = one/sqrt(r2)
-                 oneRIJ2    = oneRIJ*oneRIJ
-                 rij        = r2*oneRIJ                        ! one/oneRIJ
-                 Call ERFCD(rij,kappa_local,erfcx,drfc,Erfmod_local)
+        ! default group-based case, include all mm atoms (default).
+        do j = mstart,mstop
+           vec(1:3)   = qm_coords(1:3,i)-mm_coord(1:3,j)
+           r2         = vec(1)*vec(1)+vec(2)*vec(2)+vec(3)*vec(3)
 
-                 if(mm_main_r%q_diag_coulomb) then
-                    ! d(1/r_ij)/dx_j = - (1/r_ij)^3*(x_j-x_i)
-                    ! d(1/r_ij)/dx_i =   (1/r_ij)^3*(x_j-x_i)
-                    sw_scale =-onerij2*onerij
-                 else
-                    ! contribution by switching function. in fact, (1-Sw(rij))*c_j/rij
-                    ! d(1-Sw(rij))/drij = - dSw(rij)/drij...
-                    if(ido_switching > 0) then
-                       ! apply switching function contribution
-                       sw_scale = one - mm_main_r%sw_val(ido_switching)
-                       ! d(r_ij)^-1 / dx_j = - (1/r_ij)^3*(x_j-x_i)
-                       ! d(r_ij)^-1 / dx_i =   (1/r_ij)^3*(x_j-x_i) 
-                       sw_scale =-sw_scale*onerij2*onerij
+           oneRIJ     = one/sqrt(r2)
+           oneRIJ2    = oneRIJ*oneRIJ
+           rij        = r2*oneRIJ                        ! one/oneRIJ
+           call ERFCD(rij,kappa_local,erfcx,drfc,Erfmod_local)
 
-                       rtmp     = mm_chrgs(j)*qmmulik_chg*onerij        ! q_mm*q_qm/rij
-                       dxyz_sw(1:3) =-rtmp*mm_main_r%dsw_val(1:3,ido_switching)
-                       ! for qm atoms.
-                       mm_main_r%dxyz_sw2(1:3,ido_switching) = mm_main_r%dxyz_sw2(1:3,ido_switching)  &
-                                                     +dxyz_sw(1:3)*mm_main_r%r_num_atom_qm_grp(irs_qm)
-                       ! for mm atoms.
-                       mm_main_r%dxyz_sw2(4:6,ido_switching) = mm_main_r%dxyz_sw2(4:6,ido_switching)  &
-                                                     -dxyz_sw(1:3)*mm_main_r%r_num_atom_mm_grp(irs_mm)
-                    else
-                       sw_scale = zero
-                    end if
-                 end if
-
-                 df_qmmm    = mm_chrgs(j)*((-drfc+(one-erfcx)*oneRIJ)*oneRIJ2 + sw_scale)
-                 df_xyz(1:3)= vec(1:3)*df_qmmm*qmmulik_chg
-
-                 kk = inner_loop_count
-                 dxyzqm(1:3,i)  = dxyzqm(1:3,i)  + df_xyz(1:3)
-                 dxyzcl(kk:kk+2)= dxyzcl(kk:kk+2)- df_xyz(1:3)
-              end if
-              inner_loop_count = inner_loop_count + 3
-           end do                                    ! j=1,four_numatm,4
-        else
-           if(mm_main_r%q_switch) irs_qm = map_qmatom_to_group(i)
-           do j = mstart,mstop
-              vec(1:3)   = qm_coords(1:3,i)-mm_coord(1:3,j)
-              r2         = vec(1)*vec(1)+vec(2)*vec(2)+vec(3)*vec(3)
-
-              oneRIJ     = one/sqrt(r2)
-              oneRIJ2    = oneRIJ*oneRIJ
-              rij        = r2*oneRIJ                        ! one/oneRIJ
-              Call ERFCD(rij,kappa_local,erfcx,drfc,Erfmod_local)
-
+           if(mm_main_c%q_switch) then
+              irs_mm        = map_grp_c%map_mmatom_to_group(j)
+              ido_switching = mm_main_c%q_mmgrp_qmgrp_swt(irs_mm,irs_qm)
+           else
               ido_switching = -1
-              if(mm_main_r%q_switch) then
-                 irs_mm        = map_mmatom_to_group(j)
-                 ido_switching = mm_main_r%q_mmgrp_qmgrp_swt(irs_mm,irs_qm)
+           end if
+
+           if(mm_main_c%q_diag_coulomb) then
+              ! d(1/r_ij)/dx_j = - (1/r_ij)^3*(x_j-x_i)
+              ! d(1/r_ij)/dx_i =   (1/r_ij)^3*(x_j-x_i)
+              sw_scale =-onerij2*onerij
+           else
+              if(ido_switching > 0) then
+                 ! apply switching function contribution
+                 sw_scale = one - mm_main_c%sw_val(ido_switching)
+                 ! d(r_ij)^-1 / dx_j = - (1/r_ij)^3*(x_j-x_i)
+                 ! d(r_ij)^-1 / dx_i =   (1/r_ij)^3*(x_j-x_i)
+                 sw_scale =-sw_scale*onerij*onerij*onerij
+
+                 rtmp     = mm_chrgs(j)*qmmulik_chg*onerij        ! q_mm*q_qm/rij
+                 dxyz_sw(1:3) =-rtmp*mm_main_c%dsw_val(1:3,ido_switching)
+                 ! for qm atoms.
+                 irs_qm2  = mm_main_c%q_mmgrp_point_swt(irs_mm)
+                 ido_switching_2 = mm_main_c%q_backmap_dxyz_sw(ido_switching)
+                 mm_main_c%dxyz_sw2(1:3,ido_switching_2) = mm_main_c%dxyz_sw2(1:3,ido_switching_2)  &
+                                               +dxyz_sw(1:3)*mm_main_c%r_num_atom_qm_grp(irs_qm2)
+                 ! for mm atoms.
+                 mm_main_c%dxyz_sw2(4:6,ido_switching_2) = mm_main_c%dxyz_sw2(4:6,ido_switching_2)  &
+                                               -dxyz_sw(1:3)*mm_main_c%r_num_atom_mm_grp(irs_mm)
               else
-                 ido_switching = -1
+                 sw_scale = zero
               end if
+           end if
 
-              if(mm_main_r%q_diag_coulomb) then
-                 ! d(1/r_ij)/dx_j = - (1/r_ij)^3*(x_j-x_i)
-                 ! d(1/r_ij)/dx_i =   (1/r_ij)^3*(x_j-x_i)
-                 sw_scale =-onerij2*onerij
-              else
-                 if(ido_switching > 0) then
-                    ! apply switching function contribution
-                    sw_scale = one - mm_main_r%sw_val(ido_switching)
-                    ! d(r_ij)^-1 / dx_j = - (1/r_ij)^3*(x_j-x_i)
-                    ! d(r_ij)^-1 / dx_i =   (1/r_ij)^3*(x_j-x_i)
-                    sw_scale =-sw_scale*onerij*onerij*onerij
+           df_qmmm    = mm_chrgs(j)*((-drfc+(one-erfcx)*oneRIJ)*oneRIJ2 + sw_scale)
+           df_xyz(1:3)= vec(1:3)*df_qmmm*qmmulik_chg
 
-                    rtmp     = mm_chrgs(j)*qmmulik_chg*onerij        ! q_mm*q_qm/rij
-                    dxyz_sw(1:3) =-rtmp*mm_main_r%dsw_val(1:3,ido_switching)
-                    ! for qm atoms.
-                    irs_qm2  = mm_main_r%q_mmgrp_point_swt(irs_mm)
-                    ido_switching_2 = mm_main_r%q_backmap_dxyz_sw(ido_switching)
-                    mm_main_r%dxyz_sw2(1:3,ido_switching_2) = mm_main_r%dxyz_sw2(1:3,ido_switching_2)  &
-                                                  +dxyz_sw(1:3)*mm_main_r%r_num_atom_qm_grp(irs_qm2)
-                    ! for mm atoms.
-                    mm_main_r%dxyz_sw2(4:6,ido_switching_2) = mm_main_r%dxyz_sw2(4:6,ido_switching_2)  &
-                                                  -dxyz_sw(1:3)*mm_main_r%r_num_atom_mm_grp(irs_mm)
-                 else
-                    sw_scale = zero
-                 end if
-              end if
+           kk              = inner_loop_count
+           dxyzqm(1:3,i)   = dxyzqm(1:3,i)  + df_xyz(1:3)
+           dxyzcl(kk:kk+2) = dxyzcl(kk:kk+2)- df_xyz(1:3)
 
-              df_qmmm    = mm_chrgs(j)*((-drfc+(one-erfcx)*oneRIJ)*oneRIJ2 + sw_scale)
-              df_xyz(1:3)= vec(1:3)*df_qmmm*qmmulik_chg
-
-              kk = inner_loop_count
-              dxyzqm(1:3,i)  = dxyzqm(1:3,i)  + df_xyz(1:3)
-              dxyzcl(kk:kk+2)= dxyzcl(kk:kk+2)- df_xyz(1:3)
-
-              inner_loop_count = inner_loop_count + 3
-           end do                                    ! j=1,four_numatm,4
-        end if
+           inner_loop_count= inner_loop_count + 3
+        end do                                    ! j=1,four_numatm,4
      end do                                       ! i=1,numat
   end if
 
@@ -1565,7 +1432,7 @@ module qmmmewald_module
 #if KEY_PARALLEL==1
   loop_count = 0
 #endif
-  if(qm_main_r%rij_qm_incore) then
+  if(qm_main_c%rij_qm_incore) then
      ! this only loops over 1=2,numat, j=1,i-1, so, no half factor.
      icnt_qm   =0
      loopi1: do i = 2, numat
@@ -1574,15 +1441,15 @@ module qmmmewald_module
         loopj1: do j = 1, i-1
 #if KEY_PARALLEL==1
            loop_count = loop_count + 1
-           if(mmynod .ne. mod(loop_count-1,nnumnod)) cycle loopj1
+           if(mmynod /= mod(loop_count-1,nnumnod)) cycle loopj1
 #endif
            !
            vec(1:3) = xyz_i(1:3)-qm_coords(1:3,j)
 
            ! since qmqmerfcx_data = (-drfc+(one-erfcx)*oneRIJ)*oneRIJ2
-           icnt_qm  = icnt_qm + 1   ! this is only needed counter.
-           df_qmmm  = qmmulik_chg*qm_charges(j)*qmmm_ewald_r%qmqmerfcx_data(icnt_qm)
-           df_xyz(1:3)= vec(1:3)*df_qmmm
+           icnt_qm      = icnt_qm + 1   ! this is only needed counter.
+           df_qmmm      = qmmulik_chg*qm_charges(j)*qmmm_ewald_c%qmqmerfcx_data(icnt_qm)
+           df_xyz(1:3)  = vec(1:3)*df_qmmm
 
            dxyzqm(1:3,i)= dxyzqm(1:3,i) + df_xyz(1:3)
            dxyzqm(1:3,j)= dxyzqm(1:3,j) - df_xyz(1:3)
@@ -1594,20 +1461,20 @@ module qmmmewald_module
         xyz_i(1:3)  = qm_coords(1:3,i)
         qmmulik_chg = qm_charges(i)*sfact 
         do j = 1, numat
-           if (i .ne. j) then
+           if (i /= j) then
 #if KEY_PARALLEL==1
               loop_count = loop_count + 1
-              if(mynod .eq. MOD(loop_count-1,numnod)) then 
+              if(mynod == MOD(loop_count-1,numnod)) then 
 #endif
                  vec(1:3) = xyz_i(1:3)-qm_coords(1:3,j)
                  r2       = vec(1)*vec(1)+vec(2)*vec(2)+vec(3)*vec(3)
                  oneRIJ   = one / sqrt(r2)
                  oneRIJ2  = oneRIJ*oneRIJ
                  rij      = r2*oneRIJ                       ! one/oneRIJ
-                 Call ERFCD(rij,kappa_local,erfcx,drfc,Erfmod_local)
+                 call ERFCD(rij,kappa_local,erfcx,drfc,Erfmod_local)
 
-                 df_qmmm    = half*qmmulik_chg*qm_charges(j)*(-drfc+(one-erfcx)*oneRIJ)*oneRIJ2
-                 df_xyz(1:3)= vec(1:3)*df_qmmm
+                 df_qmmm      = half*qmmulik_chg*qm_charges(j)*(-drfc+(one-erfcx)*oneRIJ)*oneRIJ2
+                 df_xyz(1:3)  = vec(1:3)*df_qmmm
 
                  dxyzqm(1:3,i)= dxyzqm(1:3,i) + df_xyz(1:3)
                  dxyzqm(1:3,j)= dxyzqm(1:3,j) - df_xyz(1:3)
@@ -1661,34 +1528,34 @@ module qmmmewald_module
   !Step 3) do QM atoms with exclude MM atoms from QM-MM nonbonded 
   !        interactions
   !        (IGMSEL(i)=5)
-  if (qmmm_ewald_r%nexl_atm .gt. 0) then
+  if(qmmm_ewald_c%nexl_atm > 0) then
 #if KEY_PARALLEL==1
      ! do only mynod.eq.0
-     if(mynod.eq.0) then 
+     if(mynod == 0) then 
 #endif
-        Erfmod_local= qmmm_ewald_r%erfmod
-        kappa_local = qmmm_ewald_r%kappa
+        Erfmod_local= qmmm_ewald_c%erfmod
+        kappa_local = qmmm_ewald_c%kappa
         do i = 1, numat
            xyz_i(1:3)  = qm_coords(1:3,i)
            qmmulik_chg = qm_charges(i)*sfact
 
-           do j = 1, qmmm_ewald_r%nexl_atm
-              vec(1:3) = xyz_i(1:3)-qmmm_ewald_r%exl_xyz(1:3,j)
+           do j = 1, qmmm_ewald_c%nexl_atm
+              vec(1:3) = xyz_i(1:3)-qmmm_ewald_c%exl_xyz(1:3,j)
               r2       = vec(1)*vec(1)+vec(2)*vec(2)+vec(3)*vec(3)
               oneRIJ   = one / sqrt(r2)
-              oneRIJ2    = oneRIJ*oneRIJ
-              rij        = r2*oneRIJ
-              Call ERFCD(rij,kappa_local,erfcx,drfc,Erfmod_local)
+              oneRIJ2  = oneRIJ*oneRIJ
+              rij      = r2*oneRIJ
+              call ERFCD(rij,kappa_local,erfcx,drfc,Erfmod_local)
   ! namkh: 0419-2013.
   !        why do we need half here? should remove it.
-  !            df_qmmm    = half*qmmulik_chg*qmmm_ewald_r%exl_chg(j) &
+  !            df_qmmm    = half*qmmulik_chg*qmmm_ewald_c%exl_chg(j) &
   !                                         *(-drfc+(one-erfcx)*oneRIJ)*oneRIJ2
-              df_qmmm    = qmmulik_chg*qmmm_ewald_r%exl_chg(j) &
-                                            *(-drfc+(one-erfcx)*oneRIJ)*oneRIJ2
+              df_qmmm    = qmmulik_chg*qmmm_ewald_c%exl_chg(j) &
+                                      *(-drfc+(one-erfcx)*oneRIJ)*oneRIJ2
               df_xyz(1:3)= vec(1:3)*df_qmmm
 
               dxyzqm(1:3,i)                = dxyzqm(1:3,i)   + df_xyz(1:3)
-              qmmm_ewald_r%dexl_xyz(1:3,j) = qmmm_ewald_r%dexl_xyz(1:3,j) - df_xyz(1:3)
+              qmmm_ewald_c%dexl_xyz(1:3,j) = qmmm_ewald_c%dexl_xyz(1:3,j) - df_xyz(1:3)
            end do
         end do
 #if KEY_PARALLEL==1
@@ -1734,8 +1601,7 @@ module qmmmewald_module
 
   ! Local variables
   integer :: i,j,loop_count,qmid,kx,ky,kz,ksy,ksz,ksq
-  integer  :: mstart,mstop,inner_loop
-  integer  :: ISTRT_CHECK                 ! for external function
+  integer :: inner_loop
   !
   real(chm_real) :: qmmulik_chg,mmchg,sfact,picoef,kvect
   real(chm_real) :: vec(3), xyz_cos(3),xyz_sin(3),xyz_cos_j(3),xyz_sin_j(3)
@@ -1747,64 +1613,58 @@ module qmmmewald_module
   !
   real(chm_real),parameter :: ufact=EVCAL*EV*A0
 #if KEY_PARALLEL==1
-  integer,parameter :: i_array_length=4
-  real(chm_real)    :: suml(4)
   integer :: mmynod, nnumnod
 #endif
   logical :: q_do_qm
 
   ! do some initialization
-!!  mstart = 1
-!!  mstop  = numat
 #if KEY_PARALLEL==1
-     !!if(numnod>1) mstart = ISTRT_CHECK(mstop,numat)
-     mmynod  = mynod
-     nnumnod = numnod
+  mmynod  = mynod
+  nnumnod = numnod
 #endif
   !
   loop_count = 0
   grad_qm    = zero
 
   ! do virial part
-  pikapa     = two*((PI/qmmm_ewald_r%kappa)**2)  ! two/(four*kappa*kappa)
+  pikapa     = two*((PI/qmmm_ewald_c%kappa)**2)  ! two/(four*kappa*kappa)
   !virial(1:9)= zero  ! this is done in mndene routine.
 
   do kx =0, kmaxqx
-    if ( kx .eq. 0 ) then
+    if( kx == 0 ) then
        ksy = 0
     else
        ksy = -kmaxqy
     end if
-    picoef = TWOPI  * REAL(kx)
+    picoef = TWOPI  * float(kx)
     rkx(1) = picoef * recip(1)
     rkx(2) = picoef * recip(2)
     rkx(3) = picoef * recip(4)
 
     do ky = ksy, kmaxqy
-       if (kx .eq. 0 .and. ky .eq. 0) then
+       if(kx == 0 .and. ky == 0) then
           ksz = 1
        else
           ksz = -kmaxqz
        end if
-       picoef = TWOPI  * REAL(ky)
+       picoef = TWOPI  * float(ky)
        rky(1) = picoef * recip(2)
        rky(2) = picoef * recip(3)
        rky(3) = picoef * recip(5)
 
        do kz = ksz, kmaxqz
           sfact  = two
-          picoef = TWOPI  * REAL(kz)
+          picoef = TWOPI  * float(kz)
           rkz(1) = picoef * recip(4)
           rkz(2) = picoef * recip(5)
           rkz(3) = picoef * recip(6)
           ksq    = kx*kx + ky*ky + kz*kz
 
-          if (ksq .le. ksqmaxq .and. ksq .ne. 0) then
-
+          if(ksq <= ksqmaxq .and. ksq /= 0) then
              loop_count = loop_count + 1
              mkv(1:3)   = rkx(1:3) + rky(1:3) + rkz(1:3)
 
-             kvect      = sfact*qmmm_ewald_r%kvec(loop_count)
+             kvect      = sfact*qmmm_ewald_c%kvec(loop_count)
              ccfk(1:3)  = mkv(1:3)*kvect
 
   ! do virial part
@@ -1821,12 +1681,12 @@ module qmmmewald_module
   ! do over all MM atoms, since mmchg on qm atoms
   ! will be zero. Thus, no contribution
                    inner_loop = inner_loop + 1
-                   xyz_cos(1) = qmmm_ewald_r%ktable(1,inner_loop,loop_count)
-                   xyz_sin(1) = qmmm_ewald_r%ktable(2,inner_loop,loop_count)
-                   xyz_cos(2) = qmmm_ewald_r%ktable(3,inner_loop,loop_count)
-                   xyz_sin(2) = qmmm_ewald_r%ktable(4,inner_loop,loop_count)
-                   xyz_cos(3) = qmmm_ewald_r%ktable(5,inner_loop,loop_count)
-                   xyz_sin(3) = qmmm_ewald_r%ktable(6,inner_loop,loop_count)
+                   xyz_cos(1) = qmmm_ewald_c%ktable(1,inner_loop,loop_count)
+                   xyz_sin(1) = qmmm_ewald_c%ktable(2,inner_loop,loop_count)
+                   xyz_cos(2) = qmmm_ewald_c%ktable(3,inner_loop,loop_count)
+                   xyz_sin(2) = qmmm_ewald_c%ktable(4,inner_loop,loop_count)
+                   xyz_cos(3) = qmmm_ewald_c%ktable(5,inner_loop,loop_count)
+                   xyz_sin(3) = qmmm_ewald_c%ktable(6,inner_loop,loop_count)
 
                    !mmchg      = mmcharges(j)
                    ktgs(1)    = ktgs(1) + mmcharges(j)*xyz_cos(1)*xyz_cos(2)*xyz_cos(3)  ! mmchg
@@ -1839,12 +1699,12 @@ module qmmmewald_module
                    ktgs(8)    = ktgs(8) + mmcharges(j)*xyz_sin(1)*xyz_sin(2)*xyz_sin(3)  ! mmchg
                 end do
                 do j = 1, numat
-                   xyz_cos(1) = qmmm_ewald_r%qmktable(1,j,loop_count)
-                   xyz_sin(1) = qmmm_ewald_r%qmktable(2,j,loop_count)
-                   xyz_cos(2) = qmmm_ewald_r%qmktable(3,j,loop_count)
-                   xyz_sin(2) = qmmm_ewald_r%qmktable(4,j,loop_count)
-                   xyz_cos(3) = qmmm_ewald_r%qmktable(5,j,loop_count)
-                   xyz_sin(3) = qmmm_ewald_r%qmktable(6,j,loop_count)
+                   xyz_cos(1) = qmmm_ewald_c%qmktable(1,j,loop_count)
+                   xyz_sin(1) = qmmm_ewald_c%qmktable(2,j,loop_count)
+                   xyz_cos(2) = qmmm_ewald_c%qmktable(3,j,loop_count)
+                   xyz_sin(2) = qmmm_ewald_c%qmktable(4,j,loop_count)
+                   xyz_cos(3) = qmmm_ewald_c%qmktable(5,j,loop_count)
+                   xyz_sin(3) = qmmm_ewald_c%qmktable(6,j,loop_count)
 
   ! temporary array
                    fda(1)     = xyz_sin(1)*xyz_cos(2)*xyz_cos(3)
@@ -1880,12 +1740,12 @@ module qmmmewald_module
   ! MM-QM interaction
                 fda(1:8) = zero
                 do j = 1, numat
-                   xyz_cos(1) = qmmm_ewald_r%qmktable(1,j,loop_count)
-                   xyz_sin(1) = qmmm_ewald_r%qmktable(2,j,loop_count)
-                   xyz_cos(2) = qmmm_ewald_r%qmktable(3,j,loop_count)
-                   xyz_sin(2) = qmmm_ewald_r%qmktable(4,j,loop_count)
-                   xyz_cos(3) = qmmm_ewald_r%qmktable(5,j,loop_count)
-                   xyz_sin(3) = qmmm_ewald_r%qmktable(6,j,loop_count)
+                   xyz_cos(1) = qmmm_ewald_c%qmktable(1,j,loop_count)
+                   xyz_sin(1) = qmmm_ewald_c%qmktable(2,j,loop_count)
+                   xyz_cos(2) = qmmm_ewald_c%qmktable(3,j,loop_count)
+                   xyz_sin(2) = qmmm_ewald_c%qmktable(4,j,loop_count)
+                   xyz_cos(3) = qmmm_ewald_c%qmktable(5,j,loop_count)
+                   xyz_sin(3) = qmmm_ewald_c%qmktable(6,j,loop_count)
 
                    qmmulik_chg= qm_charges(j)*ufact
                    fda(1)     = fda(1) + qmmulik_chg*xyz_sin(1)*xyz_cos(2)*xyz_cos(3)
@@ -1900,12 +1760,12 @@ module qmmmewald_module
                 inner_loop = 0
                 do j = iastrt,iafinl               ! 1, natom
                    inner_loop = inner_loop + 1
-                   xyz_cos(1) = qmmm_ewald_r%ktable(1,inner_loop,loop_count)
-                   xyz_sin(1) = qmmm_ewald_r%ktable(2,inner_loop,loop_count)
-                   xyz_cos(2) = qmmm_ewald_r%ktable(3,inner_loop,loop_count)
-                   xyz_sin(2) = qmmm_ewald_r%ktable(4,inner_loop,loop_count)
-                   xyz_cos(3) = qmmm_ewald_r%ktable(5,inner_loop,loop_count)
-                   xyz_sin(3) = qmmm_ewald_r%ktable(6,inner_loop,loop_count)
+                   xyz_cos(1) = qmmm_ewald_c%ktable(1,inner_loop,loop_count)
+                   xyz_sin(1) = qmmm_ewald_c%ktable(2,inner_loop,loop_count)
+                   xyz_cos(2) = qmmm_ewald_c%ktable(3,inner_loop,loop_count)
+                   xyz_sin(2) = qmmm_ewald_c%ktable(4,inner_loop,loop_count)
+                   xyz_cos(3) = qmmm_ewald_c%ktable(5,inner_loop,loop_count)
+                   xyz_sin(3) = qmmm_ewald_c%ktable(6,inner_loop,loop_count)
 
                    ktgs(1)    = xyz_cos(1)*xyz_cos(2)*xyz_cos(3)
                    ktgs(2)    = xyz_sin(1)*xyz_cos(2)*xyz_cos(3)
@@ -1934,7 +1794,7 @@ module qmmmewald_module
 
   ! qm muliken charge has been multiplied already
                    !mmchg             = mmcharges(j)
-                   qmmm_ewald_r%d_ewald_mm(1:3,j) = qmmm_ewald_r%d_ewald_mm(1:3,j) &
+                   qmmm_ewald_c%d_ewald_mm(1:3,j) = qmmm_ewald_c%d_ewald_mm(1:3,j) &
                                                    -ccfk(1:3)*fdxyz(1:3)*mmcharges(j) !mmchg
                 end do
              end if     ! QNoPMEwald
@@ -1944,15 +1804,15 @@ module qmmmewald_module
              cos_sum_qm=zero
              !
 #if KEY_PARALLEL==1
-             if(mmynod .eq. mod(loop_count-1,nnumnod)) then
+             if(mmynod == mod(loop_count-1,nnumnod)) then
 #endif
                 do i = 1, numat
-                   xyz_cos(1) = qmmm_ewald_r%qmktable(1,i,loop_count)
-                   xyz_sin(1) = qmmm_ewald_r%qmktable(2,i,loop_count)
-                   xyz_cos(2) = qmmm_ewald_r%qmktable(3,i,loop_count)
-                   xyz_sin(2) = qmmm_ewald_r%qmktable(4,i,loop_count)
-                   xyz_cos(3) = qmmm_ewald_r%qmktable(5,i,loop_count)
-                   xyz_sin(3) = qmmm_ewald_r%qmktable(6,i,loop_count)
+                   xyz_cos(1) = qmmm_ewald_c%qmktable(1,i,loop_count)
+                   xyz_sin(1) = qmmm_ewald_c%qmktable(2,i,loop_count)
+                   xyz_cos(2) = qmmm_ewald_c%qmktable(3,i,loop_count)
+                   xyz_sin(2) = qmmm_ewald_c%qmktable(4,i,loop_count)
+                   xyz_cos(3) = qmmm_ewald_c%qmktable(5,i,loop_count)
+                   xyz_sin(3) = qmmm_ewald_c%qmktable(6,i,loop_count)
                    qmmulik_chg= qm_charges(i)*ufact
 
   ! do virial part, for qm.
@@ -1965,17 +1825,15 @@ module qmmmewald_module
   ! end
 
                    do j = 1,numat  ! as parallel is done above level (loop_count).
-                      xyz_cos_j(1) = qmmm_ewald_r%qmktable(1,j,loop_count)
-                      xyz_sin_j(1) = qmmm_ewald_r%qmktable(2,j,loop_count)
-                      xyz_cos_j(2) = qmmm_ewald_r%qmktable(3,j,loop_count)
-                      xyz_sin_j(2) = qmmm_ewald_r%qmktable(4,j,loop_count)
-                      xyz_cos_j(3) = qmmm_ewald_r%qmktable(5,j,loop_count)
-                      xyz_sin_j(3) = qmmm_ewald_r%qmktable(6,j,loop_count)
+                      xyz_cos_j(1) = qmmm_ewald_c%qmktable(1,j,loop_count)
+                      xyz_sin_j(1) = qmmm_ewald_c%qmktable(2,j,loop_count)
+                      xyz_cos_j(2) = qmmm_ewald_c%qmktable(3,j,loop_count)
+                      xyz_sin_j(2) = qmmm_ewald_c%qmktable(4,j,loop_count)
+                      xyz_cos_j(3) = qmmm_ewald_c%qmktable(5,j,loop_count)
+                      xyz_sin_j(3) = qmmm_ewald_c%qmktable(6,j,loop_count)
 
-                      ktg(1:3)     = xyz_cos_j(1:3)*xyz_cos(1:3) &
-                                    +xyz_sin_j(1:3)*xyz_sin(1:3)
-                      fdxyz(1:3)   =-xyz_cos_j(1:3)*xyz_sin(1:3) &
-                                    +xyz_sin_j(1:3)*xyz_cos(1:3)
+                      ktg(1:3)     = xyz_cos_j(1:3)*xyz_cos(1:3)+xyz_sin_j(1:3)*xyz_sin(1:3)
+                      fdxyz(1:3)   =-xyz_cos_j(1:3)*xyz_sin(1:3)+xyz_sin_j(1:3)*xyz_cos(1:3)
 
   ! force on x,y,z-axis: temporary use of FDA array
 
@@ -1987,7 +1845,7 @@ module qmmmewald_module
                       fda(2) = mmchg*ccfk(2)*ktg(1)  *fdxyz(2)*ktg(3)
                       fda(3) = mmchg*ccfk(3)*ktg(1)  *ktg(2)  *fdxyz(3)
 
-                      if (i .eq. j) then
+                      if (i == j) then
                          grad_qm(1:3,i) = grad_qm(1:3,i) + fda(1:3)
                       else
                          grad_qm(1:3,i) = grad_qm(1:3,i)+half*fda(1:3)
@@ -1996,7 +1854,7 @@ module qmmmewald_module
                    end do
                 end do
 #if KEY_PARALLEL==1
-             end if  ! (mmynod .eq. mod(loop_count-1,nnumnod))
+             end if  ! (mmynod == mod(loop_count-1,nnumnod))
 #endif
 
   ! do virial part
@@ -2010,8 +1868,8 @@ module qmmmewald_module
   ! where structfac_mm is already computed from qm_ewald_mm_pot.
 
              if(QNoPMEwald) then
-                sin_sum_mm= qmmm_ewald_r%structfac_mm(1,loop_count)
-                cos_sum_mm= qmmm_ewald_r%structfac_mm(2,loop_count)
+                sin_sum_mm= qmmm_ewald_c%structfac_mm(1,loop_count)
+                cos_sum_mm= qmmm_ewald_c%structfac_mm(2,loop_count)
                 ewen_qm_mm= sin_sum_mm*sin_sum_qm + cos_sum_mm*cos_sum_qm
              else
                 ewen_qm_mm= zero
@@ -2037,7 +1895,7 @@ module qmmmewald_module
   ! Now put gradient on grad_qm into d_ewald_mm array
   do i = 1, numat
      qmid = qminb(i)
-     qmmm_ewald_r%d_ewald_mm(1:3,qmid) = qmmm_ewald_r%d_ewald_mm(1:3,qmid) &
+     qmmm_ewald_c%d_ewald_mm(1:3,qmid) = qmmm_ewald_c%d_ewald_mm(1:3,qmid) &
                                         +grad_qm(1:3,i)
   end do
 
@@ -2058,9 +1916,9 @@ module qmmmewald_module
   logical :: q_ewald_call
 
   !
-  qmmm_ewald_r%Ktable     = zero
-  qmmm_ewald_r%qmktable   = zero
-  if(q_ewald_call) qmmm_ewald_r%d_ewald_mm = zero
+  qmmm_ewald_c%Ktable     = zero
+  qmmm_ewald_c%qmktable   = zero
+  if(q_ewald_call) qmmm_ewald_c%d_ewald_mm = zero
 
   return
   END SUBROUTINE set_initialize_for_energy_gradient
@@ -2077,15 +1935,15 @@ module qmmmewald_module
 
   integer :: i,nexcl
 
-  if(qmmm_ewald_r%nexl_atm .le. 0) return
+  if(qmmm_ewald_c%nexl_atm .le. 0) return
   !
-  do i=1, qmmm_ewald_r%nexl_atm
-     nexcl = qmmm_ewald_r%nexl_index(i)
+  do i=1, qmmm_ewald_c%nexl_atm
+     nexcl = qmmm_ewald_c%nexl_index(i)
 
-     qmmm_ewald_r%exl_xyz(1,i) = x(nexcl)
-     qmmm_ewald_r%exl_xyz(2,i) = y(nexcl)
-     qmmm_ewald_r%exl_xyz(3,i) = z(nexcl)
-     qmmm_ewald_r%exl_chg(i)   = cg(nexcl)
+     qmmm_ewald_c%exl_xyz(1,i) = x(nexcl)
+     qmmm_ewald_c%exl_xyz(2,i) = y(nexcl)
+     qmmm_ewald_c%exl_xyz(3,i) = z(nexcl)
+     qmmm_ewald_c%exl_chg(i)   = cg(nexcl)
   end do
   return
   END SUBROUTINE get_exl_crd
@@ -2094,8 +1952,10 @@ module qmmmewald_module
   SUBROUTINE getgrdq(natom,dx,dy,dz)
   !
   ! Add kspace gradient contribution of QM/MM into gradient array.
+  ! pointer array... use qmmm_ewald_r
   !
-  use qm1_info, only : qm_control_r
+  ! it means, if qmmm_ewald_c is used, all the necessary gradients must be
+  !           copied to qmmm_ewald_r.
 
   use chm_kinds
   implicit none
@@ -2104,14 +1964,11 @@ module qmmmewald_module
   real(chm_real),intent(inout) :: dx(*),dy(*),dz(*)
   integer                :: i
 
-  !
-  if(qm_control_r%q_do_cpmd_pme) return
-
   !do i = qmmm_ewald_r%iastrt,qmmm_ewald_r%iafinl       ! 1, Natom
   do i=1,natom
-     dx(i) = dx(i) + qmmm_ewald_r%d_ewald_mm(1,i)
-     dy(i) = dy(i) + qmmm_ewald_r%d_ewald_mm(2,i)
-     dz(i) = dz(i) + qmmm_ewald_r%d_ewald_mm(3,i)
+     dx(i) = dx(i) + qmmm_ewald_c%d_ewald_mm(1,i)
+     dy(i) = dy(i) + qmmm_ewald_c%d_ewald_mm(2,i)
+     dz(i) = dz(i) + qmmm_ewald_c%d_ewald_mm(3,i)
   end do
 
   return

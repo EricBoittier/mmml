@@ -1,0 +1,90 @@
+* Statistical torsion angle potential (STAP) and the flat-bottom distance potential
+* aim to bring accurate high-quality template based protein model refinement both NMR and Cryo-EM.
+* Tae-Rae Kim, Hyojung Ryu, and Jinhyuk Lee
+* which is based on doi: 10.1371/journal.pone.0108888 and  https://doi.org/10.1002/prot.24265
+* Y. Cho and Jinhyuk Lee, Feb 2020
+*
+
+if ?modeller .ne. 1 then
+   echo "Test NOT performed."
+   stop
+endif
+
+stream datadir.def
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!  Setup Structure
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+! read topology
+open read card unit 10 name @0/top_all22_prot.rtf
+read rtf  card unit 10
+clos unit 10
+
+! read parameter
+open read card unit 12 name @0/par_all22_prot.prm
+read para card unit 12
+clos unit 12
+
+!
+open read card unit 12 name @0/stap.pdb
+read sequ pdb unit 12
+clos unit 12
+
+! generate structure with the sequences
+generate pro0 setup
+
+open read card unit 12 name @0/stap.pdb
+read coor pdb  unit 12 resid
+clos unit 12
+
+ic para
+ic build
+hbuild
+
+coor print sele .not. INIT end
+
+!
+! STAP  setup
+!
+stream @0/stap.str
+
+ener
+!skip all energies except STAP
+skip all excl emd
+
+
+!test first for STAP before minimization
+test first sele resid 58:61 end
+skip excl all
+energy
+
+
+!STAP energy
+set bmin = ?emd
+
+!minimization
+mini sd   nstep 500
+
+ener
+
+! Test Check
+@testcheck ?EMD 1.15729 0.00001 STAP_ENERGY
+skip all excl emd
+
+
+!test first for STAP after minimization
+test first sele resid 58:61 end
+
+skip excl all
+set amin = ?emd
+
+write title unit 6
+* STAP energy: before: @bmin after: @amin
+*
+
+! Test Check
+@testcheck ?EMD 1.16919 0.00001 STAP_ENERGY
+
+
+
+stop

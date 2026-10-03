@@ -31,6 +31,9 @@ subroutine dynamc(vx, vy, vz, vk, xnew, ynew, znew, &
 #if KEY_TPS==1
      ,qtps,inbcut &
 #endif
+#if KEY_MIDSINR == 1
+     ,q_midsinr,v_1ij,v_2ij,L_val &
+#endif
      )
   !
   !
@@ -44,7 +47,6 @@ subroutine dynamc(vx, vy, vz, vk, xnew, ynew, znew, &
   !     Overhauled by Bernie Brooks
   !     Langevin Dynamics included by Charlie Brooks and Axel Brunger
 
-#if KEY_LIBRARY == 1
   use api_ktable, only: &
        fill_ktable, &
        ktable_init, ktable_set_names, &
@@ -58,8 +60,7 @@ subroutine dynamc(vx, vy, vz, vk, xnew, ynew, znew, &
   use api_msldata, only: &
        fill_msldata, msldata_init, msldata_set_names, msldata_add_rows
 #endif
-#endif /* KEY_LIBRARY */
-  
+
 #if KEY_RMD==1
   use cross, only: CURRENTGAMMA,SAVEDSX,SAVEDSY,SAVEDSZ, &
        SAVEDSOX,SAVEDSOY,SAVEDSOZ,SAVEDXX, &
@@ -263,7 +264,7 @@ subroutine dynamc(vx, vy, vz, vk, xnew, ynew, znew, &
   use domdec_util_gpu_mod,only:range_start, range_stop
 #endif
 #if KEY_ALLMPI==1
-  use mpi
+  use mpi_f08
 #endif
   use heurist,only: updeci, heuristic_check, reuris
   use prssre
@@ -273,7 +274,7 @@ subroutine dynamc(vx, vy, vz, vk, xnew, ynew, znew, &
   use consph, only: phwrirsvr
   use pucker_mod,only: pucker_constraint_output,ncspuck
 #if KEY_MNDO97==1
-  use qm1_info, only : qm_control_r
+  use qm1_info, only : qm_control_c
 #endif
 #if KEY_DIMS==1
   use param_store, only: set_param
@@ -329,6 +330,9 @@ subroutine dynamc(vx, vy, vz, vk, xnew, ynew, znew, &
   real(chm_real) JHTEMP
 
   LOGICAL QKUHEAD,RUNOK,OK
+#if KEY_STRINGM==1 /*  VO stringm : integer mirror for a portable logical-AND reduction */
+  INTEGER I_LAND, I_LANDG
+#endif
 #if KEY_TSM==1
   INTEGER REACLS(*),PRODLS(*),PIGGLS(*),BACKLS(*)
 #endif
@@ -340,6 +344,11 @@ subroutine dynamc(vx, vy, vz, vk, xnew, ynew, znew, &
   LOGICAL QEULER,QESTRT,QEHARM
   real(chm_real) KEHARM(*),RXHARM(*),RYHARM(*),RZHARM(*),LIEFF
 #endif
+#if KEY_MIDSINR == 1  /* MID-SINR */
+  logical :: q_midsinr
+  integer :: L_val
+  real(chm_real) :: v_1ij(3,L_val,natomx),v_2ij(3,L_val,natomx)   ! should be passed in.
+#endif /* MID-SINR */
 
   !
   integer ia,is,iq
@@ -1456,7 +1465,7 @@ subroutine dynamc(vx, vy, vz, vk, xnew, ynew, znew, &
 !  if(LTRBOMD) q_apply_tr_bomd=.true.   ! for TR-BOMD, start applying TR-BOMD
 #endif
 #if KEY_MNDO97==1
-  qm_control_r%md_run =.true.        ! this is MD run.
+  if(associated(qm_control_c)) qm_control_c%md_run =.true.        ! this is MD run.
 #endif
   !=======================================================================
   ! THIS IS THE MAIN LOOP FOR DYNAMICS.
@@ -1814,8 +1823,13 @@ subroutine dynamc(vx, vy, vz, vk, xnew, ynew, znew, &
           endif
      !
      ! all processors decide whether coordinates are consistent
-          if (MPI_COMM_STRNG.ne.MPI_COMM_NULL) &
-&          call MPI_ALLREDUCE(ftsm_voronoi_map(mestring+1).eq.ftsm_voronoi_whereami, ok, 1, MPI_LOGICAL, MPI_LAND, MPI_COMM_STRNG, i)
+     ! (MPI_MIN over an integer 0/1 == logical AND; portable on strict MPIs where
+     !  MPI_LAND on MPI_LOGICAL trips an op/datatype assertion, e.g. MPICH)
+          if (MPI_COMM_STRNG.ne.MPI_COMM_NULL) then
+           i_land=0; if (ftsm_voronoi_map(mestring+1).eq.ftsm_voronoi_whereami) i_land=1
+           call MPI_ALLREDUCE(i_land, i_landg, 1, MPI_INTEGER, MPI_MIN, MPI_COMM_STRNG, i)
+           ok=(i_landg.eq.1)
+          endif
      ! broadcast to slaves
           if (SIZE_LOCAL.gt.1) call MPI_BCAST(ok, 1, MPI_LOGICAL, 0, MPI_COMM_LOCAL, i)
           if (.not.ok) then
@@ -2326,7 +2340,6 @@ subroutine dynamc(vx, vy, vz, vk, xnew, ynew, znew, &
         ENDIF
      ENDIF
 
-#if KEY_LIBRARY == 1
      if (fill_lambdata .and. (istep .eq. istop)) then
         call lambdata_init(nbiasv, nblock)
         call lambdata_set_names()
@@ -2338,7 +2351,6 @@ subroutine dynamc(vx, vy, vz, vk, xnew, ynew, znew, &
         call msldata_set_names()
         call msldata_add_rows(istep, time)
      end if
-#endif
 #endif /* (msld)*/
 
      ! Do list updates if appropriate
@@ -4014,6 +4026,9 @@ subroutine dynamc(vx, vy, vz, vk, xnew, ynew, znew, &
 #endif
                       NPRIV,JHSTRT,NDEGF,NSTEP, &
                       NSAVC,NSAVV,ZERO,ZERO,0,-1 &
+#if KEY_MIDSINR == 1
+                      ,q_midsinr,v_1ij,v_2ij,L_val &
+#endif
 #if KEY_BLOCK==1
                       ,QLMC ,QLDM,NBLOCK,BIXLAM,BLDOLD,BiVLAM,NSAVL &     /*ldm*/
 #endif
@@ -4168,13 +4183,11 @@ subroutine dynamc(vx, vy, vz, vk, xnew, ynew, znew, &
         ENDIF
      ENDIF
 
-#if KEY_LIBRARY == 1
      if (fill_velos .and. (istep .eq. istop)) then
         call velos_init()
         call velos_set_names()
         call velos_add_rows(istep, time, vx, vy, vz)
      end if
-#endif
 
      !     mdstep is a global variable in common/contrl/
      MDSTEP=ISTEP
@@ -4280,13 +4293,11 @@ subroutine dynamc(vx, vy, vz, vk, xnew, ynew, znew, &
      ENDIF
 #endif
 
-#if KEY_LIBRARY == 1
      if (fill_ktable .and. (istep .eq. istop)) then
         call ktable_init()
         call ktable_set_names()
         call ktable_add_row(npriv, time)
      end if
-#endif
 
 #if KEY_TSM==1
      ! This section is for conformational thermodynamic integration
@@ -4573,7 +4584,7 @@ subroutine dynamc(vx, vy, vz, vk, xnew, ynew, znew, &
 #endif
 
 !!#if KEY_MNDO97==1
-!!  qm_control_r%md_run =.false.        ! end of MD run.
+!!  if(associated(qm_control_c)) qm_control_c%md_run =.false.        ! end of MD run.
 !!#endif
 
   do ia=atfrst,atlast

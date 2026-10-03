@@ -3,7 +3,7 @@ module api_lambdata
   use api_dataframe, only: t_dataframe
   implicit none
 
-#if KEY_LIBRARY == 1 && KEY_BLOCK == 1
+#if KEY_BLOCK == 1
   logical :: fill_lambdata = .false.
   type(t_dataframe) :: bias_data, bixlamsq_data
 
@@ -226,5 +226,5 @@ contains
        call dataframe_add_row(bixlamsq_data, new_row)
     end do
   end subroutine lambdata_add_rows
-#endif /* KEY_LIBRARY */
+#endif /* KEY_BLOCK */
 end module api_lambdata

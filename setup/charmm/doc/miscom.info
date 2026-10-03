@@ -55,6 +55,14 @@ DEFIne  keyname  SELE atom_selection END
 
 SYSTem  "shell-cmd"  ! Execute a shell command (Unix)
 
+ENVIronment  env_var_name  value   ! Set an OS environment variable (Unix)
+
+GENVironment  charmm_var  ENV_NAME ! Read OS environment variable ENV_NAME
+                                   ! into CHARMM parameter @charmm_var
+
+STRCat  charmm_var  word1 word2 ...! Concatenate words into CHARMM parameter
+                                   ! @charmm_var (quotes preserve case)
+
 STOP               ! Terminate CHARMM
 
 USER ....          ! Invoke a user supplied subroutine (USERSB)
@@ -400,6 +408,56 @@ within CHARMM. NOTE: CHARMM assumes all shell commands are protected
 by double quotes, e.g., system "awk -f file.awk p1=1 p2=3 filename >
 filout" will process the file filename using the awk script file.awk
 and the parameters p1=1, p2=3 placing output in file fileout.
+
+7a) The ENVIronment command (Unix only)
+
+     Sets an OS environment variable from within CHARMM.
+
+     ENVI env_var_name value
+
+     Both the variable name and value may be enclosed in double quotes
+     to preserve case, since CHARMM uppercases unquoted text.
+
+7b) The GENVironment command
+
+     Reads the value of an OS environment variable and stores it as
+     a CHARMM parameter.
+
+     GENV charmm_variable ENV_VAR_NAME
+
+     After execution, @charmm_variable expands to the value of the
+     environment variable. The value is stored with its original case
+     preserved, regardless of quoting.
+
+7c) The STRC (STRing Concatenate) command
+
+     Concatenates multiple words into a single CHARMM parameter.
+
+     STRC charmm_variable word1 word2 [word3 ...]
+
+     All remaining words on the command line are concatenated without
+     separators and stored as @charmm_variable. Double-quoted words
+     preserve their original case through CHARMM's command-line parser.
+     Unquoted text and @variable substitutions that have been uppercased
+     by the parser will remain uppercase.
+
+     This is useful for constructing case-sensitive file paths from a
+     mix of environment variables and literal path components:
+
+        genv mydir MY_DATA_DIR
+        strc mypath @mydir "/subdir/MyFile.dat"
+        ! @mypath is now e.g. /home/user/data/subdir/MyFile.dat
+
+     The maximum result length is 128 characters (MXVLEN). Longer
+     results are truncated with a warning.
+
+     This command was spelled CATS when it was introduced and was
+     renamed for c52.  BLOCK has a CATS subcommand of its own (see
+     block.info), and the commands in this file are recognized before
+     a module reads its own keywords -- so while this command was
+     called CATS, a CATS line inside BLOCK ... END was taken by this
+     command instead of by BLOCK, with no warning.  Input files that
+     used the old spelling need CATS changed to STRC.
 
 8)  The STOP command
 

@@ -379,7 +379,7 @@ contains
        loc = ior(loc, grouploc(gind))
     enddo
 
-    if (loc == b'111') group_check_box = 1
+    if (loc == int(b'111')) group_check_box = 1
 
     return
   end function group_check_box

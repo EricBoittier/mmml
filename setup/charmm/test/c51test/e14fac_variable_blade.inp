@@ -1,0 +1,113 @@
+* Variable per-atom e14fac (MR!260) validation test -- BLaDE engine
+* Companion to e14fac_variable.inp (OpenMM).  BLaDE and OpenMM cannot
+* share the GPU in one process, so each engine has its own test file.
+* BLaDE consumes a per-atom-TYPE e14fac vector (built from the per-atom
+* e14ff array); the plain CPU path uses the single scalar E14FAC.
+* Capture-free -- cross-engine checks use the ENERGY CHANGE (delta), which
+* cancels the small systematic CPU-vs-BLaDE offset so an absolute 0.05
+* kcal/mol bound is tight.
+*   Part 1: uniform e14fac 1.0->0.5 -- CPU and BLaDE deltas agree.
+*   Part 2: a uniform per-atom array (SCALAR E14F SET 0.5 on ALL atoms)
+*           gives the same BLaDE energy as the scalar path.
+*   Part 3: a per-atom array on the protein only changes the BLaDE energy.
+*
+
+if ?blade .ne. 1 then
+   echo "Test NOT performed - BLaDE not available."
+   stop
+endif
+! BLaDE needs a GPU of its own for every OpenMP thread in every rank, and
+! all ranks on one node see the same devices -- so N ranks x T threads want
+! N*T GPUs.  ?NGPU honours CUDA_VISIBLE_DEVICES; ?NTHREAD is the OpenMP
+! team size.  Across several nodes this is conservative, each node bringing
+! its own GPUs, so it can skip a run that would in fact work -- a needless
+! skip beats aborting inside BLaDE, which is what happens when the counts
+! do not add up.  Reported as an explicit SKIP because the grader matches
+! "TESTCASE RESULT: SKIP" but not the mixed-case "Test NOT performed" this
+! guard printed before.
+calc bladegpu = ?numnode * ?nthread
+if ?ngpu .lt. @bladegpu then
+   echo E14FAC_VARIABLE_BLADE TESTCASE RESULT: SKIP
+   stop
+endif
+
+stream datadir.def
+
+open unit 1 read form name @{0}top_all22_prot.inp
+read rtf card unit 1
+close unit 1
+open unit 1 read form name @{0}par_all22_prot.inp
+read param card unit 1
+close unit 1
+open unit 1 read form name @{0}5dfr_minimized.crd
+read sequ coor unit 1
+close unit 1
+generate 5dfr setup first nter last cter
+read sequ tip3 7023
+generate wat setup noangl nodihe
+read coor pdb resi name @{0}5dfr_solv-cube_equil.pdb
+
+crystal define cubic 62.23 62.23 62.23 90.0 90.0 90.0
+crystal build cutoff 11 noper 0
+image byseg xcen 0.0 ycen 0.0 zcen 0.0 select segid 5dfr end
+image byres xcen 0.0 ycen 0.0 zcen 0.0 select segid wat end
+
+set nbopt = eps 1.0 cutnb 11 cutim 11 ctofnb 9 ctonnb 7.5 vswitch -
+   Ewald kappa 0.320 pmEwald order 4 fftx 64 ffty 64 fftz 64
+set tol = -0.05     ! negative = ABSOLUTE bound (kcal/mol) in test.str
+
+echo ============================================================
+echo      Variable per-atom e14fac (MR!260) validation -- BLaDE
+echo ============================================================
+
+! ===== PART 1 : uniform e14fac, CPU vs BLaDE (delta) =====
+! The CPU energy also builds the nonbond tables (CCNBA) BLaDE needs.
+energy @nbopt e14f 1.0
+set c10 = ?ener
+energy blade
+set b10 = ?ener
+
+energy @nbopt e14f 0.5
+set c05 = ?ener
+energy blade
+set b05 = ?ener
+
+calc dcpu = @c10 - @c05
+calc dbld = @b10 - @b05
+echo   delta E(1.0->0.5):  CPU = @dcpu  BLaDE = @dbld
+@testcheck @dbld @dcpu @tol E14FAC_UNIFORM_DELTA_CPU_VS_BLADE
+
+! ===== PART 2 : per-atom array (uniform) == scalar path =====
+energy @nbopt e14f 0.5
+energy blade
+set bscal = ?ener
+
+energy @nbopt e14f 1.0
+scalar e14f set 0.5 select all end
+energy blade
+set barr = ?ener
+echo   uniform-array vs scalar (both 0.5):  BLaDE array = @barr  scalar = @bscal
+@testcheck @barr @bscal @tol E14FAC_ARRAY_EQUALS_SCALAR_BLADE
+
+! ===== PART 3 : per-atom array on protein only changes energy =====
+energy @nbopt e14f 1.0
+energy blade
+set bref = ?ener
+
+scalar e14f set 0.5 select segid 5dfr end
+energy blade
+set bvar = ?ener
+calc dabs = abs ( @bvar - @bref )
+echo   per-atom(protein 0.5) vs uniform 1.0:  BLaDE |d| = @dabs
+if @dabs .gt. 0.05 then
+   set teststat pass
+else
+   set teststat fail
+   incr testfail by 1
+endif
+echo E14FAC_BLADE_VARIABLE_CHANGES_ENERGY testcase result: @teststat
+
+echo ============================================================
+echo   BLaDE variable e14fac test complete : @testfail failure(s)
+echo ============================================================
+stop

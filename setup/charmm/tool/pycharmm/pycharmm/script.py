@@ -1,6 +1,7 @@
 import numbers
 
 import pycharmm.lingo
+import pycharmm.select as select
 import pycharmm.select_atoms as atoms
 
 
@@ -32,9 +33,9 @@ class CommandScript:
         then a "key" line is added.
         """ 
         for k, v in kwargs.items():
-            # CHARMM command options are case-sensitive.  Public PyCHARMM
-            # APIs use Pythonic lowercase kwargs, but the generated CHARMM
-            # script must use uppercase tokens (e.g. FIRSTT, IASVEL).
+            # CHARMM command options are case-sensitive. Public PyCHARMM
+            # APIs use lowercase kwargs; the generated script uses uppercase
+            # tokens (FIRSTT, IASVEL, SELE).
             key = str(k).upper()
             # must check for bools first because
             # a bool is also a numbers.Number but
@@ -74,19 +75,59 @@ class CommandScript:
 
         return script
 
-    def run(self, append=''):
+    def run(self, append='', raise_on_error=None):
         """Execute the command.
+
+        Parameters
+        ----------
+        append : str, optional
+            Additional script content to append.
+        raise_on_error : bool, optional
+            If True, raise CharmmScriptError on failure.
+            If False, just return self without raising.
+            If None (default), use the global default from lingo.set_default_error_handling().
+
+        Returns
+        -------
+        self : CommandScript
+            Returns self for method chaining.
+
+        Raises
+        ------
+        CharmmScriptError
+            If the script fails and raise_on_error is True.
         """
-        if self.selection:
-            selection = self.selection.get_selection()
-            with atoms.SelectAtoms(selection=selection) as sel:
-                self._add_selection(sel)
-                script = self.create_script_string() + append
-                pycharmm.lingo.charmm_script(script)
-                self._remove_selection(sel)
-        else:
+        if self.selection is None:
             script = self.create_script_string() + append
-            pycharmm.lingo.charmm_script(script)
+            pycharmm.lingo.charmm_script(script, raise_on_error=raise_on_error)
+            return self
+
+        # A selection was passed. If the caller already stored it in CHARMM
+        # and that stored name still exists, reuse it in place: this is what
+        # lets `store()` once outside a trajectory loop pay off, since the
+        # per-frame command no longer re-derives, stores, and deletes a copy.
+        # Otherwise store a throwaway copy for the duration of this one call.
+        #
+        # store() registers names upper-cased, so probe for the upper-cased
+        # name; if the stored define was cleared out from under us (structure
+        # reload, reset, explicit delete) find() returns 0 and we transparently
+        # fall back to the temp-store path instead of emitting a dangling name.
+        reuse = (self.selection.is_stored()
+                 and select.find(self.selection.get_stored_name().upper()) > 0)
+        if reuse:
+            sel = self.selection
+        else:
+            sel = atoms.SelectAtoms(selection=self.selection.get_selection())
+            sel.store()
+
+        try:
+            self._add_selection(sel)
+            script = self.create_script_string() + append
+            pycharmm.lingo.charmm_script(script, raise_on_error=raise_on_error)
+        finally:
+            self.opts.pop('sele', None)
+            if not reuse:
+                sel.unstore()
 
         return self
 
@@ -95,9 +136,54 @@ class NonBondedScript(CommandScript):
     """A child of the `CommandScript` class for running CHARMM NBOND command.
 
     See https://academiccharmm.org/documentation/latest/nbonds for more details.
+
+    Notes
+    -----
+    PME/EWALD electrostatics require orthorhombic crystal boxes (CUBI, TETR, ORTH).
+    If PME-related keywords are used with a non-orthorhombic crystal, an error
+    will be logged when run() is called.
     """
     def __init__(self, **kwargs):
         super().__init__('nbonds', **kwargs)
+        self._has_pme = self._check_pme_keywords(**kwargs)
+
+    def _check_pme_keywords(self, **kwargs) -> bool:
+        """Check if PME-related keywords are present."""
+        pme_keywords = {
+            'pmewald', 'ewald', 'kappa', 'fftx', 'ffty', 'fftz', 'order',
+            'pme', 'qewald', 'nfft1', 'nfft2', 'nfft3', 'spline'
+        }
+        for key in kwargs:
+            if key.lower() in pme_keywords and kwargs[key]:
+                return True
+        return False
+
+    def run(self, append='', raise_on_error=None):
+        """Execute the NBOND command.
+
+        If PME-related keywords are present, checks crystal compatibility
+        before running. Non-orthorhombic crystals with PME will log an error.
+
+        Parameters
+        ----------
+        append : str, optional
+            Additional script content to append.
+        raise_on_error : bool, optional
+            If True, raise CharmmScriptError on failure.
+
+        Returns
+        -------
+        self : NonBondedScript
+            Returns self for method chaining.
+        """
+        if self._has_pme:
+            try:
+                from pycharmm.nbonds import check_pme_crystal_compatibility
+                check_pme_crystal_compatibility()
+            except ImportError:
+                pass
+
+        return super().run(append=append, raise_on_error=raise_on_error)
 
 
 class UpdateNonBondedScript(CommandScript):
@@ -134,7 +220,7 @@ class WriteScript(CommandScript):
             self.title = '* ' + title + '\n'
             self.title += '*\n'
 
-    def run(self, append=''):
+    def run(self, append='', raise_on_error=None):
         to_append = ''
         append = append.strip()
         if append:
@@ -143,7 +229,7 @@ class WriteScript(CommandScript):
         if self.title:
             to_append += self.title
 
-        super().run(append=to_append)
+        super().run(append=to_append, raise_on_error=raise_on_error)
         return self
 
 

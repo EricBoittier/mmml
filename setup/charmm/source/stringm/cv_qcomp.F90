@@ -231,7 +231,7 @@
 #if (KEY_MULTICOM==1)
        use multicom_aux; 
 #endif
-       use mpi
+       use mpi_f08
  character(len=132)::info(21)=(/'','','','','','','','','','','','','','','','','','','','',''/);! output buffer
 !
        integer :: i

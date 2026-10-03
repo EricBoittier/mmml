@@ -194,9 +194,36 @@ VALB DONE
 
 MINIMIZE CONJ NSTEP 500 NPRINT 1
 
+! Tier 1a: minimization made real progress.  Note: GRMS plateaus around
+! 0.04 (not the more typical <1e-3) because the dihedrals defined through
+! the near-linear P04-Ir-P05 axis are mathematically ill-conditioned — the
+! dihedral derivative carries a 1/sin(theta) factor that blows up as the
+! central angle approaches 180, which is exactly where VALBOND wants the
+! trans phosphines.  See the "EPHIFASTER ... almost linear" warnings
+! issued during minimization.  The energy (5-decimal convergence in MINI>
+! trace) and geometry (Tier 2 checks below) are both fully converged; the
+! residual GRMS is numerical noise from those linear-axis dihedrals.
+@testcheck ?GRMS 0.0 0.1 valbond_minimize_converged
+
 VALB PRINT
 
+! Tier 1b: total energy after minimization (title says 16.66).
 ENERgy
+@testcheck ?ENER 16.66 0.01 valbond_total_energy
+
+! Tier 2: geometry around Ir01 — the d^6 octahedral signature that is the
+! actual physical content of the VALBOND module.  P04-Ir-P05 trans (~180);
+! H02-Ir-H03 cis (~90); each H-Ir-P also ~90.  Reference values harvested
+! from local converged run; tolerances loose enough to absorb cross-platform
+! fp drift but tight enough to catch a regression that breaks the geometry.
+QUICK 4 1 5
+@testcheck ?THET 179.91  0.5 valbond_geom_PIrP_trans
+QUICK 2 1 3
+@testcheck ?THET  92.12  1.0 valbond_geom_HIrH_cis
+QUICK 2 1 4
+@testcheck ?THET  88.58  1.0 valbond_geom_HIrP_a
+QUICK 3 1 5
+@testcheck ?THET  87.96  1.0 valbond_geom_HIrP_b
 
 write coor pdb unit 6
 * ENER = ?ENER

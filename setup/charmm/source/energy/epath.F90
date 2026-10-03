@@ -5840,6 +5840,7 @@ CONTAINS
     XP1(1:NREPL,1:NATREP) =zero
     YP1(1:NREPL,1:NATREP) =zero
     ZP1(1:NREPL,1:NATREP) =zero
+    RMST=ZERO
 
     IREP=1
     JREP=2

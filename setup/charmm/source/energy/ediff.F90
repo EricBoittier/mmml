@@ -88,6 +88,7 @@ contains
         QMAIN,QCOMP)
 
      use nb_module
+     use ecnstr_mod, only: ecnstr
      !---   use nbutil_module,only:getbnd
 
      !-----------------------------------------------------------------------
@@ -558,17 +559,17 @@ contains
         ! Just do the absolute types.
         IF(QMAIN) CALL ECNSTR(ETERM(CHARM),QCNSTR,REFX,REFY,REFZ,RTEMP, &
              NATOM,KCEXPN,XHSCALE,YHSCALE,ZHSCALE,1, &
-             NUMHSETS,TYPHSET,IHSET,QHNORT,QHNOTR, &
+             NUMHSETS,TYPHSET,PARHSET,IHSET,QHNORT,QHNOTR, &
              X,Y,Z,DX,DY,DZ, &
              QECONT,ECONT, (/ ZERO /), (/ 0 /), .FALSE. &
-             ,(/0/),(/0,0/),(/0,0/),(/0,0/) &
+             ,numpca,pcax,pcay,pcaz &
              )
         IF(QCOMP) CALL ECNSTR(ETERMM(CHARM),QCNSTR,REFX,REFY,REFZ,RTEMP, &
              NATOM,KCEXPN,XHSCALE,YHSCALE,ZHSCALE,1, &
-             NUMHSETS,TYPHSET,IHSET,QHNORT,QHNOTR, &
+             NUMHSETS,TYPHSET,PARHSET,IHSET,QHNORT,QHNOTR, &
              XM,YM,ZM,DXM,DYM,DZM, &
              QECONT,ECONTM, (/ ZERO /), (/ 0 /), .FALSE. &
-             ,(/0/),(/0,0/),(/0,0/),(/0,0/) &
+             ,numpca,pcax,pcay,pcaz &
              )
       ENDIF
 
@@ -586,14 +587,14 @@ contains
          ! Just do the absolute types.
          IF(QMAIN) CALL ECNSTR(ETERM(PCHARM),QCNSTR,REFX,REFY,REFZ,RTEMP, &
               NATOM,KCEXPN,XHSCALE,YHSCALE,ZHSCALE,2, &
-              NUMHSETS,TYPHSET,IHSET,QHNORT,QHNOTR, &
+              NUMHSETS,TYPHSET,PARHSET,IHSET,QHNORT,QHNOTR, &
               X,Y,Z,DX,DY,DZ, &
               QECONT,ECONT, (/ ZERO /), (/ 0 /), .FALSE. &
               ,numpca,pcax,pcay,pcaz &
               )
          IF(QCOMP) CALL ECNSTR(ETERMM(PCHARM),QCNSTR,REFX,REFY,REFZ,RTEMP, &
               NATOM,KCEXPN,XHSCALE,YHSCALE,ZHSCALE,2, &
-              NUMHSETS,TYPHSET,IHSET,QHNORT,QHNOTR, &
+              NUMHSETS,TYPHSET,PARHSET,IHSET,QHNORT,QHNOTR, &
               XM,YM,ZM,DXM,DYM,DZM, &
               QECONT,ECONTM, (/ ZERO /), (/ 0 /), .FALSE. &
               ,numpca,pcax,pcay,pcaz &

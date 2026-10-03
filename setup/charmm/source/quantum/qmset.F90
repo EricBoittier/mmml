@@ -1745,6 +1745,7 @@ SUBROUTINE MULLIK(COMLYN,COMLEN)
   use scfblk
   use stream
   use qmlinkm
+  use string
   implicit none
   !
   CHARACTER(len=*) COMLYN
@@ -1753,6 +1754,13 @@ SUBROUTINE MULLIK(COMLYN,COMLEN)
   real(chm_real),allocatable,dimension(:) :: WORK1,WORK2,WORK3,Work_h
   real(chm_real),allocatable,dimension(:) :: QTOT
   integer:: ndim1,ndim2,ndim3,ndim4
+  ! CB3 adds option to save mulliken charges to charge array
+  logical :: qsave
+if(INDXA(COMLYN,COMLEN,'SAVE') > 0) then
+     qsave = .true.
+  else
+     qsave = .false.
+  endif
   !
   ! BIOVIA Code Start : Bug fix
   IF (NORBS .EQ. 0 .OR. (.not.allocated(CALPHA)) .or.  &
@@ -1786,7 +1794,7 @@ SUBROUTINE MULLIK(COMLYN,COMLEN)
      WORK_h(1:ndim2)=H_matrix(1:ndim2)
      WORK_h(ndim2+1:ndim3)=zero
      CALL MULIK2(CALPHA(1:ndim1),CBETA(1:ndim1),UHF,WORK_h(1:ndim3), &             ! H_matrix(1:ndim2)
-          WORK1(1:ndim3),WORK2(1:ndim4),PDENS(1:ndim2),QTOT(1:natqm),OUTU)
+          WORK1(1:ndim3),WORK2(1:ndim4),PDENS(1:ndim2),QTOT(1:natqm),OUTU,qsave)
      !
      call chmdealloc('qmset.src','MULLIK','QTOT',size(QTOT),crl=QTOT)
      call chmdealloc('qmset.src','MULLIK','WORK1',size(WORK1),crl=WORK1)
@@ -1850,7 +1858,7 @@ SUBROUTINE MNCTRASF4(CHB,C)
   RETURN
 END SUBROUTINE MNCTRASF4
 !
-SUBROUTINE MULIK2(C,CBETA,UHF,H,VECS,STORE,P,Q,OUTU2)
+SUBROUTINE MULIK2(C,CBETA,UHF,H,VECS,STORE,P,Q,OUTU2,qsave)
   !*********************************************************************
   !
   !     MULLIK DOES A MULLIKEN POPULATION ANALYSIS
@@ -1869,12 +1877,15 @@ SUBROUTINE MULIK2(C,CBETA,UHF,H,VECS,STORE,P,Q,OUTU2)
   use am1parm
   use sizes
   use quantm
+  use psf, only : natom, cg
   !
   ! add for GHO case ... PJ 12/2002
   !
   use qmlinkm
   implicit none
   !
+  integer:: iqntm
+  logical:: qsave
   INTEGER:: OUTU2
   LOGICAL:: UHF
   real(chm_real):: C(*),CBETA(*),H(*),VECS(*),STORE(*),P(*),Q(*)
@@ -2024,6 +2035,15 @@ SUBROUTINE MULIK2(C,CBETA,UHF,H,VECS,STORE,P,Q,OUTU2)
      IF(PRNLEV.GE.2) WRITE (OUTU,'(7X,I5,8X,A2,4X,F8.5)') I,ELEMNT(NAT(I)),Q(I)
      SUM=SUM+Q(I)
   End do
+  if(qsave) then
+     iqntm = 0
+     do i = 1, natom
+        if (qatlab(i)>0) then
+           iqntm = iqntm + 1
+           cg(i) = q(iqntm)
+        endif
+     enddo
+  endif
   IF(PRNLEV.GE.2) WRITE (OUTU,'(A,F8.5)') ' MULIK2> Net QM Charge :', SUM
   !
   !     Print out the mulliken analysis.

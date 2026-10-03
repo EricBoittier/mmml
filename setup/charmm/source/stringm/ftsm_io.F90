@@ -38,7 +38,7 @@
       use coorio_mod, only : cwrite, cread
       use ctitla
 
-      use mpi
+      use mpi_f08
       use number
       use ftsm_util
 
@@ -61,8 +61,9 @@
       integer :: i, j, k
       integer :: ifile
       integer, optional :: col, ibeg, iend
-      integer :: c, ierror, stat(MPI_STATUS_SIZE), ibg, ie, ind
-      integer :: rtype=MPI_DOUBLE_PRECISION
+      integer :: c, ierror, ibg, ie, ind
+      TYPE(MPI_Status) :: stat
+      TYPE(MPI_Datatype) :: rtype=MPI_DOUBLE_PRECISION
       real(chm_real) :: r_com(3)
       logical :: qroot
 !
@@ -246,7 +247,7 @@
       use multicom_aux;
 #endif
       use string
-      use mpi
+      use mpi_f08
       use cvio, only : writcv, readcv
       use coorio_mod, only : cwrite, cread
       use ctitla
@@ -259,8 +260,9 @@
       integer, pointer :: stringatoms(:), string_inds(:)
       integer :: i, j, k, ind, ifile
       integer, optional :: col
-      integer :: c, ierror, stat(MPI_STATUS_SIZE)
-      integer :: rtype=MPI_DOUBLE_PRECISION
+      integer :: c, ierror
+      TYPE(MPI_Status) :: stat
+      TYPE(MPI_Datatype) :: rtype=MPI_DOUBLE_PRECISION
 !
 
       character(len=80) :: title(maxtit)

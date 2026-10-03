@@ -243,7 +243,7 @@
 #if (KEY_MULTICOM==1)
       use multicom_aux; 
 #endif
-      use mpi
+      use mpi_f08
       use select, only : selcta, selrpn, nselct; use psf
 !
       implicit none

@@ -37,7 +37,8 @@ contains
       use inbnd, only: lommgb, qgbsw_omm, qgbmv_omm, qmses_omm ! AN EXAMPLE OF OPENMM PLUGIN
 #if KEY_OPENMM==1
       use omm_main, only: teardown_openmm, serialize, nbopts, check_nbopts, &
-           omm_change_lambda
+           omm_change_lambda, omm_release_system, &
+           omm_release_context
       use omm_gbsa, only : qgbsa, soluteEPS, solventEPS
       use gbsw, only: qgbsw
       use omm_gbsw, only : qgbsw_import_settings, qphmd_omm, qphmd_initialized, &
@@ -51,7 +52,8 @@ contains
 #endif
       use omm_glblopts
       use omm_nbopts
-#endif
+      use fstore, only: fstore_reset
+#endif  /* KEY_OPENMM */
       implicit none
 #if KEY_OPENMM==1
       type(omm_nbopts_t) :: nbcurr
@@ -63,6 +65,10 @@ contains
       logical :: omm_state_cmd
       character(len=20) :: blank
       character(len=4) :: wrd, wrd1
+
+      ! TORC utility vars
+      character(:), allocatable :: torc_fn
+      integer :: torc_fn_len, fn_start_i, fn_end_i
 
       omm_state_cmd = .false.
 #if KEY_OPENMM==1
@@ -96,7 +102,7 @@ contains
          ! qmses: T -> MSES command is before OMM
          !        F -> MSES command does not exist in the input file
          ! default value: qmses will call qmses_omm
-         if (qmses) then           ! AN EXAMPLE OF OPENMM PLUGIN 
+         if (qmses) then           ! AN EXAMPLE OF OPENMM PLUGIN
             qmses_omm = .true.     ! AN EXAMPLE OF OPENMM PLUGIN
          endif                     ! AN EXAMPLE OF OPENMM PLUGIN
          cmds: select case(wrd)
@@ -112,6 +118,7 @@ contains
             qgbmv_omm = .false.
             qmses_omm = .false.    ! AN EXAMPLE OF OPENMM PLUGIN
             qnocpu = .false.
+            call fstore_reset()
 
          case('CLEA') cmds
             omm_state_cmd = .true.
@@ -121,7 +128,16 @@ contains
             qmses_omm = .false.    ! AN EXAMPLE OF OPENMM PLUGIN
             qnocpu = .false.
             call teardown_openmm()
+            ! Before init_glblopts, so anything supplied from outside is let
+            ! go as part of clearing rather than surviving into the next run.
+            ! The Context goes first: it refers to the System, and pyCHARMM
+            ! drops its own reference to both when OpenMM is cleared, so a
+            ! Context CHARMM still believed in would be freed memory by the
+            ! next energy evaluation.
+            call omm_release_context()
+            call omm_release_system()
             call init_glblopts()
+            call fstore_reset()
 
          case('SERI') cmds
             ! default to serializing system
@@ -166,7 +182,7 @@ contains
             if (INDXA(comlyn, comlen, 'GBON') > 0) qgbmv_import_settings = .true.
             qgbmv_omm = qgbmv_import_settings
 
-         ! OMM MSES 
+         ! OMM MSES
          case('MSES') cmds       ! AN EXAMPLE OF OPENMM PLUGIN
             qmses_omm = .true.   ! AN EXAMPLE OF OPENMM PLUGIN
 
@@ -207,6 +223,27 @@ contains
             nbcurr = current_nbopts()
             nbopts = nbcurr
 
+!          case('TORC') cmds  ! add a torch force
+! #if KEY_OMMTORCH == 1
+!             fn_start_i = index(comlyn(1:comlen), '"')
+!             fn_end_i = fn_start_i + index(comlyn(fn_start_i + 1 : comlen), '"')
+!             if (fn_start_i .le. 0 .or. fn_end_i .le. 0) then
+!                call wrndie(-1,'omm_ctrl', &
+!                     'double quoted torch model filename required after TORC command')
+!             end if
+!
+!             torc_fn = comlyn(fn_start_i + 1 : fn_end_i - 1)
+!             torc_fn_len = fn_end_i - fn_start_i - 1
+!
+!             call torch_add_force(torc_fn, torc_fn_len)
+!             call torch_turn_on()
+!
+!             comlyn = comlyn(1:fn_start_i - 1) // comlyn(fn_end_i + 1 : comlen)
+!             comlen = comlen - torc_fn_len - 2
+! #else
+!             call wrndie(-1,'omm_ctrl', &
+!                  'openmm torch integration not present in this charmm build')
+! #endif  /* KEY_OMMTORCH */
          end select cmds
       enddo
 

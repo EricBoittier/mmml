@@ -429,7 +429,8 @@ SUBROUTINE GRAPNB(NATBON,IATBON,IGRSEL,INDEXR,INDEXP, &
   use stream
   implicit none
   !
-  ! iatbmx = 8 and is a parameter set in dimens.f90
+  ! iatbmx (max bonds per atom) is a runtime variable in dimens_fcm,
+  ! default 8 (32 under BLOCK), settable via the DIMENS IATBMX command
   !
   INTEGER NGRSEL,INDEXR(*),INDEXP(*)
   INTEGER NATBON(*),IATBON(IATBMX,*)

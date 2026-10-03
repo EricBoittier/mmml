@@ -79,7 +79,7 @@ module qm1_parameters
   ! DPARM4
   real(chm_real),DIMENSION(52,1:nelements),save :: REPD
   ! DPARM6 (initialized in initialize_r2cent and used in ROTD)
-  logical,DIMENSION(45,45) :: R2CENT
+  logical,DIMENSION(45,45),save :: R2CENT
   ! DPARM7
   integer,DIMENSION(1:nelements),save :: IF0SD,IG2SD
 
@@ -226,6 +226,18 @@ module qm1_parameters
                     1.063995D0,  1.936492D0,  0.000000D0, &
                     0.819351D0,  1.574414D0,  0.000000D0/), (/3,4/))
 
+  CHARACTER(len=2),dimension(0:100),save :: ELEMNT
+  data ELEMNT /'QQ', &                                               !  0
+               ' H','HE','LI','BE',' B',' C',' N',' O',' F','NE', &  !  1 - 10
+               'NA','MG','AL','SI',' P',' S','CL','AR',' K','CA', &  ! 11 - 20
+               'SC','TI',' V','CR','MN','FE','CO','NI','CU','ZN', &  ! 21 - 30
+               'GA','GE','AS','SE','BR','KR','RB','SR',' Y','ZR', &  ! 31 - 40
+               'NB','MO','TC','RU','RH','PD','AG','CD','IN','SN', &  ! ...
+               'SB','TE',' I','XE','CS','BA','LA','CE','PR','ND', &  !
+               'PM','SM','EU','GD','TB','DY','HO','ER','TM','YB', &  ! 
+               'LU','HF','TA',' W','RE','OS','IR','PT','AU','HG', &  !
+               'TL','PB','BI','PO','AT','RN','FR','RA','AC','TH', &  !
+               'PA',' U','NP','PU','AM','CM','BK','CF','ES','FM'/    !    -100
 
 contains
 
@@ -288,9 +300,185 @@ contains
 
      ! fill QM/MM interaction parameters
      call fill_qmmm_parameters
-  end if        ! (.not. q_parm_loaded)
+
+     !! load all local parameters (qm_param_c)
+     !call load_param_to_local
+  end if
+
+  ! only to load all local parameters (qm_param_c)
+  call load_param_to_local
 
   return
+
+  contains
+     subroutine load_param_to_local
+        use qm1_info, only : qm_control_c,qm_main_c,qm_param_c,allocate_deallocate_qm_param
+
+        implicit none
+        integer        :: i,j,k,ii,int1,int2 ! ,iorbs
+        real(chm_real) :: rf
+
+        ! allocate memory
+        call allocate_deallocate_qm_param(qm_param_c,qm_main_c%numat,iqm_mode)
+       
+        !
+        qm_param_c%dd(1:6,0)    = dd(1:6,0)
+        qm_param_c%po(1:9,0)    = po(1:9,0)
+
+        ! for mm atoms, these values need to be checked. (QMMM_module_prep)
+        qm_param_c%PO_mm(1) = PO(1,0)
+        qm_param_c%PO_mm(2) = PO(2,0)
+        qm_param_c%PO_mm(3) = PO(3,0)
+        qm_param_c%PO_mm(7) = PO(7,0)
+        qm_param_c%PO_mm(8) = PO(9,0)
+        qm_param_c%DD_mm(2) = DD(2,0)
+        qm_param_c%DD_mm(3) = DD(3,0)
+
+        ! load parameters
+        do i=1,qm_main_c%numat
+           j    = qm_main_c%nat(i)
+           ii   = impar(j)
+           !!iorbs= qm_main_c%num_orbs(i) ! this is defined later. (qm_info_setup)
+           !                              ! and copied to qm_param_c%iorbs_local in QMMM_module_prep
+
+           ! delta and omega
+           qm_param_c%DELTA(i)  = DELTA(j)
+           qm_param_c%OMEGA(i)  = OMEGA(j)
+
+           ! impar
+           qm_param_c%impar(i)  = impar(j)
+           if(iqm_mode.eq.4) qm_param_c%IM1D(i) = IM1D(j)   ! am1/d
+
+           ! LORBS
+           qm_param_c%LORBS(i)  = LORBS(j)
+
+           ! IOS, IOP, IOD, III, IIID
+           qm_param_c%IOS(i)    = IOS(j)
+           qm_param_c%IOP(i)    = IOP(j)
+           qm_param_c%IOD(i)    = IOD(j)
+           qm_param_c%III(i)    = III(j)
+           qm_param_c%IIID(i)   = IIID(j)
+
+           ! common parameters (MNDO,AM1, ...)
+           qm_param_c%GNN(i)    = GNN(j)
+           qm_param_c%core(i)   = core(j)
+           qm_param_c%EHEAT(i)  = EHEAT(j)
+           qm_param_c%EISOL(i)  = EISOL(j)
+           qm_param_c%USS(i)    = USS(j)
+           qm_param_c%UPP(i)    = UPP(j)
+           qm_param_c%ZS(i)     = ZS(j)
+           qm_param_c%ZP(i)     = ZP(j)
+           qm_param_c%BETAS(i)  = BETAS(j)
+           qm_param_c%BETAP(i)  = BETAP(j)
+           qm_param_c%ALP(i)    = ALP(j)
+           qm_param_c%GSS(i)    = GSS(j)
+           qm_param_c%GSP(i)    = GSP(j)
+           qm_param_c%GPP(i)    = GPP(j)
+           qm_param_c%GP2(i)    = GP2(j)
+           qm_param_c%HSP(i)    = HSP(j)
+           qm_param_c%HPP(i)    = HPP(j)
+           qm_param_c%QQ(i)     = QQ(j)
+           qm_param_c%AM(i)     = AM(j)
+           qm_param_c%AD(i)     = AD(j)
+           qm_param_c%AQ(i)     = AQ(j)
+
+           qm_param_c%dd(1:6,i) = DD(1:6,j)
+           qm_param_c%po(1:9,i) = PO(1:9,j)
+
+           ! gaussian core terms
+           if(.not. (iqm_mode.eq.1 .or. iqm_mode.eq.5)) then
+              qm_param_c%GUESS1(1:ii,i) = GUESS1(1:ii,j)
+              qm_param_c%GUESS2(1:ii,i) = GUESS2(1:ii,j)
+              qm_param_c%GUESS3(1:ii,i) = GUESS3(1:ii,j)
+           end if
+
+           ! mndo/d, am1/d
+           if((iqm_mode.eq.4) .or. (iqm_mode.eq.5)) then
+              qm_param_c%UDD(i)   = UDD(j)
+              qm_param_c%ZD(i)    = ZD(j)
+              qm_param_c%BETAD(i) = BETAD(j)
+              qm_param_c%ZSN(i)   = ZSN(j)
+              qm_param_c%ZPN(i)   = ZPN(j)
+              qm_param_c%ZDN(i)   = ZDN(j)
+
+              qm_param_c%F0SD(i)  = F0SD(j)
+              qm_param_c%G2SD(i)  = G2SD(j)
+
+              qm_param_c%F0DD(i)  = F0DD(j)
+              qm_param_c%F2DD(i)  = F2DD(j)
+              qm_param_c%F4DD(i)  = F4DD(j)
+              qm_param_c%F0PD(i)  = F0PD(j)
+              qm_param_c%F2PD(i)  = F2PD(j)
+              qm_param_c%G1PD(i)  = G1PD(j)
+              qm_param_c%G3PD(i)  = G3PD(j)
+
+              qm_param_c%IF0SD(i) = IF0SD(j)
+              qm_param_c%IG2SD(i) = IG2SD(j)
+
+              qm_param_c%REPD(1:52,i) = REPD(1:52,j)
+           end if
+
+           ! mndo/d specific cases
+           if(iqm_mode.eq.5) then
+              qm_param_c%MALPB(i) = MALPB(j)
+              do k=1,qm_main_c%numat
+                 qm_param_c%ALPB(k,i) = ALPB(qm_main_c%nat(k),j)
+              end do
+           end if
+        end do
+
+        ! deal with reading (user-input) parameters.
+        do i=1,qm_main_c%numat
+           qm_param_c%q_atom_specific(i) =.false.  ! same atom types use the same params
+        end do
+
+        ! load parameters
+        if(qm_main_c%uhf) then
+           do i=1,qm_main_c%numat
+              qm_param_c%GSS_local(i) = qm_param_c%GSS(i)
+              qm_param_c%GSP_local(i) = qm_param_c%GSP(i)
+              qm_param_c%GPP_local(i) = qm_param_c%GPP(i)
+              qm_param_c%GP2_local(i) = qm_param_c%GP2(i)
+              qm_param_c%HSP_local(i) = qm_param_c%HSP(i)
+              qm_param_c%HPP_local(i) = qm_param_c%HPP(i)
+
+              if(qm_param_c%LORBS(i) == 9) then
+                 do j=1,243
+                    qm_param_c%w_save(j,i) = qm_param_c%REPD(intrep(j),i)
+                 end do
+              end if
+           end do
+        else
+           do i=1,qm_main_c%numat
+              qm_param_c%GSS_local(i) = qm_param_c%GSS(i)*PT5
+              qm_param_c%GSP_local(i) = qm_param_c%GSP(i)     -qm_param_c%HSP(i)*PT5
+              qm_param_c%GPP_local(i) = qm_param_c%GPP(i)*PT5
+              qm_param_c%GP2_local(i) = qm_param_c%GP2(i)     -qm_param_c%HPP(i)*PT5
+              qm_param_c%HSP_local(i) = qm_param_c%HSP(i)*PT75-qm_param_c%GSP(i)*PT25
+              qm_param_c%HPP_local(i) = qm_param_c%HPP(i)*PT75-qm_param_c%GP2(i)*PT25
+ 
+              if(qm_param_c%LORBS(i) == 9) then
+                 do j=1,243
+                    int1 = INTRF1(j)
+                    int2 = INTRF2(j)
+                    rf   = qm_param_c%REPD(INTREP(j),i)
+                    if(int1 > 0) rf = rf-PT25*qm_param_c%REPD(int1,i)
+                    if(int2 > 0) rf = rf-PT25*qm_param_c%REPD(int2,i)
+                    qm_param_c%w_save(j,i) = rf
+                 end do
+              end if
+           end do
+        end if
+
+        if(qm_control_c%do_d_orbitals) then
+           do i=1,243
+              qm_param_c%int_ij(i)=INTIJ(i)
+              qm_param_c%int_kl(i)=INTKL(i)
+           end do
+        end if
+
+        return
+     end subroutine load_param_to_local
   end subroutine initialize_elements_and_params
 
 
@@ -298,6 +486,7 @@ contains
   !
   ! computer some variables used/setup based on the parameters. 
   !
+  use qm1_info, only: qm_control_c
   implicit none
   integer :: iqm_mode
   logical :: QSRP_PhoT
@@ -322,7 +511,7 @@ contains
         if(j.gt.0) then
            HPP(i)=0.5d0*(GPP(i)-GP2(i))
            ! DD(2,i) already copied.
-           DD(3,i)=QQ(i)
+           DD(3,i)  = QQ(i)
            PO(1,i)  = PT5/AM(i)
            PO(2,i)  = PT5/AD(i)
            PO(3,i)  = PT5/AQ(i)
@@ -330,24 +519,30 @@ contains
            PO(9,i)  = PO(1,i)
         else if(j.lt.0) then
            HPP(i)=0.5d0*(GPP(i)-GP2(i))
-           call DDPOHY(i)
+           call DDPOHY(i,lorbs(i),III(i),DD(1:6,i),PO(1:9,i),ZS(i),ZP(i),GSS(i),HSP(i),HPP(i),ZD(i),IIID(i),REPD(1:52,i))
            PO(9,i)  = PO(1,i)
-           EISOL(I) = EATOM(I,0,0,0)
+           EISOL(I) = EATOM(I,0,0,0,lorbs(i),IOS(i),IOP(i),IOD(i),     &
+                            USS(i),UPP(i),GSS(i),GP2(i),GSP(i),HPP(i),HSP(i), &
+                            UDD(i),F0DD(i),F0SD(i),F0PD(i),F2DD(i),F4DD(i),G2SD(i),G1PD(i),G3PD(i))
         end if
      end do
      ! for AM1/d-PhoT: H and O atoms
      if(iqm_mode.eq.2 .and. QSRP_PhoT) then
         i=1
         HPP(i)=0.5d0*(GPP(i)-GP2(i))
-        call DDPOHY(i)
+        call DDPOHY(i,lorbs(i),III(i),DD(1:6,i),PO(1:9,i),ZS(i),ZP(i),GSS(i),HSP(i),HPP(i),ZD(i),IIID(i),REPD(1:52,i))
         PO(9,i)  = PO(1,i)
-        EISOL(I) = EATOM(I,0,0,0)
+        EISOL(I) = EATOM(I,0,0,0,lorbs(i),IOS(i),IOP(i),IOD(i),     &
+                         USS(i),UPP(i),GSS(i),GP2(i),GSP(i),HPP(i),HSP(i), &
+                         UDD(i),F0DD(i),F0SD(i),F0PD(i),F2DD(i),F4DD(i),G2SD(i),G1PD(i),G3PD(i))
  
         i=8
         HPP(i)=0.5d0*(GPP(i)-GP2(i))
-        call DDPOHY(i)
+        call DDPOHY(i,lorbs(i),III(i),DD(1:6,i),PO(1:9,i),ZS(i),ZP(i),GSS(i),HSP(i),HPP(i),ZD(i),IIID(i),REPD(1:52,i))
         PO(9,i)  = PO(1,i)
-        EISOL(I) = EATOM(I,0,0,0)
+        EISOL(I) = EATOM(I,0,0,0,lorbs(i),IOS(i),IOP(i),IOD(i),     &
+                         USS(i),UPP(i),GSS(i),GP2(i),GSP(i),HPP(i),HSP(i), &
+                         UDD(i),F0DD(i),F0SD(i),F0PD(i),F2DD(i),F4DD(i),G2SD(i),G1PD(i),G3PD(i))
      end if
   ! for AM1/d
   else if(iqm_mode.eq.4) then
@@ -358,7 +553,7 @@ contains
            if(j.gt.0) then
               HPP(i)=0.5d0*(GPP(i)-GP2(i))
               ! DD(2,i) already copied.
-              DD(3,i)=QQ(i)
+              DD(3,i)  = QQ(i)
               PO(1,i)  = PT5/AM(i)
               PO(2,i)  = PT5/AD(i)
               PO(3,i)  = PT5/AQ(i)
@@ -366,16 +561,20 @@ contains
               PO(9,i)  = PO(1,i)
            else if(j.lt.0) then
               HPP(i)=0.5d0*(GPP(i)-GP2(i))
-              call DDPOHY(i)
+              call DDPOHY(i,lorbs(i),III(i),DD(1:6,i),PO(1:9,i),ZS(i),ZP(i),GSS(i),HSP(i),HPP(i),ZD(i),IIID(i),REPD(1:52,i))
               PO(9,i)  = PO(1,i)
-              EISOL(I) = EATOM(I,0,0,0)
+              EISOL(I) = EATOM(I,0,0,0,lorbs(i),IOS(i),IOP(i),IOD(i),     &
+                               USS(i),UPP(i),GSS(i),GP2(i),GSP(i),HPP(i),HSP(i), &
+                               UDD(i),F0DD(i),F0SD(i),F0PD(i),F2DD(i),F4DD(i),G2SD(i),G1PD(i),G3PD(i))
            end if
         else if(ii.eq.2) then ! new sp-orbitals.
            if(j.ne.0) then
               HPP(i)=0.5d0*(GPP(i)-GP2(i)) 
-              call DDPOHY(i)
+              call DDPOHY(i,lorbs(i),III(i),DD(1:6,i),PO(1:9,i),ZS(i),ZP(i),GSS(i),HSP(i),HPP(i),ZD(i),IIID(i),REPD(1:52,i))
               !PO(9,I)  = POCORD; already copied, see load_qm_parameters
-              EISOL(I) = EATOM(I,0,0,0)
+              EISOL(I) = EATOM(I,0,0,0,lorbs(i),IOS(i),IOP(i),IOD(i),     &
+                               USS(i),UPP(i),GSS(i),GP2(i),GSP(i),HPP(i),HSP(i), &
+                               UDD(i),F0DD(i),F0SD(i),F0PD(i),F2DD(i),F4DD(i),G2SD(i),G1PD(i),G3PD(i))
            end if
         else if(ii.eq.3) then ! spd-orbitals
            if(j.ne.0) then
@@ -391,27 +590,35 @@ contains
                  IG2SD(I) = 0
               end if
               LORBS(I) = 9
-              CALL INIGHD(I)
+              CALL INIGHD(I,lorbs(i),III(i),IIID(i),ZSN(i),ZPN(i),ZDN(i),F0DD(i),F2DD(i),F4DD(i),F0PD(i),F2PD(i), &
+                          G1PD(i),G3PD(i),IF0SD(i),IG2SD(i),F0SD(i),G2SD(i),GSS(i),GPP(i),GP2(i),HPP(i),REPD(1:52,i)) 
               !
-              CALL DDPOHY(I)
+              CALL DDPOHY(I,lorbs(i),III(i),DD(1:6,i),PO(1:9,i),ZS(i),ZP(i),GSS(i),HSP(i),HPP(i),ZD(i),IIID(i),REPD(1:52,i))
               !PO(9,I)  = POCORD; already copied, see load_qm_parameters
-              EISOL(I) = EATOM(I,0,0,0)
+              EISOL(I) = EATOM(I,0,0,0,lorbs(i),IOS(i),IOP(i),IOD(i),     &
+                               USS(i),UPP(i),GSS(i),GP2(i),GSP(i),HPP(i),HSP(i), &
+                               UDD(i),F0DD(i),F0SD(i),F0PD(i),F2DD(i),F4DD(i),G2SD(i),G1PD(i),G3PD(i))
            end if
         end if
      end do
      ! for AM1/d-PhoT: H, O, and P atoms
      if(QSRP_PhoT) then
+        qm_control_c%qsrp_phot= QSRP_PhoT  ! for book keeping.
         i=1
         HPP(i)=0.5d0*(GPP(i)-GP2(i))
-        call DDPOHY(i)
+        call DDPOHY(i,lorbs(i),III(i),DD(1:6,i),PO(1:9,i),ZS(i),ZP(i),GSS(i),HSP(i),HPP(i),ZD(i),IIID(i),REPD(1:52,i))
         PO(9,i)  = PO(1,i)
-        EISOL(I) = EATOM(I,0,0,0)
+        EISOL(I) = EATOM(I,0,0,0,lorbs(i),IOS(i),IOP(i),IOD(i),     &
+                         USS(i),UPP(i),GSS(i),GP2(i),GSP(i),HPP(i),HSP(i), &
+                         UDD(i),F0DD(i),F0SD(i),F0PD(i),F2DD(i),F4DD(i),G2SD(i),G1PD(i),G3PD(i))
 
         i=8
         HPP(i)=0.5d0*(GPP(i)-GP2(i))
-        call DDPOHY(i)
+        call DDPOHY(i,lorbs(i),III(i),DD(1:6,i),PO(1:9,i),ZS(i),ZP(i),GSS(i),HSP(i),HPP(i),ZD(i),IIID(i),REPD(1:52,i))
         PO(9,i)  = PO(1,i)
-        EISOL(I) = EATOM(I,0,0,0)
+        EISOL(I) = EATOM(I,0,0,0,lorbs(i),IOS(i),IOP(i),IOD(i),     &
+                         USS(i),UPP(i),GSS(i),GP2(i),GSP(i),HPP(i),HSP(i), &
+                         UDD(i),F0DD(i),F0SD(i),F0PD(i),F2DD(i),F4DD(i),G2SD(i),G1PD(i),G3PD(i))
 
         i=15
         HPP(i)   = 0.5d0*(GPP(i)-GP2(i))
@@ -426,10 +633,13 @@ contains
            IG2SD(I) = 0
         end if
         LORBS(I) = 9
-        CALL INIGHD(I)
+        CALL INIGHD(I,lorbs(i),III(i),IIID(i),ZSN(i),ZPN(i),ZDN(i),F0DD(i),F2DD(i),F4DD(i),F0PD(i),F2PD(i), &
+                    G1PD(i),G3PD(i),IF0SD(i),IG2SD(i),F0SD(i),G2SD(i),GSS(i),GPP(i),GP2(i),HPP(i),REPD(1:52,i))
         !
-        CALL DDPOHY(I)
-        EISOL(I) = EATOM(I,0,0,0)
+        CALL DDPOHY(I,lorbs(i),III(i),DD(1:6,i),PO(1:9,i),ZS(i),ZP(i),GSS(i),HSP(i),HPP(i),ZD(i),IIID(i),REPD(1:52,i))
+        EISOL(I) = EATOM(I,0,0,0,lorbs(i),IOS(i),IOP(i),IOD(i),     &
+                         USS(i),UPP(i),GSS(i),GP2(i),GSP(i),HPP(i),HSP(i), &
+                         UDD(i),F0DD(i),F0SD(i),F0PD(i),F2DD(i),F4DD(i),G2SD(i),G1PD(i),G3PD(i))
      end if
   ! for MNDO/d
   else if(iqm_mode.eq.5) then
@@ -447,9 +657,11 @@ contains
            PO(9,i)  = PO(1,i)
         else if(j.eq.2) then
            HPP(i)   = 0.5d0*(GPP(i)-GP2(i))
-           call DDPOHY(i)
+           call DDPOHY(i,lorbs(i),III(i),DD(1:6,i),PO(1:9,i),ZS(i),ZP(i),GSS(i),HSP(i),HPP(i),ZD(i),IIID(i),REPD(1:52,i))
            !PO(9,I)  = POCORD; already copied, see load_qm_parameters
-           EISOL(I) = EATOM(I,0,0,0)
+           EISOL(I) = EATOM(I,0,0,0,lorbs(i),IOS(i),IOP(i),IOD(i),     &
+                            USS(i),UPP(i),GSS(i),GP2(i),GSP(i),HPP(i),HSP(i), &
+                            UDD(i),F0DD(i),F0SD(i),F0PD(i),F2DD(i),F4DD(i),G2SD(i),G1PD(i),G3PD(i))
         else if(j.eq.3) then
            HPP(i)   = 0.5d0*(GPP(i)-GP2(i))
            if(F0SD(i).GT.SMALL) then
@@ -463,11 +675,14 @@ contains
               IG2SD(I) = 0
            end if
            LORBS(I) = 9
-           CALL INIGHD(I)
+           CALL INIGHD(I,lorbs(i),III(i),IIID(i),ZSN(i),ZPN(i),ZDN(i),F0DD(i),F2DD(i),F4DD(i),F0PD(i),F2PD(i), &
+                       G1PD(i),G3PD(i),IF0SD(i),IG2SD(i),F0SD(i),G2SD(i),GSS(i),GPP(i),GP2(i),HPP(i),REPD(1:52,i))
            !
-           CALL DDPOHY(I)
+           CALL DDPOHY(I,lorbs(i),III(i),DD(1:6,i),PO(1:9,i),ZS(i),ZP(i),GSS(i),HSP(i),HPP(i),ZD(i),IIID(i),REPD(1:52,i))
            !PO(9,I)  = POCORD; already copied, see load_qm_parameters
-           EISOL(I) = EATOM(I,0,0,0)
+           EISOL(I) = EATOM(I,0,0,0,lorbs(i),IOS(i),IOP(i),IOD(i),     &
+                            USS(i),UPP(i),GSS(i),GP2(i),GSP(i),HPP(i),HSP(i), &
+                            UDD(i),F0DD(i),F0SD(i),F0PD(i),F2DD(i),F4DD(i),G2SD(i),G1PD(i),G3PD(i))
         end if
      end do
   end if
@@ -481,7 +696,7 @@ contains
   ! new version of subroutine INQMMM. So, majority will be set here.
   ! Called from subroutine START, which is called from MNDO97.
   ! 
-  use qm1_info, only : qm_main_r
+  use qm1_info, only : qm_main_c
   implicit none
 
   ! local variables
@@ -489,8 +704,8 @@ contains
   integer :: i,ni
 
   ! if these are first call, no need to get coords and charges.
-  do i=1,qm_main_r%numat
-     ni = qm_main_r%nat(i)
+  do i=1,qm_main_c%numat
+     ni = qm_main_c%nat(i)
      DELTA(ni)=zero
      OMEGA(ni)=ALP(ni)
   end do
@@ -730,7 +945,7 @@ contains
             ZS( 1)   =     1.1438456153D0
             ZP( 1)   =     1.1438456153D0 ! probably, not used.
             ALP( 1)  =     2.8849150878D0
-            EISOL( 1)=   -11.3964270D0    ! should be recomputed.
+            EISOL( 1)=   -10.93461 ! -11.3964270D0    ! should be recomputed.
             GSS( 1)  =    13.7374528871D0
             GSP( 1)  =     0.0000000D0
             GPP( 1)  =     0.0000000D0
@@ -1195,7 +1410,7 @@ contains
             ZS( 8)   =     3.0579653594D0
             ZP( 8)   =     2.5153323616D0
             ALP( 8)  =     4.4044172319D0
-            EISOL( 8)=  -316.0995200D0   ! should be recomputed.
+            EISOL( 8)=  -318.53724 ! -316.0995200D0   ! should be recomputed.
             GSS( 8)  =    14.2347142713D0
             GSP( 8)  =    14.5394514107D0
             GPP( 8)  =    14.4545302760D0
@@ -1855,6 +2070,7 @@ contains
             BETAS(15)=   -11.1947908343D0
             BETAP(15)=   -11.9856214630D0
             ALP(15)  =     1.8832372396D0
+            EISOL(15)=  -140.44529       ! recomputed
             GSS(15)  =    14.6457470000D0
             GPP(15)  =    11.6949180000D0
             GSP(15)  =     5.6896540860D0
@@ -3877,16 +4093,16 @@ contains
   end do
 
   do i=1,k
-     Bbin(i,1) = one
+     Bbin(i,1)    =one
      Bbin_inv(i,1)=one  ! inverse
      do j=2,k
-        Bbin(i,j)=zero
+        Bbin(i,j)    =zero
         Bbin_inv(i,j)=zero
      end do
   end do
   do i=2,k
      do j=2,i
-        Bbin(i,j)=Bbin(i-1,j-1)+Bbin(i-1,j)
+        Bbin(i,j)    =Bbin(i-1,j-1)+Bbin(i-1,j)
      end do
   end do
   !
@@ -4023,13 +4239,18 @@ contains
   return
   end subroutine MLIG
 
-  subroutine inighd(ni)
+  subroutine inighd(ni,lorbs_ni,III_ni,IIID_ni,ZSN_ni,ZPN_ni,ZDN_ni, &
+                    F0DD_ni,F2DD_ni,F4DD_ni,F0PD_ni,F2PD_ni,G1PD_ni,G3PD_ni, &
+                    IF0SD_ni,IG2SD_ni,F0SD_ni,G2SD_ni, &
+                    GSS_ni,GPP_ni,GP2_ni,HPP_ni,REPD_ni)
   !
   ! one-center two-electron integrals for SPD-basis.
   ! NI is the atomic number of the current element.
   !
   implicit none
-  integer :: ni
+  integer :: ni,lorbs_ni,III_ni,IIID_ni,IF0SD_ni,IG2SD_ni
+  real(chm_real):: ZSN_ni,ZPN_ni,ZDN_ni,F0DD_ni,F2DD_ni,F4DD_ni,F0PD_ni,F2PD_ni, &
+                   G1PD_ni,G3PD_ni,F0SD_ni,G2SD_ni,GSS_ni,GPP_ni,GP2_ni,HPP_ni,REPD_ni(52)
  
   ! local variables
   integer :: i,j,ii
@@ -4056,16 +4277,16 @@ contains
                               r_s15  = one/S15
 
   ! check.
-  if(LORBS(ni).lt.9) return
+  if(lorbs_ni < 9) return
 
   ! III =(/2*1,8*2,8*3,18*4,18*5,30*6,2,2/) ; 1,2,3,4,5,6
   ! IIID=(/30*3,18*4,32*5,4*6,3,3/)         ; 3,4,5,6
-  NS     = III(NI)
-  NP     = III(NI)
-  ND     = IIID(NI)
-  ES     = ZSN(NI)
-  EP     = ZPN(NI)
-  ED     = ZDN(NI)
+  NS     = III_ni
+  NP     = III_ni
+  ND     = IIID_ni
+  ES     = ZSN_ni
+  EP     = ZPN_ni
+  ED     = ZDN_ni
 
   ! *** SLATER-CONDON PARAMETERS (Rlij).
   !     FIRST  DIGIT (l)  L QUANTUM NUMBER OF SLATER-CONDON PARAMETER.
@@ -4090,90 +4311,90 @@ contains
   R466   = RSC(4,ND,ED,ND,ED,ND,ED,ND,ED)
 
   ! save slater-condon parameters.
-  F0DD(NI) = R066
-  F2DD(NI) = R266
-  F4DD(NI) = R466
-  F0PD(NI) = R036
-  F2PD(NI) = R236
-  G1PD(NI) = R155
-  G3PD(NI) = R355
+  F0DD_ni = R066
+  F2DD_ni = R266
+  F4DD_ni = R466
+  F0PD_ni = R036
+  F2PD_ni = R236
+  G1PD_ni = R155
+  G3PD_ni = R355
   ! KEEP PREDEFINED SLATER-CONDON PARAMETERS (IF REQUESTED).
-  if(IF0SD(ni).gt.0) then
-     R016  = F0SD(ni)
+  if(IF0SD_ni > 0) then
+     R016   = F0SD_ni
   else
-     F0SD(ni) = R016
+     F0SD_ni= R016
   end if
-  if(IG2SD(ni).gt.0) then
-     R244  = G2SD(ni)
+  if(IG2SD_ni > 0) then
+     R244   = G2SD_ni
   else
-     G2SD(ni) = R244
+     G2SD_ni= R244
   end if
   ! compute one-center two-electron integrals from the slater-condon
   ! parmaters.
 
   ! Integals involing sp-orbitals.
-  GSS(NI) = R011
-  GPP(NI) = R033 + FOUR*r_25*R233        ! /25.0d0
-  GP2(NI) = R033 - TWO *r_25*R233
-  HPP(NI) = THREE*r_25*R233
+  GSS_ni = R011
+  GPP_ni = R033 + FOUR*r_25*R233        ! /25.0d0
+  GP2_ni = R033 - TWO *r_25*R233
+  HPP_ni = THREE*r_25*R233
   ! in mndod/d and am1/d, these two parameters are left as independent variables
   ! to allow fine tuning.
-  ! GSP(NI) = R013       
-  ! HSP(NI) = R122/THREE 
+  ! GSP_ni = R013       
+  ! HSP_ni = R122/THREE 
 
   ! Integrals involving also d-orbitals.
-  REPD( 1,NI) =  R016
-  REPD( 2,NI) =  2.0d0*r_3*r_s5*R125      ! /(THREE*S5)
-  REPD( 3,NI) =  r_S15*R125               ! one/S15
-  REPD( 4,NI) =  2.0d0*r_5*r_S5*R234      ! /(five*S5)
-  REPD( 5,NI) =  R036 + 4.0d0*r_35*R236   ! /35.0d0
-  REPD( 6,NI) =  R036 + 2.0d0*r_35*R236
-  REPD( 7,NI) =  R036 - 4.0d0*r_35*R236
-  REPD( 8,NI) = -r_3*r_S5*R125
-  REPD( 9,NI) =  SQRT(3.0d0*r_125)*R234    ! /125.0d0
-  REPD(10,NI) =  S3   *r_35*R236           ! /35.0d0
-  REPD(11,NI) =  3.0d0*r_35*R236
-  REPD(12,NI) = -0.2d0*r_S5*R234
-  REPD(13,NI) =  R036 - 2.0d0*r_35*R236
-  REPD(14,NI) = -2.0d0*S3*r_35*R236
-  REPD(15,NI) = -REPD( 3,NI)
-  REPD(16,NI) = -REPD(11,NI)
-  REPD(17,NI) = -REPD( 9,NI)
-  REPD(18,NI) = -REPD(14,NI)
-  REPD(19,NI) =  0.2d0*R244
-  REPD(20,NI) =  2.0d0*r_7*r_s5*R246
-  REPD(21,NI) =  REPD(20,NI)*0.5d0
-  REPD(22,NI) = -REPD(20,NI)
-  REPD(23,NI) =  4.0d0   *r_15*R155 + 27.0D0   *r_245*R355
-  REPD(24,NI) =  2.0d0*S3*r_15*R155 -  9.0d0*S3*r_245*R355
-  REPD(25,NI) =  r_15*R155        + 18.D0  *r_245*R355
-  REPD(26,NI) = -S3*r_15*R155 + 12.0d0*S3*r_245*R355
-  REPD(27,NI) = -S3*r_15*R155 -  3.0d0*S3*r_245*R355
-  REPD(28,NI) = -REPD(27,NI)
-  REPD(29,NI) =  R066 + 4.0d0*r_49*R266 + 4.0d0 * r_49*R466
-  REPD(30,NI) =  R066 + 2.0d0*r_49*R266 - 24.0D0*r_441*R466
-  REPD(31,NI) =  R066 - 4.0d0*r_49*R266 + 6.0d0 *r_441*R466
-  REPD(32,NI) =  SQRT(3.0d0*r_245)*R246
-  REPD(33,NI) =  0.2d0*R155 + 24.0D0*r_245*R355
-  REPD(34,NI) =  0.2d0*R155 -  6.0d0*r_245*R355
-  REPD(35,NI) =  3.0d0*r_49*R355
-  REPD(36,NI) =  r_49*R266     + 30.0d0*r_441*R466
-  REPD(37,NI) =  S3 *r_49*R266 -  5.0d0*S3*r_441*R466
-  REPD(38,NI) =  R066 - 2.0d0*r_49*R266 -  4.0d0*r_441*R466
-  REPD(39,NI) = -2.0d0*S3*r_49*R266 + 10.0d0*S3*r_441*R466
-  REPD(40,NI) = -REPD(32,NI)
-  REPD(41,NI) = -REPD(34,NI)
-  REPD(42,NI) = -REPD(35,NI)
-  REPD(43,NI) = -REPD(37,NI)
-  REPD(44,NI) =  3.0d0*r_49*R266 + 20.0d0*r_441*R466
-  REPD(45,NI) = -REPD(39,NI)
-  REPD(46,NI) =  0.2d0*R155 - 3.0d0*r_35*R355
-  REPD(47,NI) = -REPD(46,NI)
-  REPD(48,NI) =  4.0d0*r_49*R266 + 15.0D0*r_441*R466
-  REPD(49,NI) =  3.0d0*r_49*R266 -  5.0d0*r_147*R466
-  REPD(50,NI) = -REPD(49,NI)
-  REPD(51,NI) =  R066 + 4.0d0*r_49*R266 - 34.D0*r_441*R466
-  REPD(52,NI) =  35.D0*r_441*R466
+  REPD_ni( 1) =  R016
+  REPD_ni( 2) =  2.0d0*r_3*r_s5*R125      ! /(THREE*S5)
+  REPD_ni( 3) =  r_S15*R125               ! one/S15
+  REPD_ni( 4) =  2.0d0*r_5*r_S5*R234      ! /(five*S5)
+  REPD_ni( 5) =  R036 + 4.0d0*r_35*R236   ! /35.0d0
+  REPD_ni( 6) =  R036 + 2.0d0*r_35*R236
+  REPD_ni( 7) =  R036 - 4.0d0*r_35*R236
+  REPD_ni( 8) = -r_3*r_S5*R125
+  REPD_ni( 9) =  SQRT(3.0d0*r_125)*R234    ! /125.0d0
+  REPD_ni(10) =  S3   *r_35*R236           ! /35.0d0
+  REPD_ni(11) =  3.0d0*r_35*R236
+  REPD_ni(12) = -0.2d0*r_S5*R234
+  REPD_ni(13) =  R036 - 2.0d0*r_35*R236
+  REPD_ni(14) = -2.0d0*S3*r_35*R236
+  REPD_ni(15) = -REPD_ni( 3)
+  REPD_ni(16) = -REPD_ni(11)
+  REPD_ni(17) = -REPD_ni( 9)
+  REPD_ni(18) = -REPD_ni(14)
+  REPD_ni(19) =  0.2d0*R244
+  REPD_ni(20) =  2.0d0*r_7*r_s5*R246
+  REPD_ni(21) =  REPD_ni(20)*0.5d0
+  REPD_ni(22) = -REPD_ni(20)
+  REPD_ni(23) =  4.0d0   *r_15*R155 + 27.0D0   *r_245*R355
+  REPD_ni(24) =  2.0d0*S3*r_15*R155 -  9.0d0*S3*r_245*R355
+  REPD_ni(25) =  r_15*R155        + 18.D0  *r_245*R355
+  REPD_ni(26) = -S3*r_15*R155 + 12.0d0*S3*r_245*R355
+  REPD_ni(27) = -S3*r_15*R155 -  3.0d0*S3*r_245*R355
+  REPD_ni(28) = -REPD_ni(27)
+  REPD_ni(29) =  R066 + 4.0d0*r_49*R266 + 4.0d0 * r_49*R466
+  REPD_ni(30) =  R066 + 2.0d0*r_49*R266 - 24.0D0*r_441*R466
+  REPD_ni(31) =  R066 - 4.0d0*r_49*R266 + 6.0d0 *r_441*R466
+  REPD_ni(32) =  SQRT(3.0d0*r_245)*R246
+  REPD_ni(33) =  0.2d0*R155 + 24.0D0*r_245*R355
+  REPD_ni(34) =  0.2d0*R155 -  6.0d0*r_245*R355
+  REPD_ni(35) =  3.0d0*r_49*R355
+  REPD_ni(36) =  r_49*R266     + 30.0d0*r_441*R466
+  REPD_ni(37) =  S3 *r_49*R266 -  5.0d0*S3*r_441*R466
+  REPD_ni(38) =  R066 - 2.0d0*r_49*R266 -  4.0d0*r_441*R466
+  REPD_ni(39) = -2.0d0*S3*r_49*R266 + 10.0d0*S3*r_441*R466
+  REPD_ni(40) = -REPD_ni(32)
+  REPD_ni(41) = -REPD_ni(34)
+  REPD_ni(42) = -REPD_ni(35)
+  REPD_ni(43) = -REPD_ni(37)
+  REPD_ni(44) =  3.0d0*r_49*R266 + 20.0d0*r_441*R466
+  REPD_ni(45) = -REPD_ni(39)
+  REPD_ni(46) =  0.2d0*R155 - 3.0d0*r_35*R355
+  REPD_ni(47) = -REPD_ni(46)
+  REPD_ni(48) =  4.0d0*r_49*R266 + 15.0D0*r_441*R466
+  REPD_ni(49) =  3.0d0*r_49*R266 -  5.0d0*r_147*R466
+  REPD_ni(50) = -REPD_ni(49)
+  REPD_ni(51) =  R066 + 4.0d0*r_49*R266 - 34.D0*r_441*R466
+  REPD_ni(52) =  35.D0*r_441*R466
 
   return
 
@@ -4241,7 +4462,9 @@ contains
      end function rsc
   end subroutine inighd
 
-  subroutine ddpohy(ni)
+  subroutine ddpohy(ni,lorbs_ni,III_ni,DD_ni,PO_ni, &
+                    ZS_ni,ZP_ni,GSS_ni,HSP_ni,HPP_ni, &
+                    ZD_ni,IIID_ni,REPD_ni)
   !
   ! calculate charge separations and additive terms used to compute
   ! the two-center two-electron integrals in MNDO/d and AM1/d.
@@ -4261,7 +4484,8 @@ contains
   ! atomic core        : ADDITIVE TERM PO(9,NI)
   !
   implicit none
-  integer :: ni
+  integer :: ni,lorbs_ni,iii_ni,iiid_ni
+  real(chm_real):: DD_ni(1:6),PO_ni(1:9),ZS_ni,ZP_ni,GSS_ni,HSP_ni,HPP_ni,ZD_ni,REPD_ni(1:52)
 
   ! local variables
   integer :: n,np,nd
@@ -4273,56 +4497,60 @@ contains
   ! 2nd   digit:  L+1 from definition of multiple.
 
   ! S basis: there is only one additive term.
-  PO(1,ni) = PT5*EV/GSS(ni)
-  if(LORBS(ni).eq.1) return
+  PO_ni(1) = PT5*EV/GSS_ni
+  if(lorbs_ni == 1) return
 
   ! SP basis: charge separations and additive terms must be computed.
-  N        = III(NI)
+  N        = III_ni
   NP       = MAX(N,2)
-  Z1       = ZS(NI)
-  Z2       = ZP(NI)
+  Z1       = ZS_ni
+  Z2       = ZP_ni
   AIJ22    = AIJL(Z1,Z2,N,NP,1)
-  DD(2,NI) = AIJ22/SQRT(THREE)
-  D        = DD(2,NI)
-  FG       = HSP(NI)
-  PO(2,NI) = POIJ(1,D,FG)
-  DD(3,NI) = SQRT((2*NP+1)*(2*NP+2)/20.0D0) / ZP(NI)
-  D        = DD(3,NI)*SQRT(TWO)
-  FG       = HPP(NI)
-  PO(3,NI) = POIJ(2,D,FG)
-  PO(7,NI) = PO(1,NI)
-  IF(LORBS(NI).EQ.4) RETURN
+  DD_ni(2) = AIJ22/SQRT(THREE)
+  D        = DD_ni(2)
+  FG       = HSP_ni
+  PO_ni(2) = POIJ(1,D,FG)
+  DD_ni(3) = SQRT((2*NP+1)*(2*NP+2)/20.0D0) / ZP_ni
+  D        = DD_ni(3)*SQRT(TWO)
+  FG       = HPP_ni
+  PO_ni(3) = POIJ(2,D,FG)
+  PO_ni(7) = PO_ni(1)
+  if(lorbs_ni == 4) return
 
   ! SPD basis: additive terms involving D orbitals.
   !            note extra factor of SQRT2 for the charge separations.
-  !            DD(i,ni) with i=4,6, which refer to square quadrupoles, for
+  !            DD_ni(i) with i=4,6, which refer to square quadrupoles, for
   !            simplification of the code in REPPD.
-  Z3       = ZD(NI)
-  ND       = IIID(NI)
+  !
+  ! Note that REPD values are determined in INIGHD, which is called in
+  !           before calling in ddpohy for atoms involving d-orbitals.
+  !
+  Z3       = ZD_ni
+  ND       = IIID_ni
   AIJ52    = AIJL(Z2,Z3,NP,ND,1)
   AIJ43    = AIJL(Z1,Z3,N ,ND,2)
   AIJ63    = AIJL(Z3,Z3,ND,ND,2)
   !     SD
   DA       = one/SQRT(15.0D0)
   D        = SQRT(TWO*AIJ43*DA)   ! SQRT(AIJ43*DA)*SQRT(TWO)
-  FG       = REPD(19,NI)
-  DD(4,NI) = D
-  PO(4,NI) = POIJ(2,D,FG)
+  FG       = REPD_ni(19)
+  DD_ni(4) = D
+  PO_ni(4) = POIJ(2,D,FG)
   !     PD
   D        = AIJ52*SQRT(PT2)    ! one/sqrt(five)=sqrt(one/five)=sqrt(0.2)
-  FG       = REPD(23,NI)-1.8D0*REPD(35,NI)
+  FG       = REPD_ni(23)-1.8D0*REPD_ni(35)
   !     PREVIOUS STATEMENT AS IN THE TCA PAPER,
   !     NEXT STATEMENT AS A POSSIBLE ALTERNATIVE.
-  !     FG       = REPD(33,NI)-1.6D0*REPD(35,NI) 
-  DD(5,NI) = D
-  PO(5,NI) = POIJ(1,D,FG)
+  !     FG       = REPD_ni(33)-1.6D0*REPD_ni(35) 
+  DD_ni(5) = D
+  PO_ni(5) = POIJ(1,D,FG)
   !     DD
-  FG       = PT2*(REPD(29,NI)+TWO*REPD(30,NI)+TWO*REPD(31,NI))
-  PO(8,NI) = POIJ(0,ONE,FG)
+  FG       = PT2*(REPD_ni(29)+TWO*REPD_ni(30)+TWO*REPD_ni(31))
+  PO_ni(8) = POIJ(0,ONE,FG)
   D        = SQRT(TWO*AIJ63/seven)
-  FG       = REPD(44,NI)-(20.0D0/35.0D0)*REPD(52,NI)
-  DD(6,NI) = D
-  PO(6,NI) = POIJ(2,D,FG)
+  FG       = REPD_ni(44)-(20.0D0/35.0D0)*REPD_ni(52)
+  DD_ni(6) = D
+  PO_ni(6) = POIJ(2,D,FG)
 
   return
 
@@ -4383,8 +4611,8 @@ contains
      integer, parameter :: NITER=100
 
      ! terms for SS
-     if(L.eq.0) then
-        POIJ = PT5*EV/FG
+     if(L == 0) then
+        POIJ   = PT5*EV/FG
      else
      ! higher terms.
         DSQ    = D*D
@@ -4394,24 +4622,24 @@ contains
         A2     = five
         do I=1,NITER
            DELTA  = A2-A1
-           if(DELTA.lt.EPSIL) exit
+           if(DELTA < EPSIL) exit
            Y1     = A1 + DELTA*G1
            Y2     = A1 + DELTA*G2
-           if(L.eq.1) then
-              F1= (EV4*(ONE/Y1-ONE/SQRT(Y1**2+DSQ)) - FG)**2
-              F2= (EV4*(ONE/Y2-ONE/SQRT(Y2**2+DSQ)) - FG)**2
-           else if(L.eq.2) then
-              F1= (EV8*( ONE/Y1-TWO/SQRT(Y1**2+DSQ*PT5) +ONE/SQRT(Y1**2+DSQ)) - FG)**2
-              F2= (EV8*( ONE/Y2-TWO/SQRT(Y2**2+DSQ*PT5) +ONE/SQRT(Y2**2+DSQ)) - FG)**2
+           if(L == 1) then
+              F1  = (EV4*(ONE/Y1-ONE/SQRT(Y1**2+DSQ)) - FG)**2
+              F2  = (EV4*(ONE/Y2-ONE/SQRT(Y2**2+DSQ)) - FG)**2
+           else if(L == 2) then
+              F1  = (EV8*( ONE/Y1-TWO/SQRT(Y1**2+DSQ*PT5) +ONE/SQRT(Y1**2+DSQ)) - FG)**2
+              F2  = (EV8*( ONE/Y2-TWO/SQRT(Y2**2+DSQ*PT5) +ONE/SQRT(Y2**2+DSQ)) - FG)**2
            end if
-           if(F1.lt.F2) then
+           if(F1 < F2) then
               A2  = Y2
            else
               A1  = Y1
            end if
         end do
         ! define additive terms after convergence of iteractions.
-        if(F1.ge.F2) then
+        if(F1 >= F2) then
            POIJ = A2
         else
            POIJ = A1
@@ -4421,7 +4649,9 @@ contains
      end function POIJ
   end subroutine ddpohy
 
-  function eatom(ni,iss,ipp,idd)
+  function eatom(ni,iss,ipp,idd,lorbs_ni,IOS_ni,IOP_ni,IOD_ni,     &
+                 USS_ni,UPP_ni,GSS_ni,GP2_ni,GSP_ni,HPP_ni,HSP_ni, &
+                 UDD_ni,F0DD_ni,F0SD_ni,F0PD_ni,F2DD_ni,F4DD_ni,G2SD_ni,G1PD_ni,G3PD_ni)
   ! 
   ! total energy for an atom with the atomic number NI
   ! which is in a configuration with the occupation numbers
@@ -4431,8 +4661,10 @@ contains
   !       so, only need to consider them with 0 values.
   ! 
   implicit none
-  integer :: ni,iss,ipp,idd
+  integer :: ni,iss,ipp,idd,lorbs_ni,IOS_ni,IOP_ni,IOD_ni
   real(chm_real):: EATOM
+  real(chm_real):: USS_ni,UPP_ni,GSS_ni,GP2_ni,GSP_ni,HPP_ni,HSP_ni, &
+                   UDD_ni,F0DD_ni,F0SD_ni,F0PD_ni,F2DD_ni,F4DD_ni,G2SD_ni,G1PD_ni,G3PD_ni
 
   ! prefactors for exchange terms.
   real(chm_real),parameter:: cp(6)  =(/ 0.D0,  -1.D0,  -3.D0,  &
@@ -4459,10 +4691,10 @@ contains
 
   ! find occupation number.
   ! if, iss=ipp=idd=0, find the number based on the atomic number.
-  if((ISS+IPP+IDD).eq.0) then  ! this case. use default occupation.
-     is  = IOS(ni)             ! 0~2
-     ip  = IOP(ni)             ! 0~6
-     idL = IOD(ni)             ! 0~10
+  if((ISS+IPP+IDD) == 0) then  ! this case. use default occupation.
+     is  = IOS_ni              ! 0~2
+     ip  = IOP_ni              ! 0~6
+     idL = IOD_ni              ! 0~10
   else
      is  = iss
      ip  = ipp
@@ -4470,32 +4702,32 @@ contains
   end if
   ! contribution from S electrons
   E = zero
-  if(is.eq.1) then
-     E   = E + USS(ni)
-  else if(is.eq.2) then
-     E   = E + TWO*USS(ni) + GSS(ni)
+  if(is == 1) then
+     E   = E + USS_ni
+  else if(is == 2) then
+     E   = E + two*USS_ni + GSS_ni
   end if
   ! contribution from P electrons.
-  if(ip.ge.1) then
-     E   = E + IP*UPP(ni) +IP*(IP-1)*PT5*GP2(ni) + CP(IP)*HPP(ni)
-     if(is.eq.1) then
-       E = E + IP*GSP(ni) - MIN(IP,3)*HSP(ni)
-     else if(is.eq.2) then
-       E = E + IP*(TWO*GSP(ni)-HSP(ni))
+  if(ip >= 1) then
+     E   = E + float(IP)*UPP_ni + float(IP*(IP-1))*PT5*GP2_ni + CP(IP)*HPP_ni
+     if(is == 1) then
+       E = E + float(IP)*GSP_ni - float(MIN(IP,3))*HSP_ni
+     else if(is == 2) then
+       E = E + float(IP)*(two*GSP_ni-HSP_ni)
      end if
   end if
   ! contribution from D electrons.
-  if(LORBS(ni).ge.9 .and. idL.ge.1) then
-     ADD = F0DD(ni)-(14.D0*r_441)*(F2DD(ni)+F4DD(ni))
-     E   = E + IDL*UDD(ni) + IDL*(IDL-1)*PT5*ADD               &
-             +(CD2(IDL)*F2DD(ni)+CD4(IDL)*F4DD(ni))*r_441
-     if(is.eq.1) then
-       E = E + IDL*F0SD(ni) - MIN(IDL,5)*G2SD(ni)*r_5
-     else if(is.eq.2) then
-       E = E + IDL*(TWO*F0SD(ni)-G2SD(ni)*r_5)
+  if(lorbs_ni >= 9 .and. idL >= 1) then
+     ADD = F0DD_ni-(14.D0*r_441)*(F2DD_ni+F4DD_ni)
+     E   = E + float(IDL)*UDD_ni + float(IDL*(IDL-1))*PT5*ADD               &
+             +(CD2(IDL)*F2DD_ni  + CD4(IDL)*F4DD_ni)*r_441
+     if(is == 1) then
+       E = E + float(IDL)*F0SD_ni- float(MIN(IDL,5))*G2SD_ni*r_5
+     else if(is == 2) then
+       E = E + float(IDL)*(two*F0SD_ni-G2SD_ni*r_5)
      end if
-     if(ip.ge.1) then
-        E   = E + IP*IDL*(F0PD(ni)-r_15*G1PD(ni)-THREE*r_70*G3PD(ni))
+     if(ip >= 1) then
+        E   = E + float(IP*IDL)*(F0PD_ni-r_15*G1PD_ni-three*r_70*G3PD_ni)
      end if
   end if
   EATOM  = E
@@ -4506,37 +4738,428 @@ contains
 !  ! contribution from S electrons
 !  ! if is==1, E=USS ; if is==2, E=two*USS+GSS
 !  if(is.eq.1) then
-!     E = ris*USS(ni)
+!     E = ris*USS_ni
 !  else
-!     E = ris*USS(ni)+two*GSS(ni)
+!     E = ris*USS_ni+two*GSS_ni
 !  end if
 !
 !  ! contribution from P electrons.
 !  if(ip.ge.1) then
-!     E = E + rip*UPP(ni)+rip*(rip-one)*PT5*GP2(ni)+cp(ip)*HPP(ni)
+!     E = E + rip*UPP_ni+rip*(rip-one)*PT5*GP2_ni+cp(ip)*HPP_ni
 !     if(is.eq.1) then
-!        E = E + rip*GSP(ni) - occup(MIN(ip,3))*HSP(ni)
+!        E = E + rip*GSP_ni - occup(MIN(ip,3))*HSP_ni
 !     else if(is.eq.2) then
-!        E = E + rip*(two*GSP(ni) - HSP(ni))
+!        E = E + rip*(two*GSP_ni - HSP_ni)
 !     end if
 !  end if
 !  ! contribution from D electrons.
-!  if(LORBS(ni).ge.9 .and. id.ge.1) then
-!     add= F0DD(ni)-(14.D0*r_441)*(F2DD(ni)+F4DD(ni))
-!     E  = E + rid*UDD(ni) + rid*(rid-one)*PT5*add+ &
-!             (cd2(id)*F2DD(ni)+cd4(id)*F4DD(ni))*r_441
+!  if(LORBS_ni.ge.9 .and. id.ge.1) then
+!     add= F0DD_ni-(14.D0*r_441)*(F2DD_ni+F4DD_ni)
+!     E  = E + rid*UDD_ni + rid*(rid-one)*PT5*add+ &
+!             (cd2(id)*F2DD_ni+cd4(id)*F4DD_ni)*r_441
 !     if(is.eq.1) then
-!        E = E + rid*F0SD(ni) - occup(MIN(id,5))*G2SD(ni)*r_5
+!        E = E + rid*F0SD_ni - occup(MIN(id,5))*G2SD_ni*r_5
 !     else if(is.eq.2) then
-!        E = E + rid*(two*F0SD(ni)-G2SD(ni)*r_5)
+!        E = E + rid*(two*F0SD_ni-G2SD_ni*r_5)
 !     end if
-!     if(ip.ge.1) E=E + rip*rid*(F0PD(ni)-r_15*G1PD(ni)-three*r_70*G3PD(ni))
+!     if(ip.ge.1) E=E + rip*rid*(F0PD_ni-r_15*G1PD_ni-three*r_70*G3PD_ni)
 !  end if
 !  EATOM  = E
 
   return
   end function eatom
 
+  !
+  subroutine readpar(qm_param_a,ipunit,natm_types,ierror)
+  !
+  ! Format of file
+  ! parname1 ATOMTYPE1 [int] parvalUE1
+  ! parname2 ATOMTYPE2 [int] parvalUE2
+  ! ...
+  ! END
+  !
+  ! In the above, [int] = 0    , apply to all atoms of the same atom type
+  !                       value, only apply to the specific atom (int, atom-specific parameters)
+  !
+  ! NOTE: For Boron atom and AM1 and AM1/d methods, the Gaussian terms are modified in repam1_qmmm
+  !       for specific atom pairs. Thus, readpar must be used carefully.
+  !
+  use chm_kinds
+  use dimens_fcm
+  use string
+  use stream
+  use qm1_info
+  use parallel
+
+  implicit none
+  type(qm_param) :: qm_param_a
+  integer :: ipunit,natm_types,i,j,icnt,atom_id,ierror
+  character(len=8) :: parname,atomname,elescr,atomname_old
+  real(chm_real)   :: parval
+
+  ! string
+  character(len=120):: line
+  integer :: linelen
+
+  ! initialization
+  icnt         = 0
+  atomname_old = '  '   ! empty
+  ierror       = 1      ! no error
+
+  ! read data file
+  do
+#if KEY_PARALLEL==1
+     if(mynod==0) then
+#endif
+        read(ipunit,'(A)',end=40) line
+        linelen = LEN(line)
+#if KEY_PARALLEL==1
+     end if
+     call PSND4(linelen,1)
+     call PSNDC(line(1:linelen),1) 
+#endif
+     if(line(1:1) == '!') cycle  ! comments
+     if(line(1:3) == 'END') exit
+
+     ! punch to the output
+     if(prnlev >= 2) write(outu,'(2A)') ' READPAR> ',line(1:linelen)
+
+     !1) read parameter name
+     call nextwd(line,linelen,swdtch,swdmax,swdlen)
+     parname = swdtch
+
+     !2) read atom name
+     call nextwd(line,linelen,swdtch,swdmax,swdlen)
+     atomname = swdtch
+
+     !3) read atom in qm region or 0 (applied to all atoms)
+     atom_id = nexti(line,linelen)
+
+     !4) read parameter value
+     parval = nextf(line,linelen)
+
+     ! find which atom
+     do j=0,100
+        elescr = elemnt(j)
+        if(elescr(1:1) == ' ') elescr = elescr(2:2)
+        if(atomname == elescr) i = j
+     end do
+
+     ! check if new atom and whether using atom specific parameters
+     if(atomname /= atomname_old) then
+        ! new atom
+        icnt = icnt + 1
+        if(atom_id > 0) then
+           ! atom specific parameters
+           qm_param_a%q_atom_specific(icnt) = .true.  ! atom specific parameters
+           qm_param_a%ni_local(icnt)        = atom_id ! atom to modify in the main array
+        else
+           ! global parameters
+           qm_param_a%q_atom_specific(icnt) =.false.  ! global parameters
+           qm_param_a%ni_local(icnt)        = i       ! atomic number
+        end if
+        !
+        if(icnt > natm_types) then
+           call wrndie(-1,'<READPAR>','No of atoms in paramter files overflows')
+           ierror = 0
+           return
+        end if
+        atomname_old = atomname
+     end if
+
+     !5) assign parameters
+     if(parname == 'GNN') then
+        qm_param_a%GNN(icnt)   = parval
+     else if(parname == 'USS') then
+        qm_param_a%USS(icnt)   = parval
+     else if(parname == 'UPP') then
+        qm_param_a%UPP(icnt)   = parval
+     else if(parname == 'ZS') then
+        qm_param_a%ZS(icnt)    = parval
+     else if(parname == 'ZP') then
+        qm_param_a%ZP(icnt)    = parval
+     else if(parname == 'BETAS') then
+        qm_param_a%BETAS(icnt) = parval
+     else if(parname == 'BETAP') then
+        qm_param_a%BETAP(icnt) = parval
+     !
+     else if(parname == 'UDD') then
+        qm_param_a%UDD(icnt)   = parval
+     else if(parname == 'ZD') then
+        qm_param_a%ZD(icnt)    = parval
+     else if(parname == 'BETAD') then
+        qm_param_a%BETAD(icnt) = parval
+     else if(parname == 'ZSN') then
+        qm_param_a%ZSN(icnt)    = parval
+     else if(parname == 'ZPN') then
+        qm_param_a%ZPN(icnt)    = parval
+     else if(parname == 'ZDN') then
+        qm_param_a%ZDN(icnt)    = parval
+     !
+     else if(parname == 'ALP') then
+        qm_param_a%ALP(icnt)  = parval
+     else if(parname == 'GSS') then              ! For MNDO/d and AM1/d,
+        qm_param_a%GSS(icnt)   = parval          ! for atoms involving d-orbitals, 
+     else if(parname == 'GPP') then              ! GSS, GPP, GP2 are detemined in subroutine inighd
+        qm_param_a%GPP(icnt)   = parval          ! So, only GSP and HSP are needed
+     else if(parname == 'GSP') then              !
+        qm_param_a%GSP(icnt)   = parval          !
+     else if(parname == 'GP2') then              !
+        qm_param_a%GP2(icnt)   = parval          !
+     else if(parname == 'HSP') then              !
+        qm_param_a%HSP(icnt)   = parval          !
+     else if(parname == 'POCOR') then            ! POCOR is for PO(9,atom) value. if not input, defaul is used.
+        qm_param_a%PO(9,icnt)  = parval
+     !!else if(parname == 'HPP') then            ! calcualted based on GPP and GP2
+     !!   qm_param_a%HPP(icnt)   = parval        ! for MNDO/d and AM1/d, check routine inighd
+     !
+     else if(parname == 'FN11') then
+        qm_param_a%GUESS1(1,icnt) = parval
+     else if(parname == 'FN21') then
+        qm_param_a%GUESS2(1,icnt) = parval
+     else if(parname == 'FN31') then
+        qm_param_a%GUESS3(1,icnt) = parval
+     else if(parname == 'FN12') then
+        qm_param_a%GUESS1(2,icnt) = parval
+     else if(parname == 'FN22') then
+        qm_param_a%GUESS2(2,icnt) = parval
+     else if(parname == 'FN32') then
+        qm_param_a%GUESS3(2,icnt) = parval
+     else if(parname == 'FN13') then
+        qm_param_a%GUESS1(3,icnt) = parval
+     else if(parname == 'FN23') then
+        qm_param_a%GUESS2(3,icnt) = parval
+     else if(parname == 'FN33') then
+        qm_param_a%GUESS3(3,icnt) = parval
+     else if(parname == 'FN14') then
+        qm_param_a%GUESS1(4,icnt) = parval
+     else if(parname == 'FN24') then
+        qm_param_a%GUESS2(4,icnt) = parval
+     else if(parname == 'FN34') then
+        qm_param_a%GUESS3(4,icnt) = parval
+     else
+        if(prnlev>=2) write(outu,200) atomname,parname
+        call wrndie(0,'<READPAR>','Unknown parameter. Ignored.')
+     end if
+  end do           ! outer while
+200  format('READPAR> Unrecognized parameters:',A,A)
+201  format('READPAR> ',A)
+
+  ! normal exit
+  return
+
+  ! file terminated abnormally. file format error possible.
+40 continue
+  ierror = 0
+  call wrndie(-1,'<READPAR>','Parameter file error. Terminated.')
+  return
+  end subroutine readpar
+
+
+  subroutine do_parameter_update(irepl,qm_param_a,natm_types)
+  !
+  ! do the actual work of updating parameters for replica irepl
+  !
+  use chm_kinds
+  use qm1_info
+
+  implicit none
+  type(qm_param) :: qm_param_a
+  integer :: irepl,natm_types
+
+  integer :: iqm,jqm,k,ni,nj
+  logical :: q_do_specific
+
+  !
+  ! qm_param_a%q_atom_specific(i)  ! .true. if specific atoms are modified.
+  !                                !.false. if all atoms are modified.
+  !
+  do iqm=1,natm_types
+     ni = qm_param_a%ni_local(iqm)
+     if(qm_param_a%q_atom_specific(iqm)) then
+        ! only modify specific atom
+        qm_param_r(irepl)%q_atom_specific(ni) = qm_param_a%q_atom_specific(iqm)
+
+        call update_atom(iqm,ni,qm_control_r(irepl)%iqm_mode)
+     else
+        ! update all specified atoms
+        do jqm=1,qm_main_r(irepl)%numat
+           if(ni == qm_param_r(irepl)%ni_local(jqm)) then
+              !nj = qm_param_r(irepl)%ni_local(jqm)
+              qm_param_r(irepl)%q_atom_specific(jqm) = qm_param_a%q_atom_specific(iqm)
+              call update_atom(iqm,jqm,qm_control_r(irepl)%iqm_mode)
+           end if
+        end do
+     end if
+  end do
+  return
+  !
+  contains
+     subroutine update_atom(ii,jj,iqm_mode)
+     !
+     ! ii: array index for input parameter arrays
+     ! jj: array index for qm_param_r parameter arrays
+     !
+     !use qm1_constant,only: minbig
+     implicit none
+     integer:: ii,jj,iqm_mode
+     !!real(chm_real),parameter :: small=1.0D-10
+     integer:: i,j,ij,ik,iorbs,nni,iiim,iosm,iopm,iodm,iiidm,int1,int2
+     real(chm_real):: ussm,uppm,zsm,zpm,gssm,gppm,gp2m,gspm,hspm,hppm,uddm,zdm, &
+                      zsnm,zpnm,zdnm,rf
+
+     ! copy parameters to the main array
+     if(qm_param_a%GNN(ii)  > minbig) qm_param_r(irepl)%GNN(jj)  = qm_param_a%GNN(ii)
+     if(qm_param_a%USS(ii)  > minbig) qm_param_r(irepl)%USS(jj)  = qm_param_a%USS(ii)
+     if(qm_param_a%UPP(ii)  > minbig) qm_param_r(irepl)%UPP(jj)  = qm_param_a%UPP(ii)
+     if(qm_param_a%ZS(ii)   > minbig) qm_param_r(irepl)%ZS(jj)   = qm_param_a%ZS(ii)
+     if(qm_param_a%ZP(ii)   > minbig) qm_param_r(irepl)%ZP(jj)   = qm_param_a%ZP(ii)
+     if(qm_param_a%BETAS(ii)> minbig) qm_param_r(irepl)%BETAS(jj)= qm_param_a%BETAS(ii)
+     if(qm_param_a%BETAP(ii)> minbig) qm_param_r(irepl)%BETAP(jj)= qm_param_a%BETAP(ii)
+     if(qm_param_a%ALP(ii)  > minbig) qm_param_r(irepl)%ALP(jj)  = qm_param_a%ALP(ii)
+     if(qm_param_a%GSS(ii)  > minbig) qm_param_r(irepl)%GSS(jj)  = qm_param_a%GSS(ii)
+     if(qm_param_a%GSP(ii)  > minbig) qm_param_r(irepl)%GSP(jj)  = qm_param_a%GSP(ii)
+     if(qm_param_a%GPP(ii)  > minbig) qm_param_r(irepl)%GPP(jj)  = qm_param_a%GPP(ii)
+     if(qm_param_a%GP2(ii)  > minbig) qm_param_r(irepl)%GP2(jj)  = qm_param_a%GP2(ii)
+     if(qm_param_a%HSP(ii)  > minbig) qm_param_r(irepl)%HSP(jj)  = qm_param_a%HSP(ii)
+     if(qm_param_a%PO(9,ii) > minbig) qm_param_r(irepl)%PO(9,jj) = qm_param_a%PO(9,ii)
+     if(.not. (iqm_mode == 1 .or. iqm_mode == 5)) then
+        qm_param_r(irepl)%IMPAR(jj) = qm_param_a%IMPAR(ii)
+        do ij=1,qm_param_a%IMPAR(ii)
+           if(qm_param_a%GUESS1(ij,ii)> minbig) qm_param_r(irepl)%GUESS1(ij,jj) = qm_param_a%GUESS1(ij,ii)
+           if(qm_param_a%GUESS2(ij,ii)> minbig) qm_param_r(irepl)%GUESS2(ij,jj) = qm_param_a%GUESS2(ij,ii)
+           if(qm_param_a%GUESS3(ij,ii)> minbig) qm_param_r(irepl)%GUESS3(ij,jj) = qm_param_a%GUESS3(ij,ii)
+        end do
+     end if
+     if((iqm_mode==4) .or. (iqm_mode==5)) then
+        if(qm_param_a%UDD(ii)  > minbig) qm_param_r(irepl)%UDD(jj)  = qm_param_a%UDD(ii)
+        if(qm_param_a%ZD(ii)   > minbig) qm_param_r(irepl)%ZD(jj)   = qm_param_a%ZD(ii)
+        if(qm_param_a%BETAD(ii)> minbig) qm_param_r(irepl)%BETAD(jj)= qm_param_a%BETAD(ii)
+        if(qm_param_a%ZSN(ii)  > minbig) qm_param_r(irepl)%ZSN(jj)  = qm_param_a%ZSN(ii)
+        if(qm_param_a%ZPN(ii)  > minbig) qm_param_r(irepl)%ZPN(jj)  = qm_param_a%ZPN(ii)
+        if(qm_param_a%ZDN(ii)  > minbig) qm_param_r(irepl)%ZDN(jj)  = qm_param_a%ZDN(ii)
+     end if
+
+     ! now, recompute parameters and other variables
+     nni   = qm_param_r(irepl)%ni_local(jj)
+     iorbs = qm_param_r(irepl)%lorbs(jj)
+     iiim  = qm_param_r(irepl)%III(jj)
+     iosm  = qm_param_r(irepl)%IOS(jj)
+     iopm  = qm_param_r(irepl)%IOP(jj)
+     iodm  = qm_param_r(irepl)%IOD(jj)
+     ussm  = qm_param_r(irepl)%USS(jj)
+     uppm  = qm_param_r(irepl)%UPP(jj)
+     zsm   = qm_param_r(irepl)%ZS(jj)
+     zpm   = qm_param_r(irepl)%ZP(jj)
+     uddm  = qm_param_r(irepl)%UDD(jj)
+     zdm   = qm_param_r(irepl)%ZD(jj)
+     zsnm  = qm_param_r(irepl)%ZSN(jj)
+     zpnm  = qm_param_r(irepl)%ZPN(jj)
+     zdnm  = qm_param_r(irepl)%ZDN(jj)
+     iiidm = qm_param_r(irepl)%IIID(jj)
+     
+     ! apply to all methods
+     ij = qm_param_a%IMPAR(ii)
+     if(iorbs <= 4) then
+        ! sp-orbitals
+        qm_param_r(irepl)%HPP(jj)= 0.5d0*(qm_param_r(irepl)%GPP(jj)-qm_param_r(irepl)%GP2(jj))
+        gssm  = qm_param_r(irepl)%GSS(jj)
+        gppm  = qm_param_r(irepl)%GPP(jj)
+        gp2m  = qm_param_r(irepl)%GP2(jj)
+        gspm  = qm_param_r(irepl)%GSP(jj)
+        hspm  = qm_param_r(irepl)%HSP(jj)
+        hppm  = qm_param_r(irepl)%HPP(jj)  ! see above
+        !
+        call DDPOHY(nni,iorbs,iiim,qm_param_r(irepl)%DD(1:6,jj),qm_param_r(irepl)%PO(1:9,jj), &
+                    zsm,zpm,gssm,hspm,hppm,zdm,iiidm,qm_param_r(irepl)%REPD(1:52,jj))
+        qm_param_r(irepl)%PO(9,jj) = qm_param_r(irepl)%PO(1,jj)
+        qm_param_r(irepl)%EISOL(jj)= EATOM(nni,0,0,0,iorbs,iosm,iopm,iodm,ussm,uppm,gssm,gp2m,gspm,hppm,hspm,uddm, &
+                                           qm_param_r(irepl)%F0DD(jj),qm_param_r(irepl)%F0SD(jj),qm_param_r(irepl)%F0PD(jj), &
+                                           qm_param_r(irepl)%F2DD(jj),qm_param_r(irepl)%F4DD(jj),qm_param_r(irepl)%G2SD(jj), &
+                                           qm_param_r(irepl)%G1PD(jj),qm_param_r(irepl)%G3PD(jj))
+     else if(iorbs >= 9) then
+        ! spd-orbitals
+        qm_param_r(irepl)%HPP(jj)   = 0.5d0*(qm_param_r(irepl)%GPP(jj)-qm_param_r(irepl)%GP2(jj))
+        ! since these parameters are not allowed to modify using this routine.
+        !if(qm_param_r(irepl)%F0SD(jj) > small) then
+        !   qm_param_r(irepl)%IF0SD(jj) = 1
+        !else
+        !   qm_param_r(irepl)%IF0SD(jj) = 0
+        !end if
+        !if(qm_param_r(irepl)%G2SD(jj) > small) then
+        !   qm_param_r(irepl)%IG2SD(jj) = 1
+        !else
+        !   qm_param_r(irepl)%IG2SD(jj) = 0
+        !end if
+        call INIGHD(nni,iorbs,iiim,iiidm,zsnm,zpnm,zdnm, &
+                    qm_param_r(irepl)%F0DD(jj),qm_param_r(irepl)%F2DD(jj),qm_param_r(irepl)%F4DD(jj), &
+                    qm_param_r(irepl)%F0PD(jj),qm_param_r(irepl)%F2PD(jj),   &
+                    qm_param_r(irepl)%G1PD(jj),qm_param_r(irepl)%G3PD(jj),   &
+                    qm_param_r(irepl)%IF0SD(jj),qm_param_r(irepl)%IG2SD(jj), &
+                    qm_param_r(irepl)%F0SD(jj),qm_param_r(irepl)%G2SD(jj),   &
+                    qm_param_r(irepl)%GSS(jj),qm_param_r(irepl)%GPP(jj),     &
+                    qm_param_r(irepl)%GP2(jj),qm_param_r(irepl)%HPP(jj),qm_param_r(irepl)%REPD(1:52,jj))
+        gssm  = qm_param_r(irepl)%GSS(jj)
+        gppm  = qm_param_r(irepl)%GPP(jj)
+        gp2m  = qm_param_r(irepl)%GP2(jj)
+        gspm  = qm_param_r(irepl)%GSP(jj)
+        hspm  = qm_param_r(irepl)%HSP(jj)
+        hppm  = qm_param_r(irepl)%HPP(jj)  ! see above
+        !
+        call DDPOHY(nni,iorbs,iiim,qm_param_r(irepl)%DD(1:6,jj),qm_param_r(irepl)%PO(1:9,jj), &
+                    zsm,zpm,gssm,hspm,hppm,zdm,iiidm,qm_param_r(irepl)%REPD(1:52,jj))
+        !qm_param_r(irepl)%PO(9,jj)  = qm_param_r(irepl)%PO(1,jj)
+        ! for d-orbital case, PO(9,jj) should be read in using POCOR in parameter input
+        ! otherwise, the default value in qm1_params will be used.
+        qm_param_r(irepl)%EISOL(jj)= EATOM(nni,0,0,0,iorbs,iosm,iopm,iodm,ussm,uppm,gssm,gp2m,gspm,hppm,hspm,uddm, &
+                                           qm_param_r(irepl)%F0DD(jj),qm_param_r(irepl)%F0SD(jj),qm_param_r(irepl)%F0PD(jj), &
+                                           qm_param_r(irepl)%F2DD(jj),qm_param_r(irepl)%F4DD(jj),qm_param_r(irepl)%G2SD(jj), &
+                                           qm_param_r(irepl)%G1PD(jj),qm_param_r(irepl)%G3PD(jj))
+     end if
+
+     ! load local parameters used in scf energy/gradients
+     if(qm_main_r(irepl)%uhf) then
+        !qm_param_r(irepl)%DELTA(jj)     = DELTA(nni)                ! zero
+        qm_param_r(irepl)%OMEGA(jj)     = qm_param_r(irepl)%ALP(jj)
+
+        qm_param_r(irepl)%GSS_local(jj) = qm_param_r(irepl)%GSS(jj)
+        qm_param_r(irepl)%GSP_local(jj) = qm_param_r(irepl)%GSP(jj)
+        qm_param_r(irepl)%GPP_local(jj) = qm_param_r(irepl)%GPP(jj)
+        qm_param_r(irepl)%GP2_local(jj) = qm_param_r(irepl)%GP2(jj)
+        qm_param_r(irepl)%HSP_local(jj) = qm_param_r(irepl)%HSP(jj)
+        qm_param_r(irepl)%HPP_local(jj) = qm_param_r(irepl)%HPP(jj)
+
+        if(qm_param_r(irepl)%LORBS(jj) == 9) then
+           do j=1,243
+              qm_param_r(irepl)%w_save(j,jj) = qm_param_r(irepl)%REPD(intrep(j),jj)
+           end do
+        end if
+     else
+        !qm_param_r(irepl)%DELTA(jj)     = DELTA(nni)                ! zero
+        qm_param_r(irepl)%OMEGA(jj)     = qm_param_r(irepl)%ALP(jj)
+
+        qm_param_r(irepl)%GSS_local(jj) = qm_param_r(irepl)%GSS(jj)*PT5
+        qm_param_r(irepl)%GSP_local(jj) = qm_param_r(irepl)%GSP(jj)     -qm_param_r(irepl)%HSP(jj)*PT5
+        qm_param_r(irepl)%GPP_local(jj) = qm_param_r(irepl)%GPP(jj)*PT5
+        qm_param_r(irepl)%GP2_local(jj) = qm_param_r(irepl)%GP2(jj)     -qm_param_r(irepl)%HPP(jj)*PT5
+        qm_param_r(irepl)%HSP_local(jj) = qm_param_r(irepl)%HSP(jj)*PT75-qm_param_r(irepl)%GSP(jj)*PT25
+        qm_param_r(irepl)%HPP_local(jj) = qm_param_r(irepl)%HPP(jj)*PT75-qm_param_r(irepl)%GP2(jj)*PT25
+ 
+        if(qm_param_r(irepl)%LORBS(jj) >= 9) then
+           do j=1,243
+              int1 = INTRF1(j)
+              int2 = INTRF2(j)
+              rf   = qm_param_r(irepl)%REPD(INTREP(j),jj)
+              if(int1 > 0) rf = rf-PT25*qm_param_r(irepl)%REPD(int1,jj)
+              if(int2 > 0) rf = rf-PT25*qm_param_r(irepl)%REPD(int2,jj)
+              qm_param_r(irepl)%w_save(j,jj) = rf
+           end do
+        end if
+     end if
+
+     return
+     end subroutine update_atom
+  end subroutine do_parameter_update
 #endif
 end module qm1_parameters
 ! end

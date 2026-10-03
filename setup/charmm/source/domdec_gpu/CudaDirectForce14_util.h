@@ -1,4 +1,5 @@
 #ifndef NOCUDAC
+#include "CudaDirectForceParams.h"  // nthread14 (the __launch_bounds__ below)
 //
 // CUDA device functions for direct force calculation
 //
@@ -6,9 +7,9 @@
 //
 // 1-4 exclusion and interaction calculation kernel
 //
-template <typename AT, typename CT, int vdw_model, int elec_model, 
+template <typename AT, typename CT, int vdw_model, int elec_model,
 	  bool calc_energy, bool calc_virial, bool tex_vdwparam>
-__global__ void CUDA_14_KERNEL_NAME(
+__global__ void __launch_bounds__(nthread14) CUDA_14_KERNEL_NAME(
 #ifdef USE_TEXTURE_OBJECTS
 				     const cudaTextureObject_t vdwParamTexObj, const cudaTextureObject_t vdwParam14TexObj,
 #endif

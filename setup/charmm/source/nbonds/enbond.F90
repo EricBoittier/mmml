@@ -1104,16 +1104,27 @@ SUBROUTINE ENBOND(ENB,EEL,BNBND,IFRSTA, &
           ,QGRF)   ! GRF -- Wei Chen 2015
      !-------------------------------------------------------------------
      ! PJ 06/2005
+     ! NB: the IF (QPIPF) THEN guard MUST enclose the CALL EPFDRV
+     ! itself, not just the debug print -- BNBND%JNB / BNBND%INBLO
+     ! are not allocated when no nonbond list has been built (e.g.
+     ! the c24test/dihtest2.inp ``SKIP ALL EXClude dihe; ener``
+     ! path, NBONd inbfrp 0, 4-atom system), and passing the
+     ! unassociated components as INTEGER(*) dummy args dereferences
+     ! a null pointer and SIGSEGVs at -O2 before EPFDRV's own
+     ! ``IF (.NOT. QPIPF) RETURN`` ever runs.  The original
+     ! mis-indented ENDIF (here since the 2013 Brooks Developments
+     ! r272 merge) covered only the print statement.  Bug was latent
+     ! until pipeline-dev #29 surfaced it on c24test/dihtest2.
 #if KEY_PIPF==1
      IF (QPIPF) THEN
         IF(PRNLEV > 6) WRITE(OUTU,125) 'EPIPF'
+        CALL EPFDRV(IFRSTA,NATOM,BNBND%JNB,BNBND%INBLO, &
+             CG,MAXCN,IAC,ITC,LELECX,LCONS,LSHFT,LVSHFT,LFSWT, &
+             LVFSWT,DX,DY,DZ,X,Y,Z,CTONNB,CTOFNB,EPS,E14FAC,ALP, &
+             DD1,IUPT,QSECD &
+             )
      ENDIF
-     CALL EPFDRV(IFRSTA,NATOM,BNBND%JNB,BNBND%INBLO, &
-          CG,MAXCN,IAC,ITC,LELECX,LCONS,LSHFT,LVSHFT,LFSWT, &
-          LVFSWT,DX,DY,DZ,X,Y,Z,CTONNB,CTOFNB,EPS,E14FAC,ALP, &
-          DD1,IUPT,QSECD &
-          )
-#endif 
+#endif
      !-----------------------------------------------------------------------
      ! additional call for atomic multipoles (MTP module)
 #if KEY_MTPL==1

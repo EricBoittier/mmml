@@ -9,11 +9,11 @@ There are four separate dynamics integrators available in CHARMM:
 separate set of integrators).  See *note Mbond:(doc/mbond.info).
 
 Name              Keyword     Module
-Original Verlet   ORIG        dynamcv.src  
-Leapfrog Verlet   LEAP        dynamc.src   (default)
-Velocity Verlet   VVER        dynamvv.src
-4-D L-F  Verlet   VER4        dynam4.src
-New vel. Verlet   VV2         dynamvv2.src
+Original Verlet   ORIG        dynamcv.F90
+Leapfrog Verlet   LEAP        dynamc.F90   (default)
+Velocity Verlet   VVER        dynamvv.F90
+4-D L-F  Verlet   VER4        dynamc4.F90
+New vel. Verlet   VV2         dynamvv2.F90
 
 All methods are based on the Verlet scheme, and when used without
 any special features, provide identical trajectories for short
@@ -56,7 +56,7 @@ The VV2 is a velocity-Verlet integrator based on the
       integration algorithm for polarizable force fields based on
       Drude oscillators [G. Lamoureux and B. Roux, J. Chem. Phys. 119,
       ???  (2003)].  It uses a separate "SHAKE" algorithm, called
-      RATTLE/Roll.  See *note tpcontrol:(doc/tpcontrol.info)Dynamics.
+      RATTLE/Roll.  See *note tpcontrol:(doc/tpcntrl.info)Dynamics.
 
 In order to generate a dynamics trajectory, all requirements
 for evaluating the energy must be met.
@@ -1042,6 +1042,7 @@ sources that may not set this value correctly in AKMA time units.
 
 TSET    real  Overrride the value in the file with this value (picoseconds)
 RPICo         Flag; convert file value to AKMA; assumes value is in picoseconds
+WPICo         Flag; convert active timestep from AKMA to picoseconds (export)
  
 Example. Assume that the three files traj1.trj, traj2.trj and traj3.trj  were
 created using the following dyanmics commands:
@@ -1068,7 +1069,7 @@ read-spec:==  [FIRST unit] [NUNITint] [SKIP int]
                    [BEGIN INT] [STOP INT] [ RPICo | TSET real ]
 
 write-spec:== [IWRIte unit] [NWRIte int] [NFILE int] [EXPAnd] [VELOcity]
-                [NOTHer int] [DELTa real] [SKIP int]
+                [NOTHer int] [WPICo]   [DELTa real]  [SKIP int]
 
 FIRStunit (IREAd) - first unit to read from  (default: do not read)
 NUNIts    (NREAd) - number of units to read from (default:1)
@@ -1083,6 +1084,7 @@ EXPAnd - flag to free fixed atoms in copying (only if reading)
 VELOcity - flag to write velocity (default: coordinate)
 NOTHer - number of frames in previous files (if not reading) (d:0)
 DELTa  - output delta value (if not reading) (default:0.001)
+WPICo  - delta written in ps units instead of AKMA
 
 2) Reading a frame
 
@@ -1222,7 +1224,7 @@ frame to least squares fix a reference structure.
 [Syntax MERGE dynamics trajectories]
 
      MERGE [ COOR ] [FIRSTU unit-number] [NUNIT integer] [SKIP integer]
-           [ VEL  ] [OUTPutu unit-number] [NFILE integer]
+           [ VEL  ] [OUTPutu unit-number] [NFILE integer] [WPICo]
            [ DRAW ] [BEGIN integer]   [STOP integer] [TSET real | RPICo]
                                    [first-atom-selection]
           [NOCRystal]  [NOCHeck]
@@ -1259,6 +1261,7 @@ NFILE              The number of coordinate sets written to each output
                    beginning specifying that there are more coordinates
                    than actually exist in the file. EOF errors will result
                    when the trajectory is read.
+WPICo              Timestep written in ps units instead of AKMA
 BEGIN              First step number to start reading from
 STOP               Last step number to read
 RPICo              Read timestep from header as ps, convert to AKMA
@@ -1440,6 +1443,7 @@ MERGe command before processing this command.
                 ( [IREAd unit-number] [JREAd unit-number]) 
                 ([IMAGes]) [MATRix]
                 [PQUNit unit-number [PQSEed integer] [IOPT int] [MAXFn int] [NSIG int] ]
+                DIAGonal [OFFSet]
 
 
 
@@ -1510,6 +1514,13 @@ PQSEed int  - seed for random generation of initial guesses for the (P,Q).
                 etc.
 atom-selection
             - Atoms to use in the fitting procedure, or in the DRMS calculation
+DIAG         - this keyword limits the output to the diagnonal elements of the
+               traj-traj rmsd matrix--i.e., it produces the rmsd results for a
+              frame-by-frame comparison of the trajectories.
+OFFSet  int  - optional keyword to specify a (negative or positive) integral 
+              offset between the two trajectories. An offset of n compares
+              the i*SKIPth frames of the first trajectory to the (i+n)*SKIPth 
+              frame of the second. OFFset only works with the DIAG keyword.
 
 CHARMM variable TOTRMS is set to the sum of all pairwise RMSDs (for RMS or DRMS).
 
@@ -1666,7 +1677,7 @@ File: Dynamc, Node: TSALlis, Previous: CVELocity, Up: Top, Next: CENT
 
 Molecular dynamics that yield averages for a Tsallis (generalized) ensemble
 rather than a canonical one can now be performed.  At present, this method 
-is implemented only for the leapfrog Verlet integrator (dynamc.src); the
+is implemented only for the leapfrog Verlet integrator (dynamc.F90); the
 TSALLIS keyword must be included in pref.dat when compiling.  The method is
 invoked by adding to the DYNAmics command the keywords:
 
@@ -1700,8 +1711,8 @@ Andricioaei, I. and Straub, J. E. (1997) On Monte Carlo and molecular dynamics
 
 Molecular dynamics using Tsallis scaling of the CMAP and Dihedral potential 
 terms can now be performed. This method is implemented for all integrators 
-(dynamc.src). In additional, the Tsallis scaling of the total potential 
-energy is implemented for VV2 (dynamvv2.src) and VV (dynamvv.src) integrators. 
+(dynamc.F90). In additional, the Tsallis scaling of the total potential
+energy is implemented for VV2 (dynamvv2.F90) and VV (dynamvv.F90) integrators. 
 The method for Tsallis scaling of the CMAP and Dihedral potential 
 terms is invoked by adding to the DYNAmics command the keywords:
 
@@ -1759,8 +1770,8 @@ when the solute is a small organic molecule.
 
 Syntaxis: The Keyword CENT, which is specified in the DYNAmics command 
 line, turns on the recentering option for the system at the start of 
-a dynamics calculation (dcntrl.src) and at each update of the 
-nonbonded list (heuristic.src)
+a dynamics calculation (dcntrl.F90) and at each update of the
+nonbonded list (heurist.F90)
 
           NCRES int - The first N (int) residues in the psf file,
                       based on which the system will be centered.

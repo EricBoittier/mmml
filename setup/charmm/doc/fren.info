@@ -1,3 +1,5 @@
+CHARMM Element doc/fren.info 1.1
+
 File: FREN -=- Node: Top
 Up: (commands.info) -=- Next: Syntax
 
@@ -5,7 +7,7 @@ A general purpose calculator for various free energy differences using Bennett's
 
 The free energy (FREN) module allows the analysis of potential energy data from one or two different states to calculate their free energy difference. Depending on the supplied data, it either uses the Zwanzig equation or Bennett's acceptance ratio method (BAR) to obtain the free energy difference. It is also possible to employ reweighting for each of the trajectories, thus allowing multiscale free energy calculations. The module also includes some simple commands to adjust bonded parameters (QMFIx) and generate dummy atoms (MKDUmmy). 
 
-Implemented in CHARMM by Gerhard König, Tim Miller and Bernard R. Brooks
+Implemented in CHARMM by Gerhard Konig, Tim Miller and Bernard R. Brooks
 
 For more information, please read (and possibly cite) the following works:
 
@@ -110,14 +112,14 @@ MKDUmmy - the selected atoms are converted to dummy atoms without charges or van
 
 File: FREN -=- Node: Examples
 Up: Top -=- Previous: Syntax -=- Next: Notes
-                  
-                    
+                  
+                    
 The following example shows how to use the BAR command to conduct a BAR calculation with reweighting (an NBB calculation). In this case, we already have files that contain potential energy differences and biasing potentials in their first (and only) column. All the data in the files is used.  
 
-open unit 50 read form name du0.dat 
-open unit 51 read form name du1.dat 
-open unit 52 read form name vb0.dat 
-open unit 53 read form name vb1.dat 
+open unit 50 read form name du0.dat 
+open unit 51 read form name du1.dat 
+open unit 52 read form name vb0.dat 
+open unit 53 read form name vb1.dat 
 
 FREN
    LOAD DU0 50
@@ -125,7 +127,7 @@ FREN
    LOAD VB0 52
    LOAD VB1 53
    BAR TEMP 298.0
-END                                    
+END                                    
 
 
 Alternatively, it is also possible to store all the data in one file.
@@ -154,8 +156,8 @@ FREN
     ! Use Zwanzig equation with reweighting in the backward direction
     NBZWANZIG TEMP 300 BACK
 
-END                                
-                                      
+END                                
+                                      
 
 File: FREN -=- Node: Notes
 Up: Top -=- Previous: Examples -=- Next: Top

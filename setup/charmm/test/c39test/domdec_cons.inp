@@ -111,26 +111,9 @@ calc eold = ?ener
 calc viriold = ?viri
 calc pressiold = ?prsi
 
-calc diff abs(-65171.254575 - @eold)
-echo @diff
-if diff gt 0.0001 then
-   echo "Test failed"
-   stop
-endif
-
-calc diff = abs(-11739.332528 - @viriold)
-echo @diff
-if diff gt 0.0001 then
-   echo "Test failed"
-   stop
-endif
-
-calc diff = abs(-161.405896 - @pressiold)
-echo @diff
-if diff gt 0.0001 then
-   echo "Test failed"
-   stop
-endif
+@testcheck @eold -65171.254575 -0.0001 domdec_cons_eold
+@testcheck @viriold -11739.332528 -0.0001 domdec_cons_viriold
+@testcheck @pressiold -161.405896 -0.0001 domdec_cons_pressiold
 
 ! ********* Run domdec **********
 
@@ -157,49 +140,31 @@ calc edd = ?ener
 calc viridd = ?viri
 calc pressidd = ?prsi
 
-calc diff = abs(@edd - @eold)
-echo @diff
-if diff gt 0.0002 then
-   echo "Test failed"
-   stop
-endif
-
-calc diff = abs(@viridd - @viriold)
-echo @diff
-if diff gt 0.0003 then
-   echo "Test failed"
-   stop
-endif
-
-calc diff = abs(@pressidd - @pressiold)
-echo @diff
-if diff gt 0.00006 then
-   echo "Test failed"
-   stop
-endif
+@testcheck @edd @eold -0.0002 domdec_cons_edd
+@testcheck @viridd @viriold -0.0003 domdec_cons_viridd
+@testcheck @pressidd @pressiold -0.00006 domdec_cons_pressidd
 
 !write coor card name @9/dd_xyz.crd
 !coor force comp
 !write coor comp card name @9/dd_force.crd
 
+! WARNING: under a DOMDEC direct/recip split, the coordinates and forces
+! assembled by "coor force"/"coor rms" (via copy_to_all) are only valid on
+! the DIRECT nodes -- which always include node 0.  Reciprocal nodes return
+! early from copy_to_all (by design: they hold only reciprocal-space data)
+! and so their ?rms is junk.  This is fine here because @testcheck reports
+! from node 0 (the I/O node, always a direct node, with the full picture) and
+! never issues a per-node "stop".  Do NOT turn these back into "if ?rms ...
+! stop": a per-node ?rms in control flow diverges between direct and recip
+! nodes and desyncs the parser's collective broadcasts (-> MPI_ERR_TRUNCATE).
 read coor comp card name @9/old_xyz.crd
 coor rms
-echo ?rms
-if ?rms gt 0.0000001 then
-   echo "Test failed"
-   stop
-endif
+@testcheck ?rms 0.0 -0.0000001 domdec_cons_xyz_rms
 
 read coor comp card name @9/old_force.crd
 coor force
 coor rms
-echo ?rms
-if ?rms gt 0.000008 then
-   echo "Test failed"
-   stop
-endif
-
-echo "Test OK"
+@testcheck ?rms 0.0 -0.000008 domdec_cons_force_rms
 
 stop
 
@@ -220,31 +185,12 @@ goto run_dynamics
 label return_dyn3
 
 calc edd = ?ener
-calc diff = abs(@eold - @edd)
-echo @diff
-if diff gt 0.000180 then
-   echo "Test failed"
-   stop
-endif
-
 calc viridd = ?viri
 calc pressidd = ?prsi
 
-calc diff = abs(@viriold - @viridd)
-echo @diff
-if diff gt 0.0006 then
-   echo "Test failed"
-   stop
-endif
-
-calc diff = abs(@pressiold - @pressidd)
-echo @diff
-if diff gt 0.00016 then
-   echo "Test failed"
-   stop
-endif
-
-echo "Test OK"
+@testcheck @edd @eold -0.000180 domdec_cons_nosplit_edd
+@testcheck @viridd @viriold -0.0006 domdec_cons_nosplit_viridd
+@testcheck @pressidd @pressiold -0.00016 domdec_cons_nosplit_pressidd
 
 stop
 

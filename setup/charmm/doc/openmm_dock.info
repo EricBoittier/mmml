@@ -25,7 +25,7 @@ is fixed. Molecular dynamics (MD) based simulated anneling is used to search
 for lowes energy conformations. To accelerate the calculation, three tricks are used:
 
 1. The nonbonded interaction between the flexible part and the fixed part are
-calculated using grid potentials. (see details in dock.src)
+calculated using grid potentials. (see details in grid_dock.F90)
 2. A customized OpenMM system consisting of mutiple copies of the flexible part
 the protein-ligand complex is employed. Copies of the flexible part are independent,
 because there is no interaction between atoms from different copies. Therefore,

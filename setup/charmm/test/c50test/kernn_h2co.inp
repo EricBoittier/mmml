@@ -1,0 +1,104 @@
+*test
+*
+
+BOMLev -2
+PRNLEV 5
+
+! This test stages the KERNN neural-net weights with an unguarded
+! `system "cp -r data/wandb ."` and then reads wandb/b_out.  Under more than
+! one MPI process every rank runs the copy into the same shared directory at
+! once, so the reader hits a half-written wandb/b_out (list-read EOF crash).
+! KERNN here is exercised serially; skip cleanly under MPI.
+if ?numnode .gt. 1 then
+ echo "kernn_h2co.inp> Test NOT performed (run serially; not set up for MPI)."
+ stop
+endif
+
+stream datadir.def
+
+
+read rtf card
+*Topology file
+*
+36  1  ! get rid of warning...
+
+MASS   1 C=O   12.011
+MASS   2 O=C   15.999
+MASS   3 HCMM    1.008
+
+AUTOGENERATE ANGLES DIHE
+DEFA FIRS NONE LAST NONE
+
+RESI FALD   0.000
+GROUP
+ATOM C    C=O   0.0750
+ATOM O    O=C  -0.1880
+ATOM H    HCMM  0.0565
+ATOM H1   HCMM  0.0565
+BOND C    O
+BOND C    H
+BOND C    H1
+IMPH C    H    O    H1
+IC H    O    *C    H1    0.00     0.00  180.00    0.00  0.00
+
+END
+
+
+read para card
+* params
+*
+BONDS
+C=O  O=C   0.0000     1.2220
+C=O  HCMM  0.0000     1.1010
+
+ANGLES
+O=C  C=O  HCMM   0.0000    123.4390
+HCMM C=O  HCMM   0.0000    116.6990
+
+DIHEDRALS
+
+IMPROPER
+C=O  HCMM O=C  HCMM     0.0000  0     0.00
+
+NONBONDED nbxmod  5 atom cdiel shift vatom vdistance vswitch -
+cutnb 14.0 ctofnb 12.0 ctonnb 10.0 eps 1.0 e14fac 1.0 wmin 1.5
+C=O     0.000000  -0.110000     2.000000
+O=C     0.000000  -0.120000     1.700000   0.000000  -0.120000     1.400000
+HCMM    0.000000  -0.022000     1.320000
+
+
+END
+
+
+read sequ card
+* psf FALD
+*
+ 1
+FALD
+GENErate FALD  WARNing SETUp
+
+READ COORDINATES CARD FREE
+* The coordinates for the H2CO molecule
+*
+4
+    1    1 FALD  C     -0.82678   0.23256  -0.00275 h2co  1      0.00000
+    2    1 FALD  O     -1.23133   1.14726   0.68338 h2co  1      0.00000
+    3    1 FALD  H     -0.38905   0.40557  -0.99717 h2co  1      0.00000
+    4    1 FALD  H1    -0.87885  -0.81239   0.33755 h2co  1      0.00000
+
+
+energy
+
+! Get the weights and biases of the NN
+system "cp -r data/wandb ."
+
+
+KRNN acti 
+
+MINIMIZE SD NSTEP 200 ! Perform an energy minimization
+
+vibran 
+redu fix finit
+END
+
+

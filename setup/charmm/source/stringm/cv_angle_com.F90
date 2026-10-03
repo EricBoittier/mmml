@@ -364,7 +364,7 @@
        use stream
        use string
        use multicom_aux;
-       use mpi
+       use mpi_f08
        use chutil, only : atomid
 !
        character(len=132)::info(21)=(/'','','','','','','','','','','','','','','','','','','','',''/);! output buffer

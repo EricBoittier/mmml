@@ -68,7 +68,7 @@ File: SCCDFTB Node: Description, Up: Top, Next: Usage, Previous: Top
 [SYNTAX SCCDFTB]
 
 SCCDFTB   [REMOve] [CHRG] (atom selection) [GLNK atom-selection]
-          [TEMPerature] [SCFtolerance] 
+          [TEMPerature] [SCFtolerance]
           [CUTF] [EWAD EOPT KAPPA kappa KMAX kmax KSQMAX ksqmax]
           [PMEW FFTX fftx FFTY ffty FFTZ fftz ORDEr order]
           [UPDT 0]
@@ -78,17 +78,20 @@ SCCDFTB   [REMOve] [CHRG] (atom selection) [GLNK atom-selection]
           [DHUB DHGA]
           [D3RD]
           [SCFC]
-          [QDIP UDIP unit] 
-          [SHES] [RHES]        
+          [QDIP UDIP unit]
+          [SHES] [RHES]
           [CDKO]
-          [UNPE unpe] 
+          [UNPE unpe]
           [LDEP]
           [DMEThod int]
           [MIXE int] [GENS int] [SYMM real]
           [IGUESS]
           [IDAMP]
           [PLUS]
-          [NBO] 
+          [NBO]
+          [DATF filename]
+          [DSPF filename]
+          [KOPF filename]
           [PERT TEMP SCFT CHRG (atom selection)]
  
 REMOve:  Classical energies within QM atoms are removed.
@@ -213,11 +216,52 @@ UNPE: Followed by a floating-point number this flag specifies the
       JPC-A 2007,111,5622. and refs therein).
 
 LDEP: L-dependence of the Hubbard parameters. This option should only be
-      used with DFTB parameters that are designed for l-dependence! If 
-      D3RD is switched on also the Hubbard derivative parameters for s-, 
+      used with DFTB parameters that are designed for l-dependence! If
+      D3RD is switched on also the Hubbard derivative parameters for s-,
       p-, and d-orbitals are necessary and need to be specified in the
       sccdftb.dat (see below). An example for this option is provided
       in test/c38test/sccdftb_ldep.inp.
+
+DATF: Specifies an alternative path to the sccdftb parameter file.
+      By default, SCCDFTB reads parameters from 'sccdftb.dat' in the
+      current working directory. The DATF keyword allows specifying a
+      different file path, which is useful when parameter files are
+      stored in a central location outside the working directory.
+
+      Double quotes around the filename preserve case through CHARMM's
+      command-line parser (which uppercases unquoted text). For
+      case-sensitive file systems, use the GENV and STRC commands
+      (see miscom.info) to construct the path from an environment
+      variable:
+
+        genv sccdftbdir SCCDFTB_DATA
+        strc sccdat @sccdftbdir "/sccdftb_CH.dat"
+
+        sccdftb remove chrg 0 sele qm end DATF @sccdat
+
+      Here SCCDFTB_DATA is an OS environment variable pointing to the
+      directory containing the parameter files.
+
+      An unquoted path is upper-cased by the parser, so if the name as
+      given does not exist it is retried in lower case, the way CHARMM's
+      own file opens do. A quoted path is taken exactly as written.
+
+      If the file cannot be read the run stops with a message naming it.
+      Older versions opened these files with STATUS='UNKNOWN', which
+      created an empty file instead and then failed at end-of-file
+      somewhere further on, saying nothing about what was missing.
+
+DSPF: Specifies the file holding the Slater-Kirkwood dispersion parameters
+      used by DISP. Default: 'DISPERSION.INP' in the current working
+      directory, falling back to 'DISP.INP'. The file holds one line per
+      element -- a label, four polarizabilities, four van der Waals radii
+      and a valence-electron count -- read in the same element order the
+      parameter file declares, so the order matters as much as it does
+      there. See test/data/dispersion.inp for an example.
+
+KOPF: Specifies the file holding the charge-dependent Klopman-Ohno
+      parameters used by CDKO. Default: 'ko_para.inp' in the current
+      working directory. See test/data/sccdftb_cdko.kopara for an example.
 
 DMET: Needs an integer(0/1/2/3) as input to specify the diagonalizer for solving
       the secular equations in DFTB.
@@ -356,7 +400,8 @@ where oo.spl contains the two-center integrals for the O-O interaction,
 on.spl the  two-center integrals for the O-N interaction etc.
 DFTB needs these parameters for the O-N and N-O interaction,
 similarily for all other pairwise interactions.
-The file sccdftb.dat contains the paths to these parameters, as:
+The file sccdftb.dat (or the file specified by the DATF keyword)
+contains the paths to these parameters, as:
 
 'potential:atom-1-atom-1'
 'potential:atom-1-atom-2'

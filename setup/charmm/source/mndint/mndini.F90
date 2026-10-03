@@ -1,4 +1,86 @@
 #if KEY_MNDO97==1 /*mndo97*/
+SUBROUTINE MNDINI_main(COMLYN,COMLEN)
+  use chm_kinds
+  use string
+  use mlay_mndo97, only: MNDINI_MLAYer
+
+  implicit none
+  CHARACTER(len=*):: COMLYN
+  INTEGER ::  COMLEN
+  !
+  ! local variables
+  !logical :: q_update
+
+  !q_update = (indxa(COMLYN, COMLEN, 'UPDA') > 0)  ! do update?
+  if(indxa(COMLYN, COMLEN, 'UPDA') > 0) then
+     ! do update of qm model paramerters
+     !
+     ! usage:
+     ! MNDO UPDAte PARAmeter IUNIT [int] ALLReplica
+     !                                   REPLica  [int]
+     call MNDINI_update(COMLYN,COMLEN)
+  else if(indxa(COMLYN, COMLEN, 'MLAY') >0) then
+     !
+     ! If mlayered qm/mm method is used, the total qm/mm energy
+     ! E_qm/mm (total) = E_low-levl qm/mm (PBC) + dE_corr (high-level)
+     !
+     ! where dE_corr = [ E_high-level qm/mm (cutoff) - E_low-level qm/mm (cutoff) ]
+     !
+     ! The high-level correction term, i.e., dE_corr, can also be
+     ! applied via the multiple time step (MTS) approach.
+     !
+     !
+     ! do setup for many layers (or multiple) qm regions.
+     !
+     ! usage:
+     ! MNDO97 MLAY IREPL [int] [mlay-specific] [atom-sele] LINK [atom-sele] 
+     !             QCHEM ... [QChem options]  (see qchem.info)
+     !             QPRInt  UPRInt [int]             ! prnting option
+     !             PYTHon|DPMM MLPMode [int] ONLY PGPUid [int]
+     !
+     ! IREPL [int]: the irepl no. [int] for high-level qm region.
+     !              for multi-layered qm/mm, the high region must not be
+     !              the primary (irepl==1) region, preferably irepl==2.
+     !
+     ! [atom-sele]: the first atom selection is for the high-level qm region.
+     ! LINK [atom-sele]: selection for the H-link atom for the qm/mm boundary 
+     !                   (used for high-level region).
+     !                   this should be a subset of the first selection.
+     !
+     ! mlay-specific:
+     !!! KHARge [real] CUTOff  RCUT [real] NSTEp [int]  LPLE [int] 
+     ! KHARge [real] NSTEp [int] LAMBda [real]
+     ! Q-Chem or other ab initio package options
+     !
+     !!! CUTOff       : cutoff option to use for high-level qm/mm non-bond interactions
+     !!! RCUT [real]  : cutoff distance for CUTOptions
+     ! NSTEp [int]  : NSTEP for high-level correction (for MTS calculation)
+     ! LAMBda [real]: Lambda scaling factor for the mlayered qm/mm energy/gradients. 
+     !!! LPLE  [int]  : Options to handle the force on H-link atom, when LINK is used.
+     !
+     ! MLP QM/MM specific:
+     ! note           : ML potentials will be added to the underlying low-level methods.
+     !                  This can be combined with high-level ai-qm/mm methods using 
+     !                  MTS (mts=0, meaning no high-level calculations done ever!)
+     ! PYTHon|DPMM    : use QMHub Python File I/O or DPMM LibTorch based interface
+     ! MLPMode [int[  : 0: MLP; 1: delta-MLP methods
+     ! ONLY           : use MLP/delta-MLP QM/MM not MTS QMLAY_high.
+     !                  So, the compilation & setup must be done the same way to setup
+     !                      QMLAY_high, just not performing high-level correction calc.
+     ! PGPUid [int]   : use GPU for MLP calc. & GPU id: 0 ~ ; -1 not use GPU (i.e., CPU only)
+     !
+     call MNDINI_MLAYer(COMLYN,COMLEN)
+  else
+     ! do setup
+     ! It is a general se-QM/MM setup where you have an option to allocate more than 1 
+     ! qm region. The first qm region (defined) is the default qm region as in normal
+     ! qm/mm simulation, which is called as a primary qm region.
+     call MNDINI(COMLYN,COMLEN)
+  end if
+  !
+  return
+END SUBROUTINE MNDINI_main
+
 SUBROUTINE MNDINI(COMLYN,COMLEN)
   !-----------------------------------------------------------------------
   !     This is the interface for running modified version of MNDO97 with 
@@ -19,7 +101,7 @@ SUBROUTINE MNDINI(COMLYN,COMLEN)
   use gamess_fcm
   use inbnd
   use mndo97
-  use mndgho
+  use mndgho, only : QLINK
   use quantm, only : natom_check,xim,yim,zim
   use nbndqm_mod
   use ewald_1m, only : lewald,kappa,erfmod
@@ -32,16 +114,20 @@ SUBROUTINE MNDINI(COMLYN,COMLEN)
   use stream
   !
   use mndnbnd_module, only: ch2mnd
-  use qmmm_interface, only : qmmm_init_set,qmmm_load_parameters_setup_qm_info,qmmm_Ewald_init, &
-                             qm_cpmd_init,qm_lookup_init
-  use qm1_info, only  : qm_main_r,mm_main_r,qm_control_r
+  use qm1_info, only      : num_qm_system,qm_main_c,mndo97_memory_init ! ,qm_control_c
+  use qmmm_interface, only: qmmm_init_set,qmmm_load_parameters_setup_qm_info,qmmm_Ewald_init, &
+                            array_pointers,find_unique_qm
+  use qmmmewald_module, only : qmmm_ewald_memory_init
   ! D3BJ & H4 corrections
   use dftd3_mndo, only: init_dftd3,r_autoang
-  use H4_mndo, only : q_h4corr,h4_correction_setup
+  use H4_mndo, only : h4_memory_init,h4_correction_setup
   !
   use mndgho_module, only : GHOHYB
-  use qm1_energy_module,only: dr_width,rval_min,rval_max,dr_width_beta,rval_min_beta,rval_max_beta, &
-                              find_unique_qm
+  !use qm1_energy_module,only: find_unique_qm
+#if KEY_MTS==1    /*mts*/
+  use mmbonded_mod,only : Setup_mmbond,Setup_mmbond_coupling
+  use tbmts,only : QTBMTS
+#endif /*mts*/
 
   !
   use leps
@@ -68,16 +154,23 @@ SUBROUTINE MNDINI(COMLYN,COMLEN)
   INTEGER :: i,natgho,natclink,EWMODE,NQMEWD,kmaxq,ksqmaxq,kmaxxq,kmaxyq,kmaxzq
   integer :: nqmtheory,nqmcharge,nspin
   LOGICAL :: QDONE, QIMAGE, ISNBDS, qcheck,LEWMODE,NOPMEwald,QMMM_NoDiis,clink
-  logical :: QSRP_PhoT, QNoMemIncore, q_cpmd, q_fast_pme, q_lookup_setup, q_lookup_read, q_lookup_first, &
-             q_dxl_bomd,q_analysis,q_bond_order,q_m_charge,q_fockmd
-  integer :: i_lookup_unit,K_order,N_scf_step,iiunit,imax_fdiss,iopt_fdiss
+  logical :: QSRP_PhoT,QNoMemIncore,q_dxl_bomd,q_analysis,q_bond_order,q_m_charge,q_fockmd
+  integer :: K_order,N_scf_step,iiunit,imax_fdiss,iopt_fdiss
   real(chm_real) :: cggho,scfconv,qmcharge
 
   integer,allocatable,dimension(:) :: islct,jslct,lslct
+  integer,allocatable,dimension(:) :: islct_2,jslct_2,lslct_2
   ! D3BJ & H4 corrections
   integer :: n, iunit_disp
-  real(chm_real) :: xdisp(3,nndim)
+  !!real(chm_real) :: xdisp(3,nndim)
   logical :: q_d3bj_read
+
+  ! for MTS
+  logical :: qmm_bond,qmm_angle,qmm_dihe,qmm_imph,qmmbond_use,qmm_morse,qmm_print, &
+             qmm_bond_corr
+  logical :: q_mm_write,q_mm_read,q_coupling
+  integer :: n_mm_replica,iunit_bond_write
+  real(chm_real) :: scale_force
 
   !
 #if KEY_FLUCQ==1
@@ -103,8 +196,34 @@ SUBROUTINE MNDINI(COMLYN,COMLEN)
   end if
 #endif
   !
+  ! initializations
   qmused = .true.      ! safe here since next are the allocations, ...
   call allocate_gamess ! try to reduce from MAXA to NATOM
+
+  ! first read the no. of qm regions to define
+  ! something like this
+  ! ... NUQMregion [int]
+  num_qm_system = gtrmi(COMLYN,COMLEN,'NUQM',1)  ! number of qm regions
+  if(num_qm_system>1) then
+     if(prnlev >= 2) write(outu,24) 'No. of QM regions to be defined (multi-layered and others):',num_qm_system
+
+     ! first re-allocate and init the qm related memories and others
+     ! this will overwrite the inital call of mndo97_memory_init in mndo97_iniall
+     ! at the beginning of charmm run.
+     ! this routine also sets the current point to the first replica. so the call of array_pointers
+     ! is not necessary.
+     call mndo97_memory_init(num_qm_system,.true.)
+
+     ! for qm/mm-ewald
+     call qmmm_ewald_memory_init(num_qm_system,.true.)
+
+     ! for h4 related type arrays
+     call h4_memory_init(num_qm_system,.true.)
+  
+     !! for the first sytem, set array pointers to point the first qm region.
+     !call array_pointers(.true.,1)
+  end if
+
   !new
   call chmalloc('mndini.src','MNDINI','islct',natom,intg=islct)    ! for qm     atoms
   call chmalloc('mndini.src','MNDINI','jslct',natom,intg=jslct)    ! for C-link atoms
@@ -149,16 +268,16 @@ SUBROUTINE MNDINI(COMLYN,COMLEN)
   scfconv=TENM8 ! default scf convergence
   nspin=0       ! default spin state: singlet. (see explanation of imult, in qm1_info.f
   ! QM method
-  if(index(COMLYN,'MNDO') .ne. 0) nqmtheory=1
-  if(index(COMLYN,'AM1')  .ne. 0) nqmtheory=2
-  if(index(COMLYN,'PM3')  .ne. 0) nqmtheory=3
-  if(index(COMLYN,'AMDD') .ne. 0) nqmtheory=4  ! experimental method.
-  if(index(COMLYN,'MNDD') .ne. 0) nqmtheory=5
+  if(indxa(COMLYN,COMLEN,'MNDO') .ne. 0) nqmtheory=1
+  if(indxa(COMLYN,COMLEN,'AM1')  .ne. 0) nqmtheory=2
+  if(indxa(COMLYN,COMLEN,'PM3')  .ne. 0) nqmtheory=3
+  if(indxa(COMLYN,COMLEN,'AMDD') .ne. 0) nqmtheory=4  ! experimental method.
+  if(indxa(COMLYN,COMLEN,'MNDD') .ne. 0) nqmtheory=5
 
   ! for AM1/d-PhoT parameters.
   QSRP_PhoT=.false.              ! 
   if(nqmtheory.eq.2 .or. nqmtheory.eq.4) then
-     QSRP_PhoT=index(COMLYN,'PHOT').ne.0  
+     QSRP_PhoT=indxa(COMLYN,COMLEN,'PHOT').ne.0
      if(QSRP_PhoT .and. prnlev .ge. 2) then
         write(outu,22) 'AM1/d-PhoT: Specific reactions parameters will be used for H,O, and P atoms.'
      end if
@@ -172,9 +291,9 @@ SUBROUTINE MNDINI(COMLYN,COMLEN)
   scfconv  =gtrmf(COMLYN,COMLEN,'SCFC',TENM8)
   !
   ! QM spin
-  if((index(COMLYN,'TRIPLET').ne.0).or.(index(COMLYN,'TRIP').ne.0)) nspin=3
+  if(indxa(COMLYN,COMLEN,'TRIP').ne.0) nspin=3
   ! Doublet spin state not work with Restricted QM methods
-  if((index(COMLYN,'DOUBLET').ne.0).or.(index(COMLYN,'DOUB').ne.0)) nspin=2
+  if(indxa(COMLYN,COMLEN,'DOUB').ne.0) nspin=2
   !
   if(nspin.gt.0) then
      call wrndie(-5,'<MNDINI>','Other than singlet is yet supported.')
@@ -229,7 +348,7 @@ SUBROUTINE MNDINI(COMLYN,COMLEN)
 
      ! Grimmes DFT-D3 three body dispersion
      lmndod3=(INDXA(COMLYN,COMLEN,'THREEBOD') > 0)
-     if(.not. lmndod3) lmndod2 =.true.  ! default
+     if(.not. lmndod3) lmndod2 =.true.  ! default, two-body dispersion
 
      ! User supplied parameters?
      q_d3bj_read=(INDXA(COMLYN,COMLEN,'D3PARAM') > 0)
@@ -242,6 +361,13 @@ SUBROUTINE MNDINI(COMLYN,COMLEN)
         end if
         if(q_d3bj_read) write(OUTU,22) 'D3BJ: User supplied parameters are used.'
      end if
+  end if
+  !
+
+  ! KN 10/31/2018: Add H4 correction term
+  q_h4corr = (INDXA(COMLYN,COMLEN,'H4CO') > 0)  ! H4COrrection
+  if(q_h4corr .and. prnlev >= 2) then
+     write(outu,'(/,"H4 CORR: H4 correction is used for QM atoms.")')
   end if
   !
 
@@ -261,7 +387,7 @@ SUBROUTINE MNDINI(COMLYN,COMLEN)
   !                 interaction.
   ! NQMEWD     : 0 Use Mulliken charges on QM atoms to represent charges on
   !                image atoms.
-  if(LEWALD.and.(.noT.qgmrem)) call wrndie(-1,'<MNDINI>','QM/MM-Ewald is not compatable without REMO.')
+  if(LEWALD.and.(.not.qgmrem)) call wrndie(-1,'<MNDINI>','QM/MM-Ewald is not compatable without REMO.')
   !
   ! Initialization
   LQMEWD=.false.
@@ -326,15 +452,13 @@ SUBROUTINE MNDINI(COMLYN,COMLEN)
   end if
   ! 
   ! Cutoff based on group-based cutoff.
-  ! 1. In the non-bond list, differently from that of the default (default) group-based list, 
-  !    in which any MM group that is within the cutoff distance from any QM group
-  !    is included, the list is splitted such that each QM group has different MM list, which
-  !    is within the cutoff update distance. (see routine GUQME3_by_group in qmnbnd.src.)
+  ! 1. In the non-bond list (i.e., the default (default) group-based list), any MM group
+  !    that is within the cutoff distance from any QM group is included.
   ! 2. When evaluating qm-mm interactions, for each QM group, any MM group in the list
-  !    is exlcuded in the interaction evaluation if that MM group is away more than 
+  !    is evaluated for their interaction with each QM group if that MM group is within  
   !    the cutoff distance.
-  ! 3. If the following switch is on, the interaction between the dist_on and dist_off 
-  !    is switched off at the dist_off distance. (This is the default with q_cut_by_group=.true.
+  ! 3. If the switch option is on, the interaction between the dist_on and dist_off 
+  !    is switched off at the dist_off distance. 
   ! 4. When LQMEWD is true, the interaction energy between the i (QM) and j (MM) atom pair
   !    is 
   ! 
@@ -343,14 +467,6 @@ SUBROUTINE MNDINI(COMLYN,COMLEN)
   !    where E_qm-mm-model is the regular QM-MM interaction model, and 
   !          E_qm-mm-long-distance-model is the QM-Mulliken-charge and MM charge interaction,
   !          which is used in the QM/MM-Ewald and QM/MM-PME long interaction model.
-  !
-  q_cut_by_group=(indxa(COMLYN,COMLEN,'BYGR').gt.0)
-  if(.not.qimage .and. q_cut_by_group) then
-     call wrndie(0,'<MNDINI>','QM-MM BYGRoup option is only available wiht IMAGE setup. Ignore BYGRoup.')
-     q_cut_by_group = .false.
-  end if
-  if(q_cut_by_group .and. prnlev >= 2) write(outu,22) &
-    'Group-based cutoff: QM/MM electrostatic interaction is evaluated based on group-pair cutoff.'
 
   ! cutoff switching
   qmswtch_qmmm=(indxa(COMLYN,COMLEN,'SWIT').gt.0)
@@ -361,17 +477,6 @@ SUBROUTINE MNDINI(COMLYN,COMLEN)
         write(outu,22) 'SWITch: QM/MM electrostatic Switching function is used as E =S*E_qm/mm.'
      end if
   end if
-
-  ! CPMD for the propagation of density (see below for setup.)
-  q_cpmd=(indxa(COMLYN,COMLEN,'CPMD').gt.0)
-  q_fast_pme=.false.   ! default is not using.
-  if(q_cpmd .and. LQMEWD .and. .not. NOPMEwald) then
-     q_fast_pme=(indxa(COMLYN,COMLEN,'FPME').gt.0)
-     if(q_fast_pme .and. prnlev.ge.2) then      ! write information.
-        write(outu,22) 'When MD, QM-QM interaction is evaluated using PME routine.'
-     end if
-  end if
-  !
 
   ! DXL-BOMD (AMN Niklasson, JCP (2009) 130:214109 & Guishan Zheng, Harvard Univ. 05/19/2010)
   q_dxl_bomd=(indxa(COMLYN,COMLEN,'DXLB') > 0)
@@ -401,33 +506,6 @@ SUBROUTINE MNDINI(COMLYN,COMLEN)
   end if
 51 format('MNDINT> ',A,I1,A,I3,A)
 
-  ! for Loop-up table type approach.
-  mm_main_r%q_lookup=(indxa(COMLYN,COMLEN,'LOOK').gt.0)
-  mm_main_r%q_lookup_beta =(indxa(COMLYN,COMLEN,'BETA').gt.0)
-  mm_main_r%i_lookup_unit = 100
-  if(mm_main_r%q_lookup) then
-     mm_main_r%q_lookup_setup=(indxa(COMLYN,COMLEN,'SETU').gt.0)
-     mm_main_r%q_lookup_read =(indxa(COMLYN,COMLEN,'RESD').gt.0)
-     mm_main_r%i_lookup_unit = GTRMI(COMLYN,COMLEN,'IUNT',100)
-     if(prnlev.ge.2) then
-        if(mm_main_r%q_lookup_beta) write(outu,22) 'QM-QM beta interactions are used Look-up table.'
-        write(outu,22) 'QM-MM interactions are evaluated with Look-up table.'
-        if(mm_main_r%q_lookup_setup) write(outu,22) 'Look-up tables are set and saved to file.'
-        if(mm_main_r%q_lookup_read) write(outu,22) 'Look-up tables are read from the file.'
-     end if
-     if(mm_main_r%q_lookup_setup) then
-        dr_width=gtrmf(COMLYN,COMLEN,'WIDT',zero)
-        rval_min=gtrmf(COMLYN,COMLEN,'RMIN',zero)
-        rval_max=gtrmf(COMLYN,COMLEN,'RMAX',THOSND)
-
-        if(mm_main_r%q_lookup_beta) then   
-           dr_width_beta=gtrmf(COMLYN,COMLEN,'BWID',zero)
-           rval_min_beta=gtrmf(COMLYN,COMLEN,'BMIN',zero)
-           rval_max_beta=gtrmf(COMLYN,COMLEN,'BMAX',THOSND)
-        end if
-     end if
-  end if
-
   ! analysis
   q_analysis=(INDXA(COMLYN,COMLEN,'ANAL').gt.0)
   q_bond_order=.false.
@@ -444,16 +522,103 @@ SUBROUTINE MNDINI(COMLYN,COMLEN)
   end if
 
   ! for OpenMP/MPI controls.
-  num_cpus=GTRMI(COMLYN,COMLEN,'NCPU',4)
-#if KEY_PARALLEL==1
-  if(prnlev >= 2) then
-     write(outu,51) 'The OpenMP/MPI switches occur in ',num_cpus,' number of MPIs.'
-  end if
-#endif
+!  num_cpus=GTRMI(COMLYN,COMLEN,'NCPU',4)
+!#if KEY_PARALLEL==1
+!  if(prnlev >= 2) then
+!     write(outu,51) 'The OpenMP/MPI switches occur in ',num_cpus,' number of MPIs.'
+!  end if
+!#endif
 
   ! LEPS and SVB correction part
   QLEPS = (INDXA(COMLYN,COMLEN,'LEPS').GT.0)
   if(QLEPS) CALL SETLEPS(COMLYN,COMLEN)
+
+
+  ! for MTS-MMBond part for qm/mm (only works with multple time step approaches).
+  ! usage
+  ! ... MTSMmbond BOND ANGL WRIT OUNI [int] - ! DIHE IMDI; write ounit [int] write bond infos..
+  !                         READ              ! read will be always start from OUNI unit by the number of NUQM replicas.
+  !                                           ! the following COUPling terms are handled at Setup_mmbond
+  !                         COUP CONSt [int] repeat [[int] [int] [real]] ! first, integer = no. of coupling terms to repeat
+  !                                                                      ! [int] [int] [real] H_coupling(i,j) = [real]
+  !               NUMQ [int] -                ! no. of QM mm region (for EVB) for memory allocation
+  !               BONCorrection               ! only to be used for mm-bonded (freq) corrections used in
+  !                                             mts ai-qm/mm calc. (note that this only be used for BOND, not angle/dihe/impr.
+  qmmbond_use = (INDXA(COMLYN,COMLEN,'MTSM').GT.0)  ! MTSMmbond
+  scale_force     = one  ! default, no scale
+  qmm_bond        =.false.
+  qmm_angle       =.false.
+  qmm_dihe        =.false.
+  qmm_imph        =.false.
+  qmm_morse       =.false.
+  q_mm_write      =.false.
+  q_mm_read       =.false.
+  qmm_bond_corr   =.false.
+  iunit_bond_write= 0    ! defaults to write mm bonds info
+  n_mm_replica    = 1    ! deaultts for no. qm mm evb replicas
+  if(qmmbond_use) then
+#if KEY_MTS==1
+     ! for now, only valence terms (not including UB term for the angle).
+     ! and, only two step MTS (short-time scale for MM-bonded terms and
+     ! longer-time scale for the entire energy).
+     qmm_bond_corr =(INDXA(COMLYN,COMLEN,'BONC') > 0)
+     if(qmm_bond_corr) then
+        ! only support bond terms.. perhaps, for now also allow MORSe terms but may not be used.
+        qmm_bond      =(INDXA(COMLYN,COMLEN,'BOND') > 0)
+     else
+        qmm_bond      =(INDXA(COMLYN,COMLEN,'BOND') > 0)
+        qmm_angle     =(INDXA(COMLYN,COMLEN,'ANGL') > 0)
+        qmm_dihe      =(INDXA(COMLYN,COMLEN,'DIHE') > 0)
+        qmm_imph      =(INDXA(COMLYN,COMLEN,'IMDI') > 0) ! improper dihedral (mts)
+     end if
+     !
+     !if(QTBMTS) then
+        if((qmm_bond.or.qmm_angle.or.qmm_dihe.or.qmm_imph) .and. prnlev>=2) &
+        write(outu,22) 'MTSMbond is used for MTS-SE QM/MM simulations (use with MTS).'
+     !else
+     !   qmmbond_use =.false.
+     !   call wrndie(-2,'<MNDINI>', 'MTS option not setup. It only works with MTS.')
+     !end if
+
+     !
+     n_mm_replica=gtrmi(COMLYN,COMLEN,'NUMQ',1)    ! no. of qm mm evb replicas (e.g., rs, ps, int)
+                                                   ! n_mm_replica>=2, assume EVB type potentials.
+     q_mm_write  =(INDXA(COMLYN,COMLEN,'WRIT') > 0)! write mm bonds info
+     q_mm_read   =(INDXA(COMLYN,COMLEN,'READ') > 0)! read mm bonds info (should be saved previously 
+                                                   ! using WRITE OUNI [int]
+     if(.not. q_mm_read .and. n_mm_replica>1) n_mm_replica = 1 ! reset to ignore NUQM input...
+     if(q_mm_write) then
+        iunit_bond_write=gtrmi(COMLYN,COMLEN,'OUNI',6)  ! write unit
+        if(prnlev>=2) write(outu,24) 'MTSMbond: mm bonds and angles information will be written to:',iunit_bond_write
+     else if(q_mm_read) then
+        ! note that read will start from unit "OUNI" by the no. of NUQM replicas.
+        ! for all data files must be available and open (from WRITe OUNI [int] ...)
+        iunit_bond_write=gtrmi(COMLYN,COMLEN,'OUNI',5)  ! read unit
+        if(prnlev>=2) then
+           write(outu,24) 'MTSMbond: mm bonds and angles information will be from:',iunit_bond_write
+           if(n_mm_replica>=2) then
+              write(outu,24) 'MTSMbond: mm bond/angle energy will be evaluated by EVB approach.'
+           end if
+        end if
+     end if
+
+     ! for Morse-type bond and angle energies
+     if(.not. qmm_bond_corr) &
+        qmm_morse = (INDXA(COMLYN,COMLEN,'MORS') > 0)
+     if(qmm_morse .and. prnlev >= 2) write(outu,22) 'MTSMbond: Some Bonds are treated by the Morse-type MM Energy form.'
+
+     ! printing option
+     qmm_print = (INDXA(COMLYN,COMLEN,'PSVB') > 0)
+     if(qmm_print .and. prnlev >= 2) write(outu,22) 'MTSMbond: Print SVB energy.'
+
+     ! for MM force constant scaling.
+     scale_force=gtrmf(COMLYN,COMLEN,'SCAL',one)  ! scale force constant.
+#else
+     call wrndie(-2,'<MNDINI>', 'MTSMmbond only works with MTS. So, ignored.')
+#endif
+  end if
+23 format('MNDINT> ',A,I6,A)
+24 format('MNDINT> ',A,I6)
 
   ! Turn on Logical flag that says that the PSF has been modified.
   ! (Refer code.f90)
@@ -474,6 +639,15 @@ SUBROUTINE MNDINI(COMLYN,COMLEN)
   igmsel(1:size(igmsel)) = 0  ! initialize
   call COPSEL_mndo97(numat,natgho,islct,jslct,lslct,clink,qlink)
 
+  ! 1.1) MTS-SE QM/MM (MTS-MMBond) parts.
+#if KEY_MTS==1    /*mts*/
+  if(qmmbond_use) then
+     call Setup_mmbond(COMLYN,COMLEN,qmm_bond,qmm_angle,qmm_dihe,qmm_imph,qmm_morse,qmm_print, &
+                       qmm_bond_corr, &
+                       n_mm_replica,q_mm_write,q_mm_read,iunit_bond_write,scale_force)
+  end if
+#endif /*mts*/
+
   ! 2) set qm/mm option values and allocate memory arrays for qm and mm atoms.
   call qmmm_init_set(nqmtheory,nqmcharge,nspin,numat,natgho,  &
                      natom,EWMODE,NQMEWD,                     &
@@ -482,7 +656,7 @@ SUBROUTINE MNDINI(COMLYN,COMLEN)
                      q_bond_order,q_m_charge,iiunit,          &
                      q_dxl_bomd,K_order,N_scf_step,           &
                      q_fockmd,iopt_fdiss,imax_fdiss,          &
-                     q_cut_by_group,qmswtch_qmmm,q_cpmd,QNoMemIncore)
+                     qmswtch_qmmm,QNoMemIncore)
 
   ! 3) Get and print QM region info:
   call Get_QM_from_CHM(qlink,clink,jslct,lslct)
@@ -490,30 +664,24 @@ SUBROUTINE MNDINI(COMLYN,COMLEN)
   ! 4) initialize parameters, setup qm info, and allocate memories.
   call qmmm_load_parameters_setup_qm_info(QSRP_PhoT)
 
-  ! 5) initialize CPMD info, and allocate memories.
-  if(q_cpmd) then
-     if(prnlev.ge.2) write(outu,22) 'CPMD: CPMD for the propagation of density is used.'
-     call qm_cpmd_init(q_cpmd,COMLYN,COMLEN)
-  end if
-
-  ! 6) Get MM atoms ready for the QM/MM calculations
-  ! 6-1) set non-bonded list and prepare for QM/MM-interaction list 
+  ! 5) Get MM atoms ready for the QM/MM calculations
+  ! 5-1) set non-bonded list and prepare for QM/MM-interaction list 
   !      to setup QM/MM-non-bonded list
   if (useddt_nbond(bnbnd).and.numat.GT.0) call nbndqm(x,y,z)
 
-  ! 6-2) mm coordinates copied to xim,yim,zim arrays
+  ! 5-2) mm coordinates copied to xim,yim,zim arrays
   natom_check= natom      ! for checking purpose
   call SwapXYZ_image(natom,x,y,z,xim,yim,zim,imattq)
   
-  ! 6-3) ready the coordinates for qm/mm interface.
-  call ch2mnd(qm_main_r%numat,igmsel,xim,yim,zim,.true.)
+  ! 5-3) ready the coordinates for qm/mm interface.
+  call ch2mnd(qm_main_c%numat,igmsel,xim,yim,zim,.true.)
 
   !=====================================================================
   !
   if(LQMEWD) then
      qcheck=.true.
      call qmmm_Ewald_init(natom,numat,erfmod,igmsel,kmaxXq,kmaxYq,kmaxZq,KSQmaxq,kappa, &
-                          q_fast_pme,qcheck)
+                          qcheck)
      if(.not.qcheck) call wrndie(-5,'<MNDINI>','The CHARMM will stop at qmmm_Ewald_init.')
      !
      ! Check the total charge for QM/MM-Ewald (PME usage)
@@ -521,72 +689,53 @@ SUBROUTINE MNDINI(COMLYN,COMLEN)
      do i=1,natom
         if(igmsel(i).eq.5.or.igmsel(i).eq.0) cgmm=cgmm+cg(i)
      end do
-!!#if KEY_GHO==1
      if(qlink) cgmm=cgmm+cggho
-!!#endif
-  end if
-
-  if(mm_main_r%q_lookup) then
-     if(mm_main_r%q_lookup_setup) then
-        q_lookup_first =.true.
-     else if(mm_main_r%q_lookup_read) then
-        q_lookup_first =.false.
-     end if
-     call qm_lookup_init(dr_width,rval_min,rval_max, &
-                         dr_width_beta,rval_min_beta,rval_max_beta, &
-                         mm_main_r%i_lookup_unit,q_lookup_first)
   end if
 
   ! D3BJ & H4 corrections
   if(dispers)then
-     do i=1,qm_main_r%numat
-        n                      =qm_control_r%qminb(i)
-        qm_main_r%qm_coord(1,i)=X(n)
-        qm_main_r%qm_coord(2,i)=Y(n)
-        qm_main_r%qm_coord(3,i)=Z(n)
-        xdisp(1:3,i)           =qm_main_r%qm_coord(1:3,i)*r_autoang
-     end do
-     !if(prnlev.ge.2) write(outu,22) "Reading Dispersion parameters"
+     !do i=1,qm_main_c%numat
+     !   n                      =qm_control_c%qminb(i)
+     !   qm_main_c%qm_coord(1,i)=X(n)
+     !   qm_main_c%qm_coord(2,i)=Y(n)
+     !   qm_main_c%qm_coord(3,i)=Z(n)
+     !   xdisp(1:3,i)           =qm_main_c%qm_coord(1:3,i)*r_autoang
+     !end do
+     !if(prnlev >= 2) write(outu,22) "Reading Dispersion parameters"
 
      ! before calling this, determine the total number of different QM atom types.
      ! which is "ntype"  (in sccdftb, this is based on SCCTYP == izp.)
      call find_unique_qm(ntype)
-!!!     if(l_disp) call dispersionread(iunit_disp,qm_main_r%numat,xdisp)
+!!!     if(l_disp) call dispersionread(iunit_disp,qm_main_c%numat,xdisp)
 
      if (lmndod2 .or. lmndod3) then
         ! lcpe =.false. for now.
-        call init_dftd3(qm_main_r%nat,qm_main_r%numat,lmndod2,lmndod3, &
+        call init_dftd3(qm_main_c%nat,qm_main_c%numat,lmndod2,lmndod3, &
                         q_d3bj_read,COMLYN,COMLEN)
      end if
   end if
 
   ! KN 10/31/2018: Add H4 correction term
-  q_h4corr = (INDXA(COMLYN,COMLEN,'H4CO').GT.0)  ! H4COrrection
-  if(q_h4corr) then
-     if(prnlev.ge.2) write(outu,'(/,"H4 CORR: H4 correction is used for QM atoms.")')
-     call h4_correction_setup(COMLYN,COMLEN)
+  if(q_h4corr) call h4_correction_setup(COMLYN,COMLEN)
+  !
+
+  ! 1.2) MTS-SE QM/MM (MTS-MMBond) parts. Do the remaining part for H coupling values.
+#if KEY_MTS==1    /*mts*/
+  if(qmmbond_use .and. n_mm_replica>1) then
+     q_coupling = (INDXA(COMLYN,COMLEN,'COUP') > 0)
+     if(q_coupling) call Setup_mmbond_coupling(COMLYN,COMLEN,q_coupling)
   end if
-  !
+#endif /*mts*/
 
-
-  ! This initializes MNDO97 data and performs one gradient calculation
-  !
-  !call mndo97_sub(MNDOAR,LEN,natom,natom,xim,yim,zim)
-  !
-  !if(mm_main_r%LQMEWD) then
-  !   if(mm_main_r%EWMODE.gt.0) then
-  !      do i=1,qm_main_r%numat
-  !         CGQMMM(iabs(mminb1(i)))= mm_main_r%qm_charges(i)  ! chag(i)
-  !      end do
-  !   else
-  !      do i=1,numat
-  !         CGQMMM(iabs(mminb1(i)))= CHARGQM(i)
-  !      end do
-  !   end do
-  !end if
+  ! nullify pointers, skip for now, for a single qm system
+  if(num_qm_system>1) call array_pointers(.true.,1)
 
   !
   ! free memory allocations.
+  call chmdealloc('mndini.src','MNDINI','XIM',size(XIM),crl=XIM)
+  call chmdealloc('mndini.src','MNDINI','YIM',size(YIM),crl=YIM)
+  call chmdealloc('mndini.src','MNDINI','ZIM',size(ZIM),crl=ZIM)
+
   call chmdealloc('mndini.src','MNDINI','islct',natom,intg=islct)    ! for qm   atoms
   call chmdealloc('mndini.src','MNDINI','jslct',natom,intg=jslct)    ! for link atoms
   call chmdealloc('mndini.src','MNDINI','lslct',natom,intg=lslct)    ! for GHO  atoms
@@ -595,6 +744,79 @@ SUBROUTINE MNDINI(COMLYN,COMLEN)
   !
   return
 END SUBROUTINE MNDINI
+
+SUBROUTINE MNDINI_update(COMLYN,COMLEN)
+  !-----------------------------------------------------------------------
+  !     This is the interface for running modified version of MNDO97 with 
+  !     CHARMM for QM/MM calculations
+  !
+  !     Kwangho Nam, February 2012.
+  !
+  use chm_kinds
+  use dimens_fcm
+  use number
+  use stream
+  use string, only : nexta4,gtrmi,indxa
+  use qmmm_interface, only: parameter_update
+  use qm1_info,only : num_qm_system
+  !
+
+  implicit none
+  CHARACTER(len=*):: COMLYN
+  INTEGER ::  COMLEN
+  !
+  character(len=4) :: keyword
+  integer :: inunit, irepl
+  logical :: q_all_replica
+
+  ! get the keyword
+  keyword=nexta4(comlyn,comlen)
+  if(keyword(1:4) == 'PARA') then
+     ! do update the semi-empirical parameters
+     !
+     ! usage
+     ! MNDO UPDAte PARAmeter IUNIT [int] ALLReplica
+     !                                   REPLica  [int]
+
+     ! Read unit for the input parameters. The file must be already open to read the file.
+     inunit = gtrmi(COMLYN,COMLEN,'IUNI',0)
+     if(inunit <= 0) then
+        call wrndie(-1,'<MNDINI_update>','No file to read parameters is specified. Ignored.')
+        !return
+     else
+        ! 
+        q_all_replica=(indxa(COMLYN,COMLEN,'ALLR') > 0)
+
+        ! irepl = 0 means, update them for all qm regions (num_qm_system)
+        !       > 0 do separately for each qm region defined by irepl
+        if(q_all_replica) then
+           if(prnlev>=2) write(outu,20) 'UPDA PARAm> Parameters updated for all replicas'
+           irepl=0
+        else
+           irepl=gtrmi(COMLYN,COMLEN,'IREP',0) ! update parameters for each replica
+           if(irepl > num_qm_system) then
+              call wrndie(-1,'<MNDINI_update>','Wrong IREPlica number. Ignored.')
+              return
+           else
+              if(prnlev>=2) write(outu,20) 'UPDA PARAm> Parameters updated for replica: ',irepl
+           end if
+        end if
+        !
+        ! now call to update parameters
+        !rewind inunit
+        call parameter_update(irepl,inunit)
+     end if
+  else
+     ! leave out for later use.
+     call wrndie(1,'<MNDINI_update>','Do nothing?')
+
+     continue
+  end if
+20 format('MNDINI_update> ',A,I4)
+  !
+  return
+END SUBROUTINE MNDINI_update
+
 !
 SUBROUTINE Get_QM_from_CHM(QLINK,CLINK,JSLCT,LSLCT)
   !----------------------------------------------------------------------
@@ -612,8 +834,7 @@ SUBROUTINE Get_QM_from_CHM(QLINK,CLINK,JSLCT,LSLCT)
   use mndo97
   use linkatom, only: findel
   ! 
-  use qm1_info, only : qm_control_r,qm_main_r,mm_main_r
-  use mndgho_module, only : qm_gho_info_r
+  use qm1_info, only : qm_control_c,qm_main_c,mm_main_c,qm_gho_info_c
 
   implicit none
   !
@@ -635,24 +856,24 @@ SUBROUTINE Get_QM_from_CHM(QLINK,CLINK,JSLCT,LSLCT)
   nlatq  =0
   if(qlink) then
      ! pure QM atoms first
-     do i=1,mm_main_r%natom
+     do i=1,mm_main_c%natom
         if((igmsel(i).eq.1 .or.  igmsel(i).eq.2) .and. lslct(i).eq.0) then
            nlatq       = nlatq+1
-           qm_control_r%qminb(nlatq)= i
+           qm_control_c%qminb(nlatq)= i
         end if
      end do
      ! gho atoms last, as it is needed for gho-expansion etc.
-     do i=1,mm_main_r%natom
+     do i=1,mm_main_c%natom
         if(lslct(i).eq.1) then
            nlatq        = nlatq+1
-           qm_control_r%qminb(nlatq) = i
+           qm_control_c%qminb(nlatq) = i
         end if
      end do
   else
-     do i=1,mm_main_r%natom
+     do i=1,mm_main_c%natom
         if(igmsel(i).eq.1.or.igmsel(i).eq.2) then
            nlatq       = nlatq+1
-           qm_control_r%qminb(nlatq)= i
+           qm_control_c%qminb(nlatq)= i
         end if
      end do
   end if 
@@ -660,32 +881,32 @@ SUBROUTINE Get_QM_from_CHM(QLINK,CLINK,JSLCT,LSLCT)
   !
   ! zero charges on QM atoms to remove from MM term.
   if(qgmrem) then
-     do i=1,mm_main_r%natom
-        qm_control_r%cgqmmm(i) = cg(i)
+     do i=1,mm_main_c%natom
+        qm_control_c%cgqmmm(i) = cg(i)
         if(igmsel(i).eq.1.or.igmsel(i).eq.2) cg(i) = zero
      end do
   end if
   
   ! then, assign nuclear charges:
-  !call chmalloc('mndini.src','Get_QM_from_CHM','azunc',qm_main_r%numat,crl=azunc)
-  do i=1,qm_main_r%numat
-     ii= qm_control_r%qminb(i)
+  !call chmalloc('mndini.src','Get_QM_from_CHM','azunc',qm_main_c%numat,crl=azunc)
+  do i=1,qm_main_c%numat
+     ii= qm_control_c%qminb(i)
      CALL FINDEL(ATCT(iac(ii)),amass(ii),ii,ELE,azunc,QPRT)
      !
      ! assign neclear charges
      if(qlink.and.lslct(ii).eq.1) then
         ! gho atom: 85
-        qm_main_r%nat(i)=85
+        qm_main_c%nat(i)=85
      else if(clink.and.jslct(ii).eq.1) then
         ! connection atom: 86
-        qm_main_r%nat(i)=86
+        qm_main_c%nat(i)=86
      else 
         ! regular qm atoms
-        qm_main_r%nat(i)=int(azunc)
+        qm_main_c%nat(i)=int(azunc)
      end if
   end do
   !
-  natmm=natom-qm_main_r%numat
+  natmm=natom-qm_main_c%numat
   !
   ! number of H-link atoms
   natlnk=0
@@ -701,17 +922,22 @@ SUBROUTINE Get_QM_from_CHM(QLINK,CLINK,JSLCT,LSLCT)
   end if
   ! number of GHO atoms
   if(qlink) then
-     nacg=qm_gho_info_r%nqmlnk
+     nacg=qm_gho_info_c%nqmlnk
   else
      nacg=0
   end if
+
+  !
+  ! finally, make a local copy of igmsel array (to be used in 
+  ! mlayered qm/mm & high-level qm/mm calculations.
+  qm_control_c%igmsel(1:natom) = igmsel(1:natom)
 
   !
   ! Write out atomic information
   if(prnlev.gt.2) then
      write (outu,'(/,1x,A,/)') ' Get_QM_from_CHM> Some atoms will be treated quantum mechanically.'
      write (outu,'(5(8X,A,I5,/),/)') &
-          ' The number of quantum mechanical atoms   = ',qm_main_r%numat, &
+          ' The number of quantum mechanical atoms   = ',qm_main_c%numat, &
           ' The number of Adjusted Connection atoms  = ',NACA, &
           ' The number of GHO atoms                  = ',NACG, &
           ' The number of QM/MM H-link atoms         = ',NATLNK, &
@@ -719,7 +945,7 @@ SUBROUTINE Get_QM_from_CHM(QLINK,CLINK,JSLCT,LSLCT)
   end if
   !
   ! clean-up memory.
-  !call chmdealloc('mndini.src','Get_QM_from_CHM','azunc',qm_main_r%numat,crl=azunc)
+  !call chmdealloc('mndini.src','Get_QM_from_CHM','azunc',qm_main_c%numat,crl=azunc)
 
   return
 END SUBROUTINE Get_QM_from_CHM
@@ -756,24 +982,25 @@ SUBROUTINE COPSEL_mndo97(numat,NATGHO,ISLCT,JSLCT,LSLCT,CLINK,QGLNK)
   use stream
   use psf
   use number
-  ! use mndo97
+  !use mndo97
+  use qm1_info,only : qm_bond_c !  qm_control_c
   use chutil,only:getres,atomid
   
-  use qm1_info, only : qm_main_r,mm_main_r
-  use mndgho_module, only : qm_gho_info_r
-
   !
   implicit none
   !
   integer :: numat,natgho
-  integer ::ISLCT(*),JSLCT(*),LSLCT(*)
+  integer :: ISLCT(*),JSLCT(*),LSLCT(*)
   logical :: CLINK,QGLNK
   !
-  !
-  integer :: i,j,i1,i2,n,is,iq,nlatq,numgho
+  ! local variables
+  integer :: i,j,i1,i2,j1,n,is,iq,nlatq,numgho
   character(len=4) :: SID, RID, REN, AC
   logical :: lnflag
   integer :: ln
+  !
+  integer :: nbonds_qm_local
+  integer,allocatable :: i_mm_bond_local(:,:)
   !
   ! fill igmsel array for qm atoms.
   do i=1, natom
@@ -789,26 +1016,26 @@ SUBROUTINE COPSEL_mndo97(numat,NATGHO,ISLCT,JSLCT,LSLCT,CLINK,QGLNK)
   if(qglnk) then
      ! pure QM atoms first
      do i=1, natom
-        if((igmsel(i).eq.1 .or.  igmsel(i).eq.2) .and. lslct(i).eq.0) then
+        if((igmsel(i)==1 .or.  igmsel(i)==2) .and. lslct(i)==0) then
            nlatq        = nlatq+1
         end if
      end do
      ! gho atoms last, as it is needed for gho-expansion etc.
      do i=1, natom
-        if(lslct(i).eq.1) then
+        if(lslct(i)==1) then
            nlatq        = nlatq+1
            numgho       = numgho+1
         end if
      end do
   else
      do i=1, natom
-        if(igmsel(i).eq.1.or.igmsel(i).eq.2) then
+        if(igmsel(i)==1.or.igmsel(i)==2) then
            nlatq       = nlatq+1
         end if
      end do
   end if
   !
-  if(nlatq.le.0) call wrndie(-1,'<COPSEL_mndo97>','No quantum mechanical atoms selected.')
+  if(nlatq <= 0) call wrndie(-1,'<COPSEL_mndo97>','No quantum mechanical atoms selected.')
 
   numat=nlatq
   natgho=numgho   ! number of gho atoms.
@@ -819,70 +1046,92 @@ SUBROUTINE COPSEL_mndo97(numat,NATGHO,ISLCT,JSLCT,LSLCT,CLINK,QGLNK)
   !     This is sometimes necessary to prevent opposite charge collision,
   !     since QM cannot prevent this to happen.
   !
-  !
+  nbonds_qm_local = 0
+  allocate(i_mm_bond_local(2,nbond))
   do i=1,nbond
      i1=ib(i)
      i2=jb(i)
      !
      ! For connection atom approach, link host atom or group should be
      ! removed from QM/MM SCF procedure
-     if(igmsel(i1).eq.1.and.igmsel(i2).eq.0) then
-        if(.not.(qglnk.and.lslct(i1).eq.1)) then
+     if(igmsel(i1)==1 .and. igmsel(i2)==0) then
+        if(.not.(qglnk .and. lslct(i1)==1)) then
            if(qgmexg) then
               !                 remove the entire group
               j=getres(i2,igpbs,ngrp)
-              do j=igpbs(j)+1,igpbs(j+1)
-                 if(igmsel(j).eq.0) igmsel(j)=5
+              do j1=igpbs(j)+1,igpbs(j+1)
+                 if(igmsel(j1)==0) igmsel(j1)=5
               end do
            else
               !                 remove the link host atom
-              if(igmsel(i2).eq.0) igmsel(i2)=5
+              if(igmsel(i2)==0) igmsel(i2)=5
            end if
         end if
-     else if(igmsel(i1).eq.0.and.igmsel(i2).eq.1) then
-        if(.not.(qglnk.and.lslct(i2).eq.1)) then 
+     else if(igmsel(i1)==0 .and. igmsel(i2)==1) then
+        if(.not.(qglnk .and. lslct(i2)==1)) then 
            if(qgmexg) then
               !                 remove the entire group
               j=getres(i1,igpbs,ngrp)
-              do j=igpbs(j)+1,igpbs(j+1)
-                 if(igmsel(j).eq.0) igmsel(j)=5
+              do j1=igpbs(j)+1,igpbs(j+1)
+                 if(igmsel(j1)==0) igmsel(j1)=5
               end do
            else
               !                 remove the link host atom
-              if(igmsel(i1).eq.0) igmsel(i1)=5
+              if(igmsel(i1)==0) igmsel(i1)=5
            end if
         end if
      end if
      !
      ! For the QQ-link hydrogen atom
-     if (igmsel(i1).eq.2) then
+     if (igmsel(i1)==2) then
         !           Don't change QM atoms
         if(qgmexg) then
            !              remove the entire group
            j=getres(i2,igpbs,ngrp)
-           do j=igpbs(j)+1,igpbs(j+1)
-              if(igmsel(j).eq.0) igmsel(j)=5
+           do j1=igpbs(j)+1,igpbs(j+1)
+              if(igmsel(j1)==0) igmsel(j1)=5
            end do
         else
            !              remove the link host atom
-           if(igmsel(i2).eq.0) igmsel(i2)=5
+           if(igmsel(i2)==0) igmsel(i2)=5
         end if
      end if
-     if (igmsel(i2).eq.2) then
+     if (igmsel(i2)==2) then
         if(qgmexg) then
            !              remove the entire group
            j=getres(i1,igpbs,ngrp)
-           do j=igpbs(j)+1,igpbs(j+1)
-              if(igmsel(j).eq.0) igmsel(j)=5
+           do j1=igpbs(j)+1,igpbs(j+1)
+              if(igmsel(j1)==0) igmsel(j1)=5
            end do
         else
            !              remove the link host atom
-           if(igmsel(i1).eq.0) igmsel(i1)=5
+           if(igmsel(i1)==0) igmsel(i1)=5
         end if
+     end if
+
+     ! to save mm bonds information for the qm region.
+     if((igmsel(i1)==1 .or. igmsel(i1)==2 .or. igmsel(i1)==5) .or. &
+        (igmsel(i2)==1 .or. igmsel(i2)==2 .or. igmsel(i2)==5)) then
+        nbonds_qm_local = nbonds_qm_local + 1
+        i_mm_bond_local(1,nbonds_qm_local) = i1
+        i_mm_bond_local(2,nbonds_qm_local) = i2
      end if
   end do
   !
-  if(prnlev.ge.2) then
+  if(nbonds_qm_local>0) then
+     qm_bond_c%nbond_qm = nbonds_qm_local
+     allocate(qm_bond_c%i_mm_bond(2,nbonds_qm_local))
+
+     !
+     do i=1,nbonds_qm_local
+        qm_bond_c%i_mm_bond(1,i) = i_mm_bond_local(1,i)
+        qm_bond_c%i_mm_bond(2,i) = i_mm_bond_local(2,i)
+     end do
+     qm_bond_c%qbond_qm =.true.
+  end if
+  deallocate(i_mm_bond_local)
+  !
+  if(prnlev>=2) then
      write(outu,118)
      write(outu,120) 'Classical atoms excluded from the QM calculation' 
   end if
@@ -893,14 +1142,14 @@ SUBROUTINE COPSEL_mndo97(numat,NATGHO,ISLCT,JSLCT,LSLCT,CLINK,QGLNK)
 124 format(10X,'NONE.')
   n=0
   do i=1,natom
-     if(igmsel(i).eq.5) then
+     if(igmsel(i)==5) then
         call atomid(i,sid,rid,ren,ac)
-        if(prnlev.ge.2) write(outu,122) I,SID,RID,REN,AC
+        if(prnlev>=2) write(outu,122) I,SID,RID,REN,AC
         n=n+1
      end if
   end do
-  if(prnlev.ge.2) then
-     if(n.eq.0) write(outu,124)
+  if(prnlev>=2) then
+     if(n==0) write(outu,124)
      if(clink) then
         write(outu,120) 'Quantum mechanical atoms, (* is Connection atom)'
      else
@@ -910,63 +1159,68 @@ SUBROUTINE COPSEL_mndo97(numat,NATGHO,ISLCT,JSLCT,LSLCT,CLINK,QGLNK)
   n=0
   if(clink) then
      do i=1,natom
-        if(igmsel(i).eq.1) then
+        if(igmsel(i)==1) then
            call atomid(i,sid,rid,ren,ac)
-           if(jslct(i).eq.1) then
-              if(prnlev.ge.2) write(outu,123) I,SID,RID,REN,AC
+           if(jslct(i)==1) then
+              if(prnlev>=2) write(outu,123) I,SID,RID,REN,AC
            else
-              if(prnlev.ge.2) write(outu,122) I,SID,RID,REN,AC
+              if(prnlev>=2) write(outu,122) I,SID,RID,REN,AC
            end if
            n=n+1
         end if
      end do
   else
      do i=1,natom
-        if(igmsel(i).eq.1) then
+        if(igmsel(i)==1) then
            call atomid(i,sid,rid,ren,ac)
-           if(prnlev.ge.2) write(outu,122) I,SID,RID,REN,AC
+           if(prnlev>=2) write(outu,122) I,SID,RID,REN,AC
            n=n+1
         end if
      end do
   end if
-  if(prnlev.ge.2) then
-     if(n.eq.0) write(outu,124)
+  if(prnlev>=2) then
+     if(n==0) write(outu,124)
      write(outu,120) 'Quantum mechanical Hydrogen link atoms'
   end if
   n=0
   do i=1,natom
-     if(igmsel(i).eq.2) then
+     if(igmsel(i)==2) then
         call atomid(i,sid,rid,ren,ac)
-        if(prnlev.ge.2) write(outu,122) I,SID,RID,REN,AC
+        if(prnlev>=2) write(outu,122) I,SID,RID,REN,AC
         n=n+1
      end if
   end do
   if(qglnk) then
-     if(prnlev.ge.2) then
-        if(n.eq.0) write(outu,124)
+     if(prnlev>=2) then
+        if(n==0) write(outu,124)
         write(outu,120) 'Quantum mechanical GHO atoms'
      end if
      n=0
      do i=1,natom
-        if(lslct(i).eq.1) then
+        if(lslct(i)==1) then
            call atomid(i,sid,rid,ren,ac)
-           if(prnlev.ge.2) write(outu,122) I,SID,RID,REN,AC
+           if(prnlev>=2) write(outu,122) I,SID,RID,REN,AC
            n=n+1
         end if
      end do
   end if
-  if(prnlev.ge.2) then
-     if(n.eq.0) write(outu,124)
+  if(prnlev>=2) then
+     if(n==0) write(outu,124)
      write(outu,118)
   end if
   !
   ! the following is moved to the subroutine Get_QM_from_CHM.
+  !
+  ! finally, make a local copy of igmsel array (to be used in 
+  ! mlayered qm/mm & high-level qm/mm calculations.
+  !qm_control_c%igmsel(1:natom) = igmsel(1:natom)
+  !
   !!
   !!! Zero charges on QM atoms to remove from MM term.
   !!if(qgmrem) then
   !!   do i=1,natom
   !!      ! cgqmmm(i) = cg(i)
-  !!      if(igmsel(i).eq.1.or.igmsel(i).eq.2) cg(i) = zero
+  !!      if(igmsel(i)==1.or.igmsel(i)==2) cg(i) = zero
   !!   end do
   !!end if
   !

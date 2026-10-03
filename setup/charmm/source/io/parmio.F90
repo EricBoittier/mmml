@@ -2,10 +2,7 @@ module parmiom
   private  parrdr,parrdr2,parrdr3,addnbf,chckrep
 contains
   SUBROUTINE PARMIO(IUNIT,NTITL,TITLE,ICARD,JUNIT,NATCT,ATCT,QAPPE &
-#if KEY_LIBRARY == 1
-       , flex &
-#endif /* LIBRARY */
-       )
+       , flex)
     !
     !     THIS ROUTINE ALLOCATES SPACE AND CALLS PARRD3, PARRDR_MMFF or
     !     PARRDR_CFF
@@ -43,16 +40,12 @@ contains
     INTEGER I,MLEN
     LOGICAL QFLEX,BAD
 
-#if KEY_LIBRARY == 1
     logical, optional :: flex
-#endif /* LIBRARY */
- 
+
     !yw...11-Aug-2003 initialize the local QFLEX
     QFLEX = .FALSE.
 
-#if KEY_LIBRARY == 1
     if (present(flex)) qflex = flex
-#endif /* LIBRARY */
 
 #if KEY_CFF==1 || KEY_MMFF==1
     if(ffield == charmm .or. ffield == amberffn) then
@@ -61,9 +54,7 @@ contains
        !
        ! Section for CHARMM type force field
        !
-#if KEY_LIBRARY == 1
       if (.not. present(flex)) &
-#endif /* LIBRARY */
           QFLEX=(INDXA(COMLYN,COMLEN,'FLEX') /= 0)
 
        IF(ICARD /= 0) THEN
@@ -994,13 +985,17 @@ contains
        IF(QFLXPARM) THEN
           IF(CHAD(I) > 0) THEN
              AI=ATC(CHAD(I))
-          ELSE
+          ELSE IF(CHAD(I) < 0) THEN
              AI=ACTEQV(-CHAD(I))
+          ELSE
+             AI=' '   ! CHAD==0: unresolved atom type, avoid ACTEQV(0)
           ENDIF
           IF(CHAA(I) > 0) THEN
              AJ=ATC(CHAA(I))
-          ELSE
+          ELSE IF(CHAA(I) < 0) THEN
              AJ=ACTEQV(-CHAA(I))
+          ELSE
+             AJ=' '   ! CHAA==0: unresolved atom type, avoid ACTEQV(0)
           ENDIF
        ELSE
 #endif /* (flex_bond)*/
@@ -2839,7 +2834,7 @@ contains
                    ! the value should be negative or zero.
                    IF(C6VAL > ZERO) THEN
                       IF(WRNLEV >= 2) WRITE(OUTU,349)
-349                   FORMAT(' ERROR: Specified C6-long-range value', & 
+349                   FORMAT(' ERROR: Specified C6-long-range value', &
                                ' must not be positive.',/ &
                                ' The opposite value is assumed.')
                       C6VAL=-C6VAL
@@ -3048,13 +3043,17 @@ contains
                    DO I=1,NCH
                       IF(CHAD(I) > 0) THEN
                          BI=ATC(CHAD(I))
-                      ELSE
+                      ELSE IF(CHAD(I) < 0) THEN
                          BI=ACTEQV(-CHAD(I))
+                      ELSE
+                         BI=' '   ! CHAD==0: unresolved type, avoid ACTEQV(0)
                       ENDIF
                       IF(CHAA(I) > 0) THEN
                          BJ=ATC(CHAA(I))
-                      ELSE
+                      ELSE IF(CHAA(I) < 0) THEN
                          BJ=ACTEQV(-CHAA(I))
+                      ELSE
+                         BJ=' '   ! CHAA==0: unresolved type, avoid ACTEQV(0)
                       ENDIF
                       IF(BI == AI .AND. BJ==AJ) THEN
                          IF(WRNLEV >= 2) WRITE(OUTU,827) I, &
@@ -3260,8 +3259,8 @@ contains
        CALL AINDEX(IDX,CBC,NCB,TEMP)
 #if KEY_FLEXPARM==1 /*flex_bond*/
        IF(QFLXPARM) THEN
-          CALL AINDX4(IDX,CBAI,NCB,TEMP)
-          CALL AINDX4(IDX,CBAJ,NCB,TEMP)
+          CALL AINDX4(IDX,CBAI,NCB,TMPI)
+          CALL AINDX4(IDX,CBAJ,NCB,TMPI)
        ENDIF
 #endif /* (flex_bond)*/
        ! angles
@@ -3753,7 +3752,7 @@ contains
     CALL PSND8(ALP, NATVDW+MAXATC)
     CALL PSND8(EFF, NATVDW+MAXATC)
     CALL PSND8(VDWR,NATVDW+MAXATC)
-    CALL PSND8(C6DEF,NATVDW)    
+    CALL PSND8(C6DEF,NATVDW)
     CALL PSND8(CNBA,NCN+MAXCN)
     CALL PSND8(CNBB,NCN+MAXCN)
     CALL PSND4(NBTHOL,1)

@@ -91,7 +91,7 @@ SUBROUTINE CONSHELIX(LCOM)
   LRESET=(INDXA(COMLYN, COMLEN, 'RESE') > 0)
   IF(QCONSH .AND. LRESET) THEN
      QCONSH = .FALSE.
-     WRITE(OUTU,*) 'TOTAL ', CHNUM,' CONSTRAINTS RESETED.'
+     IF(PRNLEV >= 2) WRITE(OUTU,*) 'TOTAL ', CHNUM,' CONSTRAINTS RESETED.'
      !
      ! Free HEAP Size
      DO I=1,CHNUM
@@ -252,13 +252,19 @@ SUBROUTINE CONSHELIX(LCOM)
                 'Do constraints of Tilt angle'
         ENDIF
      ENDIF
-     ! debug
-     WRITE(OUTU,*) 'Constraints : ',CHNUM
-     WRITE(OUTU,*) 'Number of selected atoms'
-     IF(LOHEL(CHNUM)) THEN
-        WRITE(OUTU,*) '1st Helix :',NSEL(1,CHNUM),'2nd Helix :          None'
-     ELSE
-        WRITE(OUTU,*) '1st Helix :',NSEL(1,CHNUM),'2nd Helix :',NSEL(2,CHNUM)
+     ! Report the selection at the usual informational level.  Without a
+     ! PRNLEV test these lines were written by every rank -- non-master
+     ! ranks run with PRNLEV=-1 precisely so that they stay quiet -- and
+     ! the duplicates interleaved with the master's output in a different
+     ! order on every run.
+     IF(PRNLEV >= 2) THEN
+        WRITE(OUTU,*) 'Constraints : ',CHNUM
+        WRITE(OUTU,*) 'Number of selected atoms'
+        IF(LOHEL(CHNUM)) THEN
+           WRITE(OUTU,*) '1st Helix :',NSEL(1,CHNUM),'2nd Helix :          None'
+        ELSE
+           WRITE(OUTU,*) '1st Helix :',NSEL(1,CHNUM),'2nd Helix :',NSEL(2,CHNUM)
+        ENDIF
      ENDIF
      ! set by consh 
      QCONSH = .TRUE.

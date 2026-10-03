@@ -264,6 +264,9 @@
 !       terminal residue.  This has not been tested for reliability;
 !       use at own risk.  Note also that the IC table was not modified
 !       to include the extra hydrogen...
+!   (3) ASH and LYN, neutral aspartic acid and neutral lysine, were
+!       added later in a similar fashion to GLH by Ryan Hayes and
+!       Amirmasoud Samadi.  They have not been tested for reliability.
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !
 !  AMBER atom types and masses (from parm10.dat & frcmod.ff14SB)
@@ -1110,6 +1113,53 @@ IC OD1  CB   *CG  OD2   1.2565 117.9900 -170.2300 117.7000  1.2541
 PATCH FIRST NASP LAST CASP
 
 
+RESI ASH        0.00
+GROUP
+ATOM N    N      -0.415700 !     |
+ATOM HN   H       0.271900 !  HN-N
+ATOM CA   CX      0.034100 !     |   HB1   OD1
+ATOM HA   H1      0.086400 !     |   |    //
+ATOM CB   2C     -0.031600 !  HA-CA--CB--CG
+ATOM HB1  HC      0.048800 !     |   |    \ 
+ATOM HB2  HC      0.048800 !     |   HB2   OD2-HD2
+ATOM CG   C       0.646200 !   O=C
+ATOM OD1  O      -0.555400 !     |
+ATOM OD2  OH     -0.637600
+ATOM HD2  HO      0.474700
+ATOM C    C       0.597300
+ATOM O    O      -0.567900
+BOND CB CA  CG CB  OD2 CG
+BOND N  HN  N  CA   C   CA  C +N
+BOND CA HA  CB HB1  CB HB2
+BOND O  C   CG OD1
+BOND OD2 HD2
+IMPROPER -C  CA   N   HN
+IMPROPER CA  +N   C   O
+IMPROPER CB  OD1  CG  OD2
+
+DONOR HN N
+DONOR HD2 OD2
+ACCEPTOR OD1 CG
+ACCEPTOR OD2 CG
+ACCEPTOR O C
+
+IC -C   CA   *N   HN    1.3465 125.3100  180.0000 112.9400  0.9966
+IC -C   N    CA   C     1.3465 125.3100  180.0000 105.6300  1.5315
+IC N    CA   C    +N    1.4490 105.6300  180.0000 117.0600  1.3478
+IC +N   CA   *C   O     1.3478 117.0600  180.0000 120.7100  1.2330
+IC CA   C    +N   +CA   1.5315 117.0600  180.0000 125.3900  1.4484
+IC N    C    *CA  CB    1.4490 105.6300  122.3300 114.1000  1.5619
+IC N    C    *CA  HA    1.4490 105.6300 -116.4000 106.7700  1.0841
+IC N    CA   CB   CG    1.4490 111.1000  180.0000 112.6000  1.5218
+IC CG   CA   *CB  HB1   1.5218 112.6000  119.2200 109.2300  1.1086
+IC CG   CA   *CB  HB2   1.5218 112.6000 -121.6100 110.6400  1.1080
+IC CA   CB   CG   OD1   1.5619 112.6000  180.0000 117.9900  1.2565
+IC OD1  CB   *CG  OD2   1.2565 117.9900 -170.2300 117.7000  1.2541
+IC HD2  OD2  CG   OD1   0.0000  0.0000  0.0000  0.0000  0.0000
+
+PATCH FIRST NONE LAST NONE
+
+
 RESI CYS          0.00
 GROUP   
 ATOM N    N      -0.41570    !     |              
@@ -1759,6 +1809,68 @@ IC HZ1  CE   *NZ  HZ2   1.0404 110.0200  120.2700 109.5000  1.0402
 IC HZ1  CE   *NZ  HZ3   1.0404 110.0200 -120.1300 109.4000  1.0401
 
 PATCH FIRST NLYS LAST CLYS
+
+
+RESI LYN          0.00
+GROUP
+ATOM N    N      -0.415700    !     |
+ATOM HN   H       0.271900    !  HN-N
+ATOM CA   CX     -0.072060    !     |   HB1 HG1 HD1 HE1    HZ1
+ATOM HA   H1      0.099400    !     |   |   |   |   |     /
+ATOM CB   CT     -0.048450    !  HA-CA--CB--CG--CD--CE--NZ--HZ2
+ATOM HB1  HC      0.034000    !     |   |   |   |   |      
+ATOM HB2  HC      0.034000    !     |   HB2 HG2 HD2 HE2    
+ATOM CG   CT      0.066120    !   O=C
+ATOM HG1  HC      0.010410    !     |
+ATOM HG2  HC      0.010410
+ATOM CD   CT     -0.037680
+ATOM HD1  HC      0.011550
+ATOM HD2  HC      0.011550
+ATOM CE   CT      0.326040
+ATOM HE1  HP     -0.033580
+ATOM HE2  HP     -0.033580
+ATOM NZ   N3     -1.035810
+ATOM HZ1  H       0.386040
+ATOM HZ2  H       0.386040
+ATOM C    C       0.597300
+ATOM O    O      -0.567900
+BOND CB CA   CG CB   CD CG   CE CD   NZ CE
+BOND N  HN   N  CA    C  CA
+BOND C  +N   CA HA   CB HB1  CB HB2  CG HG1
+BOND CG HG2  CD HD1  CD HD2  CE HE1  CE HE2
+BOND O  C
+BOND NZ HZ1  NZ HZ2  
+
+IMPROPER -C  CA   N   HN
+IMPROPER CA  +N   C   O
+
+DONOR HN N
+DONOR HZ1 NZ
+DONOR HZ2 NZ
+ACCEPTOR O C
+IC -C   CA   *N   HN    1.3482 123.5700  180.0000 115.1100  0.9988
+IC -C   N    CA   C     1.3482 123.5700  180.0000 107.2900  1.5187
+IC N    CA   C    +N    1.4504 107.2900  180.0000 117.2700  1.3478
+IC +N   CA   *C   O     1.3478 117.2700  180.0000 120.7900  1.2277
+IC CA   C    +N   +CA   1.5187 117.2700  180.0000 124.9100  1.4487
+IC N    C    *CA  CB    1.4504 107.2900  122.2300 111.3600  1.5568
+IC N    C    *CA  HA    1.4504 107.2900 -116.8800 107.3600  1.0833
+IC N    CA   CB   CG    1.4504 111.4700  180.0000 115.7600  1.5435
+IC CG   CA   *CB  HB1   1.5435 115.7600  120.9000 107.1100  1.1146
+IC CG   CA   *CB  HB2   1.5435 115.7600 -124.4800 108.9900  1.1131
+IC CA   CB   CG   CD    1.5568 115.7600  180.0000 113.2800  1.5397
+IC CD   CB   *CG  HG1   1.5397 113.2800  120.7400 109.1000  1.1138
+IC CD   CB   *CG  HG2   1.5397 113.2800 -122.3400 108.9900  1.1143
+IC CB   CG   CD   CE    1.5435 113.2800  180.0000 112.3300  1.5350
+IC CE   CG   *CD  HD1   1.5350 112.3300  122.2500 108.4100  1.1141
+IC CE   CG   *CD  HD2   1.5350 112.3300 -121.5900 108.1300  1.1146
+IC CG   CD   CE   NZ    1.5397 112.3300  180.0000 110.4600  1.4604
+IC NZ   CD   *CE  HE1   1.4604 110.4600  119.9100 110.5100  1.1128
+IC NZ   CD   *CE  HE2   1.4604 110.4600 -120.0200 110.5700  1.1123
+IC CD   CE   NZ   HZ1   1.5350 110.4600  179.9200 110.0200  1.0404
+IC HZ1  CE   *NZ  HZ2   1.0404 110.0200  120.2700 109.5000  1.0402
+
+PATCH FIRST NONE LAST NONE
 
 
 RESI MET          0.00

@@ -41,6 +41,7 @@ read  coor card
 
 energy cdie cutnb 14.0 ctofnb 12.0 fshift vshift atom
 
+set estd ?ener
 
 mscale nsubs 3
 
@@ -69,6 +70,10 @@ skip elec vdw
 
 energy cdie cutnb 14.0 ctofnb 12.0 fshift vshift atom
 
+set emsc ?ener
+
 test first step 0.00001 tol 0.0
+
+@testcheck @estd @emsc 1.e-8 mscale_energy
 
 stop

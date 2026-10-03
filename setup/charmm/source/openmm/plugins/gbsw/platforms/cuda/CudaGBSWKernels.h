@@ -68,7 +68,7 @@ public:
   
 private:
 
-    bool hasCreatedKernels, usingCPHMD, usingMembrane, usingCutoff, usingCutoffOffset, *writeGroup;
+    bool hasCreatedKernels, usingCPHMD, usingMembrane, usingCutoff, usingCutoffOffset, usingPeriodic, *writeGroup;
   
     unsigned int lookupMemory, numThreads, maxAtomsPerVoxel, numRadii, numRadii_H,
         numRadii_HEAVY, skipRadii_H, skipRadii_HEAVY, numAngles, 

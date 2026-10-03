@@ -6,9 +6,35 @@
 *
 
 IF ?SCCDFTB .NE. 1 THEN
- echo "Test NOT performed."
+ echo SCCDFTB_QMMM TESTCASE RESULT: SKIP
  STOP
 endif
+
+! SCC-DFTB needs SCCDFTB_DATA pointing at a directory holding this test's
+! parameter file.  `genv' on an unset variable is a level-0 warning, which is
+! fatal at the default BOMLEV, so lower BOMLEV across the call and self-skip
+! when the data has not been provisioned here.  The file check matters as
+! well: SCCDFTB_DATA can be set while this particular file is absent, and
+! CHARMM then dies part way through reading parameters with no termination
+! line at all.
+set sccdftbdir UNSET_SCCDFTB_DATA
+set oldbomlev ?bomlev
+bomlev -5
+genv sccdftbdir SCCDFTB_DATA
+bomlev @oldbomlev
+if @sccdftbdir eq UNSET_SCCDFTB_DATA then
+   echo SCCDFTB_QMMM TESTCASE RESULT: SKIP
+   stop
+endif
+strc sccdat @sccdftbdir "/sccdftb_CHQ.dat"
+bomlev -5
+open unit 98 read form name @sccdat
+if ?iostat .ne. 1 then
+   echo SCCDFTB_QMMM TESTCASE RESULT: SKIP
+   stop
+endif
+close unit 98
+bomlev @oldbomlev
 
 bomblev -2
 
@@ -220,7 +246,7 @@ scalar WMAIN set 3.0 sele all .and. type QQ*  SHOW end
 
 ! Default SCF convergence is 1.d-7, which is fine.
 ! 1.d-6 would give not so accurate forces
-sccdftb remove chrg 0 sele all end SCFT 0.00000001
+sccdftb remove chrg 0 sele all end SCFT 0.00000001 DATF @sccdat
 !
 ! -----------------------------------------------------------
 

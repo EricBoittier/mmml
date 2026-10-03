@@ -718,7 +718,7 @@ contains
 
   subroutine pucker_constraint_output(istep)
 #if KEY_PARALLEL==1
-    use mpi                         
+    use mpi_f08                         
 #endif
 #if KEY_PARALLEL==1
     use parallel                    

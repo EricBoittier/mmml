@@ -14,8 +14,7 @@ find_package_handle_standard_args(ExaFMM
 
 
 if(EXAFMM_FOUND)
-#  set(ExaFMM_LIBRARIES "${ExaFMM_LIBRARY}")
-  set(ExaFMM_LIBRARIES "$ENV{EXAFMM}")
+  set(ExaFMM_LIBRARIES "${ExaFMM_LIBRARY}")
 
   find_library(TBB_LIBRARY
     NAMES tbb

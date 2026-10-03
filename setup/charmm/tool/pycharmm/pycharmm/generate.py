@@ -24,23 +24,52 @@ the non-bonded list.
 Corresponds to CHARMM module `struct`
 See [struct documentation](https://academiccharmm.org/documentation/version/c47b1/struct#Top)
 
+Functions
+=========
+- `new_segment` -- Generate a new segment in the PSF
+- `setup_seg` -- Setup a segment using simplified interface
+- `patch` -- Apply a patch to modify the PSF
+- `rename` -- Rename segid, resid, resname, or atom in the PSF
+- `join` -- Join two adjacent segments
+- `replica` -- Replicate part of current PSF
+- `autogenerate` -- Control autogeneration of angles and dihedrals
+
 Examples
 ========
 >>> import pycharmm
 >>> import pycharmm.generate as gen
 
-Generate a segment called `ADP` and apply `ACE` and `CT3` patches on the N- and C- terminals
+Generate a segment called `ADP` with terminal patches
 >>> gen.new_segment('ADP', 'ACE', 'CT3', setup_ic=True)
 
-Generate a segment called `WT00` and *DO NOT* rewrite angles and dihedrals for molecules in the segment
+Generate a water segment (no angles/dihedrals)
 >>> gen.new_segment('WT00', angle=False, dihedral=False)
+
+Apply a disulfide bridge patch
+>>> gen.patch('DISU', 'PROA 5, PROA 20', setup=True)
+
+Rename a segment
+>>> gen.rename('SEGID', 'PROA', selection=pycharmm.SelectAtoms(seg_id='PROT'))
+
+Join two segments
+>>> gen.join('SEG1', 'SEG2', renumber=True)
+
+Enable autogeneration of angles
+>>> gen.autogenerate(angles=True, dihedrals=False)
 
 """
 
 import ctypes
 
-import pycharmm.lib as lib
+# import pycharmm.loader as lib
+from pycharmm.loader import lib
 import pycharmm.script
+import pycharmm.atom_info as atom_info
+
+
+def _invalidate_cache():
+    """Invalidate atom cache after PSF modifications."""
+    atom_info.invalidate_atom_cache()
 
 
 _options = [('new_seg', ctypes.c_char * 9),
@@ -135,8 +164,8 @@ def new_segment(seg_name='', first_patch='', last_patch='', **kwargs):
     # valid_opts = ['setup_ic', 'angle', 'dihedral', 'drude',
     #               'warn', 'show', 'mass']
 
-    autot = lib.charmm.generate_get_autot()
-    autod = lib.charmm.generate_get_autod()
+    autot = lib.generate_get_autot()
+    autod = lib.generate_get_autod()
 
     opts.new_seg = seg_name.encode()
     opts.dup_seg = '         '.encode()
@@ -163,7 +192,8 @@ def new_segment(seg_name='', first_patch='', last_patch='', **kwargs):
         elif k == 'mass':
             opts.dmass = types['dmass'](v)
 
-    err_code = lib.charmm.generate_segment(ctypes.byref(opts))
+    err_code = lib.generate_segment(ctypes.byref(opts))
+    _invalidate_cache()
     return err_code
 
 
@@ -194,34 +224,95 @@ def setup_seg(seg):
     """
     seg_len = len(seg)
     seg_str = ctypes.create_string_buffer(seg.encode())
-    err_code = lib.charmm.generate_setup(seg_str,
+    err_code = lib.generate_setup(seg_str,
                                          ctypes.byref(ctypes.c_int(seg_len)))
+    _invalidate_cache()
     return err_code
 
 
-def patch(name, patch_sites, **kwargs):
-    """Patch a segment in the PSF with `name`
+def patch(name, patch_sites, setup=False, warn=False, sort=False,
+          angle=None, dihedral=None, **kwargs):
+    """Apply a patch to modify the PSF
 
-    This function applies patches to the sequence.
+    This function applies patches to modify residues in the current PSF.
+    Patches can add or remove atoms, bonds, angles, dihedrals, and improper
+    torsions. Common uses include disulfide bridges, protonation state changes,
+    and terminal modifications.
 
     Parameters
     ----------
     name : str
-           name for the patch to apply
+        Name of the patch residue (PRES) to apply from the topology file.
     patch_sites : str
-                  comma separated string of pairs
-                  segid1 resid1 [, segid2 resid2 [, ... [,segid 9 resid 9]...]
-    **kwargs : [sort=bool] [awtup=bool] [warn=bool]
+        Comma-separated string of segid/resid pairs specifying which
+        residues to patch.
+        Format: "segid1 resid1 [, segid2 resid2 [, ... [, segid9 resid9]]]"
+    setup : bool
+        If True, append IC table entries from the patch to the main IC table.
+        (default: False)
+    warn : bool
+        If True, list elements deleted due to nonexistent atoms.
+        (default: False)
+    sort : bool
+        If True, sort PSF arrays after patching. (default: False)
+    angle : bool or None
+        If True, enable angle autogeneration. If False, disable (NOANGLE).
+        If None, use default from topology file. (default: None)
+    dihedral : bool or None
+        If True, enable dihedral autogeneration. If False, disable (NODIHEDRAL).
+        If None, use default from topology file. (default: None)
+    **kwargs : dict
+        Additional settings to pass to the CHARMM command.
 
     Returns
     -------
     bool
-        True indicates success
+        True indicates success.
+
+    Notes
+    -----
+    The patch command modifies PSF, coordinates, comparison coordinates,
+    harmonic constraints, fixed atom list, and internal coordinates.
+    However, NBONDS, HBONDS, SHAKE, and DYNAMICS are NOT mapped.
+    Atom numbers may change after patching.
+
+    Examples
+    --------
+    >>> import pycharmm.generate as gen
+
+    Apply disulfide bridge between CYS residues
+    >>> gen.patch('DISU', 'PROA 5, PROA 20', setup=True)
+
+    Apply terminal patch with warnings
+    >>> gen.patch('ACE', 'PROT 1', warn=True)
+
+    Apply patch with autogeneration control
+    >>> gen.patch('MYMOD', 'SEG1 10', angle=True, dihedral=False)
     """
-    patch_command = 'patch '+str(name)
-    patch_command += ' '+str(patch_sites)
-    patch_script = pycharmm.script.CommandScript(patch_command, **kwargs)
-    return patch_script.run()
+    cmd_kwargs = {}
+    if setup:
+        cmd_kwargs['setup'] = True
+    if warn:
+        cmd_kwargs['warn'] = True
+    if sort:
+        cmd_kwargs['sort'] = True
+    if angle is True:
+        cmd_kwargs['angle'] = True
+    elif angle is False:
+        cmd_kwargs['noangle'] = True
+    if dihedral is True:
+        cmd_kwargs['dihedral'] = True
+    elif dihedral is False:
+        cmd_kwargs['nodihedral'] = True
+
+    patch_command = 'patch ' + str(name)
+    patch_command += ' ' + str(patch_sites)
+    patch_script = pycharmm.script.CommandScript(patch_command,
+                                                 **cmd_kwargs,
+                                                 **kwargs)
+    result = patch_script.run()
+    _invalidate_cache()
+    return result
 
 
 def rename(to_rename='', new_name='', selection=None):
@@ -276,38 +367,47 @@ def join(segid_1, segid_2='', renumber=False):
     """
     join_command = ' '.join(['join', segid_1, segid_2])
     join_script = pycharmm.script.CommandScript(join_command, renumber=renumber)
-    return join_script.run()
+    result = join_script.run()
+    _invalidate_cache()
+    return result
 
 
 def replica(selection=None,
             segid='', nreplica=1,
             setup=False, comp=False, reset=False):
-    """Replica runs the CHARMM replica command:  replicate part of current PSF
+    """Replicate part of current PSF
 
     This function produces multiple (nreplica) copies of the selected part of
-    the current psf.
+    the current PSF.
 
     Parameters
     ----------
-    selection : pycharmm.selectAtoms
-           selection of atoms comprising atoms to be replicated
+    selection : pycharmm.SelectAtoms
+        Selection of atoms comprising atoms to be replicated.
     segid : str
-           base name for the replicated segments,
-           segments will be names base_name1 ... base_nameN
-           up to N = nreplica
+        Base name for the replicated segments.
+        Segments will be named base_name1 ... base_nameN up to N = nreplica.
     nreplica : int
-           number of replica copies to make
+        Number of replica copies to make. (default: 1)
     setup : bool
-           if True setup ic tables for replicated segments
+        If True, setup IC tables for replicated segments. (default: False)
     comp : bool
-           if True use comparison coordinate values for replicated segment atoms
+        If True, use comparison coordinate values for replicated segment atoms.
+        (default: False)
     reset : bool
-           if True the exclusions between replicated atoms is turned off
+        If True, turn off exclusions between replicated atoms. (default: False)
 
     Returns
     -------
     bool
-        True indicates success
+        True indicates success.
+
+    Examples
+    --------
+    >>> import pycharmm
+    >>> import pycharmm.generate as gen
+    >>> sel = pycharmm.SelectAtoms(seg_id='PROT')
+    >>> gen.replica(selection=sel, segid='REP', nreplica=3, setup=True)
     """
     replica_command = ' '.join(['replica', segid])
     replica_script = pycharmm.script.CommandScript(replica_command,
@@ -316,4 +416,114 @@ def replica(selection=None,
                                                    setup=setup,
                                                    comp=comp,
                                                    reset=reset)
-    return replica_script.run()
+    result = replica_script.run()
+    _invalidate_cache()
+    return result
+
+
+def autogenerate(angles=None, dihedrals=None, patch_mode=None,
+                 selection=None, on=False, off=False, **kwargs):
+    """Control autogeneration of angles and/or dihedrals
+
+    This function controls the automatic generation of angles and dihedrals
+    based on bond connectivity. It can also set autogeneration flags for
+    specific atoms.
+
+    Parameters
+    ----------
+    angles : bool or None
+        If True, regenerate all angles based on connectivity.
+        If False, disable angle autogeneration (NOANGLE).
+        If None, do not modify angle autogeneration. (default: None)
+    dihedrals : bool or None
+        If True, regenerate all dihedrals based on connectivity.
+        If False, disable dihedral autogeneration (NODIHEDRAL).
+        If None, do not modify dihedral autogeneration. (default: None)
+    patch_mode : bool or None
+        If True (PATCH), activate autogeneration for patches.
+        If False (NOPATCH), suppress autogeneration when patching.
+        If None, do not modify patch mode. (default: None)
+    selection : pycharmm.SelectAtoms or None
+        Atom selection for ON/OFF operations. Required if on or off is True.
+        (default: None)
+    on : bool
+        If True, clear autogeneration flags (bits 32 and 64) for selected atoms,
+        allowing autogeneration to modify angles/dihedrals for these atoms.
+        (default: False)
+    off : bool
+        If True, set autogeneration flags (bits 32 and 64) for selected atoms,
+        preventing autogeneration from modifying angles/dihedrals for these atoms.
+        (default: False)
+    **kwargs : dict
+        Additional settings including:
+        - drude: bool - Enable Drude particle autogeneration
+        - nodrude: bool - Disable Drude particle autogeneration
+        - pcheck: bool - Enable parameter checking
+        - nopcheck: bool - Disable parameter checking
+
+    Returns
+    -------
+    bool
+        True indicates success.
+
+    Notes
+    -----
+    The ANGLes and DIHEdrals options delete all current angles/dihedrals
+    and regenerate lists based on connectivity. This may be needed after
+    patching or other PSF modifications.
+
+    Atom autogeneration flags are bit-coded:
+    - Bit 1: Delete angles where atom is central (J position)
+    - Bit 2: Delete angles where atom is non-central (I or K position)
+    - Bit 4: Delete dihedrals where atom is central (J or K position)
+    - Bit 8: Delete dihedrals where atom is non-central (I or L position)
+    - Bit 16: Skip parameter checking for this atom
+    - Bit 32: Prevent angle modification by autogen
+    - Bit 64: Prevent dihedral modification by autogen
+
+    Examples
+    --------
+    >>> import pycharmm
+    >>> import pycharmm.generate as gen
+
+    Regenerate all angles and dihedrals
+    >>> gen.autogenerate(angles=True, dihedrals=True)
+
+    Enable autogeneration for patches
+    >>> gen.autogenerate(patch_mode=True)
+
+    Disable autogeneration for specific atoms
+    >>> sel = pycharmm.SelectAtoms(atom_type='LP*')
+    >>> gen.autogenerate(selection=sel, off=True)
+    """
+    cmd_kwargs = {}
+    cmd_parts = ['autogenerate']
+
+    if on:
+        cmd_parts.append('on')
+    elif off:
+        cmd_parts.append('off')
+    else:
+        if angles is True:
+            cmd_parts.append('angles')
+        elif angles is False:
+            cmd_parts.append('noangles')
+        if dihedrals is True:
+            cmd_parts.append('dihedrals')
+        elif dihedrals is False:
+            cmd_parts.append('nodihedrals')
+        if patch_mode is True:
+            cmd_parts.append('patch')
+        elif patch_mode is False:
+            cmd_parts.append('nopatch')
+
+    auto_command = ' '.join(cmd_parts)
+    auto_script = pycharmm.script.CommandScript(auto_command,
+                                                selection=selection,
+                                                **cmd_kwargs,
+                                                **kwargs)
+    result = auto_script.run()
+    # Autogenerate can modify PSF angles/dihedrals, invalidate cache
+    _invalidate_cache()
+    return result
+

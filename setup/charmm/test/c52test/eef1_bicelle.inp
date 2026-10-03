@@ -1,0 +1,132 @@
+* EEF1 bicelle (modified parabolic pore) implicit-membrane test
+* Validates MR!337 (model: Themis Lazaridis; fixes/integration: J. Buckner).
+* Capture-free, self-reports via the testcheck macro:
+*   PART 1  analytic first derivatives of the bicelle solvation energy,
+*           checked against finite differences by TEST FIRST.  The EEF1
+*           solvation term is ISOLATED with "skip all excl asp" so the
+*           check is not polluted by finite-difference noise from the
+*           cutoff-switched vdw/elec/bonded terms.  Every component must
+*           agree: NOK = 3*NATOM.  Probed at several placements spanning
+*           the disk interior, the radial edge (RC~1), the exterior, and
+*           off the midplane, so the radial (DGDR/DFDR/DRDZ) and axial
+*           (DFDZ) derivative paths are all exercised.
+*   PART 2  exercises the fixed SLVPRINT (eef1 print) bicelle branch.
+*   PART 3  shows rbic+rprb double-applies the pore term (the conflict the
+*           mutual-exclusivity guard rejects).
+*
+if ?aspener .ne. 1 then
+   echo "Test NOT performed - ASPENER (EEF1) not compiled."
+   stop
+endif
+if ?numnode .ne. 1 then
+   echo "Test NOT performed in parallel."
+   stop
+endif
+
+stream datadir.def
+
+open read card unit 3 name @0toph19_eef1.1.inp
+read rtf unit 3 card
+close unit 3
+open read card unit 3 name @0param19_eef1.1.inp
+read para unit 3 card
+close unit 3
+open read unit 3 card name @0testimm1.crd
+read seque coor unit 3
+close unit 3
+generate main setup
+open read unit 2 card name @0testimm1.crd
+read coor card unit 2
+close unit 2
+
+set rbic = 40.0
+set tolabs = -0.5      ! negative => absolute; NOK must equal the DOF count
+calc ndof = 3 * ?natom
+
+! ===================== PART 1 : derivatives =====================
+! nsmp 29 is the physically-appropriate radial smoothness for a 40-Ang
+! bicelle (T. Lazaridis) -- do NOT lower it to get smoother finite
+! differences; a small nsmp is a bad model.  The derivative check stays
+! valid because it isolates the EEF1 solvation term (skip all excl asp)
+! and uses a small finite-difference step.
+eef1 setup membrane slvt water slv2 chex nsmth 10 width 30.0 temp 298.15 -
+     unit 93 name @0solvpar.inp aemp 0.85 rbic @rbic aprb 10.0 nsmp 29
+update ctonnb 7. ctofnb 9. cutnb 10. group rdie
+skip all excl asp
+
+! radial edge (center ~ RBIC), at the midplane
+coor orient
+coor trans xdir @rbic ydir 0.0 zdir 0.0
+update
+energy
+test first step 0.00001 tol 0.001 sele all end
+@testcheck ?nok @ndof @tolabs EEF1_BIC_DERIV_EDGE_MID
+
+! radial edge, off the midplane (exercises DRDZ + RPOR(z))
+coor orient
+coor trans xdir @rbic ydir 0.0 zdir 12.0
+update
+energy
+test first step 0.00001 tol 0.001 sele all end
+@testcheck ?nok @ndof @tolabs EEF1_BIC_DERIV_EDGE_OFFMID
+
+! interior of the disk (small radius)
+coor orient
+coor trans xdir 8.0 ydir 0.0 zdir 4.0
+update
+energy
+test first step 0.00001 tol 0.001 sele all end
+@testcheck ?nok @ndof @tolabs EEF1_BIC_DERIV_INSIDE
+
+! exterior of the disk (large radius)
+coor orient
+coor trans xdir 70.0 ydir 0.0 zdir 4.0
+update
+energy
+test first step 0.00001 tol 0.001 sele all end
+@testcheck ?nok @ndof @tolabs EEF1_BIC_DERIV_OUTSIDE
+
+skip none
+
+! ===================== PART 2 : slvprint fix =====================
+! Pre-fix the per-atom loop used RPOR = RPRB - APRB*z'^2 (negative for
+! rbic-only) -> divergent per-atom report.  SLVPRINT's per-atom values
+! are not queryable, so we exercise the fixed branch and confirm it
+! leaves the (correct) total energy unchanged.  The per-atom math itself
+! is validated by PART 1 (same RPOR = RBIC - APRB*z'^2 formula).
+coor orient
+coor trans xdir @rbic ydir 0.0 zdir 6.0
+update
+energy
+set eref = ?ener
+eef1 print
+energy
+calc dprint = abs ( ?ener - @eref )
+@testcheck @dprint 0.0 -0.001 EEF1_BIC_SLVPRINT_CONSISTENT
+
+! ===================== PART 3 : rbic/rprb conflict =====================
+! At default bomlev the guard makes rbic+rprb fatal.  Here we lower
+! bomlev so the WRNDIE(-2) is survivable and show the combination
+! double-applies the pore term (energy differs from rbic-only) - the
+! very conflict the guard rejects.
+set ebic = ?ener
+bomlev -5
+eef1 setup membrane slvt water slv2 chex nsmth 10 width 30.0 temp 298.15 -
+     unit 93 name @0solvpar.inp aemp 0.85 rbic @rbic rprb @rbic aprb 10.0 nsmp 29
+bomlev 0
+update
+energy
+set eboth = ?ener
+calc ddbl = abs ( @eboth - @ebic )
+if @ddbl .gt. 0.01 then
+   set teststat pass
+else
+   set teststat fail
+   incr testfail by 1
+endif
+echo EEF1_BIC_RBIC_RPRB_CONFLICT testcase result: @teststat
+
+echo ============================================================
+echo   EEF1 bicelle test complete : @testfail failure(s)
+echo ============================================================
+stop

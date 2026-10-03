@@ -19,7 +19,7 @@ contains
   ! * Send character array to root node
   ! *
   subroutine send_str_to_root(str)
-    use mpi,only:mpi_integer, mpi_character, mpi_success
+    use mpi_f08,only:mpi_integer, mpi_byte, mpi_success
     use parallel,only:comm_charmm, mynod
     implicit none
     ! Input / Output
@@ -36,7 +36,7 @@ contains
     endif
 
     ! Send string
-    call mpi_send(str, nstr, mpi_character, 0, str_tag, comm_charmm, ierror)
+    call mpi_send(str, nstr, mpi_byte, 0, str_tag, comm_charmm, ierror)
     if (ierror /= mpi_success) then
        call wrndie(-5,'<domdec_io.src>','Error sending string')
     endif
@@ -48,7 +48,7 @@ contains
   ! * Send "no-string" command to root
   ! *
   subroutine send_nostr_to_root()
-    use mpi,only:mpi_integer, mpi_success
+    use mpi_f08,only:mpi_integer, mpi_success
     use parallel,only:comm_charmm,mynod
     implicit none
     ! Variables
@@ -66,7 +66,7 @@ contains
   ! * Receive character array from a node
   ! *
   subroutine recv_str_from_node(str, nstr, src_node)
-    use mpi,only:mpi_integer, mpi_character, mpi_success, mpi_status_ignore
+    use mpi_f08,only:mpi_integer, mpi_byte, mpi_success, mpi_status_ignore
     use parallel,only:comm_charmm
     implicit none
     ! Input / Output
@@ -84,7 +84,7 @@ contains
     if (nstr <= 0) return
 
     ! Receive string
-    call mpi_recv(str, nstr, mpi_character, src_node, str_tag, comm_charmm, mpi_status_ignore,&
+    call mpi_recv(str, nstr, mpi_byte, src_node, str_tag, comm_charmm, mpi_status_ignore,&
          ierror)
     if (ierror /= mpi_success) then
        call wrndie(-5,'<domdec_io.src>','Error receiving string')

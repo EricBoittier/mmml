@@ -1,0 +1,79 @@
+*>>>>>>>> All-Hydrogen Topology File for Proteins from AMBER parm19sb <<<<<<
+*>>>>>>>>>>>>>> Includes phi, psi cross-term map (CMAP) <<<<<<<<<<<<<<<<
+*>>>>>>>>>>>>>>>>>>>>>>> C. L. Brooks III <<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+*
+36  1
+
+MASS  -1  H        1.00800 ! H
+MASS  -1  H1       1.00800 ! HA
+MASS  -1  HC       1.00800 ! H1
+MASS  -1  C       12.01000 ! C
+MASS  -1  CT      12.01000 ! CH3
+MASS  -1  XC1     12.01000 ! CA
+MASS  -1  N       14.01000 ! N
+MASS  -1  O       16.00000 ! O
+
+DECL -CA
+DECL -C
+DECL -O
+DECL +N
+DECL +HN
+DECL +CA
+DEFA FIRS NONE LAST NONE
+AUTO ANGLES DIHE PATCH
+
+RESI ACE 0.00
+ATOM H1   HC      0.11230
+ATOM CH3  CT     -0.36620
+ATOM H2   HC      0.11230
+ATOM H3   HC      0.11230
+ATOM C    C       0.59720
+ATOM O    O      -0.56790
+BOND H1   CH3 
+BOND CH3  C   
+BOND CH3  H2  
+BOND CH3  H3  
+BOND C    O   
+BOND C    +N  
+IMPROPER CH3  +N   C    O   
+
+RESI ALA 0.00
+ATOM N    N      -0.41570
+ATOM H    H       0.27190
+ATOM CA   XC1     0.03370
+ATOM HA   H1      0.08230
+ATOM CB   CT     -0.18250
+ATOM HB1  HC      0.06030
+ATOM HB2  HC      0.06030
+ATOM HB3  HC      0.06030
+ATOM C    C       0.59730
+ATOM O    O      -0.56790
+BOND N    CA  
+BOND N    H   
+BOND CA   CB  
+BOND CA   C   
+BOND CA   HA  
+BOND CB   HB1 
+BOND CB   HB2 
+BOND CB   HB3 
+BOND C    O   
+BOND C    +N  
+IMPROPER CA   +N   C    O   
+IMPROPER -C   CA   N    H   
+CMAP -C   N    CA   C    N    CA   C    +N  
+
+RESI NME 0.00
+ATOM N    N      -0.41570
+ATOM H    H       0.27190
+ATOM C    CT     -0.14900
+ATOM H1   H1      0.09760
+ATOM H2   H1      0.09760
+ATOM H3   H1      0.09760
+BOND N    C   
+BOND N    H   
+BOND C    H1  
+BOND C    H2  
+BOND C    H3  
+IMPROPER -C   C    N    H   
+
+END

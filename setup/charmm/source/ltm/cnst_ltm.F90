@@ -97,6 +97,11 @@ module cnst_fcm
   integer :: ncsphi, kqexpn, kbexpn, numhsets, numpca
   integer,allocatable,dimension(:) :: ihset
   integer, allocatable,dimension(:) :: ics, jcs, kcs, lcs,iccs, ccsd, kcexpn, typhset
+  ! For a relative best-fit restraint (typhset==2) parhset holds the index
+  ! of the paired set; 0 for all other set types.  Kept separate so typhset
+  ! stays a pure type code (0=harmonic, 1=best-fit, 2=relative, 3=PCA) and
+  ! never collides with a partner set index.
+  integer, allocatable,dimension(:) :: parhset
 
   real(chm_real) :: ccbic, cctic, ccpic, cciic, kqcnst
   real(chm_real),allocatable,dimension(:) :: kcnstr, refx, refy, refz,fbeta
@@ -185,6 +190,18 @@ module cnst_fcm
 
 
 contains
+
+  ! Return the paired set index JSET for a relative best-fit restraint set
+  ! ISET (typhset==2).  The two members of a pair reference each other via
+  ! parhset, so parhset(parhset(iset)) must equal iset.  Shared by ecnstr
+  ! (energy) and prcnst (print) so the pairing invariant lives in one place.
+  subroutine hset_relative_partner(iset, parhset, jset)
+    integer, intent(in)  :: iset, parhset(*)
+    integer, intent(out) :: jset
+    jset = parhset(iset)
+    if (parhset(jset) /= iset) call wrndie(-4, '<HSET_RELATIVE_PARTNER>', &
+         'Error in relative set types - coding error')
+  end subroutine hset_relative_partner
 
   subroutine cnst_init()
     !=======================================================================

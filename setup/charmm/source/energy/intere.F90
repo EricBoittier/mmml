@@ -137,6 +137,7 @@ SUBROUTINE INTER2(X,Y,Z,ISLCT,JSLCT,ISKIP,RTEMP, &
 #endif
      QKEEP)
   use genborn, only: qgenborn, fillalpgb, gbsolv
+  use ecnstr_mod, only: ecnstr
 #if KEY_BLOCK==1
   use genborn, only: fillalpgb1, fillalpgb2, gbsolv1, gbsolv2
 #endif
@@ -956,10 +957,10 @@ SUBROUTINE INTER2(X,Y,Z,ISLCT,JSLCT,ISKIP,RTEMP, &
      ENDDO
      CALL ECNSTR(ETERM(CHARM),QCNSTR,REFX,REFY,REFZ,RTEMP,NATOM, &
           KCEXPN,XHSCALE,YHSCALE,ZHSCALE,1, &
-          NUMHSETS,TYPHSET,IHSET,QHNORT,QHNOTR, &
+          NUMHSETS,TYPHSET,PARHSET,IHSET,QHNORT,QHNOTR, &
           X,Y,Z,DX,DY,DZ, &
           QECONT,ECONT, (/ ZERO /), (/ 0 /), .FALSE. &
-          ,(/0/),(/0,0/),(/0,0/),(/0,0/) &
+          ,numpca,pcax,pcay,pcaz &
           )
 
   ENDIF
@@ -977,7 +978,7 @@ SUBROUTINE INTER2(X,Y,Z,ISLCT,JSLCT,ISKIP,RTEMP, &
      ENDDO
      CALL ECNSTR(ETERM(PCHARM),QCNSTR,REFX,REFY,REFZ,RTEMP,NATOM, &
           KCEXPN,XHSCALE,YHSCALE,ZHSCALE,2, &
-          NUMHSETS,TYPHSET,IHSET,QHNORT,QHNOTR, &
+          NUMHSETS,TYPHSET,PARHSET,IHSET,QHNORT,QHNOTR, &
           X,Y,Z,DX,DY,DZ, &
           QECONT,ECONT, (/ ZERO /), (/ 0 /), .FALSE. &
           ,numpca,pcax,pcay,pcaz &

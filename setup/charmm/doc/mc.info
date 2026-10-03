@@ -936,7 +936,7 @@ result, not all energy terms are supported.  Those that are supported are
 bonds, angles, Urey-Bradley, dihedrals, impropers, vdw, electrostatic, 
 image vdw, image electrostatic, QM/MM (MOPAC only), path integral, asp-EEF1, 
 asp-ACE/ACS, NOE constraints, and user (also note that the user must edit 
-both usersb.src and mcuser.src for the user energy to work correctly).  All 
+both usersb.F90 and mcuser.F90 for the user energy to work correctly).  All 
 non-bonded calculations can be either atom- or group-based.  Terms not listed 
 above are not included in the present implementation.
 

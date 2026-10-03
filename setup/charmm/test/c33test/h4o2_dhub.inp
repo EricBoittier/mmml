@@ -4,11 +4,34 @@
 * Author: Haibo Yu & Qiang Cui, June 2005, UW Madison
 
 if ?SCCDFTB .NE. 1 then
-  echo "Test NOT Performed."
+  echo H4O2_DHUB TESTCASE RESULT: SKIP
   STOP
 endif
 
 stream datadir.def
+
+! SCC-DFTB needs SCCDFTB_DATA set to a directory holding the DFTB parameter
+! file sccdftb_ONCH.dat (not in the repo; contact Marcus Elstner).  genv aborts
+! hard when SCCDFTB_DATA is unset, so guard it and self-skip house-style when
+! the data is not provisioned.
+set sccdftbdir UNSET_SCCDFTB_DATA
+set oldbomlev ?bomlev
+bomlev -5
+genv sccdftbdir SCCDFTB_DATA
+bomlev @oldbomlev
+if @sccdftbdir eq UNSET_SCCDFTB_DATA then
+   echo H4O2_DHUB TESTCASE RESULT: SKIP
+   stop
+endif
+strc sccdat @sccdftbdir "/sccdftb_ONCH.dat"
+bomlev -5
+open unit 98 read form name @sccdat
+if ?iostat .ne. 1 then
+   echo H4O2_DHUB TESTCASE RESULT: SKIP
+   stop
+endif
+close unit 98
+bomlev @oldbomlev
 
 OPEN UNIT 21 NAME @0top_all22_prot.inp READ FORM
 READ RTF card UNIT 21
@@ -41,17 +64,43 @@ scalar WMAIN set 3.0 sele (all) .and. type C*  SHOW end
 scalar WMAIN set 4.0 sele (all) .and. type H*  SHOW end
 
 ! ...... A standard calculation ...... 
-SCCDFTB remove CHRG 0 SELE all END TEMP 0.00 SCFT 0.00000001 
+SCCDFTB remove CHRG 0 SELE all END TEMP 0.00 SCFT 0.00000001 DATF @sccdat
+
+energy
+! A self-reported result short-circuits the comparison against the
+! benchmark, so whatever is not asserted here stops being checked.
+! QMEL is read first, at the untouched geometry, so it does not depend
+! on the probes below.  It is the one captured number and is quoted for
+! the 3ob set; it earns its place because the invariants below are all
+! satisfied by an energy that is self-consistent but wrong.
+@testcheck ?qmel -5096.94931 0.000001 h4o2_dhub_qmel
+! Forces on an isolated system sum to zero (Newton's third law).
+scalar dx stat
+set fx = ?stot
+scalar dy stat
+set fy = ?stot
+scalar dz stat
+set fz = ?stot
+calc fnet = abs(@fx) + abs(@fy) + abs(@fz)
+@testcheck @fnet 0 -0.000001 h4o2_dhub_netforce
+! A rigid shift must not change the energy.  Tolerance 1e-4 because
+! ?ENER is read at print precision.
+set e0 = ?ener
+coor trans xdir 1.0 ydir 0.0 zdir 0.0 dist 3.7
+energy
+calc edrift = abs ( ?ener - @e0 )
+@testcheck @edrift 0 -0.0001 h4o2_dhub_translation
+coor trans xdir -1.0 ydir 0.0 zdir 0.0 dist 3.7
+energy
+
+! ...... Including third-order (on-site) terms ......
+! ...... Need to include Hubbard derivatives in the sccdftb.dat file ......
+SCCDFTB remove CHRG 0 SELE all END TEMP 0.00 SCFT 0.00000001 DHUB DATF @sccdat
 
 energy
 
-! ...... Including third-order (on-site) terms ...... 
-! ...... Need to include Hubbard derivatives in the sccdftb.dat file ...... 
-SCCDFTB remove CHRG 0 SELE all END TEMP 0.00 SCFT 0.00000001 DHUB
-
-energy
-
-test first step 0.001
+test first tol 0.01 step 0.001
+@testcheck ?nok 18 -0.5 h4o2_dhub_dfirst
 
 STOP
 

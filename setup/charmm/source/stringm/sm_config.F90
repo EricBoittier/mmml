@@ -10,6 +10,7 @@
 #if (KEY_STRINGM==1) /*  automatically protect all code */
 !
       use chm_kinds
+      use mpi_f08, only: MPI_Datatype
 !
 !ccccc flags
       logical :: &
@@ -50,9 +51,9 @@
 ! & MPI_CV_TYPE3I_
 ! integer :: MPI_CV_TYPE2 , MPI_CV_TYPE3 , MPI_GRAD_TYPE,
 ! & MPI_CV_TYPE3I
-      integer*4 :: MPI_CV_TYPE2_, MPI_CV_TYPE3_, MPI_GRAD_TYPE_, &
+      TYPE(MPI_Datatype) :: MPI_CV_TYPE2_, MPI_CV_TYPE3_, MPI_GRAD_TYPE_, &
      & MPI_CV_TYPE3I_
-      integer*4 :: MPI_CV_TYPE2 , MPI_CV_TYPE3 , MPI_GRAD_TYPE, &
+      TYPE(MPI_Datatype) :: MPI_CV_TYPE2 , MPI_CV_TYPE3 , MPI_GRAD_TYPE, &
      & MPI_CV_TYPE3I
 ! flags that control parallelization
       integer, parameter :: allgather_=1, gather_bcast_=1, hypercube_=3 ! internal constants

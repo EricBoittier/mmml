@@ -51,15 +51,15 @@ echo myrep == 1
 
 mscale nsub 3
 
-subs all coef 1.0 prog "../exec/gnu_M/charmm" -
+subs all coef 1.0 prog "../bin/charmm" -
                    outp "@9clnh4.out_1" inpu "@0clnh4mscl.inp" -
                    sele all end end
 
-subs qm coef 1.0 prog "../exec/gnu_M/charmm" -
+subs qm coef 1.0 prog "../bin/charmm" -
                    outp "@9clmsclp.out_1" inpu "@0clmscl.inp" -
                    sele type cl end
 
-subs mm coef -1.0 prog "../exec/gnu_M/charmm" -
+subs mm coef -1.0 prog "../bin/charmm" -
                    outp "@9clmsclm.out_1" inpu "@0clmscl.inp" -
                    sele type cl end
 !sysd
@@ -83,15 +83,15 @@ echo myrep == 2
 
 mscale nsub 3
 
-subs all coef 1.0 prog "../exec/gnu_M/charmm" -
+subs all coef 1.0 prog "../bin/charmm" -
                    outp "@9clnh4.out_2" inpu "@0clnh4mscl.inp" -
                    sele all end end
 
-subs qm coef 1.0 prog "../exec/gnu_M/charmm" -
+subs qm coef 1.0 prog "../bin/charmm" -
                    outp "@9nh4msclp.out_2" inpu "@0nh4mscl.inp" -
                    sele .not. type cl end
 
-subs mm coef -1.0 prog "../exec/gnu_M/charmm" -
+subs mm coef -1.0 prog "../bin/charmm" -
                    outp "@9nh4msclm.out_2" inpu "@0nh4mscl.inp" -
                    sele .not. type cl end
 !sysd
@@ -115,7 +115,7 @@ echo myrep == 3
 
 mscale nsub 1
 
-subs allQM coef 1.0 prog "../exec/gnu_M/charmm" -
+subs allQM coef 1.0 prog "../bin/charmm" -
                    outp "@9clnh4.out_3" inpu "@0clnh4mscl.inp" -
                    sele all end end
 

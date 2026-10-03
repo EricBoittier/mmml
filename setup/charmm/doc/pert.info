@@ -178,22 +178,51 @@ since PERT command was first enabled, or if a PERT RESET command is used
 (regardless of whether the DYNAmics commands is run more than once or
 whether the dynamic run involved the use of restart files).
 
-By specifying the auto mode parameters (PINCrement, PEQUilibrate, LINCrement, LEXP),
-a new window will start at the conclusion of the current window with modified
-parameters.  Also, in auto mode, the run will terminate at the end of a window
-where LAMBDA reaches the LSTOP value.
+By specifying the auto mode parameters (PINCrement, PEQUilibrate,
+LINCrement, LEXP), a new window will start at the conclusion of the
+current window with modified parameters.  Also, in auto mode, the run
+will terminate at the end of a window where LAMBDA reaches the LSTOP
+value. THE DETAILS HOW TO USE AUTO MODE HAVE CHANGED STARTING WITH
+CHARMM V49 IN AN INCOMPATIBLE MANNER. (Some hints converting old auto
+mode inputs to the new one are given below.
 
-The auto mode can be specified in DYNAmic input line by LINC and/or LEXP.
-The range of LAMBDA is defined by LSTA (default 0) and LSTOP (default 1).
-When LEXP is set to 0, linear windows of LAMBDA will be defined between LSTA
-and LSTOP.  When LEXP>0 (suggested value:3.5 for transiting to dummy atoms), 
-the windows will exponentially approch LSTOP. When LEXP<0 (suggested 
-value: -3.5 for transiting from dummy atoms), the windows will 
-exponentially approach LSTA. Number of windows is defined by (LSTOP-LSTA)/LINC+1.
-LSTA can be smaller or larger than LSTOP. LINC must be positive when LSTA<LSTOP,
-or negative when LSTA>LSTOP. Dynamic simulation steps, NSTEP, should be equal to 
-or larger than PINC*((LSTOP-LSTA)/LINC+1). The auto mode will be turned off or 
+The auto mode can be specified in DYNAmic input line by LINC and/or
+LEXP.  The range of LAMBDA is defined by LSTA (default 0) and LSTOP
+(default 1).  When LEXP is set to 0, linear windows of LAMBDA will be
+defined between LSTA and LSTOP.  When LEXP>0 (suggested value:3.5 for
+transiting to dummy atoms), the windows will exponentially approch
+LSTOP. When LEXP<0 (suggested value: -3.5 for transiting from dummy
+atoms), the windows will exponentially approach LSTA. Number of
+windows is defined by (LSTOP-LSTA)/LINC+1.  LSTA can be smaller or
+larger than LSTOP. LINC must be positive when LSTA<LSTOP, or negative
+when LSTA>LSTOP. Dynamic simulation steps, NSTEP, should be equal to
+or larger than PINC*((LSTOP-LSTA)/LINC+1). It's the user's
+responsibility to ensure that the NSTEP value is matching the intent
+of the auto mode settings. The auto mode will be turned off or
 redefined when PUNIT is set.
+
+Treatment of old auto mode inputs: In the old auto mode, the user had
+to specify LSTArt, LAMBda, and LSTOp for the first window; then these
+parameters were changed based on LINC and the next window was
+calculated based on the PINC and PEQU settings. In the new auto mode
+approach, LSTArt and LSTOp should always indicate the first and last
+lambda value desired, i.e., in most cases 0 and 1 or 1 and 0,
+respectively. Setting the first LAMBda value explicitly is not needed
+and undesirable. The code will check for the use of automode and
+explicit setting of LAMBda. In such a situation (e.g., LINC and or
+LEXP set explicitly, but LAMBda as well the code will proceed as
+follows: If the user's intentions seem to be guessable (a plain 0 to 1
+or 1 to 0 mutation), then a level 0 error is thrown, together with an
+explanatory message. The user can override this with BOMLEV -1 and in
+many cases the correct behavior will ensue. NEVERTHELESS, CHECK that
+the code calculates the LAMBDA values you intended to be used. If the
+user's intentions are more complicated; e.g. an auto mode run from 0.2
+to 0.8, then the code will terminate with a level -2 error and a terse
+warning message. If this gets overriden, wrong results are guaranteed!
+The example section below contains a brief auto mode example, which is
+given for the old (<=c48) and new (>=c49) way of doing things;
+comparing the two should make it clear how to modify old auto mode
+inputs to the new style, which is strongly encouraged.
 
 The exponential distribution of LAMBDA windows are designed for the double 
 exponential (DE) VDW potential. DE potential has no signularity and is 
@@ -226,6 +255,9 @@ ENER LAMB 0.6 NOPS ! calc. system energy for L=0.6, use of soft
 
 The PERT/PSSP code supports only thermodynamic integration and slow-growth.
 Please ignore all results starting with TP> when using PSSP.
+
+Slow-growth (PSLOw), which can be used to obtain non-equilibrium work values, is currently
+incompatible with support for double exponentials (e.g., LEXP keyword) and will abort.
 
 The PUNIt option allows the free-energy-step-spec to be specified 
 more than once and acts as a scheduler for a particular simulation.
@@ -474,14 +506,24 @@ The punit file:
   LSTART 0.95 LAMBDA 1.0  LSTOP 1.0   PSTART 112000  PSTOP 120000  PWIND
   END
 
-Or equivalently using auto mode:
+Or equivalently using (the new) auto mode:
 
 * PUNIT FILE FOR SIMPLE TEST CASE
 * use window method with 2000 steps of equilibration
 * and 8000 steps of analysis for each of 10 evenly spaces
 * windows.
 *
- LSTART 0.0  LAMBDA 0.0  LSTOP 0.05  PSTART  12000  PSTOP  20000  PWIND PEQUIL 2000 PINCR 10000 LINCR 0.1
+ LSTART 0.0  LSTOP 1.0  PSTART  12000  PSTOP  20000  PWIND -
+ PEQUIL 2000 PINCR 10000 LINCR 0.1
+
+The equivalent line in the old auto mode would have been:
+
+ LSTART 0.0  LAMBDA 0.0  LSTOP 0.05  PSTART  12000  PSTOP  20000  PWIND -
+ PEQUIL 2000 PINCR 10000 LINCR 0.1 ! OLD AUTO MODE, DON'T USE
+
+The old way of doing things will NOT work in CHARMM v49 and higher. It
+is strongly encouraged to rewrite old inputs to the new auto mode,
+rather than overriding the warning by a BOMLEV -1!
 
 
 Or also equivalently as:
@@ -984,11 +1026,11 @@ correct energy subroutines are called if PSSP is active, and (ii) that
 the additional contributions to dU/dL are temporarily stored and
 added to the LJ and elec free energy contributions calculated in the
 standard PERT way. To achieve (i), subroutines FASTST,
-EVDW (enbonda.src) and EGROUP (enbondg.src) were modified slightly
+EVDW (enbonda.F90) and EGROUP (enbondg.F90) were modified slightly
 as well.
 
 (c) Special purpose nonbonded energy routines (based on the
-standard slow energy routines) have been added to the file epert.src.
+standard slow energy routines) have been added to the file epert.F90.
 Currently only a subset of nonbonded options is supported (see below)
 
 All new nonlocal variables (no arrays are needed!) have been added
@@ -1062,7 +1104,7 @@ Finally, note that there is no support for parallel architectures.
   CHARMM, support for FSHIft and RDIE is planned.
 
 * Use the slow energy routines instead of special purpose routines in
-  epert.src.  Further, maybe a merge with the existing soft core
+  epert.F90.  Further, maybe a merge with the existing soft core
   routines in CHARMM (intended primarily for docking) is possible.
   This would lead to a unified, general and flexible soft core
   facility. Also, this would cure (maybe?) (most of) the parallel code
@@ -1189,7 +1231,7 @@ Details about the use of MFF-potentials in PERT:
 The MMFP keyword makes it possible to modify (add/remove)
 MMF-potentials during an alchemical PERT mutation.  If the keyword was
 specified when activating PERT, the original call to the MMFP routines
-in the constant-energy section of EPERT (epert.src) is omitted.
+in the constant-energy section of EPERT (epert.F90) is omitted.
 Instead, two new calls to the MMFP routines, one in the lambda=0
 section and one in the lambda=1 section, are used.  It is an optional
 command, so the original use of the MMFP potentials in PERT (as

@@ -1566,7 +1566,7 @@ contains
   subroutine transfer_coord(x, y, z, rezone)
     use memory
     use number
-    use mpi,only:mpi_real8, mpi_byte, mpi_success, mpi_statuses_ignore
+    use mpi_f08,only:mpi_real8, mpi_byte, mpi_success, mpi_statuses_ignore
     use psf,only:natom
     use parallel,only:comm_charmm, mpi_integer_size, mpi_real8_size
     use groupxfast,only:group, group_out, maxgrp_rad, groupcenter, groupbox, invgroup
@@ -2391,7 +2391,7 @@ contains
   ! * Receive groups and coordinates
   ! *
   subroutine recv_groups_coords(ncomm, node, buf)
-    use mpi,only:mpi_success, mpi_status_size, mpi_byte
+    use mpi_f08,only:mpi_success, mpi_byte, MPI_Status
     use memory,only:chmrealloc
     use parallel,only:comm_charmm, mpi_real8_size
     implicit none
@@ -2401,7 +2401,8 @@ contains
     ! Variables
     integer i, j, len
     logical flag
-    integer status(mpi_status_size), ierror
+    TYPE(MPI_Status) :: status
+    integer ierror
 
     recv_flag(1:ncomm) = .false.
     do i=1,ncomm
@@ -2999,19 +3000,19 @@ contains
           diy = int(y/fry) + 1 - homeiy
           diz = int(z/frz) + 1 - homeiz
           
-          bx = (iabs(dix) > 1)
+          bx = merge(1, 0, iabs(dix) > 1)
           dix = dix - nx*sign(bx, dix)
-          
-          by = (iabs(diy) > 1)
+
+          by = merge(1, 0, iabs(diy) > 1)
           diy = diy - ny*sign(by, diy)
-          
-          bz = (iabs(diz) > 1)
+
+          bz = merge(1, 0, iabs(diz) > 1)
           diz = diz - nz*sign(bz, diz)
        endif
 
-       bx = (dix == 0)    ! These return -1 for "true" and 0 for "false"
-       by = (diy == 0)
-       bz = (diz == 0)
+       bx = merge(1, 0, dix == 0)
+       by = merge(1, 0, diy == 0)
+       bz = merge(1, 0, diz == 0)
 
        grouploc(i) = ishft(iand(bz,1), 2) + ishft(iand(by,1), 1) + iand(bx,1)
        
@@ -3025,7 +3026,7 @@ contains
   ! * Exports forces to nodes
   ! *
   subroutine transfer_force(forcex, forcey, forcez)
-    use mpi,only:mpi_real8, mpi_success, mpi_statuses_ignore, mpi_status_ignore
+    use mpi_f08,only:mpi_real8, mpi_success, mpi_statuses_ignore, mpi_status_ignore
     use parallel,only:comm_charmm
     use domdec_common,only:nx_comm, ny_comm, nz_comm, q_gpu, q_test
 #if KEY_DOMDEC_GPU==1
@@ -3340,7 +3341,7 @@ contains
     use psf,only:natom
     use memory,only:chmalloc, chmdealloc
     use domdec_common,only:homezone
-    use mpi,only:mpi_real8, mpi_sum, mpi_success
+    use mpi_f08,only:mpi_real8, mpi_sum, mpi_success
     use parallel,only:comm_charmm, mynod
     implicit none
     ! Input / Output
@@ -3657,8 +3658,8 @@ contains
     use domdec_common,only:set_box, nneigh, zonelist, groupl, atoml, natoml, &
          homezone, neighlist, zonelist_atom, q_test
     use domdec_dlb,only:q_load_balance
-    use mpi,only:mpi_integer, mpi_real8, mpi_success, mpi_packed, mpi_status_size, &
-         mpi_statuses_ignore
+    use mpi_f08,only:mpi_integer, mpi_real8, mpi_success, mpi_packed, &
+         mpi_statuses_ignore, MPI_Status, MPI_Request
 #if KEY_DOMDEC_GPU==1
     use domdec_common,only:q_gpu
     use domdec_util_gpu_mod,only:range_start, range_stop
@@ -3675,10 +3676,11 @@ contains
     ! Variables
     logical secflag, flag
     integer i, j, k, ig, nod
-    integer requests(26)
+    TYPE(MPI_Request) :: requests(26)
     integer is, iq, igroup, iatom
     integer neighsendbufpos(26), pos
-    integer status(mpi_status_size), ierror
+    TYPE(MPI_Status) :: status
+    integer ierror
     integer neighrecvbufsize, ineigh, igrp
     integer nneighsend(26), nneighsend_tot, len
     integer ncoord_send(26), req_len
@@ -4023,7 +4025,7 @@ contains
   ! *
   ! *
   subroutine copy_to_root(x, y, z)
-    use mpi,only:mpi_integer, mpi_real8
+    use mpi_f08,only:mpi_integer, mpi_real8
     use parallel,only:mynod, COMM_CHARMM
     use psf,only:natom
     use domdec_dr_common,only:q_direct_node, q_recip_node, comm_direct
@@ -4085,7 +4087,7 @@ contains
          0, comm_direct, ierror)
 
     call mpi_gatherv(send_indbuf, n, mpi_integer, recv_indbuf, nrecv, disp2, &
-         0, mpi_integer, comm_direct, ierror)
+         mpi_integer, 0, comm_direct, ierror)
 
     if (mynod == 0) then
        do i=1,natom
@@ -4103,7 +4105,7 @@ contains
   ! * Copies coordinates to all nodes
   ! *
   subroutine copy_to_all1(x)
-    use mpi,only:mpi_integer, mpi_real8
+    use mpi_f08,only:mpi_integer, mpi_real8
     use parallel,only:COMM_CHARMM
     use psf,only:natom
     use domdec_dr_common,only:q_direct_node, q_recip_node, comm_direct
@@ -4172,7 +4174,7 @@ contains
   ! * Copies (x, y, z) to all (direct) nodes
   ! *
   subroutine copy_to_all3(x, y, z)
-    use mpi,only:mpi_integer, mpi_real8
+    use mpi_f08,only:mpi_integer, mpi_real8
     use parallel,only:comm_charmm
     use psf,only:natom
     use domdec_dr_common,only:q_direct_node, q_recip_node, comm_direct
@@ -4260,7 +4262,7 @@ contains
     use psf,only:natom
     use parallel,only:mynod
     use memory,only:chmalloc, chmdealloc
-    use mpi,only:mpi_success, mpi_integer, mpi_sum, mpi_logical, mpi_land
+    use mpi_f08,only:mpi_success, mpi_integer, mpi_sum, mpi_logical, mpi_land
     use domdec_dr_common,only:comm_direct
     use domdec_common,only:natoml, atoml
     implicit none
@@ -4273,10 +4275,8 @@ contains
     flag = .true.
     
     call chmalloc('domdec_d2d_comm.src','test_groupl_atoml','tmp',natom,intg=tmp)
-    if (mynod == 0) then
-       call chmalloc('domdec_d2d_comm.src','test_groupl_atoml','res',natom,intg=res)
-       res(1:natom) = 0
-    endif
+    call chmalloc('domdec_d2d_comm.src','test_groupl_atoml','res',natom,intg=res)
+    res(1:natom) = 0
 
     tmp(1:natom) = 0
     do i=1,natoml
@@ -4326,9 +4326,7 @@ contains
     endif
 
     call chmdealloc('domdec_d2d_comm.src','test_groupl_atoml','tmp',natom,intg=tmp)
-    if (mynod == 0) then
-       call chmdealloc('domdec_d2d_comm.src','test_groupl_atoml','res',natom,intg=res)
-    endif
+    call chmdealloc('domdec_d2d_comm.src','test_groupl_atoml','res',natom,intg=res)
 
     test_groupl_atoml = resflag
 

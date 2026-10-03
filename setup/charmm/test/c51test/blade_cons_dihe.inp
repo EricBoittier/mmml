@@ -1,0 +1,286 @@
+* BLaDE CONS DIHE restraint test
+* Tests dihedral constraints with periodic and flat-bottom (width) options
+* Compares CPU CHARMM energy/forces vs BLaDE using DHFR structure
+*
+
+if ?blade .ne. 1 then
+   echo "Test NOT performed - BLaDE not available."
+   stop
+endif
+
+! BLaDE needs a GPU of its own for every OpenMP thread in every rank, and
+! all ranks on one node see the same devices -- so N ranks x T threads want
+! N*T GPUs.  ?NGPU honours CUDA_VISIBLE_DEVICES; ?NTHREAD is the OpenMP
+! team size.  Across several nodes this is conservative, each node bringing
+! its own GPUs, so it can skip a run that would in fact work -- a needless
+! skip beats aborting inside BLaDE, which is what happens when the counts
+! do not add up.  Reported as an explicit SKIP because the grader matches
+! "TESTCASE RESULT: SKIP" but not the mixed-case "Test NOT performed" this
+! guard printed before.
+calc bladegpu = ?numnode * ?nthread
+if ?ngpu .lt. @bladegpu then
+   echo BLADE_CONS_DIHE TESTCASE RESULT: SKIP
+   stop
+endif
+
+stream datadir.def
+
+! Load topology and parameters
+open unit 1 read form name @{0}top_all22_prot.inp
+read rtf card unit 1
+close unit 1
+
+open unit 1 read form name @{0}par_all22_prot.inp
+read param card unit 1
+close unit 1
+
+! Read structure
+open unit 1 read form name @{0}5dfr_minimized.crd
+read sequ coor unit 1
+close unit 1
+
+generate 5dfr setup first nter last cter
+
+read sequ tip3 7023
+generate wat setup noangl nodihe
+
+read coor pdb resi name @{0}5dfr_solv-cube_equil.pdb
+
+! Setup periodic boundary conditions
+set size 62.23
+set theta 90.0
+crystal define cubic @size @size @size @theta @theta @theta
+crystal build cutoff 11 noper 0
+image byseg xcen 0.0 ycen 0.0 zcen 0.0 select segid 5dfr end
+image byres xcen 0.0 ycen 0.0 zcen 0.0 select segid wat end
+
+! Skip most energy terms to focus on restraints
+skipe all excl vdw elec imnb imel ewks ewse ewex ewqc cdih
+
+set pme = Ewald kappa 0.320 pmEwald order 4 fftx 64 ffty 64 fftz 64
+set tol = 1e-4
+set forceTol = 5e-2
+
+echo ============================================================
+echo           BLaDE CONS DIHE Restraint Test Suite
+echo ============================================================
+echo
+
+!---------------------------------------------------------------------
+! TEST 1: Periodic dihedral restraint (n=2)
+!---------------------------------------------------------------------
+echo ------------------------------------------------------------
+echo TEST 1: Periodic dihedral restraint on backbone phi (n=2)
+echo ------------------------------------------------------------
+
+cons cldh
+! Apply restraint on a backbone phi angle (C-N-CA-C)
+cons dihe 5dfr 1 C 5dfr 2 N 5dfr 2 CA 5dfr 2 C force 10 min 90 periodic 2
+
+! Get CPU CHARMM energy
+energy eps 1.0 cutnb 11 cutim 11 ctofnb 9 ctonnb 7.5 vswitch @pme
+set expected = ?ener
+coor force comp
+
+! Store CPU forces
+scalar xcomp store 1
+scalar ycomp store 2
+scalar zcomp store 3
+
+! Get BLaDE energy
+energy blade
+set actual = ?ener
+coor force comp
+
+! Compare energies
+calc dener abs ( @actual - @expected )
+calc relerr @dener / abs ( @expected )
+echo   CPU Energy:   @expected
+echo   BLaDE Energy: @actual
+echo   Rel Error:    @relerr
+
+@testcheck @actual @expected @tol BLADE_CONS_DIHE_ENERGY_1
+
+! Compare forces
+scalar 1 mult -1.0
+scalar 2 mult -1.0
+scalar 3 mult -1.0
+scalar xcomp +store 1
+scalar ycomp +store 2
+scalar zcomp +store 3
+scalar 1 store 4
+scalar 2 store 5
+scalar 3 store 6
+scalar 4 *store 1
+scalar 5 *store 2
+scalar 6 *store 3
+scalar 3 +store 1
+scalar 2 +store 1
+scalar wcomp recall 1
+scalar wcomp stat
+calc dforceave sqrt( ?save )
+echo   Force Diff (avg): @dforceave
+
+@testcheck @dforceave 0 @forceTol BLADE_CONS_DIHE_FORCE_1
+
+!---------------------------------------------------------------------
+! TEST 2: Harmonic dihedral restraint (width=0)
+!---------------------------------------------------------------------
+echo
+echo ------------------------------------------------------------
+echo TEST 2: Harmonic dihedral restraint (width=0)
+echo ------------------------------------------------------------
+
+cons cldh
+cons dihe 5dfr 1 C 5dfr 2 N 5dfr 2 CA 5dfr 2 C force 10 min 120 width 0
+
+energy eps 1.0 cutnb 11 cutim 11 ctofnb 9 ctonnb 7.5 vswitch @pme
+set expected = ?ener
+coor force comp
+scalar xcomp store 1
+scalar ycomp store 2
+scalar zcomp store 3
+
+energy blade
+set actual = ?ener
+coor force comp
+
+calc dener abs ( @actual - @expected )
+calc relerr @dener / abs ( @expected )
+echo   CPU Energy:   @expected
+echo   BLaDE Energy: @actual
+echo   Rel Error:    @relerr
+
+@testcheck @actual @expected @tol BLADE_CONS_DIHE_ENERGY_2
+
+scalar 1 mult -1.0
+scalar 2 mult -1.0
+scalar 3 mult -1.0
+scalar xcomp +store 1
+scalar ycomp +store 2
+scalar zcomp +store 3
+scalar 1 store 4
+scalar 2 store 5
+scalar 3 store 6
+scalar 4 *store 1
+scalar 5 *store 2
+scalar 6 *store 3
+scalar 3 +store 1
+scalar 2 +store 1
+scalar wcomp recall 1
+scalar wcomp stat
+calc dforceave sqrt( ?save )
+echo   Force Diff (avg): @dforceave
+
+@testcheck @dforceave 0 @forceTol BLADE_CONS_DIHE_FORCE_2
+
+!---------------------------------------------------------------------
+! TEST 3: Flat-bottom dihedral restraint (width=30)
+!---------------------------------------------------------------------
+echo
+echo ------------------------------------------------------------
+echo TEST 3: Flat-bottom dihedral restraint (width=30)
+echo ------------------------------------------------------------
+
+cons cldh
+cons dihe 5dfr 1 C 5dfr 2 N 5dfr 2 CA 5dfr 2 C force 10 min -60 width 30
+
+energy eps 1.0 cutnb 11 cutim 11 ctofnb 9 ctonnb 7.5 vswitch @pme
+set expected = ?ener
+coor force comp
+scalar xcomp store 1
+scalar ycomp store 2
+scalar zcomp store 3
+
+energy blade
+set actual = ?ener
+coor force comp
+
+calc dener abs ( @actual - @expected )
+calc relerr @dener / abs ( @expected )
+echo   CPU Energy:   @expected
+echo   BLaDE Energy: @actual
+echo   Rel Error:    @relerr
+
+@testcheck @actual @expected @tol BLADE_CONS_DIHE_ENERGY_3
+
+scalar 1 mult -1.0
+scalar 2 mult -1.0
+scalar 3 mult -1.0
+scalar xcomp +store 1
+scalar ycomp +store 2
+scalar zcomp +store 3
+scalar 1 store 4
+scalar 2 store 5
+scalar 3 store 6
+scalar 4 *store 1
+scalar 5 *store 2
+scalar 6 *store 3
+scalar 3 +store 1
+scalar 2 +store 1
+scalar wcomp recall 1
+scalar wcomp stat
+calc dforceave sqrt( ?save )
+echo   Force Diff (avg): @dforceave
+
+@testcheck @dforceave 0 @forceTol BLADE_CONS_DIHE_FORCE_3
+
+!---------------------------------------------------------------------
+! TEST 4: Multiple dihedral restraints
+!---------------------------------------------------------------------
+echo
+echo ------------------------------------------------------------
+echo TEST 4: Multiple dihedral restraints (phi and psi)
+echo ------------------------------------------------------------
+
+cons cldh
+! Phi angle
+cons dihe 5dfr 1 C 5dfr 2 N 5dfr 2 CA 5dfr 2 C force 10 min -60 periodic 1
+! Psi angle
+cons dihe 5dfr 2 N 5dfr 2 CA 5dfr 2 C 5dfr 3 N force 10 min -40 periodic 1
+
+energy eps 1.0 cutnb 11 cutim 11 ctofnb 9 ctonnb 7.5 vswitch @pme
+set expected = ?ener
+coor force comp
+scalar xcomp store 1
+scalar ycomp store 2
+scalar zcomp store 3
+
+energy blade
+set actual = ?ener
+coor force comp
+
+calc dener abs ( @actual - @expected )
+calc relerr @dener / abs ( @expected )
+echo   CPU Energy:   @expected
+echo   BLaDE Energy: @actual
+echo   Rel Error:    @relerr
+
+@testcheck @actual @expected @tol BLADE_CONS_DIHE_ENERGY_4
+
+scalar 1 mult -1.0
+scalar 2 mult -1.0
+scalar 3 mult -1.0
+scalar xcomp +store 1
+scalar ycomp +store 2
+scalar zcomp +store 3
+scalar 1 store 4
+scalar 2 store 5
+scalar 3 store 6
+scalar 4 *store 1
+scalar 5 *store 2
+scalar 6 *store 3
+scalar 3 +store 1
+scalar 2 +store 1
+scalar wcomp recall 1
+scalar wcomp stat
+calc dforceave sqrt( ?save )
+echo   Force Diff (avg): @dforceave
+
+@testcheck @dforceave 0 @forceTol BLADE_CONS_DIHE_FORCE_4
+
+! Per-check pass/fail is reported by @testcheck above (each emits
+! '<LABEL> TESTCASE RESULT: PASS|FAIL' and increments testfail); the
+! grader scores on those, so no custom summary is needed here.
+
+stop

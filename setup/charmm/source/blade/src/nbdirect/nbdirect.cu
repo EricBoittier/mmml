@@ -8,6 +8,7 @@
 #include "domdec/domdec.h"
 #include "main/defines.h"
 #include "main/real3.h"
+#include "main/gpu_check.h"
 
 
 
@@ -15,6 +16,7 @@
 #define fasterfc erfc
 #else
 // Directly from CHARMM source code, charmm/source/domdec_gpu/gpu_utils.h
+// Note 2026-07-09: on __CUDA_ARCH__ 800, this is still faster than erfc
 // #warning "From CHARMM, not fully compatible"
 static __forceinline__ __device__ float __internal_fmad(float a, float b, float c)
 {
@@ -78,7 +80,9 @@ bool check_proximity(DomdecBlockVolume a,real3 b,real c2)
   return buffer2<=c2;
 }
 
-template <bool flagBox,bool useSoftCore,bool usevdWSwitch,bool usePME,typename box_type>
+template <bool flagBox,bool calcAlch,bool useSoftCore,int vdwMethod,int elecMethod,bool calcEnergy,typename box_type>
+// elecMethod: 0=FSWITCH, 1=PME, 2=FSHIFT
+// vdwMethod: 0=VFSWITCH, 1=VSWITCH, 2=VSHIFT
 // __global__ void getforce_nbdirect_kernel(int startBlock,int endBlock,int maxPartnersPerBlock,int *blockBounds,int *blockPartnerCount,struct DomdecBlockPartners *blockPartners,struct DomdecBlockVolume *blockVolume,struct NbondPotential *nbonds,int vdwParameterCount,struct VdwPotential *vdwParameters,int *blockExcls,struct Cutoffs cutoffs,real3 *position,real3 *force,real3 box,real *lambda,real *lambdaForce,real *energy)
 __global__ void getforce_nbdirect_kernel(
   int startBlock,
@@ -145,14 +149,16 @@ __global__ void getforce_nbdirect_kernel(
       // xi=position[ii];
       inp=nbonds[32*iBlock+iThread];
       xi=position[32*iBlock+iThread];
+      if (calcAlch) {
       bi=inp.siteBlock;
       li=1;
       if (bi) li=lambda[0xFFFF & bi];
+      }
     }
     // iBlockVolume=blockVolume[iBlock];
 
     fi=real3_reset<real3>();
-    fli=0;
+    if (calcAlch) fli=0;
 
     // used i/32 instead of iBlock to shift to beginning of array
     jmax=blockPartnerCount[iWarp>>WARPSPERBLOCK];
@@ -196,14 +202,16 @@ __global__ void getforce_nbdirect_kernel(
           xj.y+=shift.y*boxyy(box);
           xj.z+=shift.z*boxzz(box);
         }
+        if (calcAlch) {
         bj=jnp.siteBlock;
         lj=1;
         if (bj) lj=lambda[0xFFFF & bj];
+        }
       }
       bool jFlag=check_proximity(iBlockVolume,xj,cutoffs.rCut*cutoffs.rCut);
 
       fj=real3_reset<real3>();
-      flj=0;
+      if (calcAlch) flj=0;
 
       for (jtmp=0; jtmp<jCount; jtmp++) {
         if (__shfl_sync(0xFFFFFFFF,jFlag,jtmp)) {
@@ -212,11 +220,13 @@ __global__ void getforce_nbdirect_kernel(
           xjtmp.x=__shfl_sync(0xFFFFFFFF,xj.x,jtmp);
           xjtmp.y=__shfl_sync(0xFFFFFFFF,xj.y,jtmp);
           xjtmp.z=__shfl_sync(0xFFFFFFFF,xj.z,jtmp);
+          if (calcAlch) {
           bjtmp=__shfl_sync(0xFFFFFFFF,bj,jtmp);
           ljtmp=__shfl_sync(0xFFFFFFFF,lj,jtmp);
+          }
 
           fjtmp=real3_reset<real3>();
-          fljtmp=0;
+          if (calcAlch) fljtmp=0;
           if (iThread<iCount && ((1<<jtmp)&exclMask)) {
 #ifdef USE_TEXTURE
             struct VdwPotential vdwp;
@@ -231,6 +241,7 @@ __global__ void getforce_nbdirect_kernel(
 
             if (r<cutoffs.rCut) {
               // Scaling
+              if (calcAlch) {
               if ((bi&0xFFFF0000)==(bjtmp&0xFFFF0000)) {
                 if (bi==bjtmp) {
                   lixljtmp=li;
@@ -240,9 +251,10 @@ __global__ void getforce_nbdirect_kernel(
               } else {
                 lixljtmp=li*ljtmp;
               }
+              }
 
               rEff=r;
-              if (useSoftCore) {
+              if (calcAlch && useSoftCore) {
                 dredr=1; // d(rEff) / d(r)
                 dredll=0; // d(rEff) / d(lixljtmp)
                 if (bi || bjtmp) {
@@ -264,23 +276,9 @@ __global__ void getforce_nbdirect_kernel(
               rinv=1/rEff;
 
               // interaction
-                // Electrostatics
-              /*fij=-kELECTRIC*inp.q*jtmpnp_q*rinv*rinv;
-              if (bi || bjtmp || energy) {
-                eij=kELECTRIC*inp.q*jtmpnp_q*rinv;
-              }*/
-              if (usePME) {
-                real br=cutoffs.betaEwald*rEff;
-                // real erfcrinv=erfcf(br)*rinv;
-                real erfcrinv=fasterfc(br)*rinv;
-                // fij=-kELECTRIC*inp.q*jtmpnp_q*(erfcrinv+(2/sqrt(M_PI))*cutoffs.betaEwald*expf(-br*br))*rinv;
-                // fij=-kELECTRIC*inp.q*jtmpnp_q*(erfcrinv+1.128379167095513f*cutoffs.betaEwald*expf(-br*br))*rinv;
-                // fij=-kELECTRIC*inp.q*jtmpnp_q*(erfcrinv+((real)(2/sqrt(M_PI)))*cutoffs.betaEwald*expf(-br*br))*rinv;
-                fij=-kELECTRIC*inp.q*jtmpnp_q*(erfcrinv+((real)1.128379167095513)*cutoffs.betaEwald*expf(-br*br))*rinv;
-                if (bi || bjtmp || energy) {
-                  eij=kELECTRIC*inp.q*jtmpnp_q*erfcrinv;
-                }
-              } else {
+              // Electrostatics
+              // unsmoothed electrostatic interaction eij=kELECTRIC*inp.q*jtmpnp_q*rinv;
+              if (elecMethod==0) { // FSWITCH
                 real roff2=cutoffs.rCut*cutoffs.rCut;
                 real ron2=cutoffs.rSwitch*cutoffs.rSwitch;
                 real ginv=1/((roff2-ron2)*(roff2-ron2)*(roff2-ron2));
@@ -295,37 +293,67 @@ __global__ void getforce_nbdirect_kernel(
                 fij=(rEff<=cutoffs.rSwitch)?
                   -kELECTRIC*inp.q*jtmpnp_q*rinv*rinv:
                   -kELECTRIC*inp.q*jtmpnp_q*rinv*(Aconst*rinv+Bconst*rEff+3*Cconst*r3+5*Dconst*r5);
-                if (bi || bjtmp || energy) {
+                if (calcEnergy || (calcAlch && (bi || bjtmp))) {
                   eij=(rEff<=cutoffs.rSwitch)?
                     kELECTRIC*inp.q*jtmpnp_q*(rinv+dvc):
                     kELECTRIC*inp.q*jtmpnp_q*(Aconst*(rinv-1/cutoffs.rCut)+Bconst*(cutoffs.rCut-rEff)+Cconst*(roff2*cutoffs.rCut-r3)+Dconst*(roff2*roff2*cutoffs.rCut-r5));
                 }
+              } else if (elecMethod==1) { // PME
+                real br=cutoffs.betaEwald*rEff;
+                // real erfcrinv=erfc(br)*rinv;
+                real erfcrinv=fasterfc(br)*rinv;
+                // fij=-kELECTRIC*inp.q*jtmpnp_q*(erfcrinv+(2/sqrt(M_PI))*cutoffs.betaEwald*exp(-br*br))*rinv;
+                // fij=-kELECTRIC*inp.q*jtmpnp_q*(erfcrinv+1.128379167095513f*cutoffs.betaEwald*exp(-br*br))*rinv;
+                // fij=-kELECTRIC*inp.q*jtmpnp_q*(erfcrinv+((real)(2/sqrt(M_PI)))*cutoffs.betaEwald*exp(-br*br))*rinv;
+                fij=-kELECTRIC*inp.q*jtmpnp_q*(erfcrinv+((real)1.128379167095513)*cutoffs.betaEwald*exp(-br*br))*rinv;
+                if (calcEnergy || (calcAlch && (bi || bjtmp))) {
+                  eij=kELECTRIC*inp.q*jtmpnp_q*erfcrinv;
+                }
+              } else if (elecMethod==2) { // FSHIFT
+                // E = (k*qi*qj) * (1/r - 2/roff + r/roff^2)
+                // F = -(k*qi*qj) * (1/r^2 - 1/roff^2)
+                real roff=cutoffs.rCut;
+                real roffinv=1/roff;
+                real roffinv2=roffinv*roffinv;
+                real qiqj=kELECTRIC*inp.q*jtmpnp_q;
+                fij=-qiqj*(rinv*rinv-roffinv2);
+                if (calcEnergy || (calcAlch && (bi || bjtmp))) {
+                  eij=qiqj*(rinv-2*roffinv+rEff*roffinv2);
+                }
               }
-                // Van der Waals
+
+              // Van der Waals
               real rinv3=rinv*rinv*rinv;
               real rinv6=rinv3*rinv3;
-              /*fij+=-(12*(vdwp.c12*rinv6)-6*(vdwp.c6))*rinv6*rinv;
-              if (bi || bjtmp || energy) {
-                eij+=(vdwp.c12*rinv6-vdwp.c6)*rinv6;
-              }*/
+              // unsmoothed vdw potential: eij+=(vdwp.c12*rinv6-vdwp.c6)*rinv6;
               // See charmm/source/domdec/enbxfast.F90, functions calc_vdw_constants, vdw_attraction, vdw_repulsion
-              real rCut3=cutoffs.rCut*cutoffs.rCut*cutoffs.rCut;
-              real rSwitch3=cutoffs.rSwitch*cutoffs.rSwitch*cutoffs.rSwitch;
 
-              if (rEff<cutoffs.rSwitch) {
-                fij+=(6*vdwp.c6-12*vdwp.c12*rinv6)*rinv6*rinv;
-                if (bi || bjtmp || energy) {
-                  real dv6=(usevdWSwitch?0:1/(rCut3*rSwitch3));
-                  eij+=vdwp.c12*(rinv6*rinv6-dv6*dv6)-vdwp.c6*(rinv6-dv6);
-                }
-              } else {
-                if ( !usevdWSwitch ) {
+              if (vdwMethod == 0) { // VFSWITCH
+                // Force switching - smoothest forces, best for free energy
+                real rCut3=cutoffs.rCut*cutoffs.rCut*cutoffs.rCut;
+                real rSwitch3=cutoffs.rSwitch*cutoffs.rSwitch*cutoffs.rSwitch;
+
+                if (rEff<cutoffs.rSwitch) {
+                  fij+=(6*vdwp.c6-12*vdwp.c12*rinv6)*rinv6*rinv;
+                  if (calcEnergy || (calcAlch && (bi || bjtmp))) {
+                    real dv6=1/(rCut3*rSwitch3);
+                    eij+=vdwp.c12*(rinv6*rinv6-dv6*dv6)-vdwp.c6*(rinv6-dv6);
+                  }
+                } else {
                   real k6=rCut3/(rCut3-rSwitch3);
                   real k12=rCut3*rCut3/(rCut3*rCut3-rSwitch3*rSwitch3);
                   real rCutinv3=1/rCut3;
                   fij+=(6*vdwp.c6*k6*(rinv3-rCutinv3)*rinv3-12*vdwp.c12*k12*(rinv6-rCutinv3*rCutinv3)*rinv6)*rinv;
-                  if (bi || bjtmp || energy) {
+                  if (calcEnergy || (calcAlch && (bi || bjtmp))) {
                     eij+=vdwp.c12*k12*(rinv6-rCutinv3*rCutinv3)*(rinv6-rCutinv3*rCutinv3)-vdwp.c6*k6*(rinv3-rCutinv3)*(rinv3-rCutinv3);
+                  }
+                }
+              } else if (vdwMethod == 1) {  // VSWITCH
+                // Potential switching - polynomial smoothing (uses squared distances, not cubed)
+                if (rEff<cutoffs.rSwitch) {
+                  fij+=(6*vdwp.c6-12*vdwp.c12*rinv6)*rinv6*rinv;
+                  if (calcEnergy || (calcAlch && (bi || bjtmp))) {
+                    eij+=vdwp.c12*(rinv6*rinv6)-vdwp.c6*(rinv6);
                   }
                 } else {
                   real c2ofnb=cutoffs.rCut*cutoffs.rCut;
@@ -338,15 +366,38 @@ __global__ void getforce_nbdirect_kernel(
                   real dfsw = rijl*riju*rul12;
                   fij+=fsw*(6*vdwp.c6-12*vdwp.c12*rinv6)*rinv6*rinv\
                     +dfsw*(vdwp.c12*rinv6-vdwp.c6)*rinv6;
-                  if (bi || bjtmp || energy) {
+                  if (calcEnergy || (calcAlch && (bi || bjtmp))) {
                     eij+=fsw*(vdwp.c12*rinv6-vdwp.c6)*rinv6;
                   }
                 }
+              } else if (vdwMethod == 2) {  // VSHIFT
+                // Potential shift - energy zero at cutoff, forces discontinuous
+                real r2 = rEff*rEff;
+                real r5 = r2*r2*rEff;
+                real r6 = r2*r2*r2;
+                real rinv7 = rinv6*rinv;
+                real rinv12 = rinv6*rinv6;
+                real rinv13 = rinv12*rinv;
+                real rCut2 = cutoffs.rCut*cutoffs.rCut;
+                real rCut6 = rCut2*rCut2*rCut2;
+                real rCut12 = rCut6*rCut6;
+                real rCut18 = rCut12*rCut6;
+                real roffinv6 = 1/rCut6;
+                real roffinv12 = 1/rCut12;
+                real roffinv18 = 1/rCut18;
+
+                fij += 6*vdwp.c6*(rinv7 - r5*roffinv12) -
+                       12*vdwp.c12*(rinv13 + r5*roffinv18);
+
+                if (calcEnergy || (calcAlch && (bi || bjtmp))) {
+                  eij += vdwp.c12*(rinv12 + 2*r6*roffinv18 - 3*roffinv12) -
+                         vdwp.c6*(rinv6 + r6*roffinv12 - 2*roffinv6);
+                }
               }
-              fij*=lixljtmp;
+              if (calcAlch) fij*=lixljtmp;
 
               // Lambda force
-              if (bi || bjtmp) {
+              if (calcAlch && (bi || bjtmp)) {
                 if (useSoftCore) {
                   fljtmp=eij+fij*dredll;
                 } else {
@@ -364,7 +415,7 @@ __global__ void getforce_nbdirect_kernel(
               }
 
               // Spatial force
-              if (useSoftCore) {
+              if (calcAlch && useSoftCore) {
                 rinv=1/r;
                 fij*=dredr;
               }
@@ -372,9 +423,12 @@ __global__ void getforce_nbdirect_kernel(
               fjtmp=real3_scale<real3>(-fij*rinv,dr);
 
               // Energy, if requested
-              if (energy) {
-                // if (!(lixljtmp*eij>-5000000)) printf("lixljtmp*eij=%f lixljtmp=%f eij=%f\n",lixljtmp*eij,lixljtmp,eij);
+              if (calcEnergy) {
+                if (calcAlch) {
                 lEnergy+=lixljtmp*eij;
+                } else {
+                lEnergy+=eij;
+                }
               }
             }
           }
@@ -397,7 +451,7 @@ __global__ void getforce_nbdirect_kernel(
           fjtmp.z+=__shfl_xor_sync(0xFFFFFFFF,fjtmp.z,8);
           fjtmp.z+=__shfl_xor_sync(0xFFFFFFFF,fjtmp.z,16);
           if (iThread==jtmp) fj.z=fjtmp.z;
-          if (bjtmp) {
+          if (calcAlch && bjtmp) {
             fljtmp+=__shfl_xor_sync(0xFFFFFFFF,fljtmp,1);
             fljtmp+=__shfl_xor_sync(0xFFFFFFFF,fljtmp,2);
             fljtmp+=__shfl_xor_sync(0xFFFFFFFF,fljtmp,4);
@@ -409,7 +463,7 @@ __global__ void getforce_nbdirect_kernel(
       }
       __syncwarp();
       if ((iThread)<jCount) {
-        if (bj) {
+        if (calcAlch && bj) {
           atomicAdd(&lambdaForce[0xFFFF & bj],flj);
         }
         at_real3_inc(&force[32*jBlock+iThread],fj);
@@ -419,7 +473,7 @@ __global__ void getforce_nbdirect_kernel(
     }
     __syncwarp();
     if ((iThread)<iCount) {
-      if (bi) {
+      if (calcAlch && bi) {
         atomicAdd(&lambdaForce[0xFFFF & bi],fli);
       }
       at_real3_inc(&force[32*iBlock+iThread],fi);
@@ -427,7 +481,7 @@ __global__ void getforce_nbdirect_kernel(
   }
 
   // Energy, if requested
-  if (energy) {
+  if (calcEnergy) {
     // Use of shared memory here causes error when getforce_nbrecip_gather is executed concurrently. Whatever CUDA...
     // #warning "Using reduction without shared memory"
     // real_sum_reduce(lEnergy,sEnergy,energy);
@@ -435,8 +489,8 @@ __global__ void getforce_nbdirect_kernel(
   }
 }
 
-template <bool flagBox,bool useSoftCore,bool usevdWSwitch,bool usePME,typename box_type>
-void getforce_nbdirectTTTT(System *system,box_type box,bool calcEnergy)
+template <bool flagBox,bool calcAlch,bool useSoftCore,int vdwMethod,int elecMethod,bool calcEnergy,typename box_type>
+void getforce_nbdirectTTTTT(System *system,box_type box)
 {
   system->domdec->pack_positions(system);
   system->domdec->recull_blocks(system);
@@ -459,44 +513,61 @@ void getforce_nbdirectTTTT(System *system,box_type box,bool calcEnergy)
     shMem=0;
     pEnergy=s->energy_d+eenbdirect;
   }
-  getforce_nbdirect_kernel<flagBox,useSoftCore,usevdWSwitch,usePME><<<((32<<WARPSPERBLOCK)*N+(32<<WARPSPERBLOCK)-1)/(32<<WARPSPERBLOCK),(32<<WARPSPERBLOCK),shMem,r->nbdirectStream>>>(startBlock,endBlock,d->maxPartnersPerBlock,d->blockBounds_d,d->blockPartnerCount_d,d->blockPartners_d,d->blockVolume_d,d->localNbonds_d,p->vdwParameterCount,
+  getforce_nbdirect_kernel<flagBox,calcAlch,useSoftCore,vdwMethod,elecMethod,calcEnergy><<<((32<<WARPSPERBLOCK)*N+(32<<WARPSPERBLOCK)-1)/(32<<WARPSPERBLOCK),(32<<WARPSPERBLOCK),shMem,r->nbdirectStream>>>(startBlock,endBlock,d->maxPartnersPerBlock,d->blockBounds_d,d->blockPartnerCount_d,d->blockPartners_d,d->blockVolume_d,d->localNbonds_d,p->vdwParameterCount,
 #ifdef USE_TEXTURE
     p->vdwParameters_tex,
 #else
     p->vdwParameters_d,
 #endif
     system->domdec->blockExcls_d,system->run->cutoffs,d->localPosition_d,d->localForce_d,box,s->lambda_fd,s->lambdaForce_d,pEnergy);
+  gpuCheck(cudaGetLastError());
 
   system->domdec->unpack_forces(system);
 }
 
-template <bool flagBox,bool useSoftCore,bool usevdWSwitch,typename box_type>
-void getforce_nbdirectTTT(System *system,box_type box,bool calcEnergy)
+template <bool flagBox,bool calcAlch,bool useSoftCore,int vdwMethod,int elecMethod,typename box_type>
+void getforce_nbdirectTTTT(System *system,box_type box,bool calcEnergy)
 {
-  if (system->run->usePME) {
-    getforce_nbdirectTTTT<flagBox,useSoftCore,usevdWSwitch,true>(system,box,calcEnergy);
+  if (calcEnergy) {
+    getforce_nbdirectTTTTT<flagBox,calcAlch,useSoftCore,vdwMethod,elecMethod,true>(system,box);
   } else {
-    getforce_nbdirectTTTT<flagBox,useSoftCore,usevdWSwitch,false>(system,box,calcEnergy);
+    getforce_nbdirectTTTTT<flagBox,calcAlch,useSoftCore,vdwMethod,elecMethod,false>(system,box);
   }
 }
 
-template <bool flagBox,bool useSoftCore,typename box_type>
+template <bool flagBox,bool calcAlch,bool useSoftCore,int vdwMethod,typename box_type>
+void getforce_nbdirectTTT(System *system,box_type box,bool calcEnergy)
+{
+  if (system->run->elecMethod==0) { // FSWITCH
+    getforce_nbdirectTTTT<flagBox,calcAlch,useSoftCore,vdwMethod,0>(system,box,calcEnergy);
+  } else if (system->run->elecMethod==1) { // PME
+    getforce_nbdirectTTTT<flagBox,calcAlch,useSoftCore,vdwMethod,1>(system,box,calcEnergy);
+  } else if (system->run->elecMethod==2) { // FSHIFT
+    getforce_nbdirectTTTT<flagBox,calcAlch,useSoftCore,vdwMethod,2>(system,box,calcEnergy);
+  }
+}
+
+template <bool flagBox,bool calcAlch,bool useSoftCore,typename box_type>
 void getforce_nbdirectTT(System *system,box_type box,bool calcEnergy)
 {
-  if (!system->run->vfSwitch) {
-    getforce_nbdirectTTT<flagBox,useSoftCore,true>(system,box,calcEnergy);
-  } else {
-    getforce_nbdirectTTT<flagBox,useSoftCore,false>(system,box,calcEnergy);
+  if (system->run->vdwMethod==0) { // VFSWITCH
+    getforce_nbdirectTTT<flagBox,calcAlch,useSoftCore,0>(system,box,calcEnergy);
+  } else if (system->run->vdwMethod==1) { // VSWITCH
+    getforce_nbdirectTTT<flagBox,calcAlch,useSoftCore,1>(system,box,calcEnergy);
+  } else if (system->run->vdwMethod==2) { // VSHIFT
+    getforce_nbdirectTTT<flagBox,calcAlch,useSoftCore,2>(system,box,calcEnergy);
   }
 }
 
 template <bool flagBox,typename box_type>
 void getforce_nbdirectT(System *system,box_type box,bool calcEnergy)
 {
-  if (system->msld->useSoftCore) {
-    getforce_nbdirectTT<flagBox,true>(system,box,calcEnergy);
+  if (system->msld->blockCount==1) {
+    getforce_nbdirectTT<flagBox,false,false>(system,box,calcEnergy);
+  } else if (system->msld->useSoftCore) {
+    getforce_nbdirectTT<flagBox,true,true>(system,box,calcEnergy);
   } else {
-    getforce_nbdirectTT<flagBox,false>(system,box,calcEnergy);
+    getforce_nbdirectTT<flagBox,true,false>(system,box,calcEnergy);
   }
 }
 
@@ -531,9 +602,11 @@ void getforce_nbdirect_reduce(System *system,bool calcEnergy)
   int N=3*s->atomCount+2*s->lambdaCount;
 
   getforce_nbdirect_reduce_kernel<<<(N+BLNB-1)/BLNB,BLNB,0,r->updateStream>>>(N,system->idCount,s->forceBuffer_d);
+  gpuCheck(cudaGetLastError());
 
   if (calcEnergy) {
     N=eeend;
     getforce_nbdirect_reduce_kernel<<<(N+BLNB-1)/BLNB,BLNB,0,r->updateStream>>>(N,system->idCount,s->energy_d);
+    gpuCheck(cudaGetLastError());
   }
 }

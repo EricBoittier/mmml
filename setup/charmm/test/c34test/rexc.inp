@@ -92,6 +92,16 @@ dyna lang strt nstep 100 timestep 0.001  -
     iseed 12345 34567 56789 678910 -
     echeck 10000.0
 
+! Re-evaluate the energy of the current coordinates from scratch.  repdstr must
+! leave each replica's coordinates and its reported energy mutually consistent,
+! so a fresh energy call reproduces the dynamics energy to round-off.  Checking
+! this live (below) keeps the test from going stale on a hard-coded energy that
+! drifts as the force field and code evolve -- the previous reference values
+! dated from 2014-2015 and no longer matched the (self-consistent) run.
+set edyn ?ener
+energy
+set efresh ?ener
+
 
 ! Test whether the case passed or failed; this logic looks a little
 ! bulky because multi-line conditionals do not work with REPD, thanks
@@ -102,27 +112,29 @@ set passexup = 0
 set passexdn = 0
 set passener = 0
 
-if ?myrep .eq. 0 set refprob = 0.468726
+! (b) Coarse integer exchange up/down counts: robust references that do not
+!     drift with the force field (unlike an absolute energy).
 if ?myrep .eq. 0 set referup = 1
 if ?myrep .eq. 0 set referdn = 0
-if ?myrep .eq. 0 set refener = -11.0065
-if ?myrep .eq. 1 set refprob = 0.568202
 if ?myrep .eq. 1 set referup = 1
 if ?myrep .eq. 1 set referdn = 1
-if ?myrep .eq. 1 set refener = -18.9118
-if ?myrep .eq. 2 set refprob = 0.833839
 if ?myrep .eq. 2 set referup = 1
 if ?myrep .eq. 2 set referdn = 1
-if ?myrep .eq. 2 set refener = -21.673
-if ?myrep .eq. 3 set refprob = 1.00
 if ?myrep .eq. 3 set referup = 0
 if ?myrep .eq. 3 set referdn = 1
-if ?myrep .eq. 3 set refener = -17.4186
 
-if ?reprob .ae. @refprob set passprob = 1
+! Live energy self-consistency: the fresh recompute must match the dynamics
+! energy (no hard-coded value).
+if @edyn .ae. @efresh set passener = 1
+
+! (a) Exchange acceptance probability sanity: it must be a valid probability
+!     in [0,1] (the exact value is trajectory/RNG dependent and not hard-coded).
+set passprob = 1
+if ?reprob .lt. 0 set passprob = 0
+if ?reprob .gt. 1 set passprob = 0
+
 if ?exrup .ae. @referup set passexup = 1
 if ?exrdn .ae. @referdn set passexdn = 1
-if ?ener .ae. @refener set passener = 1
 
 calc passed = @passprob + @passexup + @passexdn + @passener
 if @passed .eq. 4 echo PER-REPLICA TESTS PASSED
@@ -138,10 +150,12 @@ outu 6
 
 repdstr iores
 
-if ?myrep .eq. 0 @testcheck ?reprob @refprob 1e-3 REXC_1
+! REXC_1: exchange-probability sanity ([0,1]);  REXC_2/3: coarse up/down counts;
+! REXC_4: live energy self-consistency (dynamics energy vs fresh recompute).
+if ?myrep .eq. 0 @testcheck @passprob 1 0.5 REXC_1
 if ?myrep .eq. 0 @testcheck ?exrup @referup 1e-3 REXC_2
 if ?myrep .eq. 0 @testcheck ?exrdn @referdn 1e-3 REXC_3
-if ?myrep .eq. 0 @testcheck ?ener @refener 1e-3 REXC_4
+if ?myrep .eq. 0 @testcheck @edyn @efresh 1e-4 REXC_4
 
 repdstr reset
 

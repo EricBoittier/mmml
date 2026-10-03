@@ -161,10 +161,15 @@ integer :: lambdam_dummy_var
   real(chm_real),allocatable,dimension(:,:),save :: &
           bielamtemp !GG Temp 2D array to hold pH-dependent biases for pH-REX CPHMD
   real(chm_real),allocatable,dimension(:),save:: irreup, irrlow, ikbias
-  logical,save :: qbiasthetacoll, qbiasthetainde
+  logical,save :: qbiasthetacoll, qbiasthetainde, qbiasthetaedge, qbiasthetaflat
   real(chm_real),allocatable,dimension(:),save :: ikbiasthetacoll, ipbiasthetacoll, ikbiasthetainde
+  real(chm_real) :: ikbiasthetaedge, inbiasthetaedge, iabiasthetaedge, itbiasthetaedge
+  real(chm_real),allocatable,dimension(:),save :: iwbiasthetaflat, ikbiasthetaflat
+  real(chm_real) :: ik1biascharge, ik2biascharge, ik3biascharge, iq03biascharge, iw3biascharge ! charge biases
+  real(chm_real),allocatable,dimension(:),save :: biqlam ! block charges
   real(chm_real),allocatable,dimension(:),save :: igammald
   real(chm_real),allocatable,dimension(:),save :: biblam
+  logical,allocatable,dimension(:),save :: qlfix  ! Per-block flag for partial FFIX (block-level lambda fixing)
   real(chm_real),allocatable,dimension(:),save :: &
        envdx, envdy, envdz, biptnlam, bfrst
   real(chm_real),allocatable,dimension(:),save :: lmcst
@@ -216,9 +221,11 @@ integer :: lambdam_dummy_var
 
   real(chm_real),save:: THETA, THETAV, THETAM, THETAF, THETABIB
   real(chm_real), dimension(4),save :: gammatheta
+  real(chm_real), allocatable, dimension(:,:), save :: gammathetablk  ! (4, nblock) per-block Langevin coefficients
   Logical,save :: Qthetadm
 
   integer,save :: NSAVL, IUNLDM, NTITLL, MAXTLD
+  ! integer,save :: NSAVF, IUNFLAM ! UNUSED
   integer,save :: ILAPOT, ILAF, IRESD, ITEMPLD, NTEMPLD
   character(len=80),dimension(32),save:: titlel
 
@@ -269,7 +276,8 @@ integer :: lambdam_dummy_var
   integer, allocatable, dimension(:), save :: nsubmld, out_nsubmld
   integer, allocatable, dimension(:,:), save :: blckmld, out_blckmld
   real(chm_real), allocatable, dimension(:,:), save :: thetamld, thetamldold, thetavmld, thetafmld
-  real(chm_real), save :: fnexp_factor, bicut, bicut2in
+  real(chm_real), save :: fnexp_factor
+  real(chm_real), save :: fnpwise_exp
   real(chm_real), allocatable, dimension(:), save :: fnexp_factors
   real(chm_real) :: AN1REF, GN1REF, CN3REF, UN3REF, TN3REF, PN3REF    !GG MSLD pH-REX compatibility
   real(chm_real) :: ASPREF, GLUREF, LYSREF, HSEREF, HSDREF, CYTU, ADEU   !GG MSLD pH-REX compatibility
@@ -307,6 +315,11 @@ contains
     nsobo = 0
     qbiasthetacoll = .false.
     qbiasthetainde = .false.
+    qbiasthetaedge = .false.
+    qbiasthetaflat = .false.
+    ik1biascharge = 0
+    ik2biascharge = 0
+    ik3biascharge = 0
     return
   end subroutine ldm_init
 
@@ -331,6 +344,7 @@ contains
        call chmalloc('lambda_ltm.src','ldm_blockin','BIXLAM',NBLOCK,crl=BIXLAM)
        call chmalloc('lambda_ltm.src','ldm_blockin','BIVLAM',NBLOCK,crl=BIVLAM)
        call chmalloc('lambda_ltm.src','ldm_blockin','BIMLAM',NBLOCK,crl=BIMLAM)
+       call chmalloc('lambda_ltm.src','ldm_blockin','BIQLAM',NBLOCK,crl=BIQLAM)
        call chmalloc('lambda_ltm.src','ldm_blockin','BIELAM',NBLOCK,crl=BIELAM)
        call chmalloc('lambda_ltm.src','ldm_blockin','BIFLAM',NBLOCK,crl=BIFLAM)
        call chmalloc('lambda_ltm.src','ldm_blockin','BIBLAM',NBLOCK,crl=BIBLAM)
@@ -391,10 +405,14 @@ contains
     INTEGER, intent(in) :: COMLEN
     INTEGER, intent(in) :: nblock
 
-    if (ilaldm) call chmdealloc('lambda_ltm.src','ldm_lang','IGAMMALD',4*NBLOCK,crl=IGAMMALD)
+    if (ilaldm) then
+       call chmdealloc('lambda_ltm.src','ldm_lang','IGAMMALD',4*NBLOCK,crl=IGAMMALD)
+       call chmdealloc('lambda_ltm.src','ldm_lang','gammathetablk',4,NBLOCK,crl=gammathetablk)
+    endif
     ILALDM = .TRUE.
     TBLD = GTRMF(COMLYN,COMLEN,'TEMP',ZERO) !GG Assign temperature for langevin bath
     call chmalloc('lambda_ltm.src','ldm_lang','IGAMMALD',4*NBLOCK,crl=IGAMMALD)
+    call chmalloc('lambda_ltm.src','ldm_lang','gammathetablk',4,NBLOCK,crl=gammathetablk)
 
   END subroutine ldm_lang
 
@@ -2399,26 +2417,9 @@ contains
     LDCLS = NEXTI(COMLYN,COMLEN)
     IBCLAS(LDCNT) = LDCLS
 
-    IF(LDCLS.EQ.1) THEN
-       IRREUP(LDCNT) = NEXTF(COMLYN,COMLEN)
-    ELSE IF(LDCLS.EQ.2) THEN
+    IF(LDCLS.EQ.2) THEN
        IRRLOW(LDCNT) = NEXTF(COMLYN,COMLEN)
-    ELSE IF(LDCLS.EQ.3) THEN
-       !        store the equilibrium value in irreup
-       IRREUP(LDCNT) = NEXTF(COMLYN,COMLEN)
-    else if (ldcls.eq.4) then
-       IRREUP(LDCNT) = NEXTF(COMLYN,COMLEN)
-    else if (ldcls.eq.5) then
-       IRREUP(LDCNT) = NEXTF(COMLYN,COMLEN)
-    else if (ldcls.eq.6) then
-       IRREUP(LDCNT) = NEXTF(COMLYN,COMLEN)
-    else if (ldcls.eq.7) then
-       IRREUP(LDCNT) = NEXTF(COMLYN,COMLEN)
-    else if (ldcls.eq.8) then
-       IRREUP(LDCNT) = NEXTF(COMLYN,COMLEN)
-    else if (ldcls.eq.9) then
-       IRREUP(LDCNT) = NEXTF(COMLYN,COMLEN)
-    else if (ldcls.eq.10) then
+    ELSE
        IRREUP(LDCNT) = NEXTF(COMLYN,COMLEN)
     ENDIF
     IKBIAS(LDCNT) = NEXTF(COMLYN,COMLEN)
@@ -2453,8 +2454,20 @@ contains
 !> THBV INDE <i int> <b real>
 !> Adds a variable bias to thetas at site i of the form
 !> Ubias = -b * (0.5+0.5*sin(theta))^4
+!> THBV EDGE <i int> <k real> <N real> <a real> <t real>
+!> Adds a bias to focus on edge samples
+!> Ni = 1 / (1 + exp(-a*(ti - t0 + t)))
+!> Ubias = { 0.5*k*kT*(sum(Ni) - N)^2 for sum(Ni)-N>0
+!>         { 0                        otherwise
+!> Recommended parameters k=100, N=2, a=4, t=0.5
+!> THBV FLAT <i int> <w real> <k real>
+!> Adds a flat bottom bias of the form
+!> Ubias = { 0.5*k*kT*(abs(theta) - w*Ns)^2 for abs(theta)>w*Ns
+!>         { 0                              otherwise
 !> THBV COLL RESEt resets collective biases
 !> THBV INDE RESEt resets independent biases
+!> THBV EDGE RESEt resets edge biases
+!> THBV FLAT RESEt resets flat bottom biases
 !> i may be replaced with ALL for all sites
 !> b may be replaced with AUTO to choose parameters to optimize FPL
   subroutine ldm_thetabiaspot(comlyn,comlen)
@@ -2495,7 +2508,7 @@ contains
        else
           i0=nexti(COMLYN,COMLEN)+1
           i1=i0
-          if (i0<1 .or. i0>nsitemld) call wrndie(-3,'<BLOCK>','Invalid site chosen in thbv <i int> <b real>')
+          if (i0<1 .or. i0>nsitemld) call wrndie(-3,'<BLOCK>','Invalid site chosen in thbv coll <i int> <k real> <n real>')
        endif
 
        ikbiasthetacoll(i0:i1) = NEXTF(COMLYN,COMLEN)
@@ -2522,7 +2535,7 @@ contains
        else
           i0=nexti(COMLYN,COMLEN)+1
           i1=i0
-          if (i0<1 .or. i0>nsitemld) call wrndie(-3,'<BLOCK>','Invalid site chosen in thbv <i int> <b real>')
+          if (i0<1 .or. i0>nsitemld) call wrndie(-3,'<BLOCK>','Invalid site chosen in thbv inde <i int> <b real>')
        endif
 
        if (INDXA(COMLYN,COMLEN,'AUTO') .GT. 0) then
@@ -2533,7 +2546,7 @@ contains
                 b = 0.5 * log(0.25*b*nsubmld(i)*nsubmld(i)*pi/2)
                 if (.not. b > 0) b = 0
              enddo
-             if (.not.ILALDM) call wrndie(-3,'<BLOCK>','"thbv <i int> auto" requires temperature to have been set previously with "lang temp <T real>"')
+             if (.not.ILALDM) call wrndie(-3,'<BLOCK>','"thbv inde <i int> auto" requires temperature to have been set previously with "lang temp <T real>"')
              b = kboltz * tbld * b
              ikbiasthetainde(i)=b
           enddo
@@ -2541,8 +2554,111 @@ contains
           b = NEXTF(COMLYN,COMLEN)
           ikbiasthetainde(i0:i1) = b
        endif
+
+    else if (INDXA(COMLYN,COMLEN,'EDGE') .GT. 0) then
+
+       if (INDXA(COMLYN,COMLEN,'RESE') .GT. 0) then
+          qbiasthetaedge=.false.
+          return
+       endif
+
+       qbiasthetaedge=.true.
+
+       if (.not. (INDXA(COMLYN,COMLEN,'ALL') .GT. 0)) then
+          call wrndie(-3,'<BLOCK>','"thbv edge" requires residue selection of "all"')
+       endif
+
+       if (.not.ILALDM) call wrndie(-3,'<BLOCK>','"thbv edge" requires temperature to have been set previously with "lang temp <T real>"')
+       ikbiasthetaedge = NEXTF(COMLYN,COMLEN)
+       ! ikbiasthetaedge = ikbiasthetaedge * kboltz * tbld ! MATTUNITS
+       inbiasthetaedge = NEXTF(COMLYN,COMLEN)
+       iabiasthetaedge = NEXTF(COMLYN,COMLEN)
+       itbiasthetaedge = NEXTF(COMLYN,COMLEN)
+
+    else if (INDXA(COMLYN,COMLEN,'FLAT') .GT. 0) then
+
+       if (INDXA(COMLYN,COMLEN,'RESE') .GT. 0) then
+          if (qbiasthetaflat) call chmdealloc('lambda_ltm.src','ldm_thetabiaspot','iwbiasthetaflat',nsitemld,crl=iwbiasthetaflat)
+          if (qbiasthetaflat) call chmdealloc('lambda_ltm.src','ldm_thetabiaspot','ikbiasthetaflat',nsitemld,crl=ikbiasthetaflat)
+          qbiasthetaflat=.false.
+          return
+       endif
+
+       if (.not.qbiasthetaflat) then
+          if (.not. (qmld.and.qthetadm)) call wrndie(-3,'<BLOCK>','thbv must come after qldm and msld commands in block')
+          call chmalloc('lambdadyn.F90','ldm_thetabiaspot','iwbiasthetaflat',nsitemld,crl=iwbiasthetaflat)
+          call chmalloc('lambdadyn.F90','ldm_thetabiaspot','ikbiasthetaflat',nsitemld,crl=ikbiasthetaflat)
+          iwbiasthetaflat=1
+          ikbiasthetaflat=0
+          qbiasthetaflat=.true.
+       endif
+
+       if (INDXA(COMLYN,COMLEN,'ALL') .GT. 0) then
+          i0=2
+          i1=nsitemld
+       else
+          i0=nexti(COMLYN,COMLEN)+1
+          i1=i0
+          if (i0<1 .or. i0>nsitemld) call wrndie(-3,'<BLOCK>','Invalid site chosen in thbv flat <i int> <w real> <k real>')
+       endif
+
+       if (.not.ILALDM) call wrndie(-3,'<BLOCK>','"thbv flat" requires temperature to have been set previously with "lang temp <T real>"')
+       iwbiasthetaflat(i0:i1) = NEXTF(COMLYN,COMLEN)
+       ikbiasthetaflat(i0:i1) = NEXTF(COMLYN,COMLEN)
+       ! ikbiasthetaflat(i0:i1) = ikbiasthetaflat(i0:i1) * kboltz * tbld ! MATTUNITS
+
     endif
   END subroutine ldm_thetabiaspot
+
+!-----------------------------------------------------------------------
+!> Q = sum(qi)
+!> CGBV 1 <k real>
+!> Adds PME discrete solvent correction bias
+!> U = -(2*pi/3)*kELECTRIC*gamma*NH2O*Q/V, gamma=0.76414 e*A^2, k=gamma*NH2O
+!> CGBV 2 <k real>
+!> Adds PME volume correction bias
+!> U = -(pi/2)*kELECTRIC*Q^2/V/betaEwald^2 k=0 (off) or 1 (on)
+!> CGBV 3 <k real> <q0 real> <w real>
+!> Adds a generic flat bottom harmonic charge restraint
+!> U = { 0.5*k*(abs(Q-q0)-w)^2 for abs(Q-q0)>w
+!>     { 0                     otherwise
+! nblock,iblckp,comlyn,comlen
+  subroutine ldm_chargebiaspot(nblock,iblock,comlyn,comlen)
+    use stream
+    use string
+    use memory
+    use psf
+    use consta, only : pi, kboltz
+
+    implicit none
+    integer, intent(in) :: nblock
+    integer, dimension(natom), intent(in) :: iblock
+    character(len=*), intent(inout) :: COMLYN
+    INTEGER, intent(inout) :: COMLEN
+
+    integer :: i
+
+    i = nexti(COMLYN,COMLEN)
+
+    if (i==1) then
+       ik1biascharge = NEXTF(COMLYN,COMLEN)
+    elseif (i==2) then
+       ik2biascharge = NEXTF(COMLYN,COMLEN)
+    elseif (i==3) then
+       ik3biascharge = NEXTF(COMLYN,COMLEN)
+       iq03biascharge = NEXTF(COMLYN,COMLEN)
+       iw3biascharge = NEXTF(COMLYN,COMLEN)
+    else
+       call wrndie(-3,'<BLOCK>','"cgbv" requires integer bias type of 1, 2, or 3')
+    endif
+
+    ! set block charges in case they haven't been set yet
+    biqlam(1:nblock)=0
+    do i=1,natom
+       biqlam(iblock(i))=biqlam(iblock(i))+cg(i)
+    enddo
+
+  end subroutine ldm_chargebiaspot
 
 !-----------------------------------------------------------------------
 !> RSTP adds restraining potential.
@@ -2880,6 +2996,7 @@ contains
     call chmdealloc('lambda_ltm.src','ldm_block_clear','BIXLAM',NBLOCK,crl=BIXLAM)
     call chmdealloc('lambda_ltm.src','ldm_block_clear','BIVLAM',NBLOCK,crl=BIVLAM)
     call chmdealloc('lambda_ltm.src','ldm_block_clear','BIMLAM',NBLOCK,crl=BIMLAM)
+    call chmdealloc('lambda_ltm.src','ldm_block_clear','BIQLAM',NBLOCK,crl=BIQLAM)
     call chmdealloc('lambda_ltm.src','ldm_block_clear','BIELAM',NBLOCK,crl=BIELAM)
     call chmdealloc('lambda_ltm.src','ldm_block_clear','BIFLAM',NBLOCK,crl=BIFLAM)
     call chmdealloc('lambda_ltm.src','ldm_block_clear','BIBLAM',NBLOCK,crl=BIBLAM)
@@ -2943,9 +3060,14 @@ contains
     if(qbiasthetainde) then
        call chmdealloc('lambda_ltm.src','ldm_block_clear','ikbiasthetainde',nsitemld,crl=ikbiasthetainde)
     endif
+    if(qbiasthetaflat) then
+       call chmdealloc('lambda_ltm.src','ldm_block_clear','iwbiasthetaflat',nsitemld,crl=iwbiasthetaflat)
+       call chmdealloc('lambda_ltm.src','ldm_block_clear','ikbiasthetaflat',nsitemld,crl=ikbiasthetaflat)
+    endif
 
     IF(ILALDM) THEN
        call chmdealloc('lambda_ltm.src','ldm_block_clear','IGAMMALD',NBLOCK*4,crl=IGAMMALD)
+       call chmdealloc('lambda_ltm.src','ldm_block_clear','gammathetablk',4,NBLOCK,crl=gammathetablk)
        ilaldm = .false.
     ENDIF
 
@@ -2962,12 +3084,18 @@ contains
        call chmdealloc('lambda_ltm.src','ldm_block_clear','blckmask',nblock,nblock,log=blckmask)
        call chmdealloc('lambda_ltm.src','ldm_block_clear','fullblcoep',nblock,nblock,crl=fullblcoep)
        call chmdealloc('lambda_ltm.src','ldm_block_clear','fnexp_factors',nsitemld,crl=fnexp_factors)
+       call chmdealloc('lambda_ltm.src','ldm_block_clear','qlfix',nblock,log=qlfix)
        call msld_deallocate_flags
        call msld_deallocate_lookup_tables
        qmld = .false.
     endif
     qbiasthetacoll = .false.
     qbiasthetainde = .false.
+    qbiasthetaedge = .false.
+    qbiasthetaflat = .false.
+    ik1biascharge = 0
+    ik2biascharge = 0
+    ik3biascharge = 0
 
     iqldm_softcore = 0
     iqldm_pme = 0
@@ -3065,12 +3193,14 @@ contains
 !>                                         { F2Exponential }
 !>                                         { F2Sin }
 !>                                         { FFIX }
+!>                                         { FNPW }
 !>                               default = { FNEX 5.5 }
 !>\endverbatim
 !> e.g. with the first block being the environment (Site 0) (required),
 !>      the next 2 blocks defined as substituents on Site 1 and
 !>      the remaining 4 blocks defined as substituents on Site 2:\n
 !>       msld 0 1 1 2 2 2 2 fnex 5.5
+!>       msld 0 1 1 2 2 2 2 fnpw
 ! Environment atoms = Block 1 = Site 0
 ! All other Blocks must be assigned to Site N, N > 0
 ! Within the code, Site number for Block i (isitemld(i)) is
@@ -3086,7 +3216,7 @@ contains
       character(len=*), intent(inout) :: COMLYN
       INTEGER, intent(inout) :: comlen
       INTEGER, intent(in) :: nblock
-      integer :: i, j, max
+      integer :: i, j, max, nlfix
       integer, dimension(nblock) :: count
       real(chm_real) :: def_fnexp_factor
       logical :: multi_fnexp
@@ -3112,6 +3242,7 @@ contains
          call chmdealloc('lambda_ltm.src','msld_setup','blckmask',nblock,nblock,log=blckmask)
          call chmdealloc('lambda_ltm.src','msld_setup','fullblcoep',nblock,nblock,crl=fullblcoep)
          call chmdealloc('lambda_ltm.src','msld_setup','fnexp_factors',nsitemld,crl=fnexp_factors)
+         call chmdealloc('lambda_ltm.src','msld_setup','qlfix',nblock,log=qlfix)
          call msld_deallocate_lookup_tables
       endif
       qmld = .true.
@@ -3162,6 +3293,8 @@ contains
       call chmalloc('lambda_ltm.src','msld_setup','blckmask',nblock,nblock,log=blckmask)
       call chmalloc('lambda_ltm.src','msld_setup','fullblcoep',nblock,nblock,crl=fullblcoep)
       call chmalloc('lambda_ltm.src','msld_setup','fnexp_factors',nsitemld,crl=fnexp_factors)
+      call chmalloc('lambda_ltm.src','msld_setup','qlfix',nblock,log=qlfix)
+      qlfix = .FALSE.
       count = 0
       do i = lstrt, nblock
           count(isitemld(i)) = count(isitemld(i)) + 1
@@ -3173,10 +3306,6 @@ contains
 
       if(prnlev.ge.2) write(outu,33) nsitemld
  33   FORMAT( I4, ' SITES have been assigned for Multi-site Lambda-dynamics')
-
-! setup default cutoff for fixed biases (assigned in ldin lines)
-      bicut = 0.8
-      bicut2in = 1.0/(bicut*bicut)
 
 ! Check for alternative functions:
       fcnal_form = 'nexp'
@@ -3203,9 +3332,10 @@ contains
          if (mynod == 0 ) write(outu,*) "RENORMALIZING function selected for MSLD simulations"
       endif
 
-      IF(INDXA(COMLYN,COMLEN,'FFIX').GT.0) THEN
-         fcnal_form = 'fixd'
-         if (mynod == 0 ) write(outu,*) "FIXED function selected for MSLD simulations"
+      IF(INDXA(COMLYN,COMLEN,'FNPW').GT.0) THEN
+         fcnal_form = 'npwi'
+         fnpwise_exp = 3
+         if (mynod == 0 ) write(outu,*) "PIECEWISE function selected for MSLD simulations"
       endif
 
       IF(INDXA(COMLYN,COMLEN,'FNXS').GT.0) THEN
@@ -3230,6 +3360,28 @@ contains
          enddo
       endif
 
+! FFIX must be parsed AFTER FNEX/FNXS so their keywords are consumed
+! from the command buffer before FFIX's positional NEXTI loop runs.
+      IF(INDXA(COMLYN,COMLEN,'FFIX').GT.0) THEN
+         ! Try reading block indices after FFIX
+         nlfix = 0
+         DO
+            i = NEXTI(COMLYN,COMLEN)
+            IF (i <= 0 .OR. i > nblock) EXIT
+            qlfix(i) = .TRUE.
+            nlfix = nlfix + 1
+            if (mynod == 0) write(outu,'(A,I5)') ' FFIX: Block fixed: ', i
+         ENDDO
+         IF (nlfix == 0) THEN
+            ! No block indices: global FFIX (existing behavior)
+            fcnal_form = 'fixd'
+            if (mynod == 0) write(outu,*) "FIXED function selected for MSLD simulations"
+         ELSE
+            ! Partial fix: keep current fcnal_form, mark specific blocks
+            if (mynod == 0) write(outu,'(A,I5,A)') ' FFIX: ', nlfix, ' blocks partially fixed'
+         ENDIF
+      endif
+
       if (fcnal_form == '2exp' .or. fcnal_form == '2sin') then
          call msld_check_sitenum(fcnal_form)
       endif
@@ -3237,6 +3389,18 @@ contains
 ! setup exp lookup table
       if (fcnal_form /= '2sin' .and. fcnal_form /= 'nsin') then
          call setup_exp_table
+      endif
+
+! Validate partial FFIX compatibility
+      if (ANY(qlfix)) then
+         if (fcnal_form == '2sin' .or. fcnal_form == '2exp') then
+            call wrndie(-3,'<lambdadyn>', &
+               'Partial FFIX is incompatible with 2-site forms (F2SIN/F2EXP).')
+         endif
+         if (fcnal_form == 'npwi') then
+            call wrndie(-3,'<lambdadyn>', &
+               'Partial FFIX is incompatible with piecewise constraint (FPIE).')
+         endif
       endif
 
 100 format(" FNEXP_FACTOR: ",f10.5)
@@ -3469,15 +3633,18 @@ contains
 !> The MSMA keyword is the Multi-Site lambda-dynamics equivalent to the LDMAtrix command
 !> and will automatically map the input lambda values onto the coefficient matrix of the
 !> interaction energies (and forces) between blocks.
-  subroutine msld_matrix(nblock,ninter,blcop)
+   subroutine msld_matrix(nblock,ninter,blcop,&
+        blcob,qnobo,blcoa,qnoan,blcod,qnoph)
 
     use stream
 
     implicit none
+    logical, intent(in) :: qnobo, qnoan, qnoph
     integer, intent(in) :: nblock, ninter
     integer :: i
     real(chm_real), dimension(nsitemld) :: lnorm
-    real(chm_real), dimension(ninter), intent(inout) :: BLCOP
+    real(chm_real), dimension(ninter), intent(inout) :: BLCOP, &
+         blcob,blcoa,blcod
 
     if(qmld) then
        lnorm = 0.0
@@ -3491,8 +3658,19 @@ contains
        do i = lstrt, nblock
           bixlam(i)=bixlam(i)/lnorm(isitemld(i))
        enddo
+       ! Restore lambda for single-subsite FFIX sites (solute tempering).
+       ! The normalization above divides by site sum, which for a single-block
+       ! site sets lambda to 1.0 regardless of the ldin value. For FFIX single-
+       ! subsite sites, we want to preserve the user-specified lambda.
+       if (ANY(qlfix)) then
+          do i = 2, nsitemld
+             if (nsubmld(i) == 1 .and. qlfix(blckmld(i,1))) then
+                bixlam(blckmld(i,1)) = bixlam(blckmld(i,1)) * lnorm(i)
+             endif
+          enddo
+       endif
 #if KEY_DEBUG==1
-       if (prnlev.gt.10) write(outu,100) (bixlam(i), i=lstrt,nblock) 
+       if (prnlev.gt.10) write(outu,100) (bixlam(i), i=lstrt,nblock)
 #endif
        call msld_settheta(nblock,bixlam)
 
@@ -3506,6 +3684,11 @@ contains
        if (prnlev.gt.10) write(outu,100) (bixlam(i), i=lstrt,nblock) 
 #endif
        if (prnlev >= 2) WRITE (OUTU,200)
+       
+       if(.not.qnobo) blcob = blcop
+       if(.not.qnoan) blcoa = blcop
+       if(.not.qnoph) blcod = blcop
+
     else
        IF (WRNLEV.GE.2) WRITE(OUTU,201)
     endif
@@ -4395,17 +4578,32 @@ contains
       integer :: i, j, k, intx
       real(chm_real), dimension(nblock), intent(out) :: bxlamb
       real(chm_real), dimension(ninter), intent(out) :: BLCOP
-      real(chm_real) :: bx2
+      real(chm_real) :: bx2, fixsum, denom
 
       bxlamb(1) = 1.0
       do i = 2, nsitemld
+         fixsum = 0.0
+         denom = 0.0
+         ! First pass: partition fixed vs dynamic
+         do j = 1, nsubmld(i)
+            IF(qlfix(blckmld(i,j))) THEN
+               fixsum = fixsum + thetamld(i,j)
+            ELSE
+               denom = denom + thetamld(i,j) * thetamld(i,j)
+            ENDIF
+         enddo
+         ! Second pass: assign lambda values
          do j = 1, nsubmld(i)
 #if KEY_DEBUG==1
-            if (prnlev.gt.9) write(outu,100) i, j, bxlamb(blckmld(i,j)) 
+            if (prnlev.gt.9) write(outu,100) i, j, bxlamb(blckmld(i,j))
 #endif
-            bxlamb(blckmld(i,j)) = thetamld(i,j) * thetamld(i,j)
+            IF(qlfix(blckmld(i,j))) THEN
+               bxlamb(blckmld(i,j)) = thetamld(i,j)
+            ELSE
+               bxlamb(blckmld(i,j)) = (1.0 - fixsum) * thetamld(i,j) * thetamld(i,j) / denom
+            ENDIF
 #if KEY_DEBUG==1
-            if (prnlev.gt.9) write(outu,110) i, j, bxlamb(blckmld(i,j)) 
+            if (prnlev.gt.9) write(outu,110) i, j, bxlamb(blckmld(i,j))
 #endif
          enddo
       enddo
@@ -4491,19 +4689,31 @@ contains
       real(chm_real), dimension(nblock) :: num
       real(chm_real), dimension(nblock), intent(out) :: bxlamb
       real(chm_real), dimension(ninter), intent(out) :: BLCOP
-      real(chm_real) :: bx2
+      real(chm_real) :: bx2, fixsum
 
       bxlamb(1) = 1.0
       do i = 2, nsitemld
          bx2 = 0.0
+         fixsum = 0.0
+         ! First pass: partition fixed vs dynamic
          do j = 1, nsubmld(i)
-             num(j) = sin(thetamld(i,j)) * sin(thetamld(i,j))
-             bx2 = bx2 + num(j)
+             IF(qlfix(blckmld(i,j))) THEN
+                fixsum = fixsum + thetamld(i,j)
+                num(j) = 0.0
+             ELSE
+                num(j) = sin(thetamld(i,j)) * sin(thetamld(i,j))
+                bx2 = bx2 + num(j)
+             ENDIF
          enddo
+         ! Second pass: assign lambda values
          do j = 1, nsubmld(i)
-             bxlamb(blckmld(i,j)) = num(j)/bx2
+             IF(qlfix(blckmld(i,j))) THEN
+                bxlamb(blckmld(i,j)) = thetamld(i,j)
+             ELSE
+                bxlamb(blckmld(i,j)) = (1.0 - fixsum) * num(j)/bx2
+             ENDIF
 #if KEY_DEBUG==1
-             if (prnlev.gt.9) write(outu,110) i, j, bxlamb(blckmld(i,j)) 
+             if (prnlev.gt.9) write(outu,110) i, j, bxlamb(blckmld(i,j))
 #endif
          enddo
       enddo
@@ -4528,7 +4738,7 @@ contains
       real(chm_real), dimension(nblock), intent(out) :: bxlamb
       real(chm_real), dimension(ninter), intent(out) :: BLCOP
       real(chm_real) :: th
-      real(chm_real) :: denom
+      real(chm_real) :: denom, fixsum
 
       if (prnlev.ge.8) then
          write(outu,*) "testing_lookup_fnexp>  i,  j,  num(j),  thetamld(i,j),  bxlamb(blckmld(i,j))"
@@ -4537,26 +4747,46 @@ contains
       bxlamb(1) = 1.0
       do i = 2, nsitemld
          denom = 0.0
+         fixsum = 0.0
+         ! First pass: partition into fixed vs dynamic
          do j = 1, nsubmld(i)
-             IF(QTHEOLD) THEN
-                th=thetamldold(i,j) !GG Need to use old ThetaX in replica exchange since it hasn't update yet
-             else
-                th=thetamld(i,j)
-             endif
-             if (fnexp_factor==fnexp_factors(i)) then
-                num(j) = lookupint_exp(th)
-             else
-                num(j) = exp(fnexp_factors(i)*sin(th))
-             endif
-             if (prnlev.ge.8) then
-                write(outu,110) i, j, num(j), th, bxlamb(blckmld(i,j)) !GG
-             endif
-             denom = denom + num(j)
+             IF(qlfix(blckmld(i,j))) THEN
+                IF(QTHEOLD) THEN
+                   fixsum = fixsum + thetamldold(i,j)
+                ELSE
+                   fixsum = fixsum + thetamld(i,j)
+                ENDIF
+                num(j) = 0.0
+             ELSE
+                IF(QTHEOLD) THEN
+                   th=thetamldold(i,j)
+                else
+                   th=thetamld(i,j)
+                endif
+                if (fnexp_factor==fnexp_factors(i)) then
+                   num(j) = lookupint_exp(th)
+                else
+                   num(j) = exp(fnexp_factors(i)*sin(th))
+                endif
+                if (prnlev.ge.8) then
+                   write(outu,110) i, j, num(j), th, bxlamb(blckmld(i,j))
+                endif
+                denom = denom + num(j)
+             ENDIF
          enddo
+         ! Second pass: assign lambda values
          do j = 1, nsubmld(i)
-             bxlamb(blckmld(i,j)) = num(j)/denom !GG "calculates" lambda value for precalc grid of theta->lamba correspondence
+             IF(qlfix(blckmld(i,j))) THEN
+                IF(QTHEOLD) THEN
+                   bxlamb(blckmld(i,j)) = thetamldold(i,j)
+                ELSE
+                   bxlamb(blckmld(i,j)) = thetamld(i,j)
+                ENDIF
+             ELSE
+                bxlamb(blckmld(i,j)) = (1.0 - fixsum) * num(j)/denom
+             ENDIF
              if (prnlev.ge.8) then
-                write(outu,120) i, j, bxlamb(blckmld(i,j))     !GG
+                write(outu,120) i, j, bxlamb(blckmld(i,j))
              endif
          enddo
       enddo
@@ -4601,6 +4831,99 @@ contains
 
    END subroutine msld_setblcoef_ffix
 
+   subroutine msld_setblcoef_fnpwise_helper(nsubs,theta,theta0,lambda)
+      use stream
+
+      implicit none
+
+      integer :: i, j
+      real(chm_real) :: c, dc
+      integer, intent(in) :: nsubs
+      real(chm_real), dimension(nsubs), intent(in) :: theta
+      real(chm_real), intent(out) :: theta0
+      real(chm_real), dimension(nsubs), intent(out), optional :: lambda
+
+      theta0 = theta(1)
+      do i = 2, nsubs
+         if (theta(i)>theta0) then
+            theta0 = theta(i)
+         endif
+      enddo
+      theta0 = theta0 - 1
+      ! write(outu,110) theta0
+      ! Find theta0 with Newton-Raphson
+      do i = 1, 8 ! 6 loops is generally sufficient
+         c = -1
+         dc = 0
+         do j = 1, nsubs
+            if (theta(j)>theta0) then
+               c = c + (theta(j)-theta0)**(fnpwise_exp)
+               dc = dc - fnpwise_exp*(theta(j)-theta0)**(fnpwise_exp-1)
+            endif
+         enddo
+         theta0 = theta0 - c/dc
+         ! write(outu,110) theta0
+      enddo
+      ! Set lambda
+      if (present(lambda)) then
+         do i = 1, nsubs
+            lambda(i)=0
+            if (theta(i)>theta0) then
+               lambda(i) = (theta(i)-theta0)**(fnpwise_exp)
+            endif
+            ! write(outu,120) i, j, lambda(i)     !GG
+         enddo
+      endif
+110 format("testing_fnpwise_helper> theta0 = ", f15.10)
+120 format("testing_fnpwise_helper> ", 2i5, f15.10)
+   end subroutine msld_setblcoef_fnpwise_helper
+
+!-----------------------------------------------------------------------
+!> Assigns lambda values from thetas according to FNEXP functional form.
+!> Invoked from msld_setblcoef during dynamc subroutines.
+   subroutine msld_setblcoef_fnpwise(nblock,ninter,bxlamb,blcop)
+
+      use stream
+
+      implicit none
+      integer, intent(in) :: nblock, ninter
+      integer :: i, j, k, intx
+      real(chm_real), dimension(nblock) :: num
+      real(chm_real), dimension(nblock), intent(out) :: bxlamb
+      real(chm_real), dimension(ninter), intent(out) :: BLCOP
+      real(chm_real) :: th0
+      real(chm_real) :: denom
+
+      if (prnlev.ge.8) then
+         write(outu,*) "testing_fnpwise>  i,  j,  num(j),  thetamld(i,j),  bxlamb(blckmld(i,j))"
+      endif
+
+      bxlamb(1) = 1.0
+      do i = 2, nsitemld
+         IF(QTHEOLD) THEN
+            ! th=thetamldold(i,j) !GG Need to use old ThetaX in replica exchange since it hasn't update yet
+            call msld_setblcoef_fnpwise_helper(nsubmld(i), &
+               thetamldold(i,1:nsubmld(i)), th0, &
+               bxlamb(blckmld(i,1):blckmld(i,nsubmld(i))))
+         else
+            ! th=thetamld(i,j)
+            call msld_setblcoef_fnpwise_helper(nsubmld(i), &
+               thetamld(i,1:nsubmld(i)), th0, &
+               bxlamb(blckmld(i,1):blckmld(i,nsubmld(i))))
+         endif
+         do j = 1, nsubmld(i)
+            if (prnlev.ge.8) then
+               write(outu,120) i, j, bxlamb(blckmld(i,j))     !GG
+            endif
+         enddo
+      enddo
+
+      call msld_setup_blcoef(nblock,ninter,bxlamb,blcop)
+
+120 format("testing_fnpwise> ", 2i5, f15.10)
+
+   END subroutine msld_setblcoef_fnpwise
+
 !-----------------------------------------------------------------------
 !> Distributes assignment of lambda values from thetas according to functional form.
 !> Invoked from dynamics subroutines
@@ -4612,7 +4935,7 @@ contains
 
       implicit none
       integer, intent(in) :: nblock, ninter
-      integer :: i, j
+      integer :: i, j, k
       real(chm_real), dimension(nblock), intent(inout) :: bxlamb
       real(chm_real), dimension(ninter), intent(out) :: BLCOP
       real(chm_real), dimension(ninter) :: num
@@ -4622,6 +4945,34 @@ contains
       bxlamb(1) = 1.0
       biflam = zero
       biflam2 = zero
+
+      ! Validate partial FFIX: check constraints per site
+      if (ANY(qlfix)) then
+         do i = 2, nsitemld
+            denom = zero
+            j = 0
+            do k = 1, nsubmld(i)
+               if (qlfix(blckmld(i,k))) then
+                  if (QTHEOLD) then
+                     denom = denom + thetamldold(i,k)
+                  else
+                     denom = denom + thetamld(i,k)
+                  endif
+               else
+                  j = j + 1
+               endif
+            enddo
+            if (j == 0 .and. nsubmld(i) > 1) then
+               call wrndie(-3,'msld_setblcoef', &
+                  'All blocks at a multi-subsite site are fixed. At least one must be dynamic.')
+            endif
+            ! For single-subsite FFIX sites, lambda is unconstrained (solute tempering)
+            if (j > 0 .and. denom >= 1.0) then
+               call wrndie(-3,'msld_setblcoef', &
+                  'Sum of fixed block lambda values >= 1.0. No room for dynamic blocks.')
+            endif
+         enddo
+      endif
 
       select case (fcnal_form)
       case ('2sin')
@@ -4636,6 +4987,8 @@ contains
          call msld_setblcoef_fnexp(nblock,ninter,bxlamb,blcop)
       case ('fixd')
          call msld_setblcoef_ffix(nblock,ninter,bxlamb,blcop)
+      case ('npwi')
+         call msld_setblcoef_fnpwise(nblock,ninter,bxlamb,blcop)
       end select
 
       call msld_setup_blcoef(nblock,ninter,bxlamb,blcop)
@@ -4678,7 +5031,7 @@ contains
 !-----------------------------------------------------------------------
 !> Adds scaled fixed biases to potential energy total.
 !> Invoked from energy/energy.src subroutine.
-   subroutine msld_add_potentialenergy(nblock,bxlamb,energy)
+   subroutine msld_add_potentialenergy(nblock,bxlamb,energyld,energyth,energycg)
 
       use stream
       use number
@@ -4687,7 +5040,7 @@ contains
       integer, intent(in) :: nblock
       integer :: i, j
       real(chm_real), intent(in), dimension(nblock) :: bxlamb
-      real(chm_real), intent(inout) :: energy
+      real(chm_real), intent(inout) :: energyld, energyth, energycg
       real(chm_real) :: bx, be, en
 
       en = 0.0
@@ -4710,9 +5063,10 @@ endif
          endif
 !#ENDIF
       enddo
-      energy = energy + en
-      call msld_add_biasenergy(energy)
-      call msld_add_thetabiasenergy(energy)
+      energyld = energyld + en
+      call msld_add_biasenergy(energyld)
+      call msld_add_thetabiasenergy(energyth)
+      ! call msld_add_chargebiasenergy(energycg)
 
 100 format("addbiasenergy> ", i5, 3f10.5)
 
@@ -4762,9 +5116,56 @@ endif
       endif
    end subroutine msld_add_restraints
 
+!     subroutine msld_add_force_chargebias(nblock)
+!       use chm_kinds
+!       use consta, only: pi, ccelec
+!       use ewald, only: kappa ! circular dependency
+!       use prssre,only:getvol ! circular dependency
+! 
+!       implicit none
+!       integer :: i, j
+!       integer, intent(inout) :: nblock
+!       real(chm_real) :: en, Q, V, dQ, dUdQ
+! 
+!       dUdQ = 0
+! 
+!       if (ik1biascharge .ne. 0 .or. ik2biascharge .ne. 0 .or. ik3biascharge .ne. 0) then
+!          do i = 1, nsitemld
+!             do j = 1, nsubmld(i)
+!                Q = Q + bixlam(thetamld(i,j))*biqlam(thetamld(i,j))
+!             enddo
+!          enddo
+!          getvol(V)
+!       endif
+! 
+!       if (ik1biascharge .ne. 0) then
+!          dUdQ = dUdQ + -(2*pi/3)*ccelec*k1biascharge/V
+!       endif
+! 
+!       if (ik2biascharge .ne. 0) then
+!          dUdQ = dUdQ + -2*(pi/2)*ccelec*ik2biascharge*Q/V/(kappa*kappa)
+!       endif
+! 
+!       if (ik3biascharge .ne. 0) then
+!          dQ=Q-iq03biascharge
+!          if (dQ>iw3biascharge) then
+!             dUdQ = dUdQ + ik3biascharge*(dQ-iw3biascharge)
+!          elseif (dQ<-iw3biascharge) then
+!             dUdQ = dUdQ + ik3biascharge*(dQ+iw3biascharge)
+!          endif
+!       endif
+! 
+!       if (ik1biascharge .ne. 0 .or. ik2biascharge .ne. 0 .or. ik3biascharge .ne. 0) then
+!          do i = 1, nblock
+!             biflam(i) = biflam(i) + dUdQ*biqlam(i)
+!          enddo
+!       endif
+! 
+!    end subroutine msld_add_force_chargebias
+
 !-----------------------------------------------------------------------
-!> Generates random force.
-   subroutine getrandomforce(num,frandtheta)
+!> Generates random force using per-block Langevin coefficients.
+   subroutine getrandomforce(num,frandtheta,blk)
 
       use consta
       use clcg_mod,only : random
@@ -4776,20 +5177,20 @@ endif
 
       implicit none
       integer :: ig
-      integer, intent(in) :: num
+      integer, intent(in) :: num, blk
       real(chm_real) :: pis, a, b
       real(chm_real), intent(out) :: frandtheta
 
       IF (MYNOD == 0) THEN
 
-! compute random force (frandtheta)
+! compute random force (frandtheta) using per-block RFD
          PIS=PI
          if (qoldrng) then                        !yw 05-Aug-2008
-            A=gammatheta(1)*SQRT(MINTWO*LOG(RANDOM(ISEED)))
+            A=gammathetablk(1,blk)*SQRT(MINTWO*LOG(RANDOM(ISEED)))
             B=TWO*PIS*RANDOM(ISEED)
          else
             IG=1
-            A=gammatheta(1)*SQRT(MINTWO*LOG(RANDOM(IG)))
+            A=gammathetablk(1,blk)*SQRT(MINTWO*LOG(RANDOM(IG)))
             B=TWO*PIS*RANDOM(IG)
          endif
          if (mod(num,2) == 0) then
@@ -4832,18 +5233,33 @@ endif
       integer, intent(in) :: nblock
       integer :: i, j, k
       real(chm_real) :: frandtheta
+      real(chm_real) :: fixsum, Rfrac
 
       call msld_fixedbiasforce(nblock,biflam)
       do i = 2, nsitemld
+         ! Compute fixsum for this site
+         fixsum = zero
+         do k = 1, nsubmld(i)
+            if (qlfix(blckmld(i,k))) then
+               fixsum = fixsum + bixlam(blckmld(i,k))
+            endif
+         enddo
+         Rfrac = one - fixsum
+
          do j = 1, nsubmld(i)
-            call getrandomforce(i,frandtheta)
-            thetafmld(i,j) = -two*thetamld(i,j)*(biflam(blckmld(i,j)) + biflam2(blckmld(i,j))) + frandtheta
+            IF(qlfix(blckmld(i,j))) THEN
+               thetafmld(i,j) = 0
+               CYCLE
+            ENDIF
+            call getrandomforce(i,frandtheta,blckmld(i,j))
+            ! With partial FFIX, dlambda/dtheta = 2*Rfrac*theta (norm form)
+            thetafmld(i,j) = -two*Rfrac*thetamld(i,j)*(biflam(blckmld(i,j)) + biflam2(blckmld(i,j))) + frandtheta
 
 #if KEY_DEBUG==1
             if (prnlev.gt.10) then
                write(outu,120) i,j, frandtheta, thetamld(i,j), thetafmld(i,j)
             endif
-#endif 
+#endif
          enddo
       enddo
 
@@ -4869,7 +5285,7 @@ endif
 
       call msld_fixedbiasforce(nblock,biflam)
       do i = 2, nsitemld
-         call getrandomforce(i,frandtheta)
+         call getrandomforce(i,frandtheta,blckmld(i,1))
          ijbl = blckmld(i,1)
          ikbl = blckmld(i,2)
          force1 = biflam(ijbl) + biflam2(ijbl)
@@ -4905,7 +5321,7 @@ endif
 
       call msld_fixedbiasforce(nblock,biflam)
       do i = 2, nsitemld
-         call getrandomforce(i,frandtheta)
+         call getrandomforce(i,frandtheta,blckmld(i,1))
          ijbl = blckmld(i,1)
          ikbl = blckmld(i,2)
          force1 = biflam(ijbl) + biflam2(ijbl)
@@ -4940,16 +5356,30 @@ endif
       integer, intent(in) :: nblock
       integer :: i, j, k, ijbl, ikbl
       real(chm_real) :: frandtheta, force1, force2
+      real(chm_real) :: fixsum, Rfrac
 
       call msld_fixedbiasforce(nblock,biflam)
       do i = 2, nsitemld
+         ! Compute fixsum for this site
+         fixsum = zero
+         do k = 1, nsubmld(i)
+            if (qlfix(blckmld(i,k))) then
+               fixsum = fixsum + bixlam(blckmld(i,k))
+            endif
+         enddo
+         Rfrac = one - fixsum
+
          do j = 1, nsubmld(i)
-            call getrandomforce(i,frandtheta)
             ijbl = blckmld(i,j)
-            force1 = (one-bixlam(ijbl))*(biflam(ijbl)+biflam2(ijbl))
+            IF(qlfix(ijbl)) THEN
+               thetafmld(i,j) = 0
+               CYCLE
+            ENDIF
+            call getrandomforce(i,frandtheta,ijbl)
+            force1 = (Rfrac-bixlam(ijbl))*(biflam(ijbl)+biflam2(ijbl))
             force2 = zero
             do k = 1, nsubmld(i)
-               if (k.ne.j) then
+               if (k.ne.j .and. .not.qlfix(blckmld(i,k))) then
                   ikbl = blckmld(i,k)
                   force2 = force2 + bixlam(ikbl)*(biflam(ikbl)+biflam2(ikbl))
                endif
@@ -4957,7 +5387,7 @@ endif
             if (sin(thetamld(i,j)).eq.zero) then
                write(outu,*) "WARNING... sin(thetamld(i,j))=0"
             endif
-            thetafmld(i,j) = -two*cos(thetamld(i,j))/sin(thetamld(i,j))*bixlam(ijbl)*(force1-force2)+frandtheta
+            thetafmld(i,j) = -two*cos(thetamld(i,j))/sin(thetamld(i,j))*bixlam(ijbl)*(force1-force2)/Rfrac+frandtheta
 
 #if KEY_DEBUG==1
             if (prnlev.gt.10) then
@@ -4966,7 +5396,7 @@ endif
                write(outu,130) i, j, bixlam(ijbl)
                write(outu,140) i,j, frandtheta, thetafmld(i,j)
             endif
-#endif 
+#endif
          enddo
       enddo
 
@@ -4995,25 +5425,40 @@ endif
       real(chm_real) :: frandtheta, force1, force2
       real(chm_real) :: fbiastheta
       real(chm_real) :: nhigh, nlow
+      real(chm_real) :: fixsum, Rfrac
 
 ! adds force from fixed (from ldin) and variable (from ldbv) biases into biflam
       call msld_fixedbiasforce(nblock,biflam)
 
 ! computes forces on each substituent on each site
       do i = 2, nsitemld
-         ! Theta biasing
+         ! Compute fixsum for this site (sum of fixed block lambdas)
+         fixsum = zero
+         do k = 1, nsubmld(i)
+            if (qlfix(blckmld(i,k))) then
+               fixsum = fixsum + bixlam(blckmld(i,k))
+            endif
+         enddo
+         Rfrac = one - fixsum
+
+         ! Theta biasing (skip fixed blocks — sin(theta) is meaningless for them)
          if (qbiasthetacoll) then
             nhigh=0
             nlow=0
             do j = 1, nsubmld(i)
+               IF(qlfix(blckmld(i,j))) CYCLE
                nhigh=nhigh+(0.5*sin(thetamld(i,j))+0.5)**ipbiasthetacoll(i)
                nlow=nlow+(-0.5*sin(thetamld(i,j))+0.5)**ipbiasthetacoll(i)
             enddo
          endif
 
          do j = 1, nsubmld(i)
-            call getrandomforce(i,frandtheta)
             ijbl = blckmld(i,j)
+            IF(qlfix(ijbl)) THEN
+               thetafmld(i,j) = 0
+               CYCLE
+            ENDIF
+            call getrandomforce(i,frandtheta,ijbl)
 
             fbiastheta = 0
             if (qbiasthetacoll) then
@@ -5033,12 +5478,13 @@ endif
                 endif
             endif
 
-! force1 indicates term that needs to be scaled by d(lambda(A))/d(theta(A))
-! d(lambda(A))/d(theta(A)) = fnexp_factor*cos(theta(A))*lambda(A)*(1-lambda(A))
-            force1 = (one-bixlam(ijbl))*(biflam(ijbl) + biflam2(ijbl))
+! With partial FFIX, dlambda_A/dtheta_A = c*cos(theta_A)*lambda_A*(1-lambda_A/R)
+! and dlambda_B/dtheta_A = -c*cos(theta_A)*lambda_A*lambda_B/R
+! where R = 1-fixsum. force1 uses (R-lambda_A), force2 excludes fixed blocks.
+            force1 = (Rfrac-bixlam(ijbl))*(biflam(ijbl) + biflam2(ijbl))
             force2 = zero
             do k = 1, nsubmld(i)
-               if (k.ne.j) then
+               if (k.ne.j .and. .not.qlfix(blckmld(i,k))) then
                   ikbl = blckmld(i,k)
 
                   if (prnlev.gt.10) then
@@ -5046,8 +5492,6 @@ endif
                      write(outu,115) i, j, k, cos(thetamld(i,j)), bixlam(ikbl)
                   endif
 
-! force2 indicates term that needs to be scaled by d(lambda(B))/d(theta(A))
-! d(lambda(B))/d(theta(A)) = -fnexp_factor*cos(theta(A))*lambda(A)*lambda(B)
                   force2 = force2 + bixlam(ikbl)*(biflam(ikbl) + biflam2(ikbl))
 
 !#IF DEBUG
@@ -5059,9 +5503,9 @@ endif
                endif
             enddo
 
-! compute overall force (forcemld) for this theta value
+! compute overall force (forcemld) for this theta value, dividing by Rfrac
 ! WARNING WARNING, whoever coded this up decided to buck the CHARMM sign convention on force, and stuck a minus sign in front of this to switch the convention. Caused a headache trying to find bugs when implementing fbiastheta. Fix: subtract fbiastheta instead of adding it.
-            thetafmld(i,j) = -fnexp_factors(i)*cos(thetamld(i,j))*bixlam(ijbl)*(force1-force2)+frandtheta-fbiastheta
+            thetafmld(i,j) = -fnexp_factors(i)*cos(thetamld(i,j))*bixlam(ijbl)*(force1-force2)/Rfrac+frandtheta-fbiastheta
 !#IF DEBUG
             if (prnlev.gt.10) then
                write(outu,130) i, j, thetafmld(i,j), force1, force2, frandtheta
@@ -5117,6 +5561,94 @@ endif
       enddo
 
    END subroutine msld_add_force_ffix
+
+!-----------------------------------------------------------------------
+!> Calculates force on each theta according to FNPWISE functional form.
+!> Invoked from msld_add_force during dynamc subroutines.
+   subroutine msld_add_force_fnpwise(nblock)
+
+      use consta
+      use dimens_fcm
+      use stream
+      use number
+      use memory
+
+      implicit none
+      integer, intent(in) :: nblock
+      integer :: i, j, k, ijbl, ikbl
+      real(chm_real) :: theta0, dldt, nhigh, expat
+      real(chm_real) :: frandtheta, force1, force2, norm
+      real(chm_real) :: fbiastheta
+
+! adds force from fixed (from ldin) and variable (from ldbv) biases into biflam
+      call msld_fixedbiasforce(nblock,biflam)
+
+! computes forces on each substituent on each site
+      do i = 2, nsitemld
+         ! Get theta0 and force2
+         call msld_setblcoef_fnpwise_helper(nsubmld(i), &
+            thetamld(i,1:nsubmld(i)), theta0)
+         force2 = zero
+         norm = zero
+         do j = 1, nsubmld(i)
+            if (thetamld(i,j)>theta0) then
+               ijbl = blckmld(i,j)
+               dldt = fnpwise_exp*(thetamld(i,j)-theta0)**(fnpwise_exp-1)
+               force2 = force2 + (biflam(ijbl) + biflam2(ijbl)) * dldt
+               norm = norm + dldt
+            endif
+         enddo
+         force2 = force2/norm
+
+         if (qbiasthetaedge) then
+            nhigh = 0
+            do j = 1, nsubmld(i)
+               expat = exp(-iabiasthetaedge*(thetamld(i,j)-theta0+itbiasthetaedge))
+               nhigh = nhigh + 1/(1+expat)
+            enddo
+            nhigh = nhigh - inbiasthetaedge
+         endif
+
+         ! Loop over substituents and get theta force
+         do j = 1, nsubmld(i)
+            ijbl = blckmld(i,j)
+            call getrandomforce(i,frandtheta,ijbl)
+
+            fbiastheta = 0
+            ! Theta biasing
+            if (qbiasthetaedge .and. (nhigh>0)) then
+               expat = exp(-iabiasthetaedge*(thetamld(i,j)-theta0+itbiasthetaedge))
+               fbiastheta = fbiastheta + (ikbiasthetaedge * nhigh) * iabiasthetaedge * expat / ((1+expat)*(1+expat))
+               do k = 1, nsubmld(i)
+                  dldt = fnpwise_exp*(thetamld(i,k)-theta0)**(fnpwise_exp-1)
+                  expat = exp(-iabiasthetaedge*(thetamld(i,k)-theta0+itbiasthetaedge))
+                  fbiastheta = fbiastheta - (ikbiasthetaedge * nhigh) * iabiasthetaedge * (dldt/norm) * expat / ((1+expat)*(1+expat))
+               enddo
+            endif
+            if (qbiasthetaflat) then
+              if (ikbiasthetaflat(i) .ne. 0) then
+                if (thetamld(i,j)>iwbiasthetaflat(i)*nsubmld(i)) then
+                  ! en = en + 0.5*ikbiasthetaflat(i)*(thetamld(i,j)-iwbiasthetaflat(i)*nsubmld(i))**2
+                  fbiastheta = fbiastheta + ikbiasthetaflat(i)*(thetamld(i,j)-iwbiasthetaflat(i)*nsubmld(i))
+                elseif (thetamld(i,j)<-iwbiasthetaflat(i)*nsubmld(i)) then
+                  ! en = en + 0.5*ikbiasthetaflat(i)*(thetamld(i,j)+iwbiasthetaflat(i)*nsubmld(i))**2
+                  fbiastheta = fbiastheta + ikbiasthetaflat(i)*(thetamld(i,j)+iwbiasthetaflat(i)*nsubmld(i))
+                endif
+              endif
+            endif
+
+            force1 = biflam(ijbl) + biflam2(ijbl)
+! compute overall force (forcemld) for this theta value
+! WARNING WARNING, whoever coded this up decided to buck the CHARMM sign convention on force, and stuck a minus sign in front of this to switch the convention. Caused a headache trying to find bugs when implementing fbiastheta. Fix: subtract fbiastheta instead of adding it.
+            dldt = zero
+            if (thetamld(i,j)>theta0) then
+               dldt = fnpwise_exp*(thetamld(i,j)-theta0)**(fnpwise_exp-1)
+            endif
+            thetafmld(i,j) = -dldt*(force1-force2)+frandtheta-fbiastheta
+         enddo
+      enddo
+
+   END subroutine msld_add_force_fnpwise
 
 !-----------------------------------------------------------------------
 !> Invoked by msld_add_force_* subroutines.
@@ -5206,6 +5738,32 @@ endif
              j = ibvidj(k)
              cont = ikbias(k)*bixlam(j)*(-irreup(k)*exp(irreup(k)*bixlam(i)))
              force(j) = force(j) + ikbias(k)*(1-exp(irreup(k)*bixlam(i)))
+         elseif (ibclas(k) .eq. 11) then
+             !! potential en = en + ikbias(k)*(bx**irreup(k))*(bixlam(j)**ipbias(k))
+             j = ibvidj(k)
+             cont = ikbias(k)*irreup(k)*(bixlam(i)**(irreup(k)-1))*(bixlam(j)**ipbias(k))
+             force(j) = force(j) + ikbias(k)*ipbias(k)*(bixlam(i)**irreup(k))*(bixlam(j)**(ipbias(k)-1))
+         elseif (ibclas(k) .eq. 12) then
+             !! potential en = en + ikbias(k)*bx*(bixlam(j)**ipbias(k))/(bx+irreup(k))
+             j = ibvidj(k)
+             cont = ikbias(k)*irreup(k)*(bixlam(j)**ipbias(k))/((bixlam(i)+irreup(k))*(bixlam(i)+irreup(k)))
+             force(j) = force(j) + ikbias(k)*ipbias(k)*bixlam(i)*(bixlam(j)**(ipbias(k)-1))/(bixlam(i)+irreup(k))
+!          elseif (ibclas(k) .eq. 13) then
+!              !! potential en = en + ikbias(k)*bx*bixlam(j)*(1-bx-bixlam(j))/(irreup(k)+1-bx-bixlam(j))
+!              j = ibvidj(k)
+!              if (ikbias(k) .ne. 0) then
+!                 bx = 1 - bixlam(i) - bixlam(j)
+!                 cont = -ikbias(k)*irreup(k)*bixlam(i)*bixlam(j)/(bx+irreup(k))**2
+!                 force(j) = force(j) + ikbias(k)*bixlam(i)*bx/(bx+irreup(k)) + cont
+!                 cont = cont + ikbias(k)*bixlam(j)*bx/(bx+irreup(k))
+!              endif
+!          elseif (ibclas(k) .eq. 14) then
+!              !! potential en = en + ikbias(k)*bx*bixlam(j)*(1-bx-bixlam(j))/(irreup(k)+bx)
+!              j = ibvidj(k)
+!              bx = 1 - bixlam(i) - bixlam(j)
+!              cont = -ikbias(k)*bixlam(i)*bixlam(j)/(bixlam(i)+irreup(k))
+!              force(j) = force(j) + ikbias(k)*bixlam(i)*bx/(bixlam(i)+irreup(k)) + cont
+!              cont = cont + ikbias(k)*irreup(k)*bixlam(j)*bx/(bixlam(i)+irreup(k))**2
          else
             bx = bixlam(i)
             if (ibclas(k) .eq. 1) then
@@ -5217,8 +5775,9 @@ endif
                   cont = ikbias(k)*ipbias(k)*(bx - irrlow(k))**(ipbias(k)-1)
                endif
             elseif (ibclas(k) .eq. 4) then
-               if (bx .lt. bicut) then
-                   cont = - ikbias(k)*2.0*bicut2in*(bx-bicut)
+               ! dV/dlambda = 2*CFORCE*(lambda - REF)/REF**2 if lambda < REF
+               if (bx .lt. irreup(k)) then
+                   cont = ikbias(k)*2.0*(bx - irreup(k))/(irreup(k)**2)
                endif
             elseif (ibclas(k) .eq. 5) then
                cont = - ikbias(k)
@@ -5279,6 +5838,8 @@ endif
          GOTO 77
       ENDIF
 
+      ! call msld_add_force_chargebias(nblock)
+
       select case (fcnal_form)
       case ('norm')
          call msld_add_force_norm(nblock)
@@ -5292,6 +5853,8 @@ endif
          call msld_add_force_fnexp(nblock)
       case ('fixd')
          call msld_add_force_ffix(nblock)
+      case ('npwi')
+         call msld_add_force_fnpwise(nblock)
       end select
 
 77    CONTINUE
@@ -5308,13 +5871,11 @@ endif
 
       implicit none
       integer, intent(in) :: nblock
-      integer :: i, j
+      integer :: i, j, k
       real(chm_real), intent(in) :: delta
       real(chm_real) :: fact, alpha, delta2, tempxla, rsum, rsum3, vsum
 
       delta2 = delta*delta
-      fact = delta2*gammatheta(3)/thetam
-      alpha = 2.0*gammatheta(3)*gammatheta(4)*delta
       thetavmld = zero
       tempxla = zero
 
@@ -5324,50 +5885,63 @@ endif
              rsum = zero
              vsum = zero
              do j = 1, nsubmld(i)
+                k = blckmld(i,j)
+                IF(qlfix(k)) CYCLE
+                fact = delta2*gammathetablk(3,k)/bimlam(k)
+                alpha = 2.0*gammathetablk(3,k)*gammathetablk(4,k)*delta
 #if KEY_DEBUG==1
-                if (prnlev > 7) write(outu,110) i, j, thetamld(i,j), thetavmld(i,j), thetafmld(i,j) 
+                if (prnlev > 7) write(outu,110) i, j, thetamld(i,j), thetavmld(i,j), thetafmld(i,j)
 #endif
                 tempxla = thetamld(i,j)
                 thetamld(i,j) = thetamld(i,j) + thetavmld(i,j)*alpha + thetafmld(i,j)*fact
                 thetavmld(i,j) = (thetamld(i,j) - tempxla)/delta
+                ! rsum only from dynamic blocks (target: Sigma_dynamic theta^2 = 1)
                 rsum = rsum + thetamld(i,j)*thetamld(i,j)
                 vsum = vsum + thetamld(i,j)*thetavmld(i,j)
              enddo
              rsum = one/sqrt(rsum)
              rsum3 = rsum*rsum*rsum
              do j = 1, nsubmld(i)
+                IF(qlfix(blckmld(i,j))) CYCLE
                 thetavmld(i,j) = -vsum*thetamld(i,j)*rsum3 + thetavmld(i,j)*rsum
                 thetamld(i,j) = thetamld(i,j)*rsum
 #if KEY_DEBUG==1
-                if (prnlev > 7) write(outu,120) i, j, thetamld(i,j), thetavmld(i,j), thetafmld(i,j) 
+                if (prnlev > 7) write(outu,120) i, j, thetamld(i,j), thetavmld(i,j), thetafmld(i,j)
 #endif
              enddo
           enddo
-       case ('nsin', 'nexp')
+       case ('nsin', 'nexp', 'npwi')
           do i = 2, nsitemld
              do j = 1, nsubmld(i)
+                k = blckmld(i,j)
+                IF(qlfix(k)) CYCLE
+                fact = delta2*gammathetablk(3,k)/bimlam(k)
+                alpha = 2.0*gammathetablk(3,k)*gammathetablk(4,k)*delta
 #if KEY_DEBUG==1
-                if (prnlev > 7) write(outu,110) i, j, thetamld(i,j), thetavmld(i,j), thetafmld(i,j) 
+                if (prnlev > 7) write(outu,110) i, j, thetamld(i,j), thetavmld(i,j), thetafmld(i,j)
 #endif
                 tempxla = thetamld(i,j)
                 thetamld(i,j) = thetamld(i,j) + thetavmld(i,j)*alpha + thetafmld(i,j)*fact
                 thetavmld(i,j) = (thetamld(i,j) - tempxla)/delta
 #if KEY_DEBUG==1
-                if (prnlev > 7) write(outu,120) i, j, thetamld(i,j), thetavmld(i,j), thetafmld(i,j) 
+                if (prnlev > 7) write(outu,120) i, j, thetamld(i,j), thetavmld(i,j), thetafmld(i,j)
 #endif
              enddo
           enddo
        case ('2sin', '2exp')
           do i = 2, nsitemld
              do j = 1, nsubmld(i) - 1
+                k = blckmld(i,j)
+                fact = delta2*gammathetablk(3,k)/bimlam(k)
+                alpha = 2.0*gammathetablk(3,k)*gammathetablk(4,k)*delta
 #if KEY_DEBUG==1
-                if (prnlev > 7) write(outu,110) i, j, thetamld(i,j), thetavmld(i,j), thetafmld(i,j) 
+                if (prnlev > 7) write(outu,110) i, j, thetamld(i,j), thetavmld(i,j), thetafmld(i,j)
 #endif
                 tempxla = thetamld(i,j)
                 thetamld(i,j) = thetamld(i,j) + thetavmld(i,j)*alpha + thetafmld(i,j)*fact
                 thetavmld(i,j) = (thetamld(i,j) - tempxla)/delta
 #if KEY_DEBUG==1
-                if (prnlev > 7) write(outu,120) i, j, thetamld(i,j), thetavmld(i,j), thetafmld(i,j) 
+                if (prnlev > 7) write(outu,120) i, j, thetamld(i,j), thetavmld(i,j), thetafmld(i,j)
 #endif
              enddo
           enddo
@@ -5389,7 +5963,7 @@ endif
 
       implicit none
       integer, intent(in) :: nblock
-      integer :: i, j
+      integer :: i, j, k
       real(chm_real), intent(in) :: delta
       real(chm_real) :: rsum, rsum3, vsum
 
@@ -5400,28 +5974,35 @@ endif
             rsum = zero
             vsum = zero
             do j = 1, nsubmld(i)
-               thetavmld(i,j) = gammatheta(3)*thetavmld(i,j) + gammatheta(2)*thetafmld(i,j)
+               k = blckmld(i,j)
+               IF(qlfix(k)) CYCLE
+               thetavmld(i,j) = gammathetablk(3,k)*thetavmld(i,j) + gammathetablk(2,k)*thetafmld(i,j)
                thetamld(i,j) = thetamld(i,j) + thetavmld(i,j)*delta
+               ! rsum only from dynamic blocks (target: Sigma_dynamic theta^2 = 1)
                rsum = rsum + thetamld(i,j)*thetamld(i,j)
                vsum = vsum + thetavmld(i,j)*thetamld(i,j)
             enddo
             rsum = one/sqrt(rsum)
             rsum3 = rsum*rsum*rsum
             do j = 1, nsubmld(i)
+               IF(qlfix(blckmld(i,j))) CYCLE
                thetavmld(i,j) = -vsum*thetamld(i,j)*rsum3 + thetavmld(i,j)*rsum
                thetamld(i,j) = thetamld(i,j)*rsum
             enddo
          enddo
-      case ('nsin', 'nexp')
+      case ('nsin', 'nexp', 'npwi')
          do i = 2, nsitemld
             do j = 1, nsubmld(i)
-               thetavmld(i,j) = gammatheta(3)*thetavmld(i,j) + gammatheta(2)*thetafmld(i,j)
+               k = blckmld(i,j)
+               IF(qlfix(k)) CYCLE
+               thetavmld(i,j) = gammathetablk(3,k)*thetavmld(i,j) + gammathetablk(2,k)*thetafmld(i,j)
                thetamld(i,j) = thetamld(i,j) + thetavmld(i,j)*delta
             enddo
          enddo
       case ('2sin', '2exp')
          do i = 2, nsitemld
-            thetavmld(i,1) = gammatheta(3)*thetavmld(i,1) + gammatheta(2)*thetafmld(i,1)
+            k = blckmld(i,1)
+            thetavmld(i,1) = gammathetablk(3,k)*thetavmld(i,1) + gammathetablk(2,k)*thetafmld(i,1)
             thetamld(i,1) = thetamld(i,1) + thetavmld(i,1)*delta
          enddo
       end select
@@ -5437,15 +6018,15 @@ endif
 #if KEY_DEBUG==1
       if (prnlev.gt.10) then
          select case (fcnal_form)
-         case ('norm', 'nsin', 'nexp')
+         case ('norm', 'nsin', 'nexp', 'npwi')
             do i = 2, nsitemld
                do j = 1, nsubmld(i)
-                  write(outu,100) i, j, gammatheta(3),gammatheta(2),thetamld(i,j), thetavmld(i,j), thetafmld(i,j)
+                  write(outu,100) i, j, gammathetablk(3,blckmld(i,j)),gammathetablk(2,blckmld(i,j)),thetamld(i,j), thetavmld(i,j), thetafmld(i,j)
                enddo
             enddo
          case ('2sin', '2exp')
             do i = 2, nsitemld
-               write(outu,110) i, gammatheta(3),gammatheta(2),thetamld(i,1), thetavmld(i,1), thetafmld(i,1)
+               write(outu,110) i, gammathetablk(3,blckmld(i,1)),gammathetablk(2,blckmld(i,1)),thetamld(i,1), thetavmld(i,1), thetafmld(i,1)
             enddo
          end select
       endif
@@ -5479,14 +6060,15 @@ endif
       select case (fcnal_form)
       case ('2sin', '2exp')
          do i = 2, nsitemld
-            tempi = tempi + thetavmld(i,1)*thetavmld(i,1)*thetam
+            tempi = tempi + thetavmld(i,1)*thetavmld(i,1)*bimlam(blckmld(i,1))
          enddo
-      case ('norm', 'nexp', 'nsin')
+      case ('norm', 'nexp', 'nsin', 'npwi')
          do i = 2, nsitemld
             do j = 1, nsubmld(i)
-               tempi = tempi + thetavmld(i,j)*thetavmld(i,j)*thetam
+               IF(qlfix(blckmld(i,j))) CYCLE
+               tempi = tempi + thetavmld(i,j)*thetavmld(i,j)*bimlam(blckmld(i,j))
                if (prnlev .gt. 10) then
-                  write(outu,100) tempi, thetavmld(i,j), thetam
+                  write(outu,100) tempi, thetavmld(i,j), bimlam(blckmld(i,j))
                endif
             enddo
          enddo
@@ -5522,7 +6104,7 @@ endif
      select case (fcnal_form)
      case ('2sin', '2exp')
         ndegf = ndegf + nsitemld
-     case ('norm', 'nexp', 'nsin')
+     case ('norm', 'nexp', 'nsin', 'npwi')
         ndegf = ndegf + nblock - 1
      end select
 
@@ -5549,9 +6131,13 @@ endif
 
       do i = 2, nsitemld
          do j = 1, nsubmld(i)
-            thetamld(i,j) = sqrt(bxlamb(blckmld(i,j)))
+            IF(qlfix(blckmld(i,j))) THEN
+               thetamld(i,j) = bxlamb(blckmld(i,j))  ! theta = lambda for fixed
+            ELSE
+               thetamld(i,j) = sqrt(bxlamb(blckmld(i,j)))
+            ENDIF
 #if KEY_DEBUG==1
-            if (prnlev.gt.9) write(outu,100) i, j, thetamld(i,j)  
+            if (prnlev.gt.9) write(outu,100) i, j, thetamld(i,j)
 #endif
          enddo
       enddo
@@ -5624,19 +6210,24 @@ endif
 ! assign initial theta values
          s2 = zero
          do j = 1, nsubmld(i)
-            thetamld(i,j) = asin(sqrt((bxlamb(blckmld(i,j)))))
-            s2 = s2 + sin(thetamld(i,j)) * sin(thetamld(i,j))
+            IF(qlfix(blckmld(i,j))) THEN
+               thetamld(i,j) = bxlamb(blckmld(i,j))  ! theta = lambda for fixed
+            ELSE
+               thetamld(i,j) = asin(sqrt((bxlamb(blckmld(i,j)))))
+               s2 = s2 + sin(thetamld(i,j)) * sin(thetamld(i,j))
+            ENDIF
 #if KEY_DEBUG==1
-            if (prnlev.gt.9) write(outu,100) i, j, s2, bxlamb(blckmld(i,j)), thetamld(i,j) 
+            if (prnlev.gt.9) write(outu,100) i, j, s2, bxlamb(blckmld(i,j)), thetamld(i,j)
 #endif
          enddo
          if (s2 .eq. zero ) then
             write(outu,*) "WARNING... msld... denominator equals 0. Re-scaling"
             s2 = 0.001
             do j = 1, nsubmld(i)
+               IF(qlfix(blckmld(i,j))) CYCLE
                bxlamb(blckmld(i,j)) = sin(thetamld(i,j)) * sin(thetamld(i,j)) / s2
 #if KEY_DEBUG==1
-               if (prnlev.gt.9) write(outu,100) i, j, s2, bxlamb(blckmld(i,j)), thetamld(i,j) 
+               if (prnlev.gt.9) write(outu,100) i, j, s2, bxlamb(blckmld(i,j)), thetamld(i,j)
 #endif
                thetamld(i,j) = asin(sqrt((bxlamb(blckmld(i,j)))))
             enddo
@@ -5729,7 +6320,11 @@ endif
 
 ! assign initial theta values
          do j = 1, nsubmld(i)
-            thetamld(i,j) = asin(log(bxlamb(blckmld(i,j)))/fnexp_factors(i))
+            IF(qlfix(blckmld(i,j))) THEN
+               thetamld(i,j) = bxlamb(blckmld(i,j))  ! theta = lambda for fixed
+            ELSE
+               thetamld(i,j) = asin(log(bxlamb(blckmld(i,j)))/fnexp_factors(i))
+            ENDIF
          enddo
       enddo
 
@@ -5741,7 +6336,7 @@ endif
             enddo
          enddo
       endif
-#endif 
+#endif
 
 100 format("testing_theta_fnexp> ", 2i5, " ", f15.8, " ", f15.8)
 
@@ -5797,6 +6392,57 @@ endif
    END subroutine msld_settheta_ffix
 
 !-----------------------------------------------------------------------
+!> Assigns individual theta values from lambda values according to FNPWISE functional form.
+!> Invoked from msld_settheta during dynamc subroutines.
+   subroutine msld_settheta_fnpwise(nblock,bxlamb)
+
+      use stream
+      use number
+      use consta
+
+      implicit none
+      integer, intent(in) :: nblock
+      integer :: i, j, k, count
+      real(chm_real) :: ttl, minlambda, maxlambda, min, max, denom
+      real(chm_real), intent(inout), dimension(nblock) :: bxlamb
+
+      do i = 2, nsitemld
+         
+         ttl = 0.0
+         do j = 1, nsubmld(i)
+            ttl = ttl + bxlamb(blckmld(i,j))
+         enddo
+! renormalize if needed
+         if (count.eq.1) then
+            write(outu,*) "WARNING: Renormalizing initial lambda values."
+            ttl = 1.0/ttl
+            do j = 1, nsubmld(i)
+               bxlamb(blckmld(i,j)) = bxlamb(blckmld(i,j)) * ttl
+            enddo
+         endif
+
+! assign initial theta values
+         do j = 1, nsubmld(i)
+            thetamld(i,j) = bxlamb(blckmld(i,j))**(1/fnpwise_exp)
+         enddo
+      enddo
+
+#if KEY_DEBUG==1
+      if (prnlev.gt.9) then
+         do i = 2, nsitemld
+            do j = 1, nsubmld(i)
+               if (prnlev.gt.9) &
+                  write(outu,100) i, j, bxlamb(blckmld(i,j)), thetamld(i,j)
+            enddo
+         enddo
+      endif
+#endif 
+
+100 format("testing_theta_fnpwise> ", 2i5, " ", f15.8, " ", f15.8)
+
+   END subroutine msld_settheta_fnpwise
+
+!-----------------------------------------------------------------------
 !> Distributes assignment of theta values from lambda values according to functional form.
 !> Invoked from dynamics subroutines.
    subroutine msld_settheta(nblock,bxlamb)
@@ -5823,6 +6469,8 @@ endif
          call msld_settheta_fnexp(nblock,bxlamb)
       case ('fixd')
          call msld_settheta_ffix(nblock,bxlamb)
+      case ('npwi')
+         call msld_settheta_fnpwise(nblock,bxlamb)
       end select
       ! thetavmld is initialized later in msld_firsttheta, but msld_firsttheta
       ! is not called when BLaDE runs. RLH 2021-02-04
@@ -6239,7 +6887,7 @@ endif
          write(outu,*) "Single-site differences:"
          write(outu,*) "                               nobias      nobias        bias        bias"
          write(outu,220) cutlo, cuthi, cutlo, cuthi
-         220 format("             BLK(I)..BLK(J).....> ",f5.3," ....> ",f5.3" .....> ",f5.3," ....> ",f5.3)
+         220 format("             BLK(I)..BLK(J).....> ",f5.3," ....> ",f5.3," .....> ",f5.3," ....> ",f5.3)
          do i = 2, out_nsitemld
 ! subtract 1 from i, to realign Site numbers with inputfile
             write(outu,125) i-1
@@ -6355,7 +7003,7 @@ endif
             write(outu,"(i1)",advance="no") i-1
          enddo
          write(outu,221) cutlo, cuthi, cutlo, cuthi
-         221 format("  INDEX ....> ",f5.3," ....> ",f5.3" ....> ",f5.3," ....> ",f5.3)
+         221 format("  INDEX ....> ",f5.3," ....> ",f5.3," ....> ",f5.3," ....> ",f5.3)
          do i_ms = 1, N_ms
             ratio = count_mslo(i_ms)/refpoplo
             ddg_lo = -kt*log(ratio)
@@ -6909,10 +7557,12 @@ endif
             bx = bx - bixlam(j)
             en = en + ikbias(k)*(bx**ipbias(k))
          elseif (ibclas(k) .eq. 4) then
-            if (bx .ge. bicut) then
+            ! V = -CFORCE*(1.0 - ((lambda - REF)**2)/REF**2) if lambda < REF
+            ! V = -CFORCE otherwise
+            if (bx .ge.irreup(k)) then
                en = en - ikbias(k)
             else
-               en = en - ikbias(k)*(1.0-(bicut2in*(bx-bicut)*(bx-bicut)))
+               en = en - ikbias(k)*(1.0 - ((bx - irreup(k))**2)/(irreup(k)**2))
             endif
          elseif (ibclas(k) .eq. 5) then
             en = en - ikbias(k)*bx
@@ -6930,6 +7580,20 @@ endif
          elseif (ibclas(k) .eq. 10) then
             j = ibvidj(k)
             en = en + ikbias(k)*bixlam(j)*(1-exp(irreup(k)*bx))
+         elseif (ibclas(k) .eq. 11) then
+            j = ibvidj(k)
+            en = en + ikbias(k)*(bx**irreup(k))*(bixlam(j)**ipbias(k))
+         elseif (ibclas(k) .eq. 12) then
+            j = ibvidj(k)
+            en = en + ikbias(k)*bx*(bixlam(j)**ipbias(k))/(bx+irreup(k))
+!          elseif (ibclas(k) .eq. 13) then
+!             j = ibvidj(k)
+!             if (ikbias(k) .ne. 0) then
+!                en = en + ikbias(k)*bx*bixlam(j)*(1-bx-bixlam(j))/(irreup(k)+1-bx-bixlam(j))
+!             endif
+!          elseif (ibclas(k) .eq. 14) then
+!             j = ibvidj(k)
+!             en = en + ikbias(k)*bx*bixlam(j)*(1-bx-bixlam(j))/(irreup(k)+bx)
          endif
 !#IF DEBUG
          if(prnlev.gt.9) then
@@ -6967,6 +7631,7 @@ endif
       real(chm_real), intent(inout) :: energy
       real(chm_real) :: en
       real(chm_real) :: nhigh, nlow
+      real(chm_real) :: theta0
 
       en = 0
       if (qbiasthetacoll) then
@@ -6988,9 +7653,76 @@ endif
             enddo
          enddo
       endif
+      if (qbiasthetaedge) then
+         do i = 2, nsitemld
+            call msld_setblcoef_fnpwise_helper(nsubmld(i), &
+               thetamld(i,1:nsubmld(i)), theta0)
+            nhigh = 0
+            do j = 1, nsubmld(i)
+               nhigh = nhigh + 1/(1+exp(-iabiasthetaedge*(thetamld(i,j)-theta0+itbiasthetaedge)))
+            enddo
+            nhigh = nhigh - inbiasthetaedge
+            if (nhigh>0) then
+               en = en + 0.5*ikbiasthetaedge*nhigh*nhigh
+            endif
+         enddo
+      endif
+      if (qbiasthetaflat) then
+         do i = 2, nsitemld
+            do j = 1, nsubmld(i)
+               if (thetamld(i,j)>iwbiasthetaflat(i)*nsubmld(i)) then
+                  en = en + 0.5*ikbiasthetaflat(i)*(thetamld(i,j)-iwbiasthetaflat(i)*nsubmld(i))**2
+               elseif (thetamld(i,j)<-iwbiasthetaflat(i)*nsubmld(i)) then
+                  en = en + 0.5*ikbiasthetaflat(i)*(thetamld(i,j)+iwbiasthetaflat(i)*nsubmld(i))**2
+               endif
+            enddo
+         enddo
+      endif
       energy = energy + en
 
     END subroutine msld_add_thetabiasenergy
+
+!     subroutine msld_add_chargebiasenergy(energy)
+!       use chm_kinds
+!       use consta, only: pi, ccelec
+!       use ewald, only: kappa ! circular dependency
+!       use prssre,only:getvol ! circular dependency
+! 
+!       implicit none
+!       integer :: i, j
+!       real(chm_real), intent(inout) :: energy
+!       real(chm_real) :: en, Q, V, dQ
+! 
+!       en = 0
+! 
+!       if (ik1biascharge .ne. 0 .or. ik2biascharge .ne. 0 .or. ik3biascharge .ne. 0) then
+!          do i = 1, nsitemld
+!             do j = 1, nsubmld(i)
+!                Q = Q + bixlam(thetamld(i,j))*biqlam(thetamld(i,j))
+!             enddo
+!          enddo
+!          getvol(V)
+!       endif
+! 
+!       if (ik1biascharge .ne. 0) then
+!          en = en + -(2*pi/3)*ccelec*k1biascharge*Q/V
+!       endif
+! 
+!       if (ik2biascharge .ne. 0) then
+!          en = en + -(pi/2)*ccelec*ik2biascharge*Q*Q/V/(kappa*kappa)
+!       endif
+! 
+!       if (ik3biascharge .ne. 0) then
+!          dQ=Q-iq03biascharge
+!          if (dQ>iw3biascharge) then
+!             en = en + 0.5*ik3biascharge*(dQ-iw3biascharge)*(dQ-iw3biascharge)
+!          elseif (dQ<-iw3biascharge) then
+!             en = en + 0.5*ik3biascharge*(dQ+iw3biascharge)*(dQ+iw3biascharge)
+!          endif
+!       endif
+!       energy = energy + en
+! 
+!    end subroutine msld_add_chargebiasenergy
 
 !-----------------------------------------------------------------------
 !> Check that correct params for msld have been swapped

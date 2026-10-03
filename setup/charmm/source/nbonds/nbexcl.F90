@@ -48,6 +48,7 @@ contains
 #ifdef KEY_RESIZE
     use resize,only:resize_psf,drsz0
 #endif    
+    use dimens_fcm, only: iatbmx
     implicit none
     !
     !-----------------------------------------------------------------------
@@ -106,10 +107,11 @@ contains
        IATMXB=8
     ENDIF
 #if KEY_BLOCK==1
-    if (qmld) iatmxb = 28  /*ldm*/
+    if (qmld) iatmxb = iatbmx  /*ldm*/
 #endif
 
-    IF(NATIML < 200) IATMXB=20
+    IF(NATIML < 200 .and. IATMXB < 20) IATMXB=20
+    IF(IATBMX > 32) IATMXB=IATBMX
 #if KEY_REPLICA==1
     !# <caves>-Aug-4-1993 (Leo Caves) accomodate covalently bound replicas
     !# this is a quick fix. the max number could be properly accounted for in the
@@ -409,7 +411,7 @@ contains
              IF(NATBON(IBT) > IATMXB) THEN
                 IF(WRNLEV >= 2) WRITE(OUTU,335) IBT
 335             FORMAT(' <MAKINB>: Too many bonds for atom',I5, &
-                     ' Check code')
+                     ' Check code. If intended, set DIMENS IATBMX above 32')
                 CALL DIEWRN(-4)
              ENDIF
              IATBON(NATBON(IBT),IBT)=I
@@ -582,12 +584,12 @@ contains
        ENDIF
        IPK14(NPAIR4)=NATOM
        JPK14(NPAIR4)=NATOM
-       CALL SORT(NPAIR4,EXCH5,ORDER5,IPK14,JPK14,0,0,0,0,0,2)
+       CALL SORT(NPAIR4,EXCH5,ORDER5,IPK14,JPK14,(/0/),(/0/),(/0/),(/0/),(/0/),2)
     ENDIF
     !
     ! Sort the pair list.
     !
-    CALL SORT(NPAIR,EXCH5,ORDER5,IPK,JPK,0,0,0,0,0,2)
+    CALL SORT(NPAIR,EXCH5,ORDER5,IPK,JPK,(/0/),(/0/),(/0/),(/0/),(/0/),2)
     !
     ! Process the sorted pair list to make inb. check that there are not
     ! multiple entries.

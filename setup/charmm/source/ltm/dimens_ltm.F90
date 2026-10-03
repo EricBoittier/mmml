@@ -25,7 +25,8 @@ module dimens_fcm
           maxcrt, &
 #endif
           maxshk,maxaim,maxgrp, &
-          maxnbf, maxitc, maxcn, maxpauto
+          maxnbf, maxitc, maxcn, maxpauto, &
+          iatbmx
   end type chsizes
 
   type(chsizes), save :: new_chsize
@@ -69,7 +70,11 @@ module dimens_fcm
     !
     !  MXCMSZ - The maximum command length (inluding all continuation lines)
     !
+#if KEY_MODELLER==1
+    integer,parameter :: MXCMSZ = 20000
+#else
     integer,parameter :: MXCMSZ = 5000
+#endif
 
     !-----------------------------------------------------------------------
     !  FROM:  etable.fcm
@@ -84,11 +89,7 @@ module dimens_fcm
     !
     !  IATBMX - Maximum number of bonds for any single atom.
     !
-#if KEY_BLOCK==1 /*ldm*/
-    integer,parameter :: IATBMX = 32 ! RLH - 16 wasn't enough
-#else /**/
-    integer,parameter :: IATBMX = 8
-#endif
+!    integer,parameter :: IATBMX = 8 ! or 32 if KEY_BLOCK==1
 
     !-----------------------------------------------------------------------
     !  FROM:  hbond.fcm
@@ -144,7 +145,7 @@ module dimens_fcm
 
 #if KEY_CGENFF==1
     integer,parameter :: MAXATC = 1400, MAXCB = 3000, MAXCH = 6400, MAXCI = 1200, &
-         MAXCP = 20000, MAXCT = 50000 !, MAXITC = 500
+         MAXCP =  100000, MAXCT = 50000 !, MAXITC = 500
 #elif KEY_MMFF==1 || KEY_CFF==1
     integer,parameter :: MAXATC = 500, MAXCB = 1500, MAXCH = 3200, MAXCI = 600, &
          MAXCP  = 3000, MAXCT = 50000 !,MAXITC = 500
@@ -153,7 +154,7 @@ module dimens_fcm
          MAXCP  = 1000, MAXCT = 50000 !, MAXITC=  200
 #else
     integer,parameter :: MAXATC = 1000, MAXCB = 3000, MAXCH = 6400, MAXCI = 1200, &
-         MAXCP  = 3000, MAXCT = 50000   !, MAXITC=  200
+         MAXCP  =  100000, MAXCT = 50000   !, MAXITC=  200
 #endif
 
 !    integer,parameter :: MAXCN = MAXITC*(MAXITC+1)/2
@@ -172,13 +173,14 @@ module dimens_fcm
     !
     !  MAXSHK - The maximum number of SHAKE constraints.
     !
-    integer,parameter :: REDMAX = 50
-    integer,parameter :: REDMX2 = 200
+    integer,parameter :: REDMAX = 5000
+    integer,parameter :: REDMX2 = 20000
 
     integer,save :: maxa,maxb,maxt,maxp,maximp,maxnb,maxcrt,maxseg
     integer,save :: maxaim,maxgrp
     integer,save :: maxnbf
     integer, save :: maxitc, maxcn, maxpauto
+    integer,save :: iatbmx
 
     !-----------------------------------------------------------------------
     !  FROM:  shake.fcm
@@ -206,9 +208,11 @@ module dimens_fcm
     !
     !  SCRMAX - The maximum string length. Should match MXCMSZ.
     !
-
+#if KEY_MODELLER==1
+    integer,parameter :: SCRMAX = 20000
+#else
     integer,parameter :: SCRMAX = 5000
-
+#endif
     !
     !-----------------------------------------------------------------------
 
@@ -279,6 +283,11 @@ module dimens_fcm
 ! BIOVIA Code Start
 #endif
 ! BIOVIA Code End
+#if KEY_BLOCK==1 /*ldm*/
+      call set_dimen(new_chsize%iatbmx, 32)
+#else /*ldm*/
+      call set_dimen(new_chsize%iatbmx, 8)
+#endif
     end subroutine set_chsize
 
     subroutine clear_chsize()
@@ -302,10 +311,19 @@ module dimens_fcm
       call clear_dimen(new_chsize%maxitc)
       call clear_dimen(new_chsize%maxcn)
       call clear_dimen(new_chsize%maxpauto)
+      call clear_dimen(new_chsize%iatbmx)
     end subroutine clear_chsize
 
     subroutine freeze_dimens()
+      ! Clear the pending sizes here (once, after the final set_dimens) rather
+      ! than inside set_dimens: set_dimens is called more than once per init
+      ! (e.g. api_init then again via allocate_all), and clearing inside it made
+      ! the second call reset every per-dimension size to its chsize-derived
+      ! default -- so pyCHARMM/DIMENS values for MAXA, IATBMX, etc. were lost
+      ! (only CHSIZE survived, via its own module variable). Keeping set_dimens
+      ! idempotent lets repeated calls re-apply the same new_chsize.
       sizes_frozen = .true.
+      call clear_chsize()
     end subroutine freeze_dimens
 
     subroutine set_dimens()
@@ -379,7 +397,7 @@ module dimens_fcm
 
       ! nbfix array size
       ! maxnbf = get_dimen(new_chsize%maxnbf, chsize/360)
-      maxnbf = 100000
+      maxnbf = 400000
       ! set maxitc and maxcn arrays
 ! BIOVIA Code Start
 #if KEY_LICENSE==1
@@ -392,7 +410,14 @@ module dimens_fcm
 ! BIOVIA Code Start
 #endif
 ! BIOVIA Code End
-      call clear_chsize()
+#if KEY_BLOCK==1 /*ldm*/
+      iatbmx = get_dimen(new_chsize%iatbmx, 32)
+#else /*ldm*/
+      iatbmx = get_dimen(new_chsize%iatbmx, 8)
+#endif
+      ! NB: do NOT clear_chsize() here -- set_dimens is called more than once
+      ! per init and must stay idempotent. new_chsize is cleared in
+      ! freeze_dimens() after the final set_dimens.
       return
     end subroutine set_dimens
 

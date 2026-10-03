@@ -1,0 +1,3085 @@
+*>>>>>>>> All-Hydrogen Topology File for Proteins Constructed from Amber parm19sb <<<<<<
+*>>>>>>>>>>>>>>>>> Includes phi, psi cross term map (CMAP) correction <<<<<<<<<<<<<<<<<<
+*>>>>>>>>>>>>>>>>>>>>>>>>>>>> C.L. Brooks III - May 2026 <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+*
+36  1
+
+
+
+
+! The topology and parameter files were built by processing the prmtop files created for
+! peptides ACE - AA1 - AA2 - NME and NAA - CAA for the amino acids listed in amino19.lib, aminont12.lib
+! and aminont12.lib with ff19SB and tleap create the individual AA topologies, including ACE and NME,
+! residues and N-terminal and C-terminal versions of the amino acids. File includes OPC water, K+, Na+ and Cl-
+
+
+MASS  -1  LP     0.0000  ! EPW 
+MASS  -1  H      1.0080  ! HN1 
+MASS  -1  H1     1.0080  ! H1  
+MASS  -1  H4     1.0080  ! HD2 
+MASS  -1  H5     1.0080  ! HE1 
+MASS  -1  HA     1.0080  ! HD1 
+MASS  -1  HC     1.0080  ! H1  
+MASS  -1  HO     1.0080  ! HD2 
+MASS  -1  HP     1.0080  ! HE2 
+MASS  -1  HS     1.0080  ! HG  
+MASS  -1  HW     1.0080  ! H1  
+MASS  -1  2C     12.0100 ! CB  
+MASS  -1  3C     12.0100 ! CB  
+MASS  -1  C      12.0100 ! C   
+MASS  -1  C8     12.0100 ! CB  
+MASS  -1  CA     12.0100 ! CZ  
+MASS  -1  CB     12.0100 ! CD2 
+MASS  -1  CC     12.0100 ! CG  
+MASS  -1  CN     12.0100 ! CE2 
+MASS  -1  CO     12.0100 ! CG  
+MASS  -1  CR     12.0100 ! CE1 
+MASS  -1  CT     12.0100 ! CH3 
+MASS  -1  CV     12.0100 ! CD2 
+MASS  -1  CW     12.0100 ! CD2 
+MASS  -1  CX     12.0100 ! CA  
+MASS  -1  CZ0    12.0100 ! CG  
+MASS  -1  XC1    12.0100 ! CA  
+MASS  -1  XC10   12.0100 ! CA  
+MASS  -1  XC11   12.0100 ! CA  
+MASS  -1  XC12   12.0100 ! CA  
+MASS  -1  XC13   12.0100 ! CA  
+MASS  -1  XC14   12.0100 ! CA  
+MASS  -1  XC15   12.0100 ! CA  
+MASS  -1  XC16   12.0100 ! CA  
+MASS  -1  XC17   12.0100 ! CA  
+MASS  -1  XC2    12.0100 ! CA  
+MASS  -1  XC3    12.0100 ! CA  
+MASS  -1  XC4    12.0100 ! CA  
+MASS  -1  XC5    12.0100 ! CA  
+MASS  -1  XC6    12.0100 ! CA  
+MASS  -1  XC7    12.0100 ! CA  
+MASS  -1  XC8    12.0100 ! CA  
+MASS  -1  XC9    12.0100 ! CA  
+MASS  -1  N      14.0100 ! N   
+MASS  -1  N2     14.0100 ! NE  
+MASS  -1  N3     14.0100 ! NZ  
+MASS  -1  NA     14.0100 ! ND1 
+MASS  -1  NB     14.0100 ! NE2 
+MASS  -1  O      16.0000 ! O   
+MASS  -1  O2     16.0000 ! OD1 
+MASS  -1  OH     16.0000 ! OD2 
+MASS  -1  OW     16.0000 ! O   
+MASS  -1  SOD    22.9900 ! SOD 
+MASS  -1  S      32.0600 ! SG  
+MASS  -1  SH     32.0600 ! SG  
+MASS  -1  CLA    35.4500 ! CLA 
+MASS  -1  POT    39.1000 ! POT 
+
+DECL -CA
+DECL -C
+DECL -O
+DECL +N
+DECL +HN
+DECL +CA
+DEFA FIRS NONE LAST NONE
+AUTO ANGLES DIHE PATCH
+
+
+RESI SOD 1.00
+ATOM SOD  SOD     1.00000
+
+RESI POT 1.00
+ATOM POT  POT     1.00000
+
+RESI CLA -1.00
+ATOM CLA  CLA    -1.00000
+
+RESI WAT 0.00
+ATOM O    OW      0.00000
+ATOM H1   HW      0.67914
+ATOM H2   HW      0.67914
+ATOM EPW  LP     -1.35828
+BOND O    EPW 
+BOND O    H1  
+BOND O    H2  
+BOND H1   H2  
+ANGL H1 O H2
+ACCE O
+LONEPAIR bisector EPW O H1 H2  distance 0.1594 angle 0.0 dihe 0.0
+
+RESI ACE 0.00
+ATOM H1   HC      0.11230
+ATOM CH3  CT     -0.36620
+ATOM H2   HC      0.11230
+ATOM H3   HC      0.11230
+ATOM C    C       0.59720
+ATOM O    O      -0.56790
+BOND H1   CH3 
+BOND CH3  C   
+BOND CH3  H2  
+BOND CH3  H3  
+BOND C    O   
+BOND C    +N  
+IMPROPER CH3  +N   C    O   
+
+RESI NHE 0.00
+ATOM N    N      -0.46300
+ATOM HN1  H       0.23150
+ATOM HN2  H       0.23150
+BOND N    HN1 
+BOND N    HN2 
+IMPROPER -C   HN1  N    HN2 
+
+RESI NME 0.00
+ATOM N    N      -0.41570
+ATOM H    H       0.27190
+ATOM C    CT     -0.14900
+ATOM H1   H1      0.09760
+ATOM H2   H1      0.09760
+ATOM H3   H1      0.09760
+BOND N    C   
+BOND N    H   
+BOND C    H1  
+BOND C    H2  
+BOND C    H3  
+IMPROPER -C   C    N    H   
+
+RESI ALA -0.00
+ATOM N    N      -0.41570
+ATOM H    H       0.27190
+ATOM CA   XC1     0.03370
+ATOM HA   H1      0.08230
+ATOM CB   CT     -0.18250
+ATOM HB1  HC      0.06030
+ATOM HB2  HC      0.06030
+ATOM HB3  HC      0.06030
+ATOM C    C       0.59730
+ATOM O    O      -0.56790
+BOND N    CA  
+BOND N    H   
+BOND CA   CB  
+BOND CA   C   
+BOND CA   HA  
+BOND CB   HB1 
+BOND CB   HB2 
+BOND CB   HB3 
+BOND C    O   
+BOND C    +N  
+IMPROPER CA   +N   C    O   
+IMPROPER -C   CA   N    H   
+CMAP  -C    N     CA    C     N     CA    C     +N  
+
+RESI ARG 1.00
+ATOM N    N      -0.34790
+ATOM H    H       0.27470
+ATOM CA   XC2    -0.26370
+ATOM HA   H1      0.15600
+ATOM CB   C8     -0.00070
+ATOM HB2  HC      0.03270
+ATOM HB3  HC      0.03270
+ATOM CG   C8      0.03900
+ATOM HG2  HC      0.02850
+ATOM HG3  HC      0.02850
+ATOM CD   C8      0.04860
+ATOM HD2  H1      0.06870
+ATOM HD3  H1      0.06870
+ATOM NE   N2     -0.52950
+ATOM HE   H       0.34560
+ATOM CZ   CA      0.80760
+ATOM NH1  N2     -0.86270
+ATOM HH11 H       0.44780
+ATOM HH12 H       0.44780
+ATOM NH2  N2     -0.86270
+ATOM HH21 H       0.44780
+ATOM HH22 H       0.44780
+ATOM C    C       0.73410
+ATOM O    O      -0.58940
+BOND N    CA  
+BOND N    H   
+BOND CA   CB  
+BOND CA   C   
+BOND CA   HA  
+BOND CB   CG  
+BOND CB   HB2 
+BOND CB   HB3 
+BOND CG   CD  
+BOND CG   HG2 
+BOND CG   HG3 
+BOND CD   NE  
+BOND CD   HD2 
+BOND CD   HD3 
+BOND NE   CZ  
+BOND NE   HE  
+BOND CZ   NH1 
+BOND CZ   NH2 
+BOND NH1  HH11
+BOND NH1  HH12
+BOND NH2  HH21
+BOND NH2  HH22
+BOND C    O   
+BOND C    +N  
+IMPROPER CA   +N   C    O   
+IMPROPER NE   NH1  CZ   NH2 
+IMPROPER CZ   HH21 NH2  HH22
+IMPROPER CZ   HH11 NH1  HH12
+IMPROPER CD   CZ   NE   HE  
+IMPROPER -C   H    N    CA  
+CMAP  -C    N     CA    C     N     CA    C     +N  
+
+RESI ASH 0.00
+ATOM N    N      -0.41570
+ATOM H    H       0.27190
+ATOM CA   XC3     0.03410
+ATOM HA   H1      0.08640
+ATOM CB   2C     -0.03160
+ATOM HB2  HC      0.04880
+ATOM HB3  HC      0.04880
+ATOM CG   C       0.64620
+ATOM OD1  O      -0.55540
+ATOM OD2  OH     -0.63760
+ATOM HD2  HO      0.47470
+ATOM C    C       0.59730
+ATOM O    O      -0.56790
+BOND N    CA  
+BOND N    H   
+BOND CA   CB  
+BOND CA   C   
+BOND CA   HA  
+BOND CB   CG  
+BOND CB   HB2 
+BOND CB   HB3 
+BOND CG   OD1 
+BOND CG   OD2 
+BOND OD2  HD2 
+BOND C    O   
+BOND C    +N  
+IMPROPER CA   +N   C    O   
+IMPROPER CB   OD1  CG   OD2 
+IMPROPER -C   H    N    CA  
+CMAP  -C    N     CA    C     N     CA    C     +N  
+
+RESI ASN 0.00
+ATOM N    N      -0.41570
+ATOM H    H       0.27190
+ATOM CA   XC4     0.01430
+ATOM HA   H1      0.10480
+ATOM CB   2C     -0.20410
+ATOM HB2  HC      0.07970
+ATOM HB3  HC      0.07970
+ATOM CG   C       0.71300
+ATOM OD1  O      -0.59310
+ATOM ND2  N      -0.91910
+ATOM HD21 H       0.41960
+ATOM HD22 H       0.41960
+ATOM C    C       0.59730
+ATOM O    O      -0.56790
+BOND N    CA  
+BOND N    H   
+BOND CA   CB  
+BOND CA   C   
+BOND CA   HA  
+BOND CB   CG  
+BOND CB   HB2 
+BOND CB   HB3 
+BOND CG   OD1 
+BOND CG   ND2 
+BOND ND2  HD21
+BOND ND2  HD22
+BOND C    O   
+BOND C    +N  
+IMPROPER CA   +N   C    O   
+IMPROPER CB   ND2  CG   OD1 
+IMPROPER CG   HD21 ND2  HD22
+IMPROPER -C   H    N    CA  
+CMAP  -C    N     CA    C     N     CA    C     +N  
+
+RESI ASP -1.00
+ATOM N    N      -0.51630
+ATOM H    H       0.29360
+ATOM CA   XC5     0.03810
+ATOM HA   H1      0.08800
+ATOM CB   2C     -0.03030
+ATOM HB2  HC     -0.01220
+ATOM HB3  HC     -0.01220
+ATOM CG   CO      0.79940
+ATOM OD1  O2     -0.80140
+ATOM OD2  O2     -0.80140
+ATOM C    C       0.53660
+ATOM O    O      -0.58190
+BOND N    CA  
+BOND N    H   
+BOND CA   CB  
+BOND CA   C   
+BOND CA   HA  
+BOND CB   CG  
+BOND CB   HB2 
+BOND CB   HB3 
+BOND CG   OD1 
+BOND CG   OD2 
+BOND C    O   
+BOND C    +N  
+IMPROPER CA   +N   C    O   
+IMPROPER CB   OD1  CG   OD2 
+IMPROPER -C   H    N    CA  
+CMAP  -C    N     CA    C     N     CA    C     +N  
+
+RESI CYM -1.00
+ATOM N    N      -0.41570
+ATOM H    H       0.27190
+ATOM CA   XC6    -0.03510
+ATOM HA   H1      0.05080
+ATOM CB   CT     -0.24130
+ATOM HB3  H1      0.11220
+ATOM HB2  H1      0.11220
+ATOM SG   SH     -0.88440
+ATOM C    C       0.59730
+ATOM O    O      -0.56790
+BOND N    CA  
+BOND N    H   
+BOND CA   CB  
+BOND CA   C   
+BOND CA   HA  
+BOND CB   SG  
+BOND CB   HB3 
+BOND CB   HB2 
+BOND C    O   
+BOND C    +N  
+IMPROPER CA   +N   C    O   
+IMPROPER -C   H    N    CA  
+CMAP  -C    N     CA    C     N     CA    C     +N  
+
+RESI CYS -0.00
+ATOM N    N      -0.41570
+ATOM H    H       0.27190
+ATOM CA   XC7     0.02130
+ATOM HA   H1      0.11240
+ATOM CB   2C     -0.12310
+ATOM HB2  H1      0.11120
+ATOM HB3  H1      0.11120
+ATOM SG   SH     -0.31190
+ATOM HG   HS      0.19330
+ATOM C    C       0.59730
+ATOM O    O      -0.56790
+BOND N    CA  
+BOND N    H   
+BOND CA   CB  
+BOND CA   C   
+BOND CA   HA  
+BOND CB   SG  
+BOND CB   HB2 
+BOND CB   HB3 
+BOND SG   HG  
+BOND C    O   
+BOND C    +N  
+IMPROPER CA   +N   C    O   
+IMPROPER -C   H    N    CA  
+CMAP  -C    N     CA    C     N     CA    C     +N  
+
+RESI CYX -0.00
+ATOM N    N      -0.41570
+ATOM H    H       0.27190
+ATOM CA   XC8     0.04290
+ATOM HA   H1      0.07660
+ATOM CB   2C     -0.07900
+ATOM HB2  H1      0.09100
+ATOM HB3  H1      0.09100
+ATOM SG   S      -0.10810
+ATOM C    C       0.59730
+ATOM O    O      -0.56790
+BOND N    CA  
+BOND N    H   
+BOND CA   CB  
+BOND CA   C   
+BOND CA   HA  
+BOND CB   SG  
+BOND CB   HB2 
+BOND CB   HB3 
+BOND C    O   
+BOND C    +N  
+IMPROPER CA   +N   C    O   
+IMPROPER -C   H    N    CA  
+CMAP  -C    N     CA    C     N     CA    C     +N  
+
+RESI GLH 0.00
+ATOM N    N      -0.41570
+ATOM H    H       0.27190
+ATOM CA   XC9     0.01450
+ATOM HA   H1      0.07790
+ATOM CB   2C     -0.00710
+ATOM HB2  HC      0.02560
+ATOM HB3  HC      0.02560
+ATOM CG   2C     -0.01740
+ATOM HG2  HC      0.04300
+ATOM HG3  HC      0.04300
+ATOM CD   C       0.68010
+ATOM OE1  O      -0.58380
+ATOM OE2  OH     -0.65110
+ATOM HE2  HO      0.46410
+ATOM C    C       0.59730
+ATOM O    O      -0.56790
+BOND N    CA  
+BOND N    H   
+BOND CA   CB  
+BOND CA   C   
+BOND CA   HA  
+BOND CB   CG  
+BOND CB   HB2 
+BOND CB   HB3 
+BOND CG   CD  
+BOND CG   HG2 
+BOND CG   HG3 
+BOND CD   OE1 
+BOND CD   OE2 
+BOND OE2  HE2 
+BOND C    O   
+BOND C    +N  
+IMPROPER CA   +N   C    O   
+IMPROPER CG   OE1  CD   OE2 
+IMPROPER -C   H    N    CA  
+CMAP  -C    N     CA    C     N     CA    C     +N  
+
+RESI GLN -0.00
+ATOM N    N      -0.41570
+ATOM H    H       0.27190
+ATOM CA   XC10   -0.00310
+ATOM HA   H1      0.08500
+ATOM CB   2C     -0.00360
+ATOM HB2  HC      0.01710
+ATOM HB3  HC      0.01710
+ATOM CG   2C     -0.06450
+ATOM HG2  HC      0.03520
+ATOM HG3  HC      0.03520
+ATOM CD   C       0.69510
+ATOM OE1  O      -0.60860
+ATOM NE2  N      -0.94070
+ATOM HE21 H       0.42510
+ATOM HE22 H       0.42510
+ATOM C    C       0.59730
+ATOM O    O      -0.56790
+BOND N    CA  
+BOND N    H   
+BOND CA   CB  
+BOND CA   C   
+BOND CA   HA  
+BOND CB   CG  
+BOND CB   HB2 
+BOND CB   HB3 
+BOND CG   CD  
+BOND CG   HG2 
+BOND CG   HG3 
+BOND CD   OE1 
+BOND CD   NE2 
+BOND NE2  HE21
+BOND NE2  HE22
+BOND C    O   
+BOND C    +N  
+IMPROPER CA   +N   C    O   
+IMPROPER CG   NE2  CD   OE1 
+IMPROPER CD   HE21 NE2  HE22
+IMPROPER -C   H    N    CA  
+CMAP  -C    N     CA    C     N     CA    C     +N  
+
+RESI GLU -1.00
+ATOM N    N      -0.51630
+ATOM H    H       0.29360
+ATOM CA   XC11    0.03970
+ATOM HA   H1      0.11050
+ATOM CB   2C      0.05600
+ATOM HB2  HC     -0.01730
+ATOM HB3  HC     -0.01730
+ATOM CG   2C      0.01360
+ATOM HG2  HC     -0.04250
+ATOM HG3  HC     -0.04250
+ATOM CD   CO      0.80540
+ATOM OE1  O2     -0.81880
+ATOM OE2  O2     -0.81880
+ATOM C    C       0.53660
+ATOM O    O      -0.58190
+BOND N    CA  
+BOND N    H   
+BOND CA   CB  
+BOND CA   C   
+BOND CA   HA  
+BOND CB   CG  
+BOND CB   HB2 
+BOND CB   HB3 
+BOND CG   CD  
+BOND CG   HG2 
+BOND CG   HG3 
+BOND CD   OE1 
+BOND CD   OE2 
+BOND C    O   
+BOND C    +N  
+IMPROPER CA   +N   C    O   
+IMPROPER CG   OE1  CD   OE2 
+IMPROPER -C   H    N    CA  
+CMAP  -C    N     CA    C     N     CA    C     +N  
+
+RESI GLY -0.00
+ATOM N    N      -0.41570
+ATOM H    H       0.27190
+ATOM CA   XC12   -0.02520
+ATOM HA2  H1      0.06980
+ATOM HA3  H1      0.06980
+ATOM C    C       0.59730
+ATOM O    O      -0.56790
+BOND N    CA  
+BOND N    H   
+BOND CA   C   
+BOND CA   HA2 
+BOND CA   HA3 
+BOND C    O   
+BOND C    +N  
+IMPROPER CA   +N   C    O   
+IMPROPER -C   H    N    CA  
+CMAP  -C    N     CA    C     N     CA    C     +N  
+
+RESI HID -0.00
+ATOM N    N      -0.41570
+ATOM H    H       0.27190
+ATOM CA   XC6     0.01880
+ATOM HA   H1      0.08810
+ATOM CB   CT     -0.04620
+ATOM HB2  HC      0.04020
+ATOM HB3  HC      0.04020
+ATOM CG   CC     -0.02660
+ATOM ND1  NA     -0.38110
+ATOM HD1  H       0.36490
+ATOM CE1  CR      0.20570
+ATOM HE1  H5      0.13920
+ATOM NE2  NB     -0.57270
+ATOM CD2  CV      0.12920
+ATOM HD2  H4      0.11470
+ATOM C    C       0.59730
+ATOM O    O      -0.56790
+BOND N    CA  
+BOND N    H   
+BOND CA   CB  
+BOND CA   C   
+BOND CA   HA  
+BOND CB   CG  
+BOND CB   HB2 
+BOND CB   HB3 
+BOND CG   ND1 
+BOND CG   CD2 
+BOND ND1  CE1 
+BOND ND1  HD1 
+BOND CE1  NE2 
+BOND CE1  HE1 
+BOND NE2  CD2 
+BOND CD2  HD2 
+BOND C    O   
+BOND C    +N  
+IMPROPER CA   +N   C    O   
+IMPROPER CB   CD2  CG   ND1 
+IMPROPER CG   NE2  CD2  HD2 
+IMPROPER ND1  NE2  CE1  HE1 
+IMPROPER CG   CE1  ND1  HD1 
+IMPROPER -C   H    N    CA  
+CMAP  -C    N     CA    C     N     CA    C     +N  
+
+RESI HIE -0.00
+ATOM N    N      -0.41570
+ATOM H    H       0.27190
+ATOM CA   XC6    -0.05810
+ATOM HA   H1      0.13600
+ATOM CB   CT     -0.00740
+ATOM HB2  HC      0.03670
+ATOM HB3  HC      0.03670
+ATOM CG   CC      0.18680
+ATOM ND1  NB     -0.54320
+ATOM CE1  CR      0.16350
+ATOM HE1  H5      0.14350
+ATOM NE2  NA     -0.27950
+ATOM HE2  H       0.33390
+ATOM CD2  CW     -0.22070
+ATOM HD2  H4      0.18620
+ATOM C    C       0.59730
+ATOM O    O      -0.56790
+BOND N    CA  
+BOND N    H   
+BOND CA   CB  
+BOND CA   C   
+BOND CA   HA  
+BOND CB   CG  
+BOND CB   HB2 
+BOND CB   HB3 
+BOND CG   ND1 
+BOND CG   CD2 
+BOND ND1  CE1 
+BOND CE1  NE2 
+BOND CE1  HE1 
+BOND NE2  CD2 
+BOND NE2  HE2 
+BOND CD2  HD2 
+BOND C    O   
+BOND C    +N  
+IMPROPER CA   +N   C    O   
+IMPROPER CB   CD2  CG   ND1 
+IMPROPER CG   NE2  CD2  HD2 
+IMPROPER CE1  CD2  NE2  HE2 
+IMPROPER ND1  NE2  CE1  HE1 
+IMPROPER -C   H    N    CA  
+CMAP  -C    N     CA    C     N     CA    C     +N  
+
+RESI HIP 1.00
+ATOM N    N      -0.34790
+ATOM H    H       0.27470
+ATOM CA   XC6    -0.13540
+ATOM HA   H1      0.12120
+ATOM CB   CT     -0.04140
+ATOM HB2  HC      0.08100
+ATOM HB3  HC      0.08100
+ATOM CG   CC     -0.00120
+ATOM ND1  NA     -0.15130
+ATOM HD1  H       0.38660
+ATOM CE1  CR     -0.01700
+ATOM HE1  H5      0.26810
+ATOM NE2  NA     -0.17180
+ATOM HE2  H       0.39110
+ATOM CD2  CW     -0.11410
+ATOM HD2  H4      0.23170
+ATOM C    C       0.73410
+ATOM O    O      -0.58940
+BOND N    CA  
+BOND N    H   
+BOND CA   CB  
+BOND CA   C   
+BOND CA   HA  
+BOND CB   CG  
+BOND CB   HB2 
+BOND CB   HB3 
+BOND CG   ND1 
+BOND CG   CD2 
+BOND ND1  CE1 
+BOND ND1  HD1 
+BOND CE1  NE2 
+BOND CE1  HE1 
+BOND NE2  CD2 
+BOND NE2  HE2 
+BOND CD2  HD2 
+BOND C    O   
+BOND C    +N  
+IMPROPER CA   +N   C    O   
+IMPROPER CB   CD2  CG   ND1 
+IMPROPER CG   NE2  CD2  HD2 
+IMPROPER CE1  CD2  NE2  HE2 
+IMPROPER ND1  NE2  CE1  HE1 
+IMPROPER CG   CE1  ND1  HD1 
+IMPROPER -C   H    N    CA  
+CMAP  -C    N     CA    C     N     CA    C     +N  
+
+RESI HYP 0.00
+ATOM N    N      -0.25480
+ATOM CD   CT      0.05950
+ATOM HD22 H1      0.07000
+ATOM HD23 H1      0.07000
+ATOM CG   CT      0.04000
+ATOM HG   H1      0.04160
+ATOM OD1  OH     -0.61340
+ATOM HD1  HO      0.38510
+ATOM CB   CT      0.02030
+ATOM HB2  HC      0.04260
+ATOM HB3  HC      0.04260
+ATOM CA   XC6     0.00470
+ATOM HA   H1      0.07700
+ATOM C    C       0.58960
+ATOM O    O      -0.57480
+BOND N    CD  
+BOND N    CA  
+BOND CD   CG  
+BOND CD   HD22
+BOND CD   HD23
+BOND CG   OD1 
+BOND CG   CB  
+BOND CG   HG  
+BOND OD1  HD1 
+BOND CB   CA  
+BOND CB   HB2 
+BOND CB   HB3 
+BOND CA   C   
+BOND CA   HA  
+BOND C    O   
+BOND C    +N  
+IMPROPER CA   +N   C    O   
+IMPROPER -C   CD   N    CA  
+CMAP  -C    N     CA    C     N     CA    C     +N  
+
+RESI ILE -0.00
+ATOM N    N      -0.41570
+ATOM H    H       0.27190
+ATOM CA   XC13   -0.05970
+ATOM HA   H1      0.08690
+ATOM CB   3C      0.13030
+ATOM HB   HC      0.01870
+ATOM CG2  CT     -0.32040
+ATOM HG21 HC      0.08820
+ATOM HG22 HC      0.08820
+ATOM HG23 HC      0.08820
+ATOM CG1  2C     -0.04300
+ATOM HG12 HC      0.02360
+ATOM HG13 HC      0.02360
+ATOM CD1  CT     -0.06600
+ATOM HD11 HC      0.01860
+ATOM HD12 HC      0.01860
+ATOM HD13 HC      0.01860
+ATOM C    C       0.59730
+ATOM O    O      -0.56790
+BOND N    CA  
+BOND N    H   
+BOND CA   CB  
+BOND CA   C   
+BOND CA   HA  
+BOND CB   CG2 
+BOND CB   CG1 
+BOND CB   HB  
+BOND CG2  HG21
+BOND CG2  HG22
+BOND CG2  HG23
+BOND CG1  CD1 
+BOND CG1  HG12
+BOND CG1  HG13
+BOND CD1  HD11
+BOND CD1  HD12
+BOND CD1  HD13
+BOND C    O   
+BOND C    +N  
+IMPROPER CA   +N   C    O   
+IMPROPER -C   H    N    CA  
+CMAP  -C    N     CA    C     N     CA    C     +N  
+
+RESI LEU -0.00
+ATOM N    N      -0.41570
+ATOM H    H       0.27190
+ATOM CA   XC6    -0.05180
+ATOM HA   H1      0.09220
+ATOM CB   2C     -0.11020
+ATOM HB2  HC      0.04570
+ATOM HB3  HC      0.04570
+ATOM CG   3C      0.35310
+ATOM HG   HC     -0.03610
+ATOM CD1  CT     -0.41210
+ATOM HD11 HC      0.10000
+ATOM HD12 HC      0.10000
+ATOM HD13 HC      0.10000
+ATOM CD2  CT     -0.41210
+ATOM HD21 HC      0.10000
+ATOM HD22 HC      0.10000
+ATOM HD23 HC      0.10000
+ATOM C    C       0.59730
+ATOM O    O      -0.56790
+BOND N    CA  
+BOND N    H   
+BOND CA   CB  
+BOND CA   C   
+BOND CA   HA  
+BOND CB   CG  
+BOND CB   HB2 
+BOND CB   HB3 
+BOND CG   CD1 
+BOND CG   CD2 
+BOND CG   HG  
+BOND CD1  HD11
+BOND CD1  HD12
+BOND CD1  HD13
+BOND CD2  HD21
+BOND CD2  HD22
+BOND CD2  HD23
+BOND C    O   
+BOND C    +N  
+IMPROPER CA   +N   C    O   
+IMPROPER -C   H    N    CA  
+CMAP  -C    N     CA    C     N     CA    C     +N  
+
+RESI LYN -0.00
+ATOM N    N      -0.41570
+ATOM H    H       0.27190
+ATOM CA   XC14   -0.07206
+ATOM HA   H1      0.09940
+ATOM CB   CT     -0.04845
+ATOM HB2  HC      0.03400
+ATOM HB3  HC      0.03400
+ATOM CG   CT      0.06612
+ATOM HG2  HC      0.01041
+ATOM HG3  HC      0.01041
+ATOM CD   CT     -0.03768
+ATOM HD2  HC      0.01155
+ATOM HD3  HC      0.01155
+ATOM CE   CT      0.32604
+ATOM HE2  HP     -0.03358
+ATOM HE3  HP     -0.03358
+ATOM NZ   N3     -1.03581
+ATOM HZ2  H       0.38604
+ATOM HZ3  H       0.38604
+ATOM C    C       0.59730
+ATOM O    O      -0.56790
+BOND N    CA  
+BOND N    H   
+BOND CA   CB  
+BOND CA   C   
+BOND CA   HA  
+BOND CB   CG  
+BOND CB   HB2 
+BOND CB   HB3 
+BOND CG   CD  
+BOND CG   HG2 
+BOND CG   HG3 
+BOND CD   CE  
+BOND CD   HD2 
+BOND CD   HD3 
+BOND CE   NZ  
+BOND CE   HE2 
+BOND CE   HE3 
+BOND NZ   HZ2 
+BOND NZ   HZ3 
+BOND C    O   
+BOND C    +N  
+IMPROPER CA   +N   C    O   
+IMPROPER -C   H    N    CA  
+CMAP  -C    N     CA    C     N     CA    C     +N  
+
+RESI LYS 1.00
+ATOM N    N      -0.34790
+ATOM H    H       0.27470
+ATOM CA   XC14   -0.24000
+ATOM HA   H1      0.14260
+ATOM CB   C8     -0.00940
+ATOM HB2  HC      0.03620
+ATOM HB3  HC      0.03620
+ATOM CG   C8      0.01870
+ATOM HG2  HC      0.01030
+ATOM HG3  HC      0.01030
+ATOM CD   C8     -0.04790
+ATOM HD2  HC      0.06210
+ATOM HD3  HC      0.06210
+ATOM CE   C8     -0.01430
+ATOM HE2  HP      0.11350
+ATOM HE3  HP      0.11350
+ATOM NZ   N3     -0.38540
+ATOM HZ1  H       0.34000
+ATOM HZ2  H       0.34000
+ATOM HZ3  H       0.34000
+ATOM C    C       0.73410
+ATOM O    O      -0.58940
+BOND N    CA  
+BOND N    H   
+BOND CA   CB  
+BOND CA   C   
+BOND CA   HA  
+BOND CB   CG  
+BOND CB   HB2 
+BOND CB   HB3 
+BOND CG   CD  
+BOND CG   HG2 
+BOND CG   HG3 
+BOND CD   CE  
+BOND CD   HD2 
+BOND CD   HD3 
+BOND CE   NZ  
+BOND CE   HE2 
+BOND CE   HE3 
+BOND NZ   HZ1 
+BOND NZ   HZ2 
+BOND NZ   HZ3 
+BOND C    O   
+BOND C    +N  
+IMPROPER CA   +N   C    O   
+IMPROPER -C   H    N    CA  
+CMAP  -C    N     CA    C     N     CA    C     +N  
+
+RESI MET -0.00
+ATOM N    N      -0.41570
+ATOM H    H       0.27190
+ATOM CA   XC6    -0.02370
+ATOM HA   H1      0.08800
+ATOM CB   2C      0.03420
+ATOM HB2  HC      0.02410
+ATOM HB3  HC      0.02410
+ATOM CG   2C      0.00180
+ATOM HG2  H1      0.04400
+ATOM HG3  H1      0.04400
+ATOM SD   S      -0.27370
+ATOM CE   CT     -0.05360
+ATOM HE1  H1      0.06840
+ATOM HE2  H1      0.06840
+ATOM HE3  H1      0.06840
+ATOM C    C       0.59730
+ATOM O    O      -0.56790
+BOND N    CA  
+BOND N    H   
+BOND CA   CB  
+BOND CA   C   
+BOND CA   HA  
+BOND CB   CG  
+BOND CB   HB2 
+BOND CB   HB3 
+BOND CG   SD  
+BOND CG   HG2 
+BOND CG   HG3 
+BOND SD   CE  
+BOND CE   HE1 
+BOND CE   HE2 
+BOND CE   HE3 
+BOND C    O   
+BOND C    +N  
+IMPROPER CA   +N   C    O   
+IMPROPER -C   H    N    CA  
+CMAP  -C    N     CA    C     N     CA    C     +N  
+
+RESI PHE -0.00
+ATOM N    N      -0.41570
+ATOM H    H       0.27190
+ATOM CA   XC6    -0.00240
+ATOM HA   H1      0.09780
+ATOM CB   CT     -0.03430
+ATOM HB2  HC      0.02950
+ATOM HB3  HC      0.02950
+ATOM CG   CA      0.01180
+ATOM CD1  CA     -0.12560
+ATOM HD1  HA      0.13300
+ATOM CE1  CA     -0.17040
+ATOM HE1  HA      0.14300
+ATOM CZ   CA     -0.10720
+ATOM HZ   HA      0.12970
+ATOM CE2  CA     -0.17040
+ATOM HE2  HA      0.14300
+ATOM CD2  CA     -0.12560
+ATOM HD2  HA      0.13300
+ATOM C    C       0.59730
+ATOM O    O      -0.56790
+BOND N    CA  
+BOND N    H   
+BOND CA   CB  
+BOND CA   C   
+BOND CA   HA  
+BOND CB   CG  
+BOND CB   HB2 
+BOND CB   HB3 
+BOND CG   CD1 
+BOND CG   CD2 
+BOND CD1  CE1 
+BOND CD1  HD1 
+BOND CE1  CZ  
+BOND CE1  HE1 
+BOND CZ   CE2 
+BOND CZ   HZ  
+BOND CE2  CD2 
+BOND CE2  HE2 
+BOND CD2  HD2 
+BOND C    O   
+BOND C    +N  
+IMPROPER CA   +N   C    O   
+IMPROPER CD1  CD2  CG   CB  
+IMPROPER CG   CE2  CD2  HD2 
+IMPROPER CZ   CD2  CE2  HE2 
+IMPROPER CE1  CE2  CZ   HZ  
+IMPROPER CD1  CZ   CE1  HE1 
+IMPROPER CG   CE1  CD1  HD1 
+IMPROPER -C   H    N    CA  
+CMAP  -C    N     CA    C     N     CA    C     +N  
+
+RESI PRO 0.00
+ATOM N    N      -0.25480
+ATOM CD   CT      0.01920
+ATOM HD2  H1      0.03910
+ATOM HD3  H1      0.03910
+ATOM CG   CT      0.01890
+ATOM HG2  HC      0.02130
+ATOM HG3  HC      0.02130
+ATOM CB   CT     -0.00700
+ATOM HB2  HC      0.02530
+ATOM HB3  HC      0.02530
+ATOM CA   XC15   -0.02660
+ATOM HA   H1      0.06410
+ATOM C    C       0.58960
+ATOM O    O      -0.57480
+BOND N    CD  
+BOND N    CA  
+BOND CD   CG  
+BOND CD   HD2 
+BOND CD   HD3 
+BOND CG   CB  
+BOND CG   HG2 
+BOND CG   HG3 
+BOND CB   CA  
+BOND CB   HB2 
+BOND CB   HB3 
+BOND CA   C   
+BOND CA   HA  
+BOND C    O   
+BOND C    +N  
+IMPROPER CA   +N   C    O   
+IMPROPER -C   CD   N    CA  
+CMAP  -C    N     CA    C     N     CA    C     +N  
+
+RESI SER -0.00
+ATOM N    N      -0.41570
+ATOM H    H       0.27190
+ATOM CA   XC16   -0.02490
+ATOM HA   H1      0.08430
+ATOM CB   2C      0.21170
+ATOM HB2  H1      0.03520
+ATOM HB3  H1      0.03520
+ATOM OG   OH     -0.65460
+ATOM HG   HO      0.42750
+ATOM C    C       0.59730
+ATOM O    O      -0.56790
+BOND N    CA  
+BOND N    H   
+BOND CA   CB  
+BOND CA   C   
+BOND CA   HA  
+BOND CB   OG  
+BOND CB   HB2 
+BOND CB   HB3 
+BOND OG   HG  
+BOND C    O   
+BOND C    +N  
+IMPROPER CA   +N   C    O   
+IMPROPER -C   H    N    CA  
+CMAP  -C    N     CA    C     N     CA    C     +N  
+
+RESI THR 0.00
+ATOM N    N      -0.41570
+ATOM H    H       0.27190
+ATOM CA   XC17   -0.03890
+ATOM HA   H1      0.10070
+ATOM CB   3C      0.36540
+ATOM HB   H1      0.00430
+ATOM CG2  CT     -0.24380
+ATOM HG21 HC      0.06420
+ATOM HG22 HC      0.06420
+ATOM HG23 HC      0.06420
+ATOM OG1  OH     -0.67610
+ATOM HG1  HO      0.41020
+ATOM C    C       0.59730
+ATOM O    O      -0.56790
+BOND N    CA  
+BOND N    H   
+BOND CA   CB  
+BOND CA   C   
+BOND CA   HA  
+BOND CB   CG2 
+BOND CB   OG1 
+BOND CB   HB  
+BOND CG2  HG21
+BOND CG2  HG22
+BOND CG2  HG23
+BOND OG1  HG1 
+BOND C    O   
+BOND C    +N  
+IMPROPER CA   +N   C    O   
+IMPROPER -C   H    N    CA  
+CMAP  -C    N     CA    C     N     CA    C     +N  
+
+RESI TRP -0.00
+ATOM N    N      -0.41570
+ATOM H    H       0.27190
+ATOM CA   XC6    -0.02750
+ATOM HA   H1      0.11230
+ATOM CB   CT     -0.00500
+ATOM HB2  HC      0.03390
+ATOM HB3  HC      0.03390
+ATOM CG   CZ0    -0.14150
+ATOM CD1  CW     -0.16380
+ATOM HD1  H4      0.20620
+ATOM NE1  NA     -0.34180
+ATOM HE1  H       0.34120
+ATOM CE2  CN      0.13800
+ATOM CZ2  CA     -0.26010
+ATOM HZ2  HA      0.15720
+ATOM CH2  CA     -0.11340
+ATOM HH2  HA      0.14170
+ATOM CZ3  CA     -0.19720
+ATOM HZ3  HA      0.14470
+ATOM CE3  CA     -0.23870
+ATOM HE3  HA      0.17000
+ATOM CD2  CB      0.12430
+ATOM C    C       0.59730
+ATOM O    O      -0.56790
+BOND N    CA  
+BOND N    H   
+BOND CA   CB  
+BOND CA   C   
+BOND CA   HA  
+BOND CB   CG  
+BOND CB   HB2 
+BOND CB   HB3 
+BOND CG   CD1 
+BOND CG   CD2 
+BOND CD1  NE1 
+BOND CD1  HD1 
+BOND NE1  CE2 
+BOND NE1  HE1 
+BOND CE2  CZ2 
+BOND CE2  CD2 
+BOND CZ2  CH2 
+BOND CZ2  HZ2 
+BOND CH2  CZ3 
+BOND CH2  HH2 
+BOND CZ3  CE3 
+BOND CZ3  HZ3 
+BOND CE3  CD2 
+BOND CE3  HE3 
+BOND C    O   
+BOND C    +N  
+IMPROPER CA   +N   C    O   
+IMPROPER CG   CE2  CD2  CE3 
+IMPROPER NE1  CZ2  CE2  CD2 
+IMPROPER CD2  CB   CG   CD1 
+IMPROPER CZ3  CD2  CE3  HE3 
+IMPROPER CH2  CE3  CZ3  HZ3 
+IMPROPER CZ2  CZ3  CH2  HH2 
+IMPROPER CE2  CH2  CZ2  HZ2 
+IMPROPER CD1  CE2  NE1  HE1 
+IMPROPER CG   NE1  CD1  HD1 
+IMPROPER -C   H    N    CA  
+CMAP  -C    N     CA    C     N     CA    C     +N  
+
+RESI TYR -0.00
+ATOM N    N      -0.41570
+ATOM H    H       0.27190
+ATOM CA   XC6    -0.00140
+ATOM HA   H1      0.08760
+ATOM CB   CT     -0.01520
+ATOM HB2  HC      0.02950
+ATOM HB3  HC      0.02950
+ATOM CG   CA     -0.00110
+ATOM CD1  CA     -0.19060
+ATOM HD1  HA      0.16990
+ATOM CE1  CA     -0.23410
+ATOM HE1  HA      0.16560
+ATOM CZ   C       0.32260
+ATOM OH   OH     -0.55790
+ATOM HH   HO      0.39920
+ATOM CE2  CA     -0.23410
+ATOM HE2  HA      0.16560
+ATOM CD2  CA     -0.19060
+ATOM HD2  HA      0.16990
+ATOM C    C       0.59730
+ATOM O    O      -0.56790
+BOND N    CA  
+BOND N    H   
+BOND CA   CB  
+BOND CA   C   
+BOND CA   HA  
+BOND CB   CG  
+BOND CB   HB2 
+BOND CB   HB3 
+BOND CG   CD1 
+BOND CG   CD2 
+BOND CD1  CE1 
+BOND CD1  HD1 
+BOND CE1  CZ  
+BOND CE1  HE1 
+BOND CZ   OH  
+BOND CZ   CE2 
+BOND OH   HH  
+BOND CE2  CD2 
+BOND CE2  HE2 
+BOND CD2  HD2 
+BOND C    O   
+BOND C    +N  
+IMPROPER CA   +N   C    O   
+IMPROPER CE1  CE2  CZ   OH  
+IMPROPER CD1  CD2  CG   CB  
+IMPROPER CG   CE2  CD2  HD2 
+IMPROPER CZ   CD2  CE2  HE2 
+IMPROPER CD1  CZ   CE1  HE1 
+IMPROPER CG   CE1  CD1  HD1 
+IMPROPER -C   H    N    CA  
+CMAP  -C    N     CA    C     N     CA    C     +N  
+
+RESI VAL -0.00
+ATOM N    N      -0.41570
+ATOM H    H       0.27190
+ATOM CA   XC13   -0.08750
+ATOM HA   H1      0.09690
+ATOM CB   3C      0.29850
+ATOM HB   HC     -0.02970
+ATOM CG1  CT     -0.31920
+ATOM HG11 HC      0.07910
+ATOM HG12 HC      0.07910
+ATOM HG13 HC      0.07910
+ATOM CG2  CT     -0.31920
+ATOM HG21 HC      0.07910
+ATOM HG22 HC      0.07910
+ATOM HG23 HC      0.07910
+ATOM C    C       0.59730
+ATOM O    O      -0.56790
+BOND N    CA  
+BOND N    H   
+BOND CA   CB  
+BOND CA   C   
+BOND CA   HA  
+BOND CB   CG1 
+BOND CB   CG2 
+BOND CB   HB  
+BOND CG1  HG11
+BOND CG1  HG12
+BOND CG1  HG13
+BOND CG2  HG21
+BOND CG2  HG22
+BOND CG2  HG23
+BOND C    O   
+BOND C    +N  
+IMPROPER CA   +N   C    O   
+IMPROPER -C   H    N    CA  
+CMAP  -C    N     CA    C     N     CA    C     +N  
+
+RESI NALA 1.00
+ATOM N    N3      0.14140
+ATOM H1   H       0.19970
+ATOM H2   H       0.19970
+ATOM H3   H       0.19970
+ATOM CA   CX      0.09620
+ATOM HA   HP      0.08890
+ATOM CB   CT     -0.05970
+ATOM HB1  HC      0.03000
+ATOM HB2  HC      0.03000
+ATOM HB3  HC      0.03000
+ATOM C    C       0.61630
+ATOM O    O      -0.57220
+BOND N    CA  
+BOND N    H1  
+BOND N    H2  
+BOND N    H3  
+BOND CA   CB  
+BOND CA   C   
+BOND CA   HA  
+BOND CB   HB1 
+BOND CB   HB2 
+BOND CB   HB3 
+BOND C    O   
+BOND C    +N  
+IMPROPER CA   +N   C    O   
+
+RESI CALA -1.00
+ATOM N    N      -0.38210
+ATOM H    H       0.26810
+ATOM CA   CX     -0.17470
+ATOM HA   H1      0.10670
+ATOM CB   CT     -0.20930
+ATOM HB1  HC      0.07640
+ATOM HB2  HC      0.07640
+ATOM HB3  HC      0.07640
+ATOM C    C       0.77310
+ATOM O    O2     -0.80550
+ATOM OXT  O2     -0.80550
+BOND N    CA  
+BOND N    H   
+BOND CA   CB  
+BOND CA   C   
+BOND CA   HA  
+BOND CB   HB1 
+BOND CB   HB2 
+BOND CB   HB3 
+BOND C    O   
+BOND C    OXT 
+IMPROPER CA   O    C    OXT 
+IMPROPER -C   CA   N    H   
+
+RESI NARG 2.00
+ATOM N    N3      0.13050
+ATOM H1   H       0.20830
+ATOM H2   H       0.20830
+ATOM H3   H       0.20830
+ATOM CA   CX     -0.02230
+ATOM HA   HP      0.12420
+ATOM CB   C8      0.01180
+ATOM HB2  HC      0.02260
+ATOM HB3  HC      0.02260
+ATOM CG   C8      0.02360
+ATOM HG2  HC      0.03090
+ATOM HG3  HC      0.03090
+ATOM CD   C8      0.09350
+ATOM HD2  H1      0.05270
+ATOM HD3  H1      0.05270
+ATOM NE   N2     -0.56500
+ATOM HE   H       0.35920
+ATOM CZ   CA      0.82810
+ATOM NH1  N2     -0.86930
+ATOM HH11 H       0.44940
+ATOM HH12 H       0.44940
+ATOM NH2  N2     -0.86930
+ATOM HH21 H       0.44940
+ATOM HH22 H       0.44940
+ATOM C    C       0.72140
+ATOM O    O      -0.60130
+BOND N    CA  
+BOND N    H1  
+BOND N    H2  
+BOND N    H3  
+BOND CA   CB  
+BOND CA   C   
+BOND CA   HA  
+BOND CB   CG  
+BOND CB   HB2 
+BOND CB   HB3 
+BOND CG   CD  
+BOND CG   HG2 
+BOND CG   HG3 
+BOND CD   NE  
+BOND CD   HD2 
+BOND CD   HD3 
+BOND NE   CZ  
+BOND NE   HE  
+BOND CZ   NH1 
+BOND CZ   NH2 
+BOND NH1  HH11
+BOND NH1  HH12
+BOND NH2  HH21
+BOND NH2  HH22
+BOND C    O   
+BOND C    +N  
+IMPROPER CA   +N   C    O   
+IMPROPER NE   NH1  CZ   NH2 
+IMPROPER CZ   HH21 NH2  HH22
+IMPROPER CZ   HH11 NH1  HH12
+IMPROPER CD   CZ   NE   HE  
+
+RESI CARG -0.00
+ATOM N    N      -0.34810
+ATOM H    H       0.27640
+ATOM CA   CX     -0.30680
+ATOM HA   H1      0.14470
+ATOM CB   C8     -0.03740
+ATOM HB2  HC      0.03710
+ATOM HB3  HC      0.03710
+ATOM CG   C8      0.07440
+ATOM HG2  HC      0.01850
+ATOM HG3  HC      0.01850
+ATOM CD   C8      0.11140
+ATOM HD2  H1      0.04680
+ATOM HD3  H1      0.04680
+ATOM NE   N2     -0.55640
+ATOM HE   H       0.34790
+ATOM CZ   CA      0.83680
+ATOM NH1  N2     -0.87370
+ATOM HH11 H       0.44930
+ATOM HH12 H       0.44930
+ATOM NH2  N2     -0.87370
+ATOM HH21 H       0.44930
+ATOM HH22 H       0.44930
+ATOM C    C       0.85570
+ATOM O    O2     -0.82660
+ATOM OXT  O2     -0.82660
+BOND N    CA  
+BOND N    H   
+BOND CA   CB  
+BOND CA   C   
+BOND CA   HA  
+BOND CB   CG  
+BOND CB   HB2 
+BOND CB   HB3 
+BOND CG   CD  
+BOND CG   HG2 
+BOND CG   HG3 
+BOND CD   NE  
+BOND CD   HD2 
+BOND CD   HD3 
+BOND NE   CZ  
+BOND NE   HE  
+BOND CZ   NH1 
+BOND CZ   NH2 
+BOND NH1  HH11
+BOND NH1  HH12
+BOND NH2  HH21
+BOND NH2  HH22
+BOND C    O   
+BOND C    OXT 
+IMPROPER CA   O    C    OXT 
+IMPROPER NE   NH1  CZ   NH2 
+IMPROPER CZ   HH21 NH2  HH22
+IMPROPER CZ   HH11 NH1  HH12
+IMPROPER CD   CZ   NE   HE  
+IMPROPER -C   CA   N    H   
+
+RESI NASN 1.00
+ATOM N    N3      0.18010
+ATOM H1   H       0.19210
+ATOM H2   H       0.19210
+ATOM H3   H       0.19210
+ATOM CA   CX      0.03680
+ATOM HA   HP      0.12310
+ATOM CB   2C     -0.02830
+ATOM HB2  HC      0.05150
+ATOM HB3  HC      0.05150
+ATOM CG   C       0.58330
+ATOM OD1  O      -0.57440
+ATOM ND2  N      -0.86340
+ATOM HD21 H       0.40970
+ATOM HD22 H       0.40970
+ATOM C    C       0.61630
+ATOM O    O      -0.57220
+BOND N    CA  
+BOND N    H1  
+BOND N    H2  
+BOND N    H3  
+BOND CA   CB  
+BOND CA   C   
+BOND CA   HA  
+BOND CB   CG  
+BOND CB   HB2 
+BOND CB   HB3 
+BOND CG   OD1 
+BOND CG   ND2 
+BOND ND2  HD21
+BOND ND2  HD22
+BOND C    O   
+BOND C    +N  
+IMPROPER CA   +N   C    O   
+IMPROPER CB   ND2  CG   OD1 
+IMPROPER CG   HD21 ND2  HD22
+
+RESI CASN -1.00
+ATOM N    N      -0.38210
+ATOM H    H       0.26810
+ATOM CA   CX     -0.20800
+ATOM HA   H1      0.13580
+ATOM CB   2C     -0.22990
+ATOM HB2  HC      0.10230
+ATOM HB3  HC      0.10230
+ATOM CG   C       0.71530
+ATOM OD1  O      -0.60100
+ATOM ND2  N      -0.90840
+ATOM HD21 H       0.41500
+ATOM HD22 H       0.41500
+ATOM C    C       0.80500
+ATOM O    O2     -0.81470
+ATOM OXT  O2     -0.81470
+BOND N    CA  
+BOND N    H   
+BOND CA   CB  
+BOND CA   C   
+BOND CA   HA  
+BOND CB   CG  
+BOND CB   HB2 
+BOND CB   HB3 
+BOND CG   OD1 
+BOND CG   ND2 
+BOND ND2  HD21
+BOND ND2  HD22
+BOND C    O   
+BOND C    OXT 
+IMPROPER CA   O    C    OXT 
+IMPROPER CB   ND2  CG   OD1 
+IMPROPER CG   HD21 ND2  HD22
+IMPROPER -C   CA   N    H   
+
+RESI NASP -0.00
+ATOM N    N3      0.07820
+ATOM H1   H       0.22000
+ATOM H2   H       0.22000
+ATOM H3   H       0.22000
+ATOM CA   CX      0.02920
+ATOM HA   HP      0.11410
+ATOM CB   2C     -0.02350
+ATOM HB2  HC     -0.01690
+ATOM HB3  HC     -0.01690
+ATOM CG   CO      0.81940
+ATOM OD1  O2     -0.80840
+ATOM OD2  O2     -0.80840
+ATOM C    C       0.56210
+ATOM O    O      -0.58890
+BOND N    CA  
+BOND N    H1  
+BOND N    H2  
+BOND N    H3  
+BOND CA   CB  
+BOND CA   C   
+BOND CA   HA  
+BOND CB   CG  
+BOND CB   HB2 
+BOND CB   HB3 
+BOND CG   OD1 
+BOND CG   OD2 
+BOND C    O   
+BOND C    +N  
+IMPROPER CA   +N   C    O   
+IMPROPER CB   OD1  CG   OD2 
+
+RESI CASP -2.00
+ATOM N    N      -0.51920
+ATOM H    H       0.30550
+ATOM CA   CX     -0.18170
+ATOM HA   H1      0.10460
+ATOM CB   2C     -0.06770
+ATOM HB2  HC     -0.02120
+ATOM HB3  HC     -0.02120
+ATOM CG   CO      0.88510
+ATOM OD1  O2     -0.81620
+ATOM OD2  O2     -0.81620
+ATOM C    C       0.72560
+ATOM O    O2     -0.78870
+ATOM OXT  O2     -0.78870
+BOND N    CA  
+BOND N    H   
+BOND CA   CB  
+BOND CA   C   
+BOND CA   HA  
+BOND CB   CG  
+BOND CB   HB2 
+BOND CB   HB3 
+BOND CG   OD1 
+BOND CG   OD2 
+BOND C    O   
+BOND C    OXT 
+IMPROPER CA   O    C    OXT 
+IMPROPER CB   OD1  CG   OD2 
+IMPROPER -C   CA   N    H   
+
+RESI NCYS 1.00
+ATOM N    N3      0.13250
+ATOM H1   H       0.20230
+ATOM H2   H       0.20230
+ATOM H3   H       0.20230
+ATOM CA   CX      0.09270
+ATOM HA   HP      0.14110
+ATOM CB   2C     -0.11950
+ATOM HB2  H1      0.11880
+ATOM HB3  H1      0.11880
+ATOM SG   SH     -0.32980
+ATOM HG   HS      0.19750
+ATOM C    C       0.61230
+ATOM O    O      -0.57130
+BOND N    CA  
+BOND N    H1  
+BOND N    H2  
+BOND N    H3  
+BOND CA   CB  
+BOND CA   C   
+BOND CA   HA  
+BOND CB   SG  
+BOND CB   HB2 
+BOND CB   HB3 
+BOND SG   HG  
+BOND C    O   
+BOND C    +N  
+IMPROPER CA   +N   C    O   
+
+RESI CCYS -1.00
+ATOM N    N      -0.38210
+ATOM H    H       0.26810
+ATOM CA   CX     -0.16350
+ATOM HA   H1      0.13960
+ATOM CB   2C     -0.19960
+ATOM HB2  H1      0.14370
+ATOM HB3  H1      0.14370
+ATOM SG   SH     -0.31020
+ATOM HG   HS      0.20680
+ATOM C    C       0.74970
+ATOM O    O2     -0.79810
+ATOM OXT  O2     -0.79810
+BOND N    CA  
+BOND N    H   
+BOND CA   CB  
+BOND CA   C   
+BOND CA   HA  
+BOND CB   SG  
+BOND CB   HB2 
+BOND CB   HB3 
+BOND SG   HG  
+BOND C    O   
+BOND C    OXT 
+IMPROPER CA   O    C    OXT 
+IMPROPER -C   CA   N    H   
+
+RESI NCYX 1.00
+ATOM N    N3      0.20690
+ATOM H1   H       0.18150
+ATOM H2   H       0.18150
+ATOM H3   H       0.18150
+ATOM CA   CX      0.10550
+ATOM HA   HP      0.09220
+ATOM CB   2C     -0.02770
+ATOM HB2  H1      0.06800
+ATOM HB3  H1      0.06800
+ATOM SG   S      -0.09840
+ATOM C    C       0.61230
+ATOM O    O      -0.57130
+BOND N    CA  
+BOND N    H1  
+BOND N    H2  
+BOND N    H3  
+BOND CA   CB  
+BOND CA   C   
+BOND CA   HA  
+BOND CB   SG  
+BOND CB   HB2 
+BOND CB   HB3 
+BOND C    O   
+BOND C    +N  
+IMPROPER CA   +N   C    O   
+
+RESI CCYX -1.00
+ATOM N    N      -0.38210
+ATOM H    H       0.26810
+ATOM CA   CX     -0.13180
+ATOM HA   H1      0.09380
+ATOM CB   2C     -0.19430
+ATOM HB2  H1      0.12280
+ATOM HB3  H1      0.12280
+ATOM SG   S      -0.05290
+ATOM C    C       0.76180
+ATOM O    O2     -0.80410
+ATOM OXT  O2     -0.80410
+BOND N    CA  
+BOND N    H   
+BOND CA   CB  
+BOND CA   C   
+BOND CA   HA  
+BOND CB   SG  
+BOND CB   HB2 
+BOND CB   HB3 
+BOND C    O   
+BOND C    OXT 
+IMPROPER CA   O    C    OXT 
+IMPROPER -C   CA   N    H   
+
+RESI NGLN 1.00
+ATOM N    N3      0.14930
+ATOM H1   H       0.19960
+ATOM H2   H       0.19960
+ATOM H3   H       0.19960
+ATOM CA   CX      0.05360
+ATOM HA   HP      0.10150
+ATOM CB   2C      0.06510
+ATOM HB2  HC      0.00500
+ATOM HB3  HC      0.00500
+ATOM CG   2C     -0.09030
+ATOM HG2  HC      0.03310
+ATOM HG3  HC      0.03310
+ATOM CD   C       0.73540
+ATOM OE1  O      -0.61330
+ATOM NE2  N      -1.00310
+ATOM HE21 H       0.44290
+ATOM HE22 H       0.44290
+ATOM C    C       0.61230
+ATOM O    O      -0.57130
+BOND N    CA  
+BOND N    H1  
+BOND N    H2  
+BOND N    H3  
+BOND CA   CB  
+BOND CA   C   
+BOND CA   HA  
+BOND CB   CG  
+BOND CB   HB2 
+BOND CB   HB3 
+BOND CG   CD  
+BOND CG   HG2 
+BOND CG   HG3 
+BOND CD   OE1 
+BOND CD   NE2 
+BOND NE2  HE21
+BOND NE2  HE22
+BOND C    O   
+BOND C    +N  
+IMPROPER CA   +N   C    O   
+IMPROPER CG   NE2  CD   OE1 
+IMPROPER CD   HE21 NE2  HE22
+
+RESI CGLN -1.00
+ATOM N    N      -0.38210
+ATOM H    H       0.26810
+ATOM CA   CX     -0.22480
+ATOM HA   H1      0.12320
+ATOM CB   2C     -0.06640
+ATOM HB2  HC      0.04520
+ATOM HB3  HC      0.04520
+ATOM CG   2C     -0.02100
+ATOM HG2  HC      0.02030
+ATOM HG3  HC      0.02030
+ATOM CD   C       0.70930
+ATOM OE1  O      -0.60980
+ATOM NE2  N      -0.95740
+ATOM HE21 H       0.43040
+ATOM HE22 H       0.43040
+ATOM C    C       0.77750
+ATOM O    O2     -0.80420
+ATOM OXT  O2     -0.80420
+BOND N    CA  
+BOND N    H   
+BOND CA   CB  
+BOND CA   C   
+BOND CA   HA  
+BOND CB   CG  
+BOND CB   HB2 
+BOND CB   HB3 
+BOND CG   CD  
+BOND CG   HG2 
+BOND CG   HG3 
+BOND CD   OE1 
+BOND CD   NE2 
+BOND NE2  HE21
+BOND NE2  HE22
+BOND C    O   
+BOND C    OXT 
+IMPROPER CA   O    C    OXT 
+IMPROPER CG   NE2  CD   OE1 
+IMPROPER CD   HE21 NE2  HE22
+IMPROPER -C   CA   N    H   
+
+RESI NGLU -0.00
+ATOM N    N3      0.00170
+ATOM H1   H       0.23910
+ATOM H2   H       0.23910
+ATOM H3   H       0.23910
+ATOM CA   CX      0.05880
+ATOM HA   HP      0.12020
+ATOM CB   2C      0.09090
+ATOM HB2  HC     -0.02320
+ATOM HB3  HC     -0.02320
+ATOM CG   2C     -0.02360
+ATOM HG2  HC     -0.03150
+ATOM HG3  HC     -0.03150
+ATOM CD   CO      0.80870
+ATOM OE1  O2     -0.81890
+ATOM OE2  O2     -0.81890
+ATOM C    C       0.56210
+ATOM O    O      -0.58890
+BOND N    CA  
+BOND N    H1  
+BOND N    H2  
+BOND N    H3  
+BOND CA   CB  
+BOND CA   C   
+BOND CA   HA  
+BOND CB   CG  
+BOND CB   HB2 
+BOND CB   HB3 
+BOND CG   CD  
+BOND CG   HG2 
+BOND CG   HG3 
+BOND CD   OE1 
+BOND CD   OE2 
+BOND C    O   
+BOND C    +N  
+IMPROPER CA   +N   C    O   
+IMPROPER CG   OE1  CD   OE2 
+
+RESI CGLU -2.00
+ATOM N    N      -0.51920
+ATOM H    H       0.30550
+ATOM CA   CX     -0.20590
+ATOM HA   H1      0.13990
+ATOM CB   2C      0.00710
+ATOM HB2  HC     -0.00780
+ATOM HB3  HC     -0.00780
+ATOM CG   2C      0.06750
+ATOM HG2  HC     -0.05480
+ATOM HG3  HC     -0.05480
+ATOM CD   CO      0.81830
+ATOM OE1  O2     -0.82200
+ATOM OE2  O2     -0.82200
+ATOM C    C       0.74200
+ATOM O    O2     -0.79300
+ATOM OXT  O2     -0.79300
+BOND N    CA  
+BOND N    H   
+BOND CA   CB  
+BOND CA   C   
+BOND CA   HA  
+BOND CB   CG  
+BOND CB   HB2 
+BOND CB   HB3 
+BOND CG   CD  
+BOND CG   HG2 
+BOND CG   HG3 
+BOND CD   OE1 
+BOND CD   OE2 
+BOND C    O   
+BOND C    OXT 
+IMPROPER CA   O    C    OXT 
+IMPROPER CG   OE1  CD   OE2 
+IMPROPER -C   CA   N    H   
+
+RESI NGLY 1.00
+ATOM N    N3      0.29430
+ATOM H1   H       0.16420
+ATOM H2   H       0.16420
+ATOM H3   H       0.16420
+ATOM CA   CX     -0.01000
+ATOM HA2  HP      0.08950
+ATOM HA3  HP      0.08950
+ATOM C    C       0.61630
+ATOM O    O      -0.57220
+BOND N    CA  
+BOND N    H1  
+BOND N    H2  
+BOND N    H3  
+BOND CA   C   
+BOND CA   HA2 
+BOND CA   HA3 
+BOND C    O   
+BOND C    +N  
+IMPROPER CA   +N   C    O   
+
+RESI CGLY -1.00
+ATOM N    N      -0.38210
+ATOM H    H       0.26810
+ATOM CA   CX     -0.24930
+ATOM HA2  H1      0.10560
+ATOM HA3  H1      0.10560
+ATOM C    C       0.72310
+ATOM O    O2     -0.78550
+ATOM OXT  O2     -0.78550
+BOND N    CA  
+BOND N    H   
+BOND CA   C   
+BOND CA   HA2 
+BOND CA   HA3 
+BOND C    O   
+BOND C    OXT 
+IMPROPER CA   O    C    OXT 
+IMPROPER -C   CA   N    H   
+
+RESI NHID 1.00
+ATOM N    N3      0.15420
+ATOM H1   H       0.19630
+ATOM H2   H       0.19630
+ATOM H3   H       0.19630
+ATOM CA   CX      0.09640
+ATOM HA   HP      0.09580
+ATOM CB   CT      0.02590
+ATOM HB2  HC      0.02090
+ATOM HB3  HC      0.02090
+ATOM CG   CC     -0.03990
+ATOM ND1  NA     -0.38190
+ATOM HD1  H       0.36320
+ATOM CE1  CR      0.21270
+ATOM HE1  H5      0.13850
+ATOM NE2  NB     -0.57110
+ATOM CD2  CV      0.10460
+ATOM HD2  H4      0.12990
+ATOM C    C       0.61230
+ATOM O    O      -0.57130
+BOND N    CA  
+BOND N    H1  
+BOND N    H2  
+BOND N    H3  
+BOND CA   CB  
+BOND CA   C   
+BOND CA   HA  
+BOND CB   CG  
+BOND CB   HB2 
+BOND CB   HB3 
+BOND CG   ND1 
+BOND CG   CD2 
+BOND ND1  CE1 
+BOND ND1  HD1 
+BOND CE1  NE2 
+BOND CE1  HE1 
+BOND NE2  CD2 
+BOND CD2  HD2 
+BOND C    O   
+BOND C    +N  
+IMPROPER CA   +N   C    O   
+IMPROPER CB   CD2  CG   ND1 
+IMPROPER CG   NE2  CD2  HD2 
+IMPROPER ND1  NE2  CE1  HE1 
+IMPROPER CG   CE1  ND1  HD1 
+
+RESI CHID -1.00
+ATOM N    N      -0.38210
+ATOM H    H       0.26810
+ATOM CA   CX     -0.17390
+ATOM HA   H1      0.11000
+ATOM CB   CT     -0.10460
+ATOM HB2  HC      0.05650
+ATOM HB3  HC      0.05650
+ATOM CG   CC      0.02930
+ATOM ND1  NA     -0.38920
+ATOM HD1  H       0.37550
+ATOM CE1  CR      0.19250
+ATOM HE1  H5      0.14180
+ATOM NE2  NB     -0.56290
+ATOM CD2  CV      0.10010
+ATOM HD2  H4      0.12410
+ATOM C    C       0.76150
+ATOM O    O2     -0.80160
+ATOM OXT  O2     -0.80160
+BOND N    CA  
+BOND N    H   
+BOND CA   CB  
+BOND CA   C   
+BOND CA   HA  
+BOND CB   CG  
+BOND CB   HB2 
+BOND CB   HB3 
+BOND CG   ND1 
+BOND CG   CD2 
+BOND ND1  CE1 
+BOND ND1  HD1 
+BOND CE1  NE2 
+BOND CE1  HE1 
+BOND NE2  CD2 
+BOND CD2  HD2 
+BOND C    O   
+BOND C    OXT 
+IMPROPER CA   O    C    OXT 
+IMPROPER CB   CD2  CG   ND1 
+IMPROPER CG   NE2  CD2  HD2 
+IMPROPER ND1  NE2  CE1  HE1 
+IMPROPER CG   CE1  ND1  HD1 
+IMPROPER -C   CA   N    H   
+
+RESI NHIE 1.00
+ATOM N    N3      0.14720
+ATOM H1   H       0.20160
+ATOM H2   H       0.20160
+ATOM H3   H       0.20160
+ATOM CA   CX      0.02360
+ATOM HA   HP      0.13800
+ATOM CB   CT      0.04890
+ATOM HB2  HC      0.02230
+ATOM HB3  HC      0.02230
+ATOM CG   CC      0.17400
+ATOM ND1  NB     -0.55790
+ATOM CE1  CR      0.18040
+ATOM HE1  H5      0.13970
+ATOM NE2  NA     -0.27810
+ATOM HE2  H       0.33240
+ATOM CD2  CW     -0.23490
+ATOM HD2  H4      0.19630
+ATOM C    C       0.61230
+ATOM O    O      -0.57130
+BOND N    CA  
+BOND N    H1  
+BOND N    H2  
+BOND N    H3  
+BOND CA   CB  
+BOND CA   C   
+BOND CA   HA  
+BOND CB   CG  
+BOND CB   HB2 
+BOND CB   HB3 
+BOND CG   ND1 
+BOND CG   CD2 
+BOND ND1  CE1 
+BOND CE1  NE2 
+BOND CE1  HE1 
+BOND NE2  CD2 
+BOND NE2  HE2 
+BOND CD2  HD2 
+BOND C    O   
+BOND C    +N  
+IMPROPER CA   +N   C    O   
+IMPROPER CB   CD2  CG   ND1 
+IMPROPER CG   NE2  CD2  HD2 
+IMPROPER CE1  CD2  NE2  HE2 
+IMPROPER ND1  NE2  CE1  HE1 
+
+RESI CHIE -1.00
+ATOM N    N      -0.38210
+ATOM H    H       0.26810
+ATOM CA   CX     -0.26990
+ATOM HA   H1      0.16500
+ATOM CB   CT     -0.10680
+ATOM HB2  HC      0.06200
+ATOM HB3  HC      0.06200
+ATOM CG   CC      0.27240
+ATOM ND1  NB     -0.55170
+ATOM CE1  CR      0.15580
+ATOM HE1  H5      0.14480
+ATOM NE2  NA     -0.26700
+ATOM HE2  H       0.33190
+ATOM CD2  CW     -0.25880
+ATOM HD2  H4      0.19570
+ATOM C    C       0.79160
+ATOM O    O2     -0.80650
+ATOM OXT  O2     -0.80650
+BOND N    CA  
+BOND N    H   
+BOND CA   CB  
+BOND CA   C   
+BOND CA   HA  
+BOND CB   CG  
+BOND CB   HB2 
+BOND CB   HB3 
+BOND CG   ND1 
+BOND CG   CD2 
+BOND ND1  CE1 
+BOND CE1  NE2 
+BOND CE1  HE1 
+BOND NE2  CD2 
+BOND NE2  HE2 
+BOND CD2  HD2 
+BOND C    O   
+BOND C    OXT 
+IMPROPER CA   O    C    OXT 
+IMPROPER CB   CD2  CG   ND1 
+IMPROPER CG   NE2  CD2  HD2 
+IMPROPER CE1  CD2  NE2  HE2 
+IMPROPER ND1  NE2  CE1  HE1 
+IMPROPER -C   CA   N    H   
+
+RESI NHIP 2.00
+ATOM N    N3      0.25600
+ATOM H1   H       0.17040
+ATOM H2   H       0.17040
+ATOM H3   H       0.17040
+ATOM CA   CX      0.05810
+ATOM HA   HP      0.10470
+ATOM CB   CT      0.04840
+ATOM HB2  HC      0.05310
+ATOM HB3  HC      0.05310
+ATOM CG   CC     -0.02360
+ATOM ND1  NA     -0.15100
+ATOM HD1  H       0.38210
+ATOM CE1  CR     -0.00110
+ATOM HE1  H5      0.26450
+ATOM NE2  NA     -0.17390
+ATOM HE2  H       0.39210
+ATOM CD2  CW     -0.14330
+ATOM HD2  H4      0.24950
+ATOM C    C       0.72140
+ATOM O    O      -0.60130
+BOND N    CA  
+BOND N    H1  
+BOND N    H2  
+BOND N    H3  
+BOND CA   CB  
+BOND CA   C   
+BOND CA   HA  
+BOND CB   CG  
+BOND CB   HB2 
+BOND CB   HB3 
+BOND CG   ND1 
+BOND CG   CD2 
+BOND ND1  CE1 
+BOND ND1  HD1 
+BOND CE1  NE2 
+BOND CE1  HE1 
+BOND NE2  CD2 
+BOND NE2  HE2 
+BOND CD2  HD2 
+BOND C    O   
+BOND C    +N  
+IMPROPER CA   +N   C    O   
+IMPROPER CB   CD2  CG   ND1 
+IMPROPER CG   NE2  CD2  HD2 
+IMPROPER CE1  CD2  NE2  HE2 
+IMPROPER ND1  NE2  CE1  HE1 
+IMPROPER CG   CE1  ND1  HD1 
+
+RESI CHIP 0.00
+ATOM N    N      -0.34810
+ATOM H    H       0.27640
+ATOM CA   CX     -0.14450
+ATOM HA   H1      0.11150
+ATOM CB   CT     -0.08000
+ATOM HB2  HC      0.08680
+ATOM HB3  HC      0.08680
+ATOM CG   CC      0.02980
+ATOM ND1  NA     -0.15010
+ATOM HD1  H       0.38830
+ATOM CE1  CR     -0.02510
+ATOM HE1  H5      0.26940
+ATOM NE2  NA     -0.16830
+ATOM HE2  H       0.39130
+ATOM CD2  CW     -0.12560
+ATOM HD2  H4      0.23360
+ATOM C    C       0.80320
+ATOM O    O2     -0.81770
+ATOM OXT  O2     -0.81770
+BOND N    CA  
+BOND N    H   
+BOND CA   CB  
+BOND CA   C   
+BOND CA   HA  
+BOND CB   CG  
+BOND CB   HB2 
+BOND CB   HB3 
+BOND CG   ND1 
+BOND CG   CD2 
+BOND ND1  CE1 
+BOND ND1  HD1 
+BOND CE1  NE2 
+BOND CE1  HE1 
+BOND NE2  CD2 
+BOND NE2  HE2 
+BOND CD2  HD2 
+BOND C    O   
+BOND C    OXT 
+IMPROPER CA   O    C    OXT 
+IMPROPER CB   CD2  CG   ND1 
+IMPROPER CG   NE2  CD2  HD2 
+IMPROPER CE1  CD2  NE2  HE2 
+IMPROPER ND1  NE2  CE1  HE1 
+IMPROPER CG   CE1  ND1  HD1 
+IMPROPER -C   CA   N    H   
+
+RESI NILE 1.00
+ATOM N    N3      0.03110
+ATOM H1   H       0.23290
+ATOM H2   H       0.23290
+ATOM H3   H       0.23290
+ATOM CA   CX      0.02570
+ATOM HA   HP      0.10310
+ATOM CB   3C      0.18850
+ATOM HB   HC      0.02130
+ATOM CG2  CT     -0.37200
+ATOM HG21 HC      0.09470
+ATOM HG22 HC      0.09470
+ATOM HG23 HC      0.09470
+ATOM CG1  2C     -0.03870
+ATOM HG12 HC      0.02010
+ATOM HG13 HC      0.02010
+ATOM CD1  CT     -0.09080
+ATOM HD11 HC      0.02260
+ATOM HD12 HC      0.02260
+ATOM HD13 HC      0.02260
+ATOM C    C       0.61230
+ATOM O    O      -0.57130
+BOND N    CA  
+BOND N    H1  
+BOND N    H2  
+BOND N    H3  
+BOND CA   CB  
+BOND CA   C   
+BOND CA   HA  
+BOND CB   CG2 
+BOND CB   CG1 
+BOND CB   HB  
+BOND CG2  HG21
+BOND CG2  HG22
+BOND CG2  HG23
+BOND CG1  CD1 
+BOND CG1  HG12
+BOND CG1  HG13
+BOND CD1  HD11
+BOND CD1  HD12
+BOND CD1  HD13
+BOND C    O   
+BOND C    +N  
+IMPROPER CA   +N   C    O   
+
+RESI CILE -1.00
+ATOM N    N      -0.38210
+ATOM H    H       0.26810
+ATOM CA   CX     -0.31000
+ATOM HA   H1      0.13750
+ATOM CB   3C      0.03630
+ATOM HB   HC      0.07660
+ATOM CG2  CT     -0.34980
+ATOM HG21 HC      0.10210
+ATOM HG22 HC      0.10210
+ATOM HG23 HC      0.10210
+ATOM CG1  2C     -0.03230
+ATOM HG12 HC      0.03210
+ATOM HG13 HC      0.03210
+ATOM CD1  CT     -0.06990
+ATOM HD11 HC      0.01960
+ATOM HD12 HC      0.01960
+ATOM HD13 HC      0.01960
+ATOM C    C       0.83430
+ATOM O    O2     -0.81900
+ATOM OXT  O2     -0.81900
+BOND N    CA  
+BOND N    H   
+BOND CA   CB  
+BOND CA   C   
+BOND CA   HA  
+BOND CB   CG2 
+BOND CB   CG1 
+BOND CB   HB  
+BOND CG2  HG21
+BOND CG2  HG22
+BOND CG2  HG23
+BOND CG1  CD1 
+BOND CG1  HG12
+BOND CG1  HG13
+BOND CD1  HD11
+BOND CD1  HD12
+BOND CD1  HD13
+BOND C    O   
+BOND C    OXT 
+IMPROPER CA   O    C    OXT 
+IMPROPER -C   CA   N    H   
+
+RESI NLEU 1.00
+ATOM N    N3      0.10100
+ATOM H1   H       0.21480
+ATOM H2   H       0.21480
+ATOM H3   H       0.21480
+ATOM CA   CX      0.01040
+ATOM HA   HP      0.10530
+ATOM CB   2C     -0.02440
+ATOM HB2  HC      0.02560
+ATOM HB3  HC      0.02560
+ATOM CG   3C      0.34210
+ATOM HG   HC     -0.03800
+ATOM CD1  CT     -0.41060
+ATOM HD11 HC      0.09800
+ATOM HD12 HC      0.09800
+ATOM HD13 HC      0.09800
+ATOM CD2  CT     -0.41040
+ATOM HD21 HC      0.09800
+ATOM HD22 HC      0.09800
+ATOM HD23 HC      0.09800
+ATOM C    C       0.61230
+ATOM O    O      -0.57130
+BOND N    CA  
+BOND N    H1  
+BOND N    H2  
+BOND N    H3  
+BOND CA   CB  
+BOND CA   C   
+BOND CA   HA  
+BOND CB   CG  
+BOND CB   HB2 
+BOND CB   HB3 
+BOND CG   CD1 
+BOND CG   CD2 
+BOND CG   HG  
+BOND CD1  HD11
+BOND CD1  HD12
+BOND CD1  HD13
+BOND CD2  HD21
+BOND CD2  HD22
+BOND CD2  HD23
+BOND C    O   
+BOND C    +N  
+IMPROPER CA   +N   C    O   
+
+RESI CLEU -1.00
+ATOM N    N      -0.38210
+ATOM H    H       0.26810
+ATOM CA   CX     -0.28470
+ATOM HA   H1      0.13460
+ATOM CB   2C     -0.24690
+ATOM HB2  HC      0.09740
+ATOM HB3  HC      0.09740
+ATOM CG   3C      0.37060
+ATOM HG   HC     -0.03740
+ATOM CD1  CT     -0.41630
+ATOM HD11 HC      0.10380
+ATOM HD12 HC      0.10380
+ATOM HD13 HC      0.10380
+ATOM CD2  CT     -0.41630
+ATOM HD21 HC      0.10380
+ATOM HD22 HC      0.10380
+ATOM HD23 HC      0.10380
+ATOM C    C       0.83260
+ATOM O    O2     -0.81990
+ATOM OXT  O2     -0.81990
+BOND N    CA  
+BOND N    H   
+BOND CA   CB  
+BOND CA   C   
+BOND CA   HA  
+BOND CB   CG  
+BOND CB   HB2 
+BOND CB   HB3 
+BOND CG   CD1 
+BOND CG   CD2 
+BOND CG   HG  
+BOND CD1  HD11
+BOND CD1  HD12
+BOND CD1  HD13
+BOND CD2  HD21
+BOND CD2  HD22
+BOND CD2  HD23
+BOND C    O   
+BOND C    OXT 
+IMPROPER CA   O    C    OXT 
+IMPROPER -C   CA   N    H   
+
+RESI NLYS 2.00
+ATOM N    N3      0.09660
+ATOM H1   H       0.21650
+ATOM H2   H       0.21650
+ATOM H3   H       0.21650
+ATOM CA   CX     -0.00150
+ATOM HA   HP      0.11800
+ATOM CB   C8      0.02120
+ATOM HB2  HC      0.02830
+ATOM HB3  HC      0.02830
+ATOM CG   C8     -0.00480
+ATOM HG2  HC      0.01210
+ATOM HG3  HC      0.01210
+ATOM CD   C8     -0.06080
+ATOM HD2  HC      0.06330
+ATOM HD3  HC      0.06330
+ATOM CE   C8     -0.01810
+ATOM HE2  HP      0.11710
+ATOM HE3  HP      0.11710
+ATOM NZ   N3     -0.37640
+ATOM HZ1  H       0.33820
+ATOM HZ2  H       0.33820
+ATOM HZ3  H       0.33820
+ATOM C    C       0.72140
+ATOM O    O      -0.60130
+BOND N    CA  
+BOND N    H1  
+BOND N    H2  
+BOND N    H3  
+BOND CA   CB  
+BOND CA   C   
+BOND CA   HA  
+BOND CB   CG  
+BOND CB   HB2 
+BOND CB   HB3 
+BOND CG   CD  
+BOND CG   HG2 
+BOND CG   HG3 
+BOND CD   CE  
+BOND CD   HD2 
+BOND CD   HD3 
+BOND CE   NZ  
+BOND CE   HE2 
+BOND CE   HE3 
+BOND NZ   HZ1 
+BOND NZ   HZ2 
+BOND NZ   HZ3 
+BOND C    O   
+BOND C    +N  
+IMPROPER CA   +N   C    O   
+
+RESI CLYS -0.00
+ATOM N    N      -0.34810
+ATOM H    H       0.27640
+ATOM CA   CX     -0.29030
+ATOM HA   H1      0.14380
+ATOM CB   C8     -0.05380
+ATOM HB2  HC      0.04820
+ATOM HB3  HC      0.04820
+ATOM CG   C8      0.02270
+ATOM HG2  HC      0.01340
+ATOM HG3  HC      0.01340
+ATOM CD   C8     -0.03920
+ATOM HD2  HC      0.06110
+ATOM HD3  HC      0.06110
+ATOM CE   C8     -0.01760
+ATOM HE2  HP      0.11210
+ATOM HE3  HP      0.11210
+ATOM NZ   N3     -0.37410
+ATOM HZ1  H       0.33740
+ATOM HZ2  H       0.33740
+ATOM HZ3  H       0.33740
+ATOM C    C       0.84880
+ATOM O    O2     -0.82520
+ATOM OXT  O2     -0.82520
+BOND N    CA  
+BOND N    H   
+BOND CA   CB  
+BOND CA   C   
+BOND CA   HA  
+BOND CB   CG  
+BOND CB   HB2 
+BOND CB   HB3 
+BOND CG   CD  
+BOND CG   HG2 
+BOND CG   HG3 
+BOND CD   CE  
+BOND CD   HD2 
+BOND CD   HD3 
+BOND CE   NZ  
+BOND CE   HE2 
+BOND CE   HE3 
+BOND NZ   HZ1 
+BOND NZ   HZ2 
+BOND NZ   HZ3 
+BOND C    O   
+BOND C    OXT 
+IMPROPER CA   O    C    OXT 
+IMPROPER -C   CA   N    H   
+
+RESI NMET 1.00
+ATOM N    N3      0.15920
+ATOM H1   H       0.19840
+ATOM H2   H       0.19840
+ATOM H3   H       0.19840
+ATOM CA   CX      0.02210
+ATOM HA   HP      0.11160
+ATOM CB   2C      0.08650
+ATOM HB2  HC      0.01250
+ATOM HB3  HC      0.01250
+ATOM CG   2C      0.03340
+ATOM HG2  H1      0.02920
+ATOM HG3  H1      0.02920
+ATOM SD   S      -0.27740
+ATOM CE   CT     -0.03410
+ATOM HE1  H1      0.05970
+ATOM HE2  H1      0.05970
+ATOM HE3  H1      0.05970
+ATOM C    C       0.61230
+ATOM O    O      -0.57130
+BOND N    CA  
+BOND N    H1  
+BOND N    H2  
+BOND N    H3  
+BOND CA   CB  
+BOND CA   C   
+BOND CA   HA  
+BOND CB   CG  
+BOND CB   HB2 
+BOND CB   HB3 
+BOND CG   SD  
+BOND CG   HG2 
+BOND CG   HG3 
+BOND SD   CE  
+BOND CE   HE1 
+BOND CE   HE2 
+BOND CE   HE3 
+BOND C    O   
+BOND C    +N  
+IMPROPER CA   +N   C    O   
+
+RESI CMET -1.00
+ATOM N    N      -0.38210
+ATOM H    H       0.26810
+ATOM CA   CX     -0.25970
+ATOM HA   H1      0.12770
+ATOM CB   2C     -0.02360
+ATOM HB2  HC      0.04800
+ATOM HB3  HC      0.04800
+ATOM CG   2C      0.04920
+ATOM HG2  H1      0.03170
+ATOM HG3  H1      0.03170
+ATOM SD   S      -0.26920
+ATOM CE   CT     -0.03760
+ATOM HE1  H1      0.06250
+ATOM HE2  H1      0.06250
+ATOM HE3  H1      0.06250
+ATOM C    C       0.80130
+ATOM O    O2     -0.81050
+ATOM OXT  O2     -0.81050
+BOND N    CA  
+BOND N    H   
+BOND CA   CB  
+BOND CA   C   
+BOND CA   HA  
+BOND CB   CG  
+BOND CB   HB2 
+BOND CB   HB3 
+BOND CG   SD  
+BOND CG   HG2 
+BOND CG   HG3 
+BOND SD   CE  
+BOND CE   HE1 
+BOND CE   HE2 
+BOND CE   HE3 
+BOND C    O   
+BOND C    OXT 
+IMPROPER CA   O    C    OXT 
+IMPROPER -C   CA   N    H   
+
+RESI NPHE 1.00
+ATOM N    N3      0.17370
+ATOM H1   H       0.19210
+ATOM H2   H       0.19210
+ATOM H3   H       0.19210
+ATOM CA   CX      0.07330
+ATOM HA   HP      0.10410
+ATOM CB   CT      0.03300
+ATOM HB2  HC      0.01040
+ATOM HB3  HC      0.01040
+ATOM CG   CA      0.00310
+ATOM CD1  CA     -0.13920
+ATOM HD1  HA      0.13740
+ATOM CE1  CA     -0.16020
+ATOM HE1  HA      0.14330
+ATOM CZ   CA     -0.12080
+ATOM HZ   HA      0.13290
+ATOM CE2  CA     -0.16030
+ATOM HE2  HA      0.14330
+ATOM CD2  CA     -0.13910
+ATOM HD2  HA      0.13740
+ATOM C    C       0.61230
+ATOM O    O      -0.57130
+BOND N    CA  
+BOND N    H1  
+BOND N    H2  
+BOND N    H3  
+BOND CA   CB  
+BOND CA   C   
+BOND CA   HA  
+BOND CB   CG  
+BOND CB   HB2 
+BOND CB   HB3 
+BOND CG   CD1 
+BOND CG   CD2 
+BOND CD1  CE1 
+BOND CD1  HD1 
+BOND CE1  CZ  
+BOND CE1  HE1 
+BOND CZ   CE2 
+BOND CZ   HZ  
+BOND CE2  CD2 
+BOND CE2  HE2 
+BOND CD2  HD2 
+BOND C    O   
+BOND C    +N  
+IMPROPER CA   +N   C    O   
+IMPROPER CD1  CD2  CG   CB  
+IMPROPER CG   CE2  CD2  HD2 
+IMPROPER CZ   CD2  CE2  HE2 
+IMPROPER CE1  CE2  CZ   HZ  
+IMPROPER CD1  CZ   CE1  HE1 
+IMPROPER CG   CE1  CD1  HD1 
+
+RESI CPHE -1.00
+ATOM N    N      -0.38210
+ATOM H    H       0.26810
+ATOM CA   CX     -0.18250
+ATOM HA   H1      0.10980
+ATOM CB   CT     -0.09590
+ATOM HB2  HC      0.04430
+ATOM HB3  HC      0.04430
+ATOM CG   CA      0.05520
+ATOM CD1  CA     -0.13000
+ATOM HD1  HA      0.14080
+ATOM CE1  CA     -0.18470
+ATOM HE1  HA      0.14610
+ATOM CZ   CA     -0.09440
+ATOM HZ   HA      0.12800
+ATOM CE2  CA     -0.18470
+ATOM HE2  HA      0.14610
+ATOM CD2  CA     -0.13000
+ATOM HD2  HA      0.14080
+ATOM C    C       0.76600
+ATOM O    O2     -0.80260
+ATOM OXT  O2     -0.80260
+BOND N    CA  
+BOND N    H   
+BOND CA   CB  
+BOND CA   C   
+BOND CA   HA  
+BOND CB   CG  
+BOND CB   HB2 
+BOND CB   HB3 
+BOND CG   CD1 
+BOND CG   CD2 
+BOND CD1  CE1 
+BOND CD1  HD1 
+BOND CE1  CZ  
+BOND CE1  HE1 
+BOND CZ   CE2 
+BOND CZ   HZ  
+BOND CE2  CD2 
+BOND CE2  HE2 
+BOND CD2  HD2 
+BOND C    O   
+BOND C    OXT 
+IMPROPER CA   O    C    OXT 
+IMPROPER CD1  CD2  CG   CB  
+IMPROPER CG   CE2  CD2  HD2 
+IMPROPER CZ   CD2  CE2  HE2 
+IMPROPER CE1  CE2  CZ   HZ  
+IMPROPER CD1  CZ   CE1  HE1 
+IMPROPER CG   CE1  CD1  HD1 
+IMPROPER -C   CA   N    H   
+
+RESI NPRO 1.00
+ATOM N    N3     -0.20200
+ATOM H2   H       0.31200
+ATOM H3   H       0.31200
+ATOM CD   CT     -0.01200
+ATOM HD2  HP      0.10000
+ATOM HD3  HP      0.10000
+ATOM CG   CT     -0.12100
+ATOM HG2  HC      0.10000
+ATOM HG3  HC      0.10000
+ATOM CB   CT     -0.11500
+ATOM HB2  HC      0.10000
+ATOM HB3  HC      0.10000
+ATOM CA   CX      0.10000
+ATOM HA   HP      0.10000
+ATOM C    C       0.52600
+ATOM O    O      -0.50000
+BOND N    CD  
+BOND N    CA  
+BOND N    H2  
+BOND N    H3  
+BOND CD   CG  
+BOND CD   HD2 
+BOND CD   HD3 
+BOND CG   CB  
+BOND CG   HG2 
+BOND CG   HG3 
+BOND CB   CA  
+BOND CB   HB2 
+BOND CB   HB3 
+BOND CA   C   
+BOND CA   HA  
+BOND C    O   
+BOND C    +N  
+IMPROPER CA   +N   C    O   
+
+RESI CPRO -1.00
+ATOM N    N      -0.28020
+ATOM CD   CT      0.04340
+ATOM HD2  H1      0.03310
+ATOM HD3  H1      0.03310
+ATOM CG   CT      0.04660
+ATOM HG2  HC      0.01720
+ATOM HG3  HC      0.01720
+ATOM CB   CT     -0.05430
+ATOM HB2  HC      0.03810
+ATOM HB3  HC      0.03810
+ATOM CA   CX     -0.13360
+ATOM HA   H1      0.07760
+ATOM C    C       0.66310
+ATOM O    O2     -0.76970
+ATOM OXT  O2     -0.76970
+BOND N    CD  
+BOND N    CA  
+BOND CD   CG  
+BOND CD   HD2 
+BOND CD   HD3 
+BOND CG   CB  
+BOND CG   HG2 
+BOND CG   HG3 
+BOND CB   CA  
+BOND CB   HB2 
+BOND CB   HB3 
+BOND CA   C   
+BOND CA   HA  
+BOND C    O   
+BOND C    OXT 
+IMPROPER CA   O    C    OXT 
+IMPROPER -C   CD   N    CA  
+
+RESI NSER 1.00
+ATOM N    N3      0.18490
+ATOM H1   H       0.18980
+ATOM H2   H       0.18980
+ATOM H3   H       0.18980
+ATOM CA   CX      0.05670
+ATOM HA   HP      0.07820
+ATOM CB   2C      0.25960
+ATOM HB2  H1      0.02730
+ATOM HB3  H1      0.02730
+ATOM OG   OH     -0.67140
+ATOM HG   HO      0.42390
+ATOM C    C       0.61630
+ATOM O    O      -0.57220
+BOND N    CA  
+BOND N    H1  
+BOND N    H2  
+BOND N    H3  
+BOND CA   CB  
+BOND CA   C   
+BOND CA   HA  
+BOND CB   OG  
+BOND CB   HB2 
+BOND CB   HB3 
+BOND OG   HG  
+BOND C    O   
+BOND C    +N  
+IMPROPER CA   +N   C    O   
+
+RESI CSER -1.00
+ATOM N    N      -0.38210
+ATOM H    H       0.26810
+ATOM CA   CX     -0.27220
+ATOM HA   H1      0.13040
+ATOM CB   2C      0.11230
+ATOM HB2  H1      0.08130
+ATOM HB3  H1      0.08130
+ATOM OG   OH     -0.65140
+ATOM HG   HO      0.44740
+ATOM C    C       0.81130
+ATOM O    O2     -0.81320
+ATOM OXT  O2     -0.81320
+BOND N    CA  
+BOND N    H   
+BOND CA   CB  
+BOND CA   C   
+BOND CA   HA  
+BOND CB   OG  
+BOND CB   HB2 
+BOND CB   HB3 
+BOND OG   HG  
+BOND C    O   
+BOND C    OXT 
+IMPROPER CA   O    C    OXT 
+IMPROPER -C   CA   N    H   
+
+RESI NTHR 1.00
+ATOM N    N3      0.18120
+ATOM H1   H       0.19340
+ATOM H2   H       0.19340
+ATOM H3   H       0.19340
+ATOM CA   CX      0.00340
+ATOM HA   HP      0.10870
+ATOM CB   3C      0.45140
+ATOM HB   H1     -0.03230
+ATOM CG2  CT     -0.25540
+ATOM HG21 HC      0.06270
+ATOM HG22 HC      0.06270
+ATOM HG23 HC      0.06270
+ATOM OG1  OH     -0.67640
+ATOM HG1  HO      0.40700
+ATOM C    C       0.61630
+ATOM O    O      -0.57220
+BOND N    CA  
+BOND N    H1  
+BOND N    H2  
+BOND N    H3  
+BOND CA   CB  
+BOND CA   C   
+BOND CA   HA  
+BOND CB   CG2 
+BOND CB   OG1 
+BOND CB   HB  
+BOND CG2  HG21
+BOND CG2  HG22
+BOND CG2  HG23
+BOND OG1  HG1 
+BOND C    O   
+BOND C    +N  
+IMPROPER CA   +N   C    O   
+
+RESI CTHR -1.00
+ATOM N    N      -0.38210
+ATOM H    H       0.26810
+ATOM CA   CX     -0.24200
+ATOM HA   H1      0.12070
+ATOM CB   3C      0.30250
+ATOM HB   H1      0.00780
+ATOM CG2  CT     -0.18530
+ATOM HG21 HC      0.05860
+ATOM HG22 HC      0.05860
+ATOM HG23 HC      0.05860
+ATOM OG1  OH     -0.64960
+ATOM HG1  HO      0.41190
+ATOM C    C       0.78100
+ATOM O    O2     -0.80440
+ATOM OXT  O2     -0.80440
+BOND N    CA  
+BOND N    H   
+BOND CA   CB  
+BOND CA   C   
+BOND CA   HA  
+BOND CB   CG2 
+BOND CB   OG1 
+BOND CB   HB  
+BOND CG2  HG21
+BOND CG2  HG22
+BOND CG2  HG23
+BOND OG1  HG1 
+BOND C    O   
+BOND C    OXT 
+IMPROPER CA   O    C    OXT 
+IMPROPER -C   CA   N    H   
+
+RESI NTRP 1.00
+ATOM N    N3      0.19130
+ATOM H1   H       0.18880
+ATOM H2   H       0.18880
+ATOM H3   H       0.18880
+ATOM CA   CX      0.04210
+ATOM HA   HP      0.11620
+ATOM CB   CT      0.05430
+ATOM HB2  HC      0.02220
+ATOM HB3  HC      0.02220
+ATOM CG   CZ0    -0.16540
+ATOM CD1  CW     -0.17880
+ATOM HD1  H4      0.21950
+ATOM NE1  NA     -0.34440
+ATOM HE1  H       0.34120
+ATOM CE2  CN      0.15750
+ATOM CZ2  CA     -0.27100
+ATOM HZ2  HA      0.15890
+ATOM CH2  CA     -0.10800
+ATOM HH2  HA      0.14110
+ATOM CZ3  CA     -0.20340
+ATOM HZ3  HA      0.14580
+ATOM CE3  CA     -0.22650
+ATOM HE3  HA      0.16460
+ATOM CD2  CB      0.11320
+ATOM C    C       0.61230
+ATOM O    O      -0.57130
+BOND N    CA  
+BOND N    H1  
+BOND N    H2  
+BOND N    H3  
+BOND CA   CB  
+BOND CA   C   
+BOND CA   HA  
+BOND CB   CG  
+BOND CB   HB2 
+BOND CB   HB3 
+BOND CG   CD1 
+BOND CG   CD2 
+BOND CD1  NE1 
+BOND CD1  HD1 
+BOND NE1  CE2 
+BOND NE1  HE1 
+BOND CE2  CZ2 
+BOND CE2  CD2 
+BOND CZ2  CH2 
+BOND CZ2  HZ2 
+BOND CH2  CZ3 
+BOND CH2  HH2 
+BOND CZ3  CE3 
+BOND CZ3  HZ3 
+BOND CE3  CD2 
+BOND CE3  HE3 
+BOND C    O   
+BOND C    +N  
+IMPROPER CA   +N   C    O   
+IMPROPER CG   CE2  CD2  CE3 
+IMPROPER NE1  CZ2  CE2  CD2 
+IMPROPER CD2  CB   CG   CD1 
+IMPROPER CZ3  CD2  CE3  HE3 
+IMPROPER CH2  CE3  CZ3  HZ3 
+IMPROPER CZ2  CZ3  CH2  HH2 
+IMPROPER CE2  CH2  CZ2  HZ2 
+IMPROPER CD1  CE2  NE1  HE1 
+IMPROPER CG   NE1  CD1  HD1 
+
+RESI CTRP -1.00
+ATOM N    N      -0.38210
+ATOM H    H       0.26810
+ATOM CA   CX     -0.20840
+ATOM HA   H1      0.12720
+ATOM CB   CT     -0.07420
+ATOM HB2  HC      0.04970
+ATOM HB3  HC      0.04970
+ATOM CG   CZ0    -0.07960
+ATOM CD1  CW     -0.18080
+ATOM HD1  H4      0.20430
+ATOM NE1  NA     -0.33160
+ATOM HE1  H       0.34130
+ATOM CE2  CN      0.12220
+ATOM CZ2  CA     -0.25940
+ATOM HZ2  HA      0.15670
+ATOM CH2  CA     -0.10200
+ATOM HH2  HA      0.14010
+ATOM CZ3  CA     -0.22870
+ATOM HZ3  HA      0.15070
+ATOM CE3  CA     -0.18370
+ATOM HE3  HA      0.14910
+ATOM CD2  CB      0.10780
+ATOM C    C       0.76580
+ATOM O    O2     -0.80110
+ATOM OXT  O2     -0.80110
+BOND N    CA  
+BOND N    H   
+BOND CA   CB  
+BOND CA   C   
+BOND CA   HA  
+BOND CB   CG  
+BOND CB   HB2 
+BOND CB   HB3 
+BOND CG   CD1 
+BOND CG   CD2 
+BOND CD1  NE1 
+BOND CD1  HD1 
+BOND NE1  CE2 
+BOND NE1  HE1 
+BOND CE2  CZ2 
+BOND CE2  CD2 
+BOND CZ2  CH2 
+BOND CZ2  HZ2 
+BOND CH2  CZ3 
+BOND CH2  HH2 
+BOND CZ3  CE3 
+BOND CZ3  HZ3 
+BOND CE3  CD2 
+BOND CE3  HE3 
+BOND C    O   
+BOND C    OXT 
+IMPROPER CA   O    C    OXT 
+IMPROPER CG   CE3  CD2  CE2 
+IMPROPER CZ2  CD2  CE2  NE1 
+IMPROPER CD2  CB   CG   CD1 
+IMPROPER CZ3  CD2  CE3  HE3 
+IMPROPER CH2  CE3  CZ3  HZ3 
+IMPROPER CZ2  CZ3  CH2  HH2 
+IMPROPER CE2  CH2  CZ2  HZ2 
+IMPROPER CD1  CE2  NE1  HE1 
+IMPROPER CG   NE1  CD1  HD1 
+IMPROPER -C   CA   N    H   
+
+RESI NTYR 1.00
+ATOM N    N3      0.19400
+ATOM H1   H       0.18730
+ATOM H2   H       0.18730
+ATOM H3   H       0.18730
+ATOM CA   CX      0.05700
+ATOM HA   HP      0.09830
+ATOM CB   CT      0.06590
+ATOM HB2  HC      0.01020
+ATOM HB3  HC      0.01020
+ATOM CG   CA     -0.02050
+ATOM CD1  CA     -0.20020
+ATOM HD1  HA      0.17200
+ATOM CE1  CA     -0.22390
+ATOM HE1  HA      0.16500
+ATOM CZ   C       0.31390
+ATOM OH   OH     -0.55780
+ATOM HH   HO      0.40010
+ATOM CE2  CA     -0.22390
+ATOM HE2  HA      0.16500
+ATOM CD2  CA     -0.20020
+ATOM HD2  HA      0.17200
+ATOM C    C       0.61230
+ATOM O    O      -0.57130
+BOND N    CA  
+BOND N    H1  
+BOND N    H2  
+BOND N    H3  
+BOND CA   CB  
+BOND CA   C   
+BOND CA   HA  
+BOND CB   CG  
+BOND CB   HB2 
+BOND CB   HB3 
+BOND CG   CD1 
+BOND CG   CD2 
+BOND CD1  CE1 
+BOND CD1  HD1 
+BOND CE1  CZ  
+BOND CE1  HE1 
+BOND CZ   OH  
+BOND CZ   CE2 
+BOND OH   HH  
+BOND CE2  CD2 
+BOND CE2  HE2 
+BOND CD2  HD2 
+BOND C    O   
+BOND C    +N  
+IMPROPER CA   +N   C    O   
+IMPROPER CE1  CE2  CZ   OH  
+IMPROPER CD1  CD2  CG   CB  
+IMPROPER CG   CE2  CD2  HD2 
+IMPROPER CZ   CD2  CE2  HE2 
+IMPROPER CD1  CZ   CE1  HE1 
+IMPROPER CG   CE1  CD1  HD1 
+
+RESI CTYR -1.00
+ATOM N    N      -0.38210
+ATOM H    H       0.26810
+ATOM CA   CX     -0.20150
+ATOM HA   H1      0.10920
+ATOM CB   CT     -0.07520
+ATOM HB2  HC      0.04900
+ATOM HB3  HC      0.04900
+ATOM CG   CA      0.02430
+ATOM CD1  CA     -0.19220
+ATOM HD1  HA      0.17800
+ATOM CE1  CA     -0.24580
+ATOM HE1  HA      0.16730
+ATOM CZ   C       0.33950
+ATOM OH   OH     -0.56430
+ATOM HH   HO      0.40170
+ATOM CE2  CA     -0.24580
+ATOM HE2  HA      0.16730
+ATOM CD2  CA     -0.19220
+ATOM HD2  HA      0.17800
+ATOM C    C       0.78170
+ATOM O    O2     -0.80700
+ATOM OXT  O2     -0.80700
+BOND N    CA  
+BOND N    H   
+BOND CA   CB  
+BOND CA   C   
+BOND CA   HA  
+BOND CB   CG  
+BOND CB   HB2 
+BOND CB   HB3 
+BOND CG   CD1 
+BOND CG   CD2 
+BOND CD1  CE1 
+BOND CD1  HD1 
+BOND CE1  CZ  
+BOND CE1  HE1 
+BOND CZ   OH  
+BOND CZ   CE2 
+BOND OH   HH  
+BOND CE2  CD2 
+BOND CE2  HE2 
+BOND CD2  HD2 
+BOND C    O   
+BOND C    OXT 
+IMPROPER CA   O    C    OXT 
+IMPROPER CE1  CE2  CZ   OH  
+IMPROPER CD1  CD2  CG   CB  
+IMPROPER CG   CE2  CD2  HD2 
+IMPROPER CZ   CD2  CE2  HE2 
+IMPROPER CD1  CZ   CE1  HE1 
+IMPROPER CG   CE1  CD1  HD1 
+IMPROPER -C   CA   N    H   
+
+RESI NVAL 1.00
+ATOM N    N3      0.05770
+ATOM H1   H       0.22720
+ATOM H2   H       0.22720
+ATOM H3   H       0.22720
+ATOM CA   CX     -0.00540
+ATOM HA   HP      0.10930
+ATOM CB   3C      0.31960
+ATOM HB   HC     -0.02210
+ATOM CG1  CT     -0.31290
+ATOM HG11 HC      0.07350
+ATOM HG12 HC      0.07350
+ATOM HG13 HC      0.07350
+ATOM CG2  CT     -0.31290
+ATOM HG21 HC      0.07350
+ATOM HG22 HC      0.07350
+ATOM HG23 HC      0.07350
+ATOM C    C       0.61630
+ATOM O    O      -0.57220
+BOND N    CA  
+BOND N    H1  
+BOND N    H2  
+BOND N    H3  
+BOND CA   CB  
+BOND CA   C   
+BOND CA   HA  
+BOND CB   CG1 
+BOND CB   CG2 
+BOND CB   HB  
+BOND CG1  HG11
+BOND CG1  HG12
+BOND CG1  HG13
+BOND CG2  HG21
+BOND CG2  HG22
+BOND CG2  HG23
+BOND C    O   
+BOND C    +N  
+IMPROPER CA   +N   C    O   
+
+RESI CVAL -1.00
+ATOM N    N      -0.38210
+ATOM H    H       0.26810
+ATOM CA   CX     -0.34380
+ATOM HA   H1      0.14380
+ATOM CB   3C      0.19400
+ATOM HB   HC      0.03080
+ATOM CG1  CT     -0.30640
+ATOM HG11 HC      0.08360
+ATOM HG12 HC      0.08360
+ATOM HG13 HC      0.08360
+ATOM CG2  CT     -0.30640
+ATOM HG21 HC      0.08360
+ATOM HG22 HC      0.08360
+ATOM HG23 HC      0.08360
+ATOM C    C       0.83500
+ATOM O    O2     -0.81730
+ATOM OXT  O2     -0.81730
+BOND N    CA  
+BOND N    H   
+BOND CA   CB  
+BOND CA   C   
+BOND CA   HA  
+BOND CB   CG1 
+BOND CB   CG2 
+BOND CB   HB  
+BOND CG1  HG11
+BOND CG1  HG12
+BOND CG1  HG13
+BOND CG2  HG21
+BOND CG2  HG22
+BOND CG2  HG23
+BOND C    O   
+BOND C    OXT 
+IMPROPER CA   O    C    OXT 
+IMPROPER -C   CA   N    H   
+
+PRES DISU 0.00
+BOND 1SG  2SG 
+
+END

@@ -658,7 +658,12 @@ def read_charmm_switch_cutoffs() -> tuple[float, float]:
 
 
 def try_get_charmm_cutnb() -> float:
-    """Return live ``cutnb`` when ``nbonds_get_cutnb`` is linked; else NaN."""
+    """Return live ``cutnb`` when ``nbonds_get_cutnb`` is linked; else NaN.
+
+    c52a1 exports ``nbonds_get_cutnb`` as ``real(c_double)`` (a return value,
+    not an out-argument plus status code). ``pycharmm.nbonds.get_cutnb`` sets
+    that ``restype``.
+    """
     try:
         import pycharmm.lib as lib
         import pycharmm.nbonds as nbonds

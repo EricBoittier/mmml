@@ -2,7 +2,7 @@
 * Mike DEVEREUX (2017)
 *
 
-BOMLEV 0
+BOMLEV -1
 PRNLEVEL 2 NODE 0
 
 !================================================================
@@ -13,7 +13,7 @@ stream datadir.def
 set PATH @0
 
 READ RTF CARD        NAME -
- @PATH/zeroed.top  ! topology file with atomic charges set to zero 
+ @PATH/zeroed.top  ! topology file with atomic charges set to zero
                    ! (DCM module will handle electrostatics)
 
 READ PARAM CARD        NAME -
@@ -57,7 +57,7 @@ FAST OFF
 
 ! Make certain we have no charges on the solute atoms from the topology
 ! file:
-SCALAR CHARGE SET 0. SELE SEGI SOLU END 
+SCALAR CHARGE SET 0. SELE SEGI SOLU END
 PERT SELE SEGI SOLU END
 
 !================================================================
@@ -66,7 +66,7 @@ PERT SELE SEGI SOLU END
 
 COOR STAT
 CALC BOXX = (?XMAX - ?XMIN -1 )
-CRYSTAL DEFI CUBIC @BOXX @BOXX @BOXX 90. 90. 90.  
+CRYSTAL DEFI CUBIC @BOXX @BOXX @BOXX 90. 90. 90.
 CRYSTAL BUILD nope 0
 IMAGE BYRES XCEN 0.0 YCEN 0.0 ZCEN 0.0 SELE ALL END
 SHAKE BOND TOL 1.0E-8 PARA
@@ -108,7 +108,7 @@ DYNA LEAP STRT NSTEP 100 TIMESTEP 0.001                   -
    IEQFRQ 0  ICHECW 1  TWINDH 5.0  TWINDL -5.0          -
    CPT PCONst PREF 1.0 PGAMMA 20.0 PMASs 500            -
    TBATH 298.                                           -
-   IUNREAD -1  IUNWRITE -1  IUNCRD -1  NSAVCRD 0        
+   IUNREAD -1  IUNWRITE -1  IUNCRD -1  NSAVCRD 0
 
 
 STOP

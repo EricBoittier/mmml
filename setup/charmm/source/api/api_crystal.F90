@@ -3,7 +3,6 @@ module api_crystal
   implicit none
 contains
 
-#if KEY_LIBRARY == 1
   !> @brief initializes the constants for a new crystal from xtltyp, xucell and xtlref
   !
   ! Call only after setting xtltyp, xucell and xtlref
@@ -11,7 +10,8 @@ contains
   !> @return success
   !>            1 if success
   integer function crystal_init() result(success)
-    use image, only: cutxtl, imgfrq, xtlabc, xdim, xtltyp, xtlref, xucell
+    use image, only: cutxtl, imgfrq, xtlabc, xdim, xtltyp, xtlref, xucell, &
+         xtlrot, qorth
     use number, only: fmark, zero, thirty, ten
     use stream, only: prnlev, outu
     implicit none
@@ -33,6 +33,8 @@ contains
     call xtlaxs(xtlabc, xucell)
     call xtlsym(xtlabc, xucell, xtltyp, xdim, xtlref)
     call xtlmsr(xucell)
+    call xtlaxsacc(qorth,xtlrot,xucell,xtlabc)
+
     if (prnlev .ge. 2) then
        call prnxtld(outu, '    ', xtltyp, xucell, &
             .false., zero, .false., [zero])
@@ -279,19 +281,20 @@ contains
   integer(c_int) function crystal_define_octa(length) result(success) bind(c)
     use, intrinsic :: iso_c_binding, only: c_int, c_double
     use image, only: xtltyp, xucell
+    use consta, only: degrad
+    use chm_kinds
     implicit none
 
     real(c_double), intent(in) :: length
-
+ 
     integer :: i = 0
 
     success = 0
 
     xtltyp = 'OCTA'
-
     xucell(1:3) = length
-    xucell(4:6) = 109.4712206344907
-
+    xucell(4:6) = 109.4712206344907_chm_real
+    
     success = crystal_init()
   end function crystal_define_octa
 
@@ -316,9 +319,9 @@ contains
 
     xucell(1:3) = length
 
-    xucell(1) = 60.0
-    xucell(2) = 90.0
-    xucell(3) = 60.0
+    xucell(4) = 60.0
+    xucell(5) = 90.0
+    xucell(6) = 60.0
 
     success = crystal_init()
   end function crystal_define_rhdo
@@ -411,8 +414,8 @@ contains
 
     ! args
     real(c_double), intent(in) :: cutoff
-    integer(c_int), intent(in) :: nops
-    type(c_ptr), target, dimension(nops) :: sym_ops
+    integer(c_int), intent(in), value :: nops
+    type(c_ptr), intent(in) :: sym_ops(nops)
 
     ! locals
     character(kind=c_char, len=1), pointer, dimension(:) :: str
@@ -466,6 +469,76 @@ contains
     call xtlmsr(xucell)
   end function crystal_build
 
+  !=========================================================================
+  ! Query functions
+  !=========================================================================
+
+  !> @brief Get the current crystal type
+  !
+  !> @param[out] out_type 4-character crystal type string (CUBI, ORTH, MONO, etc.)
+  !> @return 1 if crystal is defined, 0 if not defined
+  integer(c_int) function crystaldata_get_type(out_type) bind(c) result(success)
+    use, intrinsic :: iso_c_binding, only: c_int, c_char
+    use image, only: xtltyp
+    implicit none
+
+    character(kind=c_char), intent(out) :: out_type(5)
+    integer :: i
+
+    success = 0
+
+    ! Check if crystal is defined
+    if (xtltyp == '    ') then
+       out_type(1:5) = c_char_' '
+       return
+    end if
+
+    ! Copy crystal type (4 chars + null terminator)
+    do i = 1, 4
+       out_type(i) = xtltyp(i:i)
+    end do
+    out_type(5) = c_char_''//char(0)
+
+    success = 1
+  end function crystaldata_get_type
+
+  !> @brief Check if crystal is currently defined
+  !
+  !> @return 1 if crystal is defined, 0 otherwise
+  integer(c_int) function crystaldata_is_defined() bind(c) result(defined)
+    use, intrinsic :: iso_c_binding, only: c_int
+    use image, only: xtltyp
+    implicit none
+
+    if (xtltyp == '    ') then
+       defined = 0
+    else
+       defined = 1
+    end if
+  end function crystaldata_is_defined
+
+  !> @brief Get the number of symmetry operations
+  !
+  !> @return Number of symmetry operations (XNSYMM)
+  integer(c_int) function crystaldata_get_nsymm() bind(c) result(nsymm)
+    use, intrinsic :: iso_c_binding, only: c_int
+    use image, only: xnsymm
+    implicit none
+
+    nsymm = xnsymm
+  end function crystaldata_get_nsymm
+
+  !> @brief Get the crystal cutoff distance
+  !
+  !> @return Crystal cutoff distance (CUTXTL)
+  real(c_double) function crystaldata_get_cutoff() bind(c) result(cutoff)
+    use, intrinsic :: iso_c_binding, only: c_double
+    use image, only: cutxtl
+    implicit none
+
+    cutoff = cutxtl
+  end function crystaldata_get_cutoff
+
   !> @brief clear crystal and periodic image state (``CRYSTAL FREE``).
   integer(c_int) function crystal_free() bind(c) result(success)
     use, intrinsic :: iso_c_binding, only: c_int
@@ -491,5 +564,4 @@ contains
     success = 1
   end function crystal_free
 
-#endif /* KEY_LIBRARY */
 end module api_crystal

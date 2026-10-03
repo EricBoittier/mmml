@@ -37,6 +37,8 @@ struct LeapState
   real_f *f;
   real *ism; // 1/sqrt(m)
   real *random;
+  real *lambda_friction_d;  // per-block friction for lambda DOFs (a2=exp(-g*dt))
+  real *lambda_noise_d;     // per-block noise for lambda DOFs (sqrt((1-a2^2)*kT)) - still divided by sqrt(m) at use
 };
 
 typedef enum ebox {
@@ -67,6 +69,7 @@ class State {
   real *positionBuffer_omp;
   real_f *forceBuffer;
   real_f *forceBuffer_d;
+  real_x *forceBufferX_d; 
   real_f *forceBackup_d; // For NPT
   real_f *forceBuffer_omp;
 
@@ -75,6 +78,15 @@ class State {
   real_e *energy_d;
   real_e *energyBackup_d;
   real_e *energy_omp;
+
+  // NaN detection flag (GPU-side, checked during recv_energy)
+  int *nanFlag_d;      // GPU flag: -1 is ok, >=0 is NaN detected (encoded atom index)
+  int nanFlag;         // CPU copy of flag
+
+  // Minimization buffers
+  real_e *grads2_d; // sd+sdfd, [0] is rms, [1] is max
+  real_e prevEnergy; // sd
+  real_v *minDirection_d; // sdfd
 
   // Spatial-Theta buffers
   real_v *velocityBuffer;
@@ -154,6 +166,9 @@ class State {
   void recv_position();
   void recv_lambda();
   void recv_energy();
+  bool recv_energy_safe();
+  void reset_nan_flag();
+  void check_nan_flag();
 
   void backup_position();
   void restore_position();
@@ -169,6 +184,11 @@ class State {
   void set_fd(System *system);
   void update(int step,System *system);
   void kinetic_energy(System *system);
+
+  // From update/minimize.cu
+  void min_init(System *system);
+  void min_dest(System *system);
+  bool min_move(int step,int nsteps,System *system);
 };
 
 #endif

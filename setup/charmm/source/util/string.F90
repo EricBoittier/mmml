@@ -1112,6 +1112,10 @@ contains
        ! Here we can put back to the parse string ST,STLEN
        ! Do this for ISEED only ???
        !
+       ! Old-iseed detection #1 (existing, narrow): slot 1 numeric AND
+       ! trailing non-numeric junk consumed.  Put the junk back into the
+       ! parse string so it isn't lost, and flag the caller (-100) so it
+       ! can broadcast the single value to every RNG slot.
        if(qoldiseed.and.(gtrmim_err < 0)) then
           ! Error -100 for old iseed
           gtrmim_err=-100
@@ -1134,6 +1138,26 @@ contains
              stlen = stlen + restoreindx
              st(1:stlen) = strestore0(1:stlen)
           endif
+       endif
+
+       ! Old-iseed detection #2: slot 1 was a number AND exactly one
+       ! value was provided (slots 2:m all empty).  The user almost
+       ! certainly meant the one value to seed every RNG slot (the
+       ! single-seed reproducibility case behind ``iseed N`` for
+       ! dynamics, MC, vibran, etc.).  Without this flag, slots 2:m
+       ! retain their clock-seeded defaults and the run is silently
+       ! non-reproducible -- LNilsson's broadcast in rngmodseeds was
+       ! supposed to handle this but only fired for case #1 above.
+       !
+       ! Only fire for EXACTLY one filled slot: if the user gave 2..m-1
+       ! values, treat as an explicit partial specification and leave
+       ! slots alone (the existing behavior for that ambiguous case).
+       if (qoldiseed .and. gtrmim_err == 0) then
+          rstindx = 0
+          do j = 1, m
+             if (lswdlen(j) > 0) rstindx = rstindx + 1
+          enddo
+          if (rstindx == 1) gtrmim_err = -100
        endif
 
        deallocate(lswdtch,lswdlen)

@@ -23,7 +23,7 @@ ENDIF
 ! ##EXEND
 ! ##ENDEX    (expand_pert)
 
-#else /* KEY_EXAND && KEY_PERT */
+#else /* KEY_EXPAND && KEY_PERT */
 
 #define NBONDA_P_FLAG 1
 #define NBONDA_NOPERT 1
@@ -33,4 +33,4 @@ ENDIF
 #undef NBONDA_P_FLAG
 #undef NBONDA_NOPERT
 
-#endif /* KEY_EXAND && KEY_PERT */
+#endif /* KEY_EXPAND && KEY_PERT */

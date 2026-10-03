@@ -1,4 +1,4 @@
-CHARMM Element doc/facts.info $Revision: 1.1.1.1 $
+CHARMM Element doc/facts.info $Revision: 1.2 $
 
 File: FACTS, Node: Top, Up: (doc/commands.info), Next: Description
 
@@ -10,6 +10,7 @@ File: FACTS, Node: Top, Up: (doc/commands.info), Next: Description
      Questions and comments regarding FACTS should be directed to 
      ------------------------------------------------------------
      Amedeo Caflisch (caflisch@bioc.uzh.ch)
+     Giuseppe Giangreco (g.giangreco@bioc.uzh.ch)
 
      Reference for FACTS:
      --------------------
@@ -79,6 +80,9 @@ as low dielectric region for the evaluation of the effective Born radii,
 and for calculation of the accessible surface.  Moreover, the screening of the 
 pairwise interactions between fixed and flexible atoms is taken into account
 by the generalized Born formula.  
+FACTS is compatible with the use of an external forces (PULL),
+whether a generic force (PULL FORCe) or a force due to an  electrical field
+(PULL EFIEld).
 
 5) Energy decomposition.
 FACTS is compatible with the BLOCK module. 
@@ -96,9 +100,19 @@ The FACTS polar and non-polar energy of the latest energy evaluation can be
 accessed with ?FCTP and ?FCTN, respectively.
 
 7) Parallel code.
-The FACTS algorithm has been parallelized in 2007 by F.Marchand
-(fmarchand@bioc.uzh.ch).
+The FACTS algorithm was parallelized in 2007 by the late Francois Marchand.
+The general command to parallelize makes use of default configuration and a 
+command-line tool provided by MPI implementations (like OpenMPI) to launch 
+parallel applications. An example using OpenMPI is:
 
+/path/to/mpirun -np 16 /path/to/charmm -i input_file > output_file &
+
+The parallelization efficiency scales with the system size. 
+It is suggested to run benchmarks on 1, 2, 4, 8, 16, 32, and 64 cores 
+(if available) before running production jobs.
+The LEAP integrator is required when running simulations in parallel. 
+More information for running CHARMM on parallel systems can be found 
+in the parallel documentation (~/charmm/doc/parallel.info).
 
 
 File: FACTS, Node: Syntax, Up: Top, Previous: Description, Next: Function
@@ -272,6 +286,7 @@ scalar wmain set 1.0 selection (type h*) end
 
 facts tcps 19 teps @diele TPSL
 
+
 ! ------------------------------------------------------------------
 
 
@@ -282,7 +297,7 @@ REMARK: Use the special GBSW CMAP parameter file "par_all22_prot_gbsw.inp"
         (~charmm/toppar/gbsw/par_all22_prot_gbsw.inp)
 
 ! ------------------------------------------------------------------
-
+!
 !  epsilon=1.0 and GAMMa=0.015
 !  Interpolate parameters for non-parameterized
 !  radii with the 'TAVW' option
@@ -309,11 +324,53 @@ scalar wmain = radius
 
 facts tcps 22 teps @diele gamm 0.015 TAVW
 
+
+! ------------------------------------------------------------------
+!
+!  Exemple added in Januar 2025 
+!  by Giuseppe Giangreco (g.giangreco@bioc.uzh.ch)
+!  Langevin dynamics simulations of (un)structured peptides
+!  Temperature coupling using Langevin thermostat
+!  Use of leap integrator when parallelization is performed
+!  epsilon=1.0, gamm=0.015, conc=0.150 and temp=@tempi
+
+set diele 1.0
+set conc  0.150
+set tempi @tempi
+
+nbond nbxmod 5 atom cdiel eps @diele shift vatom vdistance vswitch -
+      cutnb 14.0 ctofnb 12.0 ctonnb 10.0 e14fac 1.0 wmin 1.5
+
+scalar wmain = radius
+
+facts tcps 22 teps @diele gamm 0.015 tavw conc @conc temp @tempi
+
+...
+...
+
+! Production - NVT ensemble:
+open write unit 11 form name @md.rst
+open write unit 12 file name @md.dcd
+
+set tstruc @tempf
+set tbath  @tempf
+scalar fbeta set 0.15
+shake bonh para
+
+dynamics start langevin leap nstep @nstep timestep 0.002 -
+         ilbfrq @nilbfrq ntrfrq @nntrfrq iprfrq @niprfrq -
+         inbfrq -1 ihbfrq 0 ieqfrq 0 ihtfrq 0 imgfrq -1 -
+         tbath @tempf tstruc @tempf rbuffer 0.0 -
+         nsavc @nsavc isvfrq @nisvfrq -
+         ichecw 0 iunwrite 11 iuncrd 12
+
+!  End of example added by G. Giangreco in January 2025
 ! ------------------------------------------------------------------
 
 See also: test cases ~/charmm/test/c35test/facts_p19.inp
                      ~/charmm/test/c35test/facts_p22.inp
-
+                     ~/charmm/test/c49test/facts_p22_tau_pept.inp
+! facts_p22_tau_pept.inp added in January 2025
 
 
 File: FACTS, Node: Examples-II, Up: Top, Previous: Examples, Next: Top

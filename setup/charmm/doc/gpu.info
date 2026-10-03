@@ -8,7 +8,7 @@ File: Gpu, Node: Top, Up: (doc/commands.info), Next: Syntax
 increasingly popular. CHARMM is capable to use the GPU for
 calculations of non-bonded part of the energy and forces. The
 code in CHARMM is based on the GRAPE/CHARMM interface mostly
-implemented in the nbonds/grape.src file.
+implemented in the nbonds/grape.F90 file.
 
 * Menu:
 

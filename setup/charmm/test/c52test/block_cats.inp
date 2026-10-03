@@ -1,0 +1,246 @@
+* CHARMM c52 testcase block_cats.inp
+* BLOCK's CATS subcommand must reach BLOCK, and the top-level string
+* concatenation command must keep working.
+*
+
+! (A line holding nothing but a star ends the title block, so the rest of
+! this description is written as ordinary comments.)
+!
+! BLOCK> CATS selects the constrained atoms that lambda-dynamics is allowed
+! to scale (lambdadyn.F90, ldm_call_catsmsld_setup).  A top-level command
+! named CATS was added in c52 to concatenate strings (machio.F90, STRCAT).
+! BLOCK reads its subcommands by calling MISCOM first, so any word MISCOM
+! claims is taken away from BLOCK before BLOCK ever sees it, and for the
+! time both were called CATS a CATS line inside BLOCK ... END was silently
+! handled by STRCAT.  The concatenation command is now called STRC.
+!
+! Three things went wrong, none of them announced:
+!
+!   1. The constrained-atom selection never happened.  nires stayed 0 and
+!      iblcks was never filled, so lambda-dynamics scaled nothing.  A whole
+!      residue mutation set up this way ran with the wrong forces and
+!      finished without complaint.  That is the reason this matters.
+!
+!   2. STRCAT takes the first word after the keyword as a parameter name
+!      and concatenates the rest into it, so `CATS sele type C* end'
+!      defined a parameter called SELE, overwriting whatever was there.
+!
+!   3. Neither raised a warning, because STRCAT's syntax is satisfied by a
+!      name followed by at least one word.
+
+if ?block .ne. 1 then
+   echo BLOCK_CATS TESTCASE RESULT: SKIP
+   stop
+endif
+
+stream datadir.def
+
+! ---------------------------------------------------------------------
+! A small system: three residues of three atoms each.
+! ---------------------------------------------------------------------
+! Three because MSLD needs at least three blocks -- one for the
+! environment and two alchemical states at a site -- and checks 6 and 7 need
+! MSLD switched on for the CATS energy term to be evaluated at all.
+!
+! The two selections used below have to give different counts, or check 5
+! could not tell a working CATS from an intercepted one: the last CALL
+! picks the 3 atoms of residue 3, CATS picks the 2 hydrogens of residue 2,
+! and ?NSEL is left holding whichever of them ran last.
+
+read rtf card
+* minimal
+*
+   99  1
+mass 1  HT  1.00800 H
+mass 2  CT 12.01100 C
+
+resi ALA2  0.00
+group
+atom C1 CT  0.00
+atom H1 HT  0.00
+atom H2 HT  0.00
+bond C1 H1  C1 H2
+patch first none last none
+
+end
+
+read param card flex
+* minimal
+*
+atoms
+mass 1  HT  1.00800 H
+mass 2  CT 12.01100 C
+
+bonds
+CT HT  300.0 1.09
+
+angles
+HT CT HT  35.0 109.5
+
+nonbonded
+HT  0.0 -0.0220 1.32
+CT  0.0 -0.0200 2.28
+
+end
+
+read sequence ALA2 3
+generate MAIN setup warn first none last none
+
+read coor card
+* three molecules, far enough apart to be uninteresting
+*
+    9
+    1    1 ALA2 C1     0.00000   0.00000   0.00000 MAIN 1      0.00000
+    2    1 ALA2 H1     1.09000   0.00000   0.00000 MAIN 1      0.00000
+    3    1 ALA2 H2    -0.36000   1.02800   0.00000 MAIN 1      0.00000
+    4    2 ALA2 C1    10.00000   0.00000   0.00000 MAIN 2      0.00000
+    5    2 ALA2 H1    11.09000   0.00000   0.00000 MAIN 2      0.00000
+    6    2 ALA2 H2     9.64000   1.02800   0.00000 MAIN 2      0.00000
+    7    3 ALA2 C1    20.00000   0.00000   0.00000 MAIN 3      0.00000
+    8    3 ALA2 H1    21.09000   0.00000   0.00000 MAIN 3      0.00000
+    9    3 ALA2 H2    19.64000   1.02800   0.00000 MAIN 3      0.00000
+
+! ---------------------------------------------------------------------
+! Check 1: the top-level command still concatenates
+! ---------------------------------------------------------------------
+! This is what it was added for -- building a case-sensitive path out of
+! pieces -- and 34 SCC-DFTB testcases depend on it.  If a fix for the
+! collision goes too far and removes the command, this check says so.
+!
+! Both sides are built the same way, because an unquoted word in an `if'
+! is upper-cased by the parser while a parameter keeps the case it was
+! given; comparing against a bare literal would test the parser, not STRC.
+
+strc joined "abc" "def"
+strc expect "abcdef"
+set ok = 0
+if @joined eq @expect then set ok = 1
+@testcheck @ok 1 -0.5 BLOCK_CATS_STRC_CONCATENATES
+
+! ---------------------------------------------------------------------
+! Checks 2 and 3: quoting preserves case, and the quotes do not survive
+! ---------------------------------------------------------------------
+! These are the two halves of what the SCC-DFTB parameter paths rely on,
+! and they are checked separately so a failure says which one broke.
+!
+! Case: the quoted and unquoted forms of the same text must NOT agree.
+! The parser upper-cases the unquoted one, and stripping the quotes is
+! what keeps the other as written.  If both came through upper-cased,
+! every parameter path built with this command would silently become
+! upper case and fail to open.  (`set' upper-cases too, so there is no
+! way to write a case-preserved literal to compare against -- the
+! unquoted form is the only available reference.)
+!
+! Quotes: the same text given as one quoted word and as two must agree.
+! If the quotes were left in the value, the one-word form would be
+! "aBcD" and the two-word form "aB""cD", which differ.
+
+strc quoted "aBcD"
+strc bare aBcD
+set ok = 0
+if @quoted ne @bare then set ok = 1
+@testcheck @ok 1 -0.5 BLOCK_CATS_STRC_PRESERVES_CASE
+
+strc split "aB" "cD"
+set ok = 0
+if @quoted eq @split then set ok = 1
+@testcheck @ok 1 -0.5 BLOCK_CATS_STRC_STRIPS_QUOTES
+
+! ---------------------------------------------------------------------
+! Checks 4 and 5: CATS inside a BLOCK belongs to BLOCK
+! ---------------------------------------------------------------------
+! SELEGUARD is a sentinel in the parameter that STRCAT would overwrite.
+! If the CATS line reaches BLOCK the sentinel survives, because BLOCK's
+! CATS reads an atom selection and defines no parameters.  If MISCOM
+! claims the line first, STRCAT writes the concatenated remainder into
+! SELE and the sentinel is gone.
+!
+! ?NSEL is the other half of the same story and the one that matters:
+! BLOCK's CATS calls SELCTA, which publishes the number of atoms it
+! selected.  An intercepted CATS never calls it, so ?NSEL still holds the
+! 3 atoms of the last CALL rather than the 2 hydrogens CATS asked for.
+
+! One BLOCK setup serves checks 4, 5, 6 and 7.  CATS is the last thing in it
+! that makes a selection, so ?NSEL afterwards is the one CATS made.
+! `ldin' switches lambda dynamics on, and `SCAT K' gives the restraint a
+! force constant, which checks 6 and 7 need.
+
+set sele SELEGUARD
+
+! The order of the subcommands below is the order every working MSLD test
+! uses (c45test/domdec_minimize.inp, c51test/blade_msld_piecewise.inp) and
+! it matters: `lang' has to precede `ldin', which is what makes `ldin' read
+! the fifth number, and `ldbi' has to be given or the biasing-potential
+! count is never initialized.  SCAT and CATS come last so that the
+! selection CATS makes is the one ?NSEL reports.
+
+BLOCK 3
+   CALL 2 SELE resid 2 END
+   CALL 3 SELE resid 3 END
+   qldm theta
+   lang temp 298.0
+   ldin 1 1.0 0.0 5.0 0.0 5.0
+   ldin 2 0.5 0.0 5.0 0.0 5.0
+   ldin 3 0.5 0.0 5.0 0.0 5.0
+   excl 2 3
+   rmla bond thet dihe impr
+   msld 0 1 1
+   msma
+   ldbi 0
+   SCAT ON
+   SCAT K 10.0
+   CATS sele resid 2 .and. type H* end
+END
+
+set seleafter @sele
+set nselafter ?NSEL
+
+set ok = 0
+if @seleafter eq SELEGUARD then set ok = 1
+@testcheck @ok 1 -0.5 BLOCK_CATS_NOT_INTERCEPTED
+
+@testcheck @nselafter 2 -0.5 BLOCK_CATS_SELECTED_ITS_OWN_ATOMS
+
+! ---------------------------------------------------------------------
+! Checks 6 and 7: the selection reaches the energy
+! ---------------------------------------------------------------------
+! The checks above show CATS was parsed by BLOCK.  This one shows the
+! result is actually used.  msld_add_restraints (lambdadyn.F90) harmonically
+! restrains every atom CATS selected to the centre of mass of its group, and
+! reports the total in the CATS energy term.  It loops over nires groups, so
+! an intercepted CATS leaves nires at 0, the loop body never runs, and the
+! CATS energy is identically zero however the system moves.
+!
+! No reference value is needed or wanted: the restraint is 0.5*k*|r-com|^2
+! summed over the selected atoms, which is positive for any selection whose
+! atoms are not all at one point, and exactly zero when the selection never
+! happened.  Asserting "greater than zero" is the whole of the physics and
+! holds whatever the geometry and the force constant are.
+
+energy
+set ecats0 = ?CATS
+
+! A short run, so the term is exercised through the integrator as well as
+! through a single energy call.  Lambda dynamics insists on a unit to write
+! the lambda trajectory to, so it gets one in the scratch directory.
+open unit 24 write file name @9block_cats.lmd
+
+dynamics leap start nstep 20 timestep 0.001 -
+   nprint 10 iprfrq 20 -
+   firstt 100.0 finalt 100.0 iasvel 1 iseed 314159 -
+   inbfrq 5 ihbfrq 0 -
+   iunldm 24 nsavl 10 -
+   iunread -1 iunwrite -1 iuncrd -1 iunvel -1 nsavc 0 nsavv 0
+
+energy
+set ecats1 = ?CATS
+
+set ok = 0
+if @ecats0 gt 0.0 then set ok = 1
+@testcheck @ok 1 -0.5 BLOCK_CATS_ENERGY_IS_NONZERO
+
+set ok = 0
+if @ecats1 gt 0.0 then set ok = 1
+@testcheck @ok 1 -0.5 BLOCK_CATS_ENERGY_SURVIVES_DYNAMICS
+
+stop

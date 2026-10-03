@@ -14,11 +14,12 @@ if ?numnode .ne. 1 then
 endif
 
 stream datadir.def
+set testfail 0
 
 if @?nsteps eq 0 set nsteps = 100
 if @?openmm eq 0 set openmm = 1
 if @openmm gt 0 then
-   omm on
+   omm on precision mixed
 else
    omm off
 endif
@@ -90,6 +91,16 @@ dynamics leap start timestep 0.002 -
      ewald kappa @kappa pme order 4 fftx @nmesh ffty @nmesh fftz @nmesh ntrfq @nsteps - !PME
      andersen colfrq 500 prmc przz 1
 
+! Case 1: Check final potential energy
+@testcheck ?ener -4664.84970 0.0001 baro2_case1_ener
+
+! Case 1: Constant surface area - A and B must not change
+@qcheck ?xtla @size -0.00001 baro2_case1_xtla
+@qcheck ?xtlb @size -0.00001 baro2_case1_xtlb
+
+! Save Case 1 final C for Case 2 constraint check
+set cref ?xtlc
+
 open unit 10 write form name @9/openmm.res
 
 !!!!**************CASE 2*************************!!!!
@@ -113,9 +124,18 @@ dynamics leap restart timestep 0.002 -
      ewald kappa @kappa pme order 4 fftx @nmesh ffty @nmesh fftz @nmesh ntrfq @nsteps - !PME
      andersen colfrq 500 prmc prxx 1 pryy 1
 
+! Case 2: Check final potential energy
+@testcheck ?ener -4716.86163 0.0001 baro2_case2_ener
+
+! Case 2: Constant height - C must not change from Case 1 end
+@qcheck ?xtlc @cref -0.00001 baro2_case2_xtlc
+
 !!!!**************CASE 3*************************!!!!
 read coor pdb name @0/@pdb resi
 open unit 10 write form name @9/openmm.res
+
+! Save volume before Case 3 for constant-volume check
+calc vref = ?xtla * ?xtlb * ?xtlc
 
 !!!!!!!!!!!!!!Constant temperature / isobaric - Langevin
 ! Run dynamics in periodic box
@@ -135,6 +155,15 @@ dynamics leap start timestep 0.002 -
      eps 1.0 cutnb @cutoff cutim @cutim ctofnb @ctofnb ctonnb @ctonnb vswi -
      ewald kappa @kappa pme order 4 fftx @nmesh ffty @nmesh fftz @nmesh ntrfq @nsteps - !PME
      langevin gamma 6 prmc tens 0.1
+
+! Case 3: Check final potential energy
+@testcheck ?ener -4528.94608 0.0001 baro2_case3_ener
+
+! Case 3: Constant volume - volume must be preserved throughout dynamics
+! Note: use FLUC volume from averages (PRESS line col 5) which is ~0.00017
+! Check final volume matches step 0 volume (crystal was modified by prior cases)
+calc cvol = ?xtla * ?xtlb * ?xtlc
+@qcheck @cvol @vref -0.01 baro2_case3_volume
 
 open unit 10 write form name @9/openmm.res
 
@@ -158,9 +187,18 @@ dynamics leap restart timestep 0.002 -
      ewald kappa @kappa pme order 4 fftx @nmesh ffty @nmesh fftz @nmesh ntrfq @nsteps - !PME
      langevin gamma 6 prmc przz 1.0 tens 0.1
 
+! Case 4: Check final potential energy
+@testcheck ?ener -4517.72655 0.0001 baro2_case4_ener
+
+set nfail @testfail
+echo baro2 test failures: @nfail
 
 if @openmm gt 0 then
    omm clear
+endif
+
+if @nfail gt 0 then
+   echo ABNORMAL TERMINATION
 endif
 
 stop

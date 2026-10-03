@@ -64,13 +64,10 @@ static const char *curandGetErrorString(curandStatus_t error)
 
 RngGPU::RngGPU()
 {
-  unsigned long long seed = time(NULL);
-
   /* Create pseudo-random number generator */
   curandCheck(curandCreateGenerator(&gen, CURAND_RNG_PSEUDO_MTGP32));
   
-  /* Set seed */
-  curandCheck(curandSetPseudoRandomGeneratorSeed(gen, seed));
+  seed(time(NULL));
 
   rngStream=NULL;
   curandCheck(curandSetStream(gen,rngStream));
@@ -79,6 +76,11 @@ RngGPU::RngGPU()
 RngGPU::~RngGPU()
 {
     curandCheck(curandDestroyGenerator(gen));
+}
+
+void RngGPU::seed(unsigned long long seed)
+{
+  curandCheck(curandSetPseudoRandomGeneratorSeed(gen, seed));
 }
 
 // Generate n random numbers in the pointer p
@@ -111,19 +113,23 @@ void RngGPU::rand_uniform(int n,real *p,cudaStream_t s)
 #include <curand_mtgp32dc_p_11213.h>
 
 #include "rng/rng_gpu.h"
+#include "main/gpu_check.h"
 
 void RngGPU::setup()
 {
-  long long seed=time(NULL);
-
   // 200 is limit, each of the 200 states can have up to 256 threads
-  cudaMalloc((void**)&devStates, 200*sizeof(curandStateMtgp32_t));
+  gpuCheck(cudaMalloc((void**)&devStates, 200*sizeof(curandStateMtgp32_t)));
   /* Allocate space for MTGP kernel parameters */
-  cudaMalloc((void**)&devParams, sizeof(mtgp32_kernel_params_t));
+  gpuCheck(cudaMalloc((void**)&devParams, sizeof(mtgp32_kernel_params_t)));
   
   /* Reformat from predefined parameter sets to kernel format, */
   /* and copy kernel parameters to device memory               */
   curandMakeMTGP32Constants(mtgp32dc_params_fast_11213, devParams);
+  seed(time(NULL));
+}
+
+void RngGPU::seed(unsigned long long seed)
+{
   /* Initialize one state per thread block */
   curandMakeMTGP32KernelState(devStates, 
     mtgp32dc_params_fast_11213, devParams, 200, seed);
@@ -153,6 +159,7 @@ void RngGPU::rand_normal(int n,real *p,cudaStream_t s)
   int nblocks=(n+256-1)/256;
   nblocks=(nblocks>200)?200:nblocks;
   kernel_normal<<<nblocks,256,0,s>>>(devStates,n,p);
+  gpuCheck(cudaGetLastError());
 }
 
 // Generate n random numbers in the pointer p
@@ -161,6 +168,7 @@ void RngGPU::rand_uniform(int n,real *p,cudaStream_t s)
   int nblocks=(n+256-1)/256;
   nblocks=(nblocks>200)?200:nblocks;
   kernel_uniform<<<nblocks,256,0,s>>>(devStates,n,p);
+  gpuCheck(cudaGetLastError());
 }
 
 #endif

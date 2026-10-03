@@ -16,10 +16,11 @@ pushd $newtree >&/dev/null
 ln -s $myroot/install.com .
 ln -s $myroot/configure .
 ln -s $myroot/CMakeLists.txt .
-if ( -d $myroot/.git ) ln -s $myroot/.git .
-mkdir exec lib build test
+if ( -d $myroot/doc ) ln -s $myroot/doc .
+if ( -d $myroot/toppar ) ln -s $myroot/toppar .
 echo "Making link $newtree/build/UNX"
-ln -s $myroot/build/UNX build/
+
+mkdir exec lib build test
 
 foreach i (source tool)
    echo "Making link $newtree/$i"

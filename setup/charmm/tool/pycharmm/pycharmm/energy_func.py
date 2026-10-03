@@ -18,7 +18,7 @@
 """
 
 import ctypes
-import pycharmm.lib as lib
+from pycharmm.loader import lib
 
 
 class EnergyFunc:
@@ -83,11 +83,11 @@ class EnergyFunc:
         if py_func:
             self.energy_func = self.func_type(py_func)
 
-        lib.charmm.func_set(self.energy_func)
+        lib.func_set(self.energy_func)
         self.is_set = True
 
     def unset_func(self):
         """Just store the function and do not run it during energy calculations
         """
-        lib.charmm.func_unset()
+        lib.func_unset()
         self.is_set = False

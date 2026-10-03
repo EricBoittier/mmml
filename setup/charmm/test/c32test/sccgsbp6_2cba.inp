@@ -1,0 +1,168 @@
+* CHARMM 32 testcase sccgsbp6_2cba.inp
+* .Test that GSBP refuses to evaluate SCC-DFTB against a static external
+* .field that does not exist, instead of reading it anyway.  This is what
+* .bucknerj/dev#60 died of.  Same carbonic anhydrase system as
+* .sccgsbp4_2cba.inp, no dynamics.
+* .Author: Josh Buckner, 2026
+*
+
+IF ?SCCDFTB .NE. 1 THEN
+ echo "c32test/sccgsbp6_2cba> SCCDFTB Test NOT performed."
+ STOP
+endif
+
+IF ?QGSBP .NE. 1 THEN
+ echo "c32test/sccgsbp6_2cba> GSBP Test NOT performed."
+ STOP
+endif
+
+bomb -5
+
+! variables
+stream datadir.def
+
+! SCC-DFTB needs SCCDFTB_DATA pointing at a directory holding this test's
+! parameter file.  `genv' on an unset variable is a level-0 warning, which is
+! fatal at the default BOMLEV, so lower BOMLEV across the call and self-skip
+! when the data has not been provisioned here.  The file check matters as
+! well: SCCDFTB_DATA can be set while this particular file is absent, and
+! CHARMM then dies part way through reading parameters with no termination
+! line at all.
+set sccdftbdir UNSET_SCCDFTB_DATA
+set oldbomlev ?bomlev
+bomlev -5
+genv sccdftbdir SCCDFTB_DATA
+bomlev @oldbomlev
+if @sccdftbdir eq UNSET_SCCDFTB_DATA then
+   echo SCCGSBP6_2CBA TESTCASE RESULT: SKIP
+   stop
+endif
+strc sccdat @sccdftbdir "/sccdftb_ONCHZN.dat"
+bomlev -5
+open unit 98 read form name @sccdat
+if ?iostat .ne. 1 then
+   echo SCCGSBP6_2CBA TESTCASE RESULT: SKIP
+   stop
+endif
+close unit 98
+bomlev @oldbomlev
+
+set j    2cba
+set k    2cba_gsbp
+! Build what this testcase reads.  The scratch directory is cleared before
+! every testcase, so nothing another testcase wrote is here.  This writes a
+! PHIX file as well, which this testcase then deliberately does not read --
+! it is the shared setup, and generating MIJ on its own would not be
+! cheaper.
+stream @0sccgsbp_matrices.str
+stream @0sccgsbp_system.str
+stream @0sccgsbp_cons.str
+
+OPEN UNIT 21 NAME @0top_ca.inp READ FORM
+READ RTF card UNIT 21
+CLOSE UNIT 21
+
+OPEN UNIT 22 NAME @0par_ca.inp READ FORM
+READ PARA card UNIT 22
+CLOSE UNIT 22
+
+OPEN UNIT 3 NAME @9@k_sb.psf READ  FORM
+READ  PSF CARD UNIT 3
+CLOSE UNIT 3
+
+OPEN UNIT 3 NAME @9@k_sb.crd READ FORM
+READ  COOR CARD UNIT 3
+CLOSE UNIT 3
+
+NBONDS  GROUP  SWITCH CDIE  VDW VSWI  EXTEND GRAD QUAD -
+        CUTNB 13.0  CTOFNB 12.0 CTONNB 8.0  WMIN 1.5  EPS 1.0 -
+        inbfrq -1
+
+set rsphere 20.0              ! radius of the spherical region of interest
+
+! center of active site (at zinc atom)
+set xcen   0.0
+set ycen   0.0
+set zcen   0.0
+
+define INNER   sele POINT @xcen @ycen @zcen CUT @rsphere end
+
+! We don't need to consider the bare Coulombic interactions between IR and OR
+! because it is already incorporated into PHIX.
+SCALAR CHARGE SET 0.0 sele .not. INNER end
+
+! -------------- SCC section ----------------
+define qm sele (segid 2CBA .and. -
+! imidazole groups from nearby histidine residues
+       (resid 94 .or. resid 92 .or. resid 117) .and. .not. -
+       (type CA .or. type C .or. type N .or. type O -
+        .or. type HN .or. type HA)) -
+! link atoms
+       .or. (segid 2CBA .and. type QQ*) .or. -
+! Zn and Zn-bound water
+       (segid SOLV .and. resid 1) .or. (segid ZNAT .and. type ZN) SHOW end
+
+scalar WMAIN set 1.0 sele (qm) .and. type O*  SHOW end
+scalar WMAIN set 2.0 sele (qm) .and. type N*  SHOW end
+scalar WMAIN set 3.0 sele (qm) .and. type C*  SHOW end
+scalar WMAIN set 4.0 sele (qm) .and. type H*  SHOW end
+scalar WMAIN set 4.0 sele (qm) .and. type QQ*  SHOW end
+scalar WMAIN set 5.0 sele (qm) .and. type ZN*  SHOW end
+
+SCCDFTB remove CHRG +2 SELE qm END TEMP 0.00 SCFT 0.00000001 mull DATF @sccdat
+
+! Single point energy must be performed in order to use sorting with SCCGSBP.
+energy
+
+!Now set GSBP up with the reaction-field matrices and nothing else.
+!
+! Note what is deliberately absent: no READ PHIX.  GSBP is perfectly willing
+! to be set up this way, and the MM side of it asks whether the static
+! external field is there before reading it -- QGAB and QPHIX gate the call
+! to RFORCE2.  The SCC-DFTB side asked nothing, and handed the array that was
+! never allocated straight to the interpolation in SCCGSBP0, which reads the
+! potential at the eight grid points around every QM atom.  It arrives there
+! as an assumed-size dummy carrying no bounds, so there was nothing to catch
+! it and the run ended in a segmentation fault with no message of any kind.
+!
+! The same state is reached the way the report reached it -- leaving a GSBP
+! setup in place across a change of system, so that the allocation block in
+! PREP2 is skipped -- but that route needs a second molecule and a stream
+! file that forgets to reset.  Asking for the boundary potential without the
+! field it is read from is the same question in one command.
+PBEQ
+
+OPEN READ FILE UNIT 50 NAME @9@k_MIJ2.dat
+READ MIJ UNIT 50
+CLOSE UNIT 50
+
+PRNLEV 8
+GSBP SPHERE -
+     NMPOL  2        MAXNPOL 4     -
+     SRDIST @rsphere RRXCEN  @xcen RRYCEN @ycen RRZCEN @zcen
+PRNLEV 5
+END
+
+SKIP All Excl QMEL ELEC GSBP
+
+! Demote the refusal so the run survives it and this testcase can say what it
+! did.  This is also the case the refusal has to be written for: a guard that
+! only called WRNDIE would be demoted here too and carry straight on into the
+! read it exists to prevent.
+bomlev -6
+ENER
+bomlev @oldbomlev
+
+! No field to read, so no GSBP energy.  This zero is the refusal and nothing
+! else: the atoms are at their own coordinates and inside the region of
+! interest, so the reaction-field half would otherwise contribute.  Without
+! the refusal the run does not reach the next line at all.
+@testcheck ?gsbp 0.0 -0.000001 sccgsbp6_2cba_no_field
+
+SKIP NONE
+
+set cfinal = FAIL
+if @testfail eq 0 then set cfinal = PASS
+echo SCCGSBP6_2CBA TESTCASE RESULT: @cfinal
+
+STOP

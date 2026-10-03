@@ -32,7 +32,7 @@
 #if (KEY_MULTICOM==1)
       use multicom_aux; 
 #endif
-      use mpi
+      use mpi_f08
       use parallel, only: psnd4, psnd8
 !
 !
@@ -74,9 +74,12 @@
        subroutine hypercube_allgatherv(message,count,displ,type, &
      & comm, ierror, rank, size)
       use chm_kinds
+      use mpi_f08
        real(chm_real) :: message(*)
        integer :: ierror
-       integer*4 :: comm, rank, size, type, count(size), displ(size)
+       TYPE(MPI_Comm) :: comm
+       TYPE(MPI_Datatype) :: type
+       integer*4 :: rank, size, count(size), displ(size)
        end subroutine hypercube_allgatherv
       end interface
 !

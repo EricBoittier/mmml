@@ -62,7 +62,7 @@ The motif is represented in one line using the following format:
 E.g. for protonated water dimer the file contains the following line:
      1     7     4   NLM
 
-‘D’ is the donor atom, ‘A’ is the acceptor atom.
+'D' is the donor atom, 'A' is the acceptor atom.
 
 The type of proton transfer potential should be chosen from one of the 
 following:

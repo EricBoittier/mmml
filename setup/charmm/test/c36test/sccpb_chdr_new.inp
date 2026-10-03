@@ -12,6 +12,46 @@ bomb -5
 
 stream datadir.def
 
+! SCC-DFTB needs SCCDFTB_DATA pointing at a directory holding this test's
+! parameter file.  `genv' on an unset variable is a level-0 warning, which is
+! fatal at the default BOMLEV, so lower BOMLEV across the call and self-skip
+! when the data has not been provisioned here.  The file check matters as
+! well: SCCDFTB_DATA can be set while this particular file is absent, and
+! CHARMM then dies part way through reading parameters with no termination
+! line at all.
+set sccdftbdir UNSET_SCCDFTB_DATA
+set oldbomlev ?bomlev
+bomlev -5
+genv sccdftbdir SCCDFTB_DATA
+bomlev @oldbomlev
+if @sccdftbdir eq UNSET_SCCDFTB_DATA then
+   echo SCCPB_CHDR_NEW TESTCASE RESULT: SKIP
+   stop
+endif
+strc sccdat @sccdftbdir "/sccdftb_ONCH.dat"
+bomlev -5
+open unit 98 read form name @sccdat
+if ?iostat .ne. 1 then
+   echo SCCPB_CHDR_NEW TESTCASE RESULT: SKIP
+   stop
+endif
+close unit 98
+bomlev @oldbomlev
+
+! The charge-dependent radii this testcase needs are read from
+! @0chrg_radius_scc.dat further down (the SOLVE command under PBEQ).  That
+! file is not in the repository -- no copy of it exists anywhere in the tree
+! -- so check for it here rather than reading off the end of nothing halfway
+! through a Poisson-Boltzmann calculation.
+bomlev -5
+open unit 97 read form name @0chrg_radius_scc.dat
+if ?iostat .ne. 1 then
+   echo SCCPB_CHDR_NEW TESTCASE RESULT: SKIP
+   stop
+endif
+close unit 97
+bomlev @oldbomlev
+
 OPEN UNIT 21 NAME @0top_all22_model.inp READ FORM
 READ RTF card UNIT 21
 CLOSE UNIT 21
@@ -50,7 +90,7 @@ scalar WMAIN set 2.0 sele (qm) .and. type N*  end
 scalar WMAIN set 3.0 sele (qm) .and. type C*  end
 scalar WMAIN set 4.0 sele (qm) .and. type H*  end
 
-SCCDftb remove CHRG 0 sele qm end TEMP 0.00 SCFT 0.00000001  
+SCCDftb remove CHRG 0 sele qm end TEMP 0.00 SCFT 0.00000001 DATF @sccdat
 
 mini abnr nstep 10000 tolgd 0.01
 
@@ -60,13 +100,13 @@ prnlev 5
 !-----------------------------------------------------------------------
 !scale the radius of non-hydrogen atoms for smoothing boundary calculation
 !Nina,Im,Roux, Biophysical Chemistry 78 (1999) 89-96
-!sw  0.1    0.2    0.3    0.4    0.5    0.6    0.7    0.8    0.9    1.0 
+!sw  0.1    0.2    0.3    0.4    0.5    0.6    0.7    0.8    0.9    1.0
 !a   0.979  0.965  0.952  0.939  0.927  0.914  0.901  0.888  0.875  0.861
 set factor 0.952
 set sw     0.3
 
 scalar wmain = radius
-!stream @0PARM_SCCPB.DAT   !this is not really used in the charge dependent scheme 
+!stream @0PARM_SCCPB.DAT   !this is not really used in the charge dependent scheme
 scalar wmain set     2.03900  sele type  C*          end 
 scalar wmain set     1.01500  sele type  H*          end 
 scalar wmain set     1.72600  sele type  O*          end 

@@ -868,6 +868,9 @@ SUBROUTINE ZMERGE(WSUBSP,NPSUBS,LOCONF,HICONF, &
 #endif
   use heurist,only:updeci
   use nbexcl,only:makitc
+#if KEY_PARALLEL==1
+  use mpi_f08
+#endif
   !
   implicit none
   !  passed variables
@@ -999,7 +1002,6 @@ SUBROUTINE ZMERGE(WSUBSP,NPSUBS,LOCONF,HICONF, &
   integer,dimension(:),allocatable :: SRCHDLST,DFSRCHED
   real(chm_real),dimension(:),allocatable :: SRCHDVAL
   real(chm_real),allocatable,dimension(:) :: SENDMIN
-  include 'mpif.h'
   logical :: QZDATCOMM
   integer :: NSECTS,MYSECT
 #endif /*paradecl2*/
@@ -3700,17 +3702,15 @@ end SUBROUTINE WRITEIMINOR
  use nbndcc_utilb,only: parstoperr 
  use paral4,only: po_comm_r,po_comm_i
  use cpustruc, only: HEADCOM,HOODCOM,IMYKEYP,NUMNODH
- implicit none 
+ use mpi_f08
+ implicit none
  character(len=*),intent(in) :: LINE
  integer,intent(in) :: LENGTH
  integer :: NIGCOM,NGCOM,NALGA,NIALGA,NPOST,NIPOST
- integer,dimension(:),allocatable :: ITEST,IREC 
+ integer,dimension(:),allocatable :: ITEST,IREC
  real(chm_real),dimension(:),allocatable :: RTEST,RREC
  integer :: II,SENDSZ,DATSIZ,TOTSIZ,JJ,START
  logical :: QPRINT
-#if KEY_PARALLEL==1
- include 'mpif.h' 
-#endif
  integer :: COUNT,COUNT_RATE,COUNT_MAX,COUNT2,ierr
 
  NIGCOM = GTRMI(LINE,LENGTH,'IGCO',0)

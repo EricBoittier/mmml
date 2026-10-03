@@ -29,10 +29,13 @@ Functions
 
 import ctypes
 import numpy as np
-#import pyopencl as cl
+# pyopencl is an optional dependency, imported on demand by
+# _require_pyopencl() rather than here: importing it at module scope would
+# make `import pycharmm.grid` fail for everyone who does not have it, and
+# only the OpenCL grid routines need it.
 
 import pycharmm
-import pycharmm.lib as lib
+from pycharmm.loader import lib
 import pycharmm.psf as psf
 import pycharmm.read as read
 import pycharmm.coor as coor
@@ -185,7 +188,30 @@ class Grid(ctypes.Structure):
         int
             one indicates success, any other value indicates failure
 
+        Notes
+        -----
+        Grid generation narrows CHARMM's energy-term mask to van der Waals
+        and electrostatics while it evaluates the probe energies. That mask
+        is global process state, so it is restored before returning, even
+        if generation fails.
         """
+        self._eterm_mask_narrowed = False
+        try:
+            return self._generate()
+        finally:
+            if self._eterm_mask_narrowed:
+                # Restore the default all-terms-enabled mask. SKIPE INIT
+                # assigns QETERM(1:LENENT) wholesale and returns without
+                # printing the "SKIPE> The following energy terms will be
+                # computed" listing, so it neither disturbs reference
+                # output nor depends on a term having been named -- unlike
+                # a by-name restore, which cannot reach terms that are
+                # named lazily on first use.
+                lingo.charmm_script('skipe init')
+                self._eterm_mask_narrowed = False
+
+    def _generate(self):
+        """Body of :meth:`generate`; see there. Mutates the energy-term mask."""
         status = False
         if self.gridFile is None:
             if self.flag_form:
@@ -219,7 +245,7 @@ class Grid(ctypes.Structure):
 
         ## Decide whether or use GPU or CPU to perform grid generation
         try:
-            if callable(lib.charmm.grid_fftgen):
+            if callable(lib.grid_fftgen_c_interface):
                 if self.flag_gpu:
                     print("Use GPU to generate grids")
                     tmp_flag_gpu_gen = True
@@ -250,6 +276,7 @@ class Grid(ctypes.Structure):
             fix_atom = pycharmm.SelectAtoms(seg_id = self.probes).__invert__()
             cons_fix.setup(fix_atom)
             lingo.charmm_script('skipe all excl vdw elec')
+            self._eterm_mask_narrowed = True
             energy.show()
 
         if self.nbond_opt is None:
@@ -295,7 +322,7 @@ class Grid(ctypes.Structure):
             c_rdie = (ctypes.c_bool)(self.flag_rdie)
    
             ## Grid calculation with CHARMM library (api_grid.F90)
-            status = lib.charmm.grid_fftgen(ctypes.byref(c_islct), 
+            status = lib.grid_fftgen_c_interface(ctypes.byref(c_islct), 
                                             ctypes.byref(c_rdie), 
                                             ctypes.byref(c_dielec),
                                             ctypes.byref(c_natom), 
@@ -350,7 +377,7 @@ class Grid(ctypes.Structure):
             c_gridRadii = (ctypes.c_double * len(probes))(*probes)
 
             ## Grid calculation with CHARMM library (api_grid.F90)
-            status = lib.charmm.grid_generate(ctypes.byref(c_islct), 
+            status = lib.grid_generate(ctypes.byref(c_islct), 
                                               ctypes.byref(c_jslct), 
                                               ctypes.byref(c_gridslct), 
                                               ctypes.byref(c_natom), 
@@ -375,7 +402,7 @@ class Grid(ctypes.Structure):
 
         ## Generation result
         grid_file.close()
-        lib.charmm.grid_clear()
+        lib.grid_clear()
         return status
 
 class CDOCKER(Grid):
@@ -434,7 +461,7 @@ class CDOCKER(Grid):
         c_gridSlct = (ctypes.c_int * len(GridSlct))(*GridSlct)
  
         ## Use CHARMM API function to read in the grid 
-        status = lib.charmm.grid_read(ctypes.byref(c_natom),
+        status = lib.grid_read(ctypes.byref(c_natom),
                                       ctypes.byref(c_NAtmGrd),
                                       ctypes.byref(c_gridU),
                                       ctypes.byref(c_gridSlct),
@@ -470,7 +497,7 @@ class CDOCKER(Grid):
         c_gridSlct = (ctypes.c_int * len(GridSlct))(*GridSlct)
  
         ## Use CHARMM API function to set grid on
-        status = lib.charmm.grid_on(ctypes.byref(c_gridSlct),
+        status = lib.grid_on(ctypes.byref(c_gridSlct),
                                     ctypes.byref(c_gridHBon),
                                     ctypes.byref(c_NAtmGrd),
                                     ctypes.byref(c_natom))
@@ -485,7 +512,7 @@ class CDOCKER(Grid):
         status : int
             one indicates success, any other value indicates failure
         """
-        status = lib.charmm.grid_off()
+        status = lib.grid_off()
         status = bool(status)
         return status 
 
@@ -497,7 +524,7 @@ class CDOCKER(Grid):
         status: int
             one indicates success, any other value indicates failure
         """
-        status = lib.charmm.grid_clear()
+        status = lib.grid_clear()
         status = bool(status)
         return status 
 
@@ -609,7 +636,7 @@ class OMMD(Grid):
         ## Prepare 
         natom = psf.get_natom()
 
-        if self.fix_select == None:
+        if self.fix_select is None:
             in_fix_select = np.zeros(natom).astype(int)
         else:
             fix_atoms = np.asarray(list(self.fix_select)) 
@@ -653,7 +680,7 @@ class OMMD(Grid):
         c_flexSelect = (ctypes.c_int * natom)(*in_flex_select)
  
         ## Grid calculation with CHARMM library (api_grid.F90)
-        status = lib.charmm.ommd_create(ctypes.byref(c_softU), 
+        status = lib.ommd_create(ctypes.byref(c_softU), 
                                         ctypes.byref(c_hardU), 
                                         ctypes.byref(c_form), 
                                         ctypes.byref(c_grhbon), 
@@ -673,7 +700,7 @@ class OMMD(Grid):
                  one indicates success, any other value indicates failure
         """
         c_grhbon = (ctypes.c_bool)(self.flag_grhb)
-        status = lib.charmm.ommd_energy(ctypes.byref(c_grhbon))
+        status = lib.ommd_energy(ctypes.byref(c_grhbon))
         status = bool(status)
         return status 
 
@@ -691,7 +718,7 @@ class OMMD(Grid):
             one indicates success, any other value indicates failure
         """
         c_idxCopy = ctypes.c_int(idxCopy) 
-        status = lib.charmm.ommd_set_position(ctypes.byref(c_idxCopy))
+        status = lib.ommd_set_position(ctypes.byref(c_idxCopy))
         status = bool(status)
         return status 
 
@@ -709,7 +736,7 @@ class OMMD(Grid):
             one indicates success, any other value indicates failure
         """
         c_idxCopy = ctypes.c_int(idxCopy) 
-        status = lib.charmm.ommd_copy_position(ctypes.byref(c_idxCopy))
+        status = lib.ommd_copy_position(ctypes.byref(c_idxCopy))
         status = bool(status)
         return status 
 
@@ -730,7 +757,7 @@ class OMMD(Grid):
         c_eps = ctypes.c_double(self.eps) 
  
         ## Call function
-        status = lib.charmm.ommd_change_softness(ctypes.byref(c_soft),
+        status = lib.ommd_change_softness(ctypes.byref(c_soft),
                                                  ctypes.byref(c_hard),
                                                  ctypes.byref(c_emax),
                                                  ctypes.byref(c_mine),
@@ -755,7 +782,7 @@ class OMMD(Grid):
         c_startTemp = ctypes.c_double(self.startTemp) 
  
         ## Call function
-        status = lib.charmm.ommd_sian(ctypes.byref(c_steps),
+        status = lib.ommd_sian(ctypes.byref(c_steps),
                                       ctypes.byref(c_heatFrq),
                                       ctypes.byref(c_startTemp),
                                       ctypes.byref(c_endTemp),
@@ -774,7 +801,7 @@ class OMMD(Grid):
         natom = psf.get_natom()
         c_natom = ctypes.c_int(natom)
         c_grhbon = (ctypes.c_bool)(self.flag_grhb)
-        status = lib.charmm.ommd_clear(ctypes.byref(c_grhbon),
+        status = lib.ommd_clear(ctypes.byref(c_grhbon),
 	                               ctypes.byref(c_natom))
         status = bool(status)
         return status 
@@ -794,6 +821,41 @@ def _get_boxSize(center, length, dgrid):
         xmin = center - length / 2
         xmax = xmin + round(length / dgrid) * dgrid
         return True, np.linspace(xmin, xmax, int(round(length / dgrid) + 1))
+
+def _require_pyopencl():
+    """Import pyopencl on demand and return the module.
+
+    pyopencl is optional: it is needed only by the OpenCL grid routines,
+    so it is imported here rather than at module scope, where a missing
+    install would break ``import pycharmm.grid`` for every user.
+
+    Returns
+    -------
+    module
+        The imported ``pyopencl`` module.
+
+    Raises
+    ------
+    ImportError
+        If pyopencl is not installed, with a message naming the
+        alternative that does not need it.
+
+    Examples
+    --------
+    >>> cl = _require_pyopencl()
+    >>> ctx = cl.create_some_context()
+    """
+    try:
+        import pyopencl as cl
+    except ImportError as exc:
+        raise ImportError(
+            "pyopencl is required for OpenCL grid generation but is not "
+            "installed. Install it together with an OpenCL driver for your "
+            "device (for example `conda install -c conda-forge pyopencl`), "
+            "or use Grid.generate(), which does not need pyopencl."
+        ) from exc
+    return cl
+
 
 def _vdwGrid(receptor, gridSpace, probes, vdwEmax):
     """ calculate vdw grids point energy
@@ -817,6 +879,7 @@ def _vdwGrid(receptor, gridSpace, probes, vdwEmax):
     eParam[:, 5] = 24 * eParam[:, 2] / vdwEmax * eParam[:, 3] * (eParam[:, 3] - 1) ## beta
 
     ## Set up variables for pyopencl calculation
+    cl = _require_pyopencl()
     ctx = cl.create_some_context()
     queue = cl.CommandQueue(ctx)
     mf = cl.mem_flags
@@ -913,6 +976,7 @@ def _elecGrid(receptor, gridSpace, elecReplEmax, elecAttrEmax, dielec):
     eParam[:, 4] = eParam[:, 2] / np.power(eParam[:, 3], 2) / 2
     
     ## Set up variables for pyopencl calculation
+    cl = _require_pyopencl()
     ctx = cl.create_some_context()
     queue = cl.CommandQueue(ctx)
     mf = cl.mem_flags
@@ -1007,7 +1071,13 @@ def generate_with_pyopencl(probes, gridU, formatted = False,
         true for success, false if there was an error 
     """
     ## Update parameters and pass value
-    grid_opts = _configure(**kwargs)
+    # The options object is the Grid instance itself: Grid.__init__ accepts
+    # every attribute this function reads (xCen/yCen/zCen, xMax/yMax/zMax,
+    # dGrid, emax, maxe, mine, dielec, gridForce). This replaces a call to
+    # a grid-specific _configure() that was never written -- grid.py moved
+    # to the class-plus-setVar pattern and this free function was left on
+    # the older kwargs-plus-_configure pattern that dynamics.py still uses.
+    grid_opts = Grid(**kwargs)
 
     ## Generate grid box
     gridSpace = None
@@ -1074,7 +1144,7 @@ def generate_with_pyopencl(probes, gridU, formatted = False,
     c_form = (ctypes.c_bool)(formatted)
 
     ## Output grid generation results
-    status = lib.charmm.grid_write(ctypes.byref(c_xcen), 
+    status = lib.grid_write(ctypes.byref(c_xcen), 
                                    ctypes.byref(c_ycen), 
                                    ctypes.byref(c_zcen), 
                                    ctypes.byref(c_xmax), 
@@ -1094,4 +1164,3 @@ def generate_with_pyopencl(probes, gridU, formatted = False,
                                    ctypes.byref(c_form))
     status = bool(status)
     return gridPot, status 
-

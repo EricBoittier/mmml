@@ -142,7 +142,25 @@ coor dupl sele segid hlx1 end sele segid hlx2 end
 update cutnb 50.0 ctofnb 47.0 ctonnb 45.0
 
 define helx1 sele segid hlx1 .and. type CA end
+set nca = ?nsel
 define helx2 sele segid hlx2 .and. type CA end
+
+! Each `test first' below selects one helix's CA atoms, so TESTFD reports
+! 3*nca derivative components and ?NOK counts how many agreed with the
+! finite-difference gradient.  TESTFD calls a component OK when its
+! deviation is under TOL relative to max(|analytic|,1); the worst
+! component here is 8e-5, so 1e-3 keeps an order of magnitude of
+! headroom.  The `tol 0.0' this test used before made ?NOK identically
+! zero -- TESTFD compares with `.GE. TOL' -- so the ten force tests
+! printed a table and checked nothing.
+set fdtol = 0.001
+calc nfd = 3 * @nca
+
+! nfd comes from the same selection the force tests use, so an empty or
+! mis-built selection would make every ?NOK check pass on zero
+! components.  Pin the count: this test builds ten-residue helices and
+! selects one CA from each residue.
+@testcheck @nca 10 -0.5 conshelix_selection_size
 
 ! Translate along y-axis to separate helices.
 coor trans xdir 0.0 ydir  1.0 zdir 0.0 dist 15.0 sele segid hlx1 end
@@ -165,12 +183,32 @@ CONS HELIx DISTance 10.0 FORCe 300.0 -
 
 skipe all excl ECHD
 ENERGY
+set e0 = ?ener
 
-test first tol 0.0 sele helx1 end
-test first tol 0.0 sele helx2 end
+test first tol @fdtol sele helx1 end
+@testcheck ?nok @nfd -0.5 conshelix_dist_dfirst_hlx1
+test first tol @fdtol sele helx2 end
+@testcheck ?nok @nfd -0.5 conshelix_dist_dfirst_hlx2
+
 mini sd nstep 60 nprint 10
+set e1 = ?ener
+
+set elabel = conshelix_dist_engaged
+set slabel = conshelix_dist_satisfied
+set return = back_dist
+goto checkener
+label back_dist
 
 CONS HELIx RESEt
+
+! Now that the restraint is released, `coor helix' reports again.
+coor helix sele helx1 end sele helx2 end
+set g1 = ?mind
+set target = 10.0
+set tlabel = conshelix_dist_target
+set return = back_dist_geom
+goto checkgeom
+label back_dist_geom
 
 ! copy original coordinates before next test
 coor copy
@@ -186,12 +224,31 @@ CONS HELIx CROSs ANGLe 20.0 FORCe 50.0 -
 
 skipe all excl ECHA
 ENERGY
+set e0 = ?ener
 
-test first tol 0.0 sele helx1 end
-test first tol 0.0 sele helx2 end
+test first tol @fdtol sele helx1 end
+@testcheck ?nok @nfd -0.5 conshelix_cross_dfirst_hlx1
+test first tol @fdtol sele helx2 end
+@testcheck ?nok @nfd -0.5 conshelix_cross_dfirst_hlx2
+
 mini sd nstep 60 nprint 10
+set e1 = ?ener
+
+set elabel = conshelix_cross_engaged
+set slabel = conshelix_cross_satisfied
+set return = back_cross
+goto checkener
+label back_cross
 
 CONS HELIx RESEt
+
+coor helix sele helx1 end sele helx2 end
+set g1 = ?omeg
+set target = 20.0
+set tlabel = conshelix_cross_target
+set return = back_cross_geom
+goto checkgeom
+label back_cross_geom
 
 ! copy original coordinates before next test
 coor copy
@@ -207,12 +264,38 @@ CONS HELIx HINGe ANGLe 80.0 FORCe 50.0 -
 
 skipe all excl ECHA
 ENERGY
+set e0 = ?ener
 
-test first tol 0.0 sele helx1 end
-test first tol 0.0 sele helx2 end
+test first tol @fdtol sele helx1 end
+@testcheck ?nok @nfd -0.5 conshelix_hinge_dfirst_hlx1
+test first tol @fdtol sele helx2 end
+@testcheck ?nok @nfd -0.5 conshelix_hinge_dfirst_hlx2
+
 mini sd nstep 60 nprint 10
+set e1 = ?ener
+
+set elabel = conshelix_hinge_engaged
+set slabel = conshelix_hinge_satisfied
+set return = back_hinge
+goto checkener
+label back_hinge
 
 CONS HELIx RESEt
+
+! The hinge restraint reaches zero energy at its 80 degree target, but
+! ?HANG then reads 100 -- the supplement.  Accept either, so this still
+! catches a geometry that is simply wrong without asserting which of the
+! two conventions is the intended one.
+coor helix sele helx1 end sele helx2 end
+calc offhinge = abs ( ?hang - 80.0 )
+calc offsuppl = abs ( ?hang - 100.0 )
+set g1 = @offhinge
+if @offsuppl lt @offhinge set g1 = @offsuppl
+set target = 0.0
+set tlabel = conshelix_hinge_target
+set return = back_hinge_geom
+goto checkgeom
+label back_hinge_geom
 
 ! copy original coordinates before next test
 coor copy
@@ -232,12 +315,44 @@ CONS HELIx ANGLe 30.0 FORCe 1000.0 sele helx2 end -
 
 skipe all excl ECHT
 ENERGY
+set e0 = ?ener
 
-test first tol 0.0 sele helx1 end
-test first tol 0.0 sele helx2 end
+test first tol @fdtol sele helx1 end
+@testcheck ?nok @nfd -0.5 conshelix_tilt_dfirst_hlx1
+test first tol @fdtol sele helx2 end
+@testcheck ?nok @nfd -0.5 conshelix_tilt_dfirst_hlx2
+
 mini sd nstep 60 nprint 10
+set e1 = ?ener
+
+! Both helices carry their own tilt restraint; the reported energy is
+! their sum, so one pair of checks covers both.
+set elabel = conshelix_tilt_engaged
+set slabel = conshelix_tilt_satisfied
+set return = back_tilt
+goto checkener
+label back_tilt
 
 CONS HELIx RESEt
+
+! Each helix carries its own tilt restraint, so check both.  The tilt
+! energy starts small here (the helices are built at 29.9/30.1 against a
+! 30.0 target), so this geometry check, not the energy, is what makes
+! the tilt section worth running.
+coor helix sele helx1 end
+set g1 = ?tang
+set target = 30.0
+set tlabel = conshelix_tilt_target_hlx1
+set return = back_tilt_ga
+goto checkgeom
+label back_tilt_ga
+
+coor helix sele helx2 end
+set g1 = ?tang
+set tlabel = conshelix_tilt_target_hlx2
+set return = back_tilt_gb
+goto checkgeom
+label back_tilt_gb
 
 ! copy original coordinates before next test
 coor copy
@@ -257,11 +372,76 @@ CONS HELIx ROTH ANGLe -30.0 FORCe 500.0 sele helx2 end refa 5 -
 
 skipe all excl ECHR
 ENERGY
+set e0 = ?ener
 
-test first tol 0.0 sele helx1 end
-test first tol 0.0 sele helx2 end
+test first tol @fdtol sele helx1 end
+@testcheck ?nok @nfd -0.5 conshelix_roth_dfirst_hlx1
+test first tol @fdtol sele helx2 end
+@testcheck ?nok @nfd -0.5 conshelix_roth_dfirst_hlx2
+
 mini sd nstep 60 nprint 10
+set e1 = ?ener
+
+set elabel = conshelix_roth_engaged
+set slabel = conshelix_roth_satisfied
+set return = back_roth
+goto checkener
+label back_roth
 
 CONS HELIx RESEt
+
+coor helix sele helx1 end refa 5
+set g1 = ?rota
+set target = 150.0
+set tlabel = conshelix_roth_target_hlx1
+set return = back_roth_ga
+goto checkgeom
+label back_roth_ga
+
+coor helix sele helx2 end refa 5
+set g1 = ?rota
+set target = -30.0
+set tlabel = conshelix_roth_target_hlx2
+set return = back_roth_gb
+goto checkgeom
+label back_roth_gb
+
+stop
+
+!-----------------------------------------------------------------------
+! Shared restraint check.
+!
+! `skipe all excl ECH?' leaves the helix restraint as the only active
+! energy term, so the reported energy IS the restraint penalty.  Two
+! things then have to be true, and neither is a captured number: the
+! restraint has to be doing something at the displaced geometry (E > 0),
+! and minimizing against it has to drive it to its analytic minimum of
+! zero.  A restraint whose energy reaches zero is satisfied exactly, so
+! this says more about the restrained coordinate than re-measuring the
+! geometry would -- and it holds at any rank count and under either
+! random-number generator, since nothing here follows a `dyna' command.
+!
+! The restrained coordinate itself is then re-measured after each
+! `CONS HELIx RESEt'.  It has to be done after the reset and not right
+! after the minimization: source/manip/helix.F90 computes the reported
+! ?MIND/?OMEG/?HANG/?TANG/?ROTA only under IF(.NOT.QCONSH), so while a
+! restraint is still active `coor helix' leaves them holding whatever
+! the previous call put there.
+
+label checkener
+  if @e0 le 0 then
+     echo @elabel TESTCASE RESULT: FAIL
+  else
+     echo @elabel TESTCASE RESULT: PASS
+  endif
+  @testcheck @e1 0 -0.000001 @slabel
+goto @return
+
+label checkgeom
+  ! The restraint energy reached zero, so the restrained coordinate has
+  ! to be sitting on its target.  Absolute tolerance: these land within
+  ! about 3e-7 of it.
+  @testcheck @g1 @target -0.001 @tlabel
+goto @return
 
 stop

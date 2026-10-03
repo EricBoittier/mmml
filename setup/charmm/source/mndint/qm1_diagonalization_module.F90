@@ -3,11 +3,161 @@ module qm1_diagonalization
   use number
   use qm1_constant
 
+  ! local memories to be used..
+  integer, save            :: mstart_fast,  mstop_fast  ,              &
+                              kstart_fast_a,kstop_fast_a,              &
+                              fstart_fast_a,fstop_fast_a,              &
+                              kstart_fast_b,kstop_fast_b,              &  ! for UHF, and nbeta case
+                              fstart_fast_b,fstop_fast_b,              &  !  
+                              mstart_trbk,mstop_trbk
+  integer, save            :: nv1d_a,nv2d_a,nv1d_b,nv2d_b
+  real(chm_real),allocatable,save :: fmo_local_a(:,:),                 &
+                                     fmo_local_b(:,:)                     ! for UHF
+  real(chm_real),allocatable,save :: r_rv1(:)
+  integer,allocatable,save        :: j_cnt(:)
+
+  !
+#if KEY_PARALLEL==1
+  integer, save            :: mstart_einv,mstop_einv     ! same as mstart_trbk,mstop_trbk
+  integer,allocatable,save :: JPARPT_trbk(:),KPARPT_fast_a(:),KPARPT_fast_b(:)
+#endif
+
   contains
 
 #if KEY_MNDO97==1 /*mndo97*/
 
-  subroutine fast_diag(FAO,VECTOR,EIG,WS,LM2,N,NOCC) ! FMO,
+  subroutine setup_diag_array_info(norbs,nvect,nv,nocc,nbeta,uhf)
+     !
+     ! setup memory arrays and initialize the array variables for parallel run.
+     !
+#if KEY_PARALLEL==1
+     use parallel
+#endif
+
+     implicit none
+     integer :: norbs,nvect,nv,nocc,nbeta
+     logical :: uhf
+
+     integer :: i,nvirt_a,nvirt_b,mmynod,nnumnod
+     integer :: ier=0
+
+     ! array
+     nvirt_a = norbs - nocc
+     nvirt_b = norbs - nbeta
+#if KEY_PARALLEL==1
+     mmynod = mynod
+     nnumnod= numnod
+#else
+     mmynod = 0
+     nnumnod= 1
+#endif
+
+     ! first, deal with memory arrays
+#if KEY_PARALLEL==1
+     if(allocated(JPARPT_trbk))   deallocate(JPARPT_trbk)
+     if(allocated(KPARPT_fast_a)) deallocate(KPARPT_fast_a)
+     if(allocated(KPARPT_fast_b)) deallocate(KPARPT_fast_b)
+#endif
+     if(allocated(fmo_local_a)) deallocate(fmo_local_a)
+     if(allocated(fmo_local_b)) deallocate(fmo_local_b)
+     if(allocated(r_rv1))       deallocate(r_rv1)
+     if(allocated(j_cnt))       deallocate(j_cnt)
+
+     ! allocate memories, prepare array for vector allgather calls using VDGBRE
+#if KEY_PARALLEL==1
+     allocate(JPARPT_trbk(0:numnod),stat=ier)
+     allocate(KPARPT_fast_a(0:numnod),stat=ier)
+     if(uhf) allocate(KPARPT_fast_b(0:numnod),stat=ier)
+#endif
+
+     ! memory used in fast_diag
+     if(nocc < nvirt_a) then
+        nv1d_a = nvirt_a
+        nv2d_a = nocc
+        allocate(fmo_local_a(nvirt_a,nocc),stat=ier)
+     else
+        nv1d_a = nocc
+        nv2d_a = nvirt_a
+        allocate(fmo_local_a(nocc,nvirt_a),stat=ier)
+     end if
+     mstart_fast  = norbs*mmynod/nnumnod + 1 
+     mstop_fast   = norbs*(mmynod+1)/nnumnod
+
+     kstart_fast_a= nocc*mmynod/nnumnod + 1
+     kstop_fast_a = nocc*(mmynod+1)/nnumnod
+
+     fstart_fast_a= nvirt_a*mmynod/nnumnod + 1
+     fstop_fast_a = nvirt_a*(mmynod+1)/nnumnod
+
+#if KEY_PARALLEL==1
+     KPARPT_fast_a(0) = 0
+     if(nocc < nvirt_a) then 
+        do i=1,nnumnod
+           KPARPT_fast_a(i) = (nocc*i/nnumnod)*nvirt_a
+        end do
+     else
+        do i=1,nnumnod
+           KPARPT_fast_a(i) = (nvirt_a*i/nnumnod)*nocc
+        end do
+     end if
+#endif
+
+     if(uhf) then
+        if(nbeta < nvirt_b) then
+           nv1d_b = nvirt_b
+           nv2d_b = nbeta
+           allocate(fmo_local_b(nvirt_b,nbeta),stat=ier)
+        else
+           nv1d_b = nbeta
+           nv2d_b = nvirt_b
+           allocate(fmo_local_b(nbeta,nvirt_b),stat=ier)
+        end if
+        kstart_fast_b= nbeta*mmynod/nnumnod + 1
+        kstop_fast_b = nbeta*(mmynod+1)/nnumnod
+
+        fstart_fast_b= nvirt_b*mmynod/nnumnod + 1
+        fstop_fast_b = nvirt_b*(mmynod+1)/nnumnod
+
+#if KEY_PARALLEL==1
+        KPARPT_fast_b(0) = 0
+        if(nbeta < nvirt_b) then
+           do i=1,nnumnod
+              KPARPT_fast_b(i) = (nbeta*i/nnumnod)*nvirt_b
+           end do
+        else
+           do i=1,nnumnod
+              KPARPT_fast_b(i) = (nvirt_b*i/nnumnod)*nbeta
+           end do
+        end if
+#endif
+     end if
+
+     ! memory used in einvit
+     allocate(r_rv1(norbs),stat=ier)
+     allocate(j_cnt(nvect),stat=ier)
+#if KEY_PARALLEL==1
+     mstart_einv = nvect*mmynod/nnumnod + 1
+     mstop_einv  = nvect*(mmynod+1)/nnumnod
+#endif
+
+     ! used in trbak1
+     mstart_trbk = nvect*mmynod/nnumnod + 1
+     mstop_trbk  = nvect*(mmynod+1)/nnumnod
+#if KEY_PARALLEL==1
+     JPARPT_trbk(0) = 0
+     do i=1,nnumnod
+        JPARPT_trbk(i) = (nvect*i/nnumnod)*nv
+     end do
+#endif
+
+     return
+  end subroutine setup_diag_array_info
+
+  subroutine fast_diag(FAO,VECTOR,EIG,WS,LM2,N,NOCC,    &
+#if KEY_PARALLEL==1
+                       KPARPT_local,                    &
+#endif
+                       fmo_local,nv1,nv2,mstart,mstop,kstart,kstop,fstart,fstop)
   !
   ! Fast diagonalization procedure.
   !
@@ -45,50 +195,31 @@ module qm1_diagonalization
 #if KEY_PARALLEL==1
   use parallel
 #endif
-!#if KEY_MNDOOPENMP==1  /*OpenMP specific*/
-!  use omp_lib
-!#endif                 /*OpenMP specific*/
 
   implicit none
 
   integer :: LM2,N,NOCC
   real(chm_real):: FAO(LM2,LM2),VECTOR(LM2,LM2),EIG(LM2)
   real(chm_real):: WS(LM2,NOCC)                 ! FMO(LM2,NOCC),
+  integer       :: nv1,nv2,mstart,mstop,kstart,kstop,fstart,fstop
+  real(chm_real):: fmo_local(nv1,nv2)           ! fmo_local for ease of parallelization
+#if KEY_PARALLEL==1
+  integer       :: KPARPT_local(0:numnod)
+#endif
 
   ! local variables
-  integer :: i,j,ii,jj,m,L,k,i_old,nb2
+  integer :: i,j,ii,jj,m,L,k,i_old
   integer :: LUMO,NVIRT,IIMAX,JJMAX,IVIRT
   real(chm_real):: TINY,A,B,C,D,E,ALPHA,BETA,S_AUX,eig_i,eig_j,tiny_1,tiny_2
   real(chm_real),parameter :: CUTOFF=0.04D0
   !
   real(chm_real):: ddot_mn ! external function
-  integer :: ier=0
-  real(chm_real),save,dimension(:,:),allocatable :: fmo_local   !,vect_local(:)=>Null()
-  integer :: nnumnod,ist,ift
-  integer, save :: old_N = 0
-  integer, save :: mstart,mstop,isize,kstart,kstop,ksize,fstart,fstop
-#if KEY_PARALLEL==1
-  integer      :: ISTRT_CHECK        ! external function
-  integer,save :: JPARPT_local(0:MAXNODE),KPARPT_local(0:MAXNODE),LPARPT_local(0:MAXNODE)
-  integer      :: isnd_node,irec_node,ID
-#endif
+  integer :: nnumnod   ! ,isize
 
   ! check memory size
   LUMO   = NOCC+1   ! 
   NVIRT  = N-NOCC
-
-  ! check if memory need to be allocated.
-  ! fmo_local is introduced for the ease of parallelization.
-  if(allocated(fmo_local)) then
-     if(size(fmo_local).ne.(nocc*nvirt)) deallocate(fmo_local)
-  end if
-  if(.not.allocated(fmo_local)) then
-     if(NOCC < NVIRT) then
-        allocate(fmo_local(nvirt,nocc),stat=ier)
-     else
-        allocate(fmo_local(nocc,nvirt),stat=ier)
-     end if
-  end if
+  !isize  = mstop-mstart+1
 
   ! for parallelization
 #if KEY_PARALLEL==1
@@ -96,64 +227,8 @@ module qm1_diagonalization
 #else
   nnumnod = 1
 #endif
-  if(old_N .ne. n) then
-     old_N  = n
-     mstart = 1
-     mstop  = n
-     kstart = 1
-     kstop  = nocc
-     fstart = 1
-     fstop  = nvirt
-#if KEY_PARALLEL==1
-     if(nnumnod>1) then
-        !mstart = ISTRT_CHECK(mstop,n)
-
-        ! prepare array for vector allgather calls using VDGBRE
-        ! mapping for each node (Hard weird).
-        JPARPT_local(0)=0
-        LPARPT_local(0)=0
-        KPARPT_local(0)=0
-        do i=1,nnumnod
-           JPARPT_local(i)= n*i/nnumnod ! for linear vector
-           LPARPT_local(i)= nvirt*i/nnumnod
-           KPARPT_local(i)= nocc*i/nnumnod
-        end do
-
-        ! for n
-        mstart = JPARPT_local(mynod)+1
-        mstop  = JPARPT_local(mynod+1)
-
-        ! for nocc
-        kstart = KPARPT_local(mynod)+1
-        kstop  = KPARPT_local(mynod+1)
-
-        ! for nvirt
-        fstart = LPARPT_local(mynod)+1
-        fstop  = LPARPT_local(mynod+1)
-
-        if(nocc < nvirt) then
-           KPARPT_local(0)=0
-           do i=1,nnumnod
-              KPARPT_local(i)= KPARPT_local(i)*nvirt
-           end do
-        else  ! nocc>=nvirt
-           LPARPT_local(0)=0
-           KPARPT_local(0)=0
-           do i=1,nnumnod
-              LPARPT_local(i)= LPARPT_local(i)*nocc
-              KPARPT_local(i)= nvirt*i/nnumnod      ! reuse this for snd_recv.
-           end do
-        end if
-     end if
-#endif
-     isize  = mstop-mstart+1
-  end if
 
   !======================================================================
-#if KEY_MNDOOPENMP==0  /*OpenMP specific*/
-  !======================================================================
-  ! This is pure MPI version.
-
   ! construct the fock MO interaction matrix between occupied and virtual MOS in
   ! fmo_local(nocc,nvirt). So, the buffer ws must hold LM2*nocc words.
   !
@@ -196,7 +271,7 @@ module qm1_diagonalization
         end do
      end do
 #if KEY_PARALLEL==1
-     if(nnumnod>1) call VDGBRE(fmo_local,LPARPT_local)
+     if(nnumnod>1) call VDGBRE(fmo_local,KPARPT_local)  ! LPARPT_local
 #endif
   end if
 
@@ -260,204 +335,15 @@ module qm1_diagonalization
      end do loopi2
   end if
   !======================================================================
-#else                  /*OpenMP specific*/
-  !======================================================================
-  ! This is OpenMP/MPI version.
-
-  ! some initializations.
-  iimax  = MAX(NOCC,NVIRT)
-  jjmax  = MIN(NOCC,NVIRT)
-  nb2    = n/2
-
-!$omp parallel private(ii,jj,i,j,ivirt,c,d,e,alpha,beta,m,a,b,k,S_AUX,ID,ist,ift) NUM_THREADS(2)
-  id = OMP_get_thread_num()
-
-  ! construct the fock MO interaction matrix between occupied and virtual MOS in
-  ! fmo_local(nocc,nvirt). So, the buffer ws must hold LM2*nocc words.
-  !
-  ! in the following, dgemm routine calls are hard-weired here.
-  if(NOCC < NVIRT) then
-     ! ws:=fao*vector
-     ! avoid is the same as do the following matrix multiplication.
-     ! note that fao should be a symmetric matrix.
-     !ws(1:n,1:nocc)=MATMUL(fao(1:n,1:n),vector(1:n,1:nocc))
-!$omp do 
-     do j = kstart,kstop   ! 1,nocc
-        do i=1,n
-           !ws(i,j) =ddot_mn(n,fao(1:n,i),1,vector(1:n,j),1) ! DOT_PRODUCT(fao(1:n,i),vector(1:n,j))
-           S_AUX=zero
-           do k=1,n
-              S_AUX=S_AUX + fao(k,i)*vector(k,j)
-           enddo
-           ws(i,j) = S_AUX
-        end do
-     !end do
-     !! fmo:=vector'*ws  = v'*fao*v
-     !do j = kstart,kstop   ! 1, nocc
-        do i = 1, nvirt
-           jj= lumo+i-1
-           !fmo_local(i,j) = ddot_mn(n,vector(1:n,jj),1,ws(1:n,j),1)
-           S_AUX=zero
-           do k=1,n
-              S_AUX = S_AUX + ws(k,j)*vector(k,jj)
-           enddo
-           fmo_local(i,j) = S_AUX
-        end do       
-     end do
-!$omp end do
-!$omp single
-#if KEY_PARALLEL==1
-     if(nnumnod>1) call VDGBRE(fmo_local,KPARPT_local)
-#endif
-!$omp end single
-
-  else
-     ! ws:=fao*vector
-     ! above is the same as do the following matrix multiplication.
-     ! note that fao should be a symmetric matrix.
-     !ws(1:n,1:nvirt)=MATMUL(fao(1:n,1:n),vector(1:n,lumo:lumo+nvirt-1))
-!$omp do 
-     do j = fstart,fstop   ! 1,nvirt
-        jj= lumo+j-1
-        do i=1,n
-           !ws(i,j) = ddot_mn(n,fao(1:n,i),1,vector(1:n,jj),1) ! DOT_PRODUCT(fao(1:n,i),vector(1:n,jj))
-           S_AUX=zero
-           do k=1,n
-              S_AUX=S_AUX + fao(k,i)*vector(k,jj) ! DOT_PRODUCT(fao(1:n,i),vector(1:n,jj))
-           enddo
-           ws(i,j) = S_AUX
-        end do
-     !end do
-     !! fmo:=ws'*vector = v'*fao'*v (?)
-     !do j = fstart,fstop   ! 1, nvirt
-        do i = 1, nocc
-           !fmo_local(i,j) = ddot_mn(n,ws(1:n,j),1,vector(1:n,i),1)
-           S_AUX=zero
-           do k=1,n
-              S_AUX = S_AUX + ws(k,j)*vector(k,i)
-           enddo
-           fmo_local(i,j) = S_AUX
-        end do
-     end do
-!$omp end do
-!$omp single
-#if KEY_PARALLEL==1
-     if(nnumnod>1) call VDGBRE(fmo_local,LPARPT_local)
-#endif
-!$omp end single
-  end if
-
-  ! do a crude 2 by 2 rotation to eliminate significant elements.
-  ! 1) find tiny value (find_tiny is hard wired.)
-  ! 2) do a 2 by 2 rotation.
-  if(nocc < nvirt) then
-     ! note that fmo_local(nvirt,nocc)
-     if(id==0) then
-        ist    = 1
-        ift    = nb2
-        tiny_1 = zero
-        do j=1,nocc/2
-           do i=1,nvirt
-              tiny_1 = max(abs(fmo_local(i,j)),tiny_1)
-           end do
-        end do
-     else
-        ist    = nb2+1
-        ift    = n
-        tiny_2 = zero
-        do j=nocc/2+1,nocc
-           do i=1,nvirt
-              tiny_2 = max(abs(fmo_local(i,j)),tiny_2)
-           end do
-        end do
-     end if
-!$omp barrier
-!$omp single
-     TINY   = CUTOFF*max(tiny_1,tiny_2)  ! CUTOFF*find_tiny(nocc,nvirt)
-!$omp end single
-     !
-     do ii=1,iimax
-        do jj=1,jjmax
-           i      = LUMO+MOD(ii+jj-2,iimax)
-           j      = jj
-           IVIRT  = i-NOCC
-           if(ABS(fmo_local(IVIRT,j)) >= TINY) then
-              C      = fmo_local(IVIRT,j)
-              D      = EIG(j)-EIG(i)
-              E      = (C/D)**2
-              ALPHA  = ONE-E*PT5
-              BETA   =-SIGN(SQRT(E-E*E*PT25),C)
-              do m=ist,ift ! 1,n
-                 A      = VECTOR(m,j)
-                 B      = VECTOR(m,i)
-                 VECTOR(m,j) = ALPHA*A+BETA*B
-                 VECTOR(m,i) = ALPHA*B-BETA*A
-              end do
-           end if
-        end do
-     end do
-
-  else   ! nocc >= nvirt
-     ! note that fmo_local(nocc,nvirt)
-     if(id==0) then
-        ist    = 1
-        ift    = nb2
-        tiny_1 = zero
-        do j=1,nvirt/2
-           do i=1,nocc
-              tiny_1 = max(abs(fmo_local(i,j)),tiny_1)
-           end do
-        end do
-     else
-        ist    = nb2+1
-        ift    = n
-        tiny_2 = zero
-        do j=nvirt/2+1,nvirt
-           do i=1,nocc
-              tiny_2 = max(abs(fmo_local(i,j)),tiny_2)
-           end do
-        end do
-     end if
-!$omp barrier
-!$omp single
-     TINY   = CUTOFF*max(tiny_1,tiny_2)  ! CUTOFF*find_tiny(nvirt,nocc)
-!$omp end single
-     !
-     do ii=1,iimax     ! = 1,nocc
-        do jj=1,jjmax  ! = 1,nvirt
-           i      = jj+NOCC
-           j      = 1+MOD(ii+jj-2,iimax)
-           IVIRT  = i-NOCC
-           if(ABS(fmo_local(j,IVIRT)) >= TINY) then
-              C      = fmo_local(j,IVIRT)
-              D      = EIG(j)-EIG(i)
-              E      = (C/D)**2
-              ALPHA  = ONE-E*PT5
-              BETA   =-SIGN(SQRT(E-E*E*PT25),C)
-              do m=ist,ift  ! 1,n
-                 A      = VECTOR(m,j)
-                 B      = VECTOR(m,i)
-                 VECTOR(m,j) = ALPHA*A+BETA*B
-                 VECTOR(m,i) = ALPHA*B-BETA*A
-              end do
-           end if
-        end do
-     end do
-     !
-  end if
-!$omp end parallel
-  !======================================================================
-#endif                 /*OpenMP specific*/
-  !======================================================================
 
   return
 
-#if KEY_MNDOOPENMP==0  /*OpenMP specific*/
   contains
      real(chm_real) function find_tiny(NVIRT_local,NOCC_local)
      !
      ! function to find tiny value to use below
      !
+     implicit none
      integer :: NVIRT_local,NOCC_local,iinit,ifin
      integer :: i,j
      real(chm_real):: dmax,tiny_tmp
@@ -474,7 +360,6 @@ module qm1_diagonalization
      !
      return
      end function find_tiny
-#endif                 /*OpenMP specific*/
   !
   end subroutine fast_diag
 
@@ -610,7 +495,7 @@ module qm1_diagonalization
   subroutine tred1(NM,N,A,D,E,E2,Diag,work)
   !
 #if KEY_PARALLEL==1
-  use parallel, only: mynod, numnod, MAXNODE, psnd4, psnd8, gcomb
+  use parallel,only : mynod,numnod,psnd4,psnd8,gcomb
 #endif
   implicit none
 
@@ -694,109 +579,42 @@ module qm1_diagonalization
            ! form A*U 
            r_H    = one/H
            ! form A*U and P
-           if(L>100) then
-              sum_f  = zero  ! initialization.
-              !
-!$omp parallel private(j,f,g,k,tmpD,tmpE) NUM_THREADS(2)
-!$omp do reduction(+:work)
-              do j = mmynod+1,L,nnumnod ! 1, L
-                 F = D(j)
-                 G = A(j,j)*D(j) ! G = E(j)
-                 do k=j+1,L
-                    G    = G    + A(k,j) * D(k)
-                    !E(k) = E(k) + A(k,j) * F
-                    work(k) = work(k) + A(k,j) * F
-                 end do
-                 E(j) = G
+           do j = mmynod+1,L,nnumnod ! 1, L
+              F = D(j)
+              G = A(j,j)*D(j) ! G = E(j)
+              do k=j+1,L
+                 G    = G    + A(k,j) * D(k)
+                 E(k) = E(k) + A(k,j) * F
               end do
-!$omp end do
-!$omp do
-              do j=1,L
-                 E(j) = (E(j) + work(j))*r_H
-                 !E(j) = E(j) + work(j)
-              end do
-!$omp end do
-!$omp single
+              E(j) = E(j) + G
+           end do
 #if KEY_PARALLEL==1
-              if(nnumnod>1) call gcomb(E(1:L),L)
+           if(nnumnod>1) call gcomb(E(1:L),L)
 #endif
-!$omp end single
-!$omp do reduction(+:sum_f)
-              do j=1, L
-                 !E(j) = E(j)*r_H
-                 sum_f= sum_f + E(j)*D(j)
-              end do
-!$omp end do
-!$omp single
-              H = half*sum_f*r_H  ! F / (H + H)
-!$omp end single
+           sum_f  = zero
+           do j=1, L
+              E(j) = E(j)*r_H
+              sum_f= sum_f + E(j)*D(j)
+           end do
+           H = half*sum_f*r_H  ! F / (H + H)
 
-              ! form Q and reduced A
-              ! do-loop is split into 3 loops to make it easy to see.
-              ! which the original routines have.
-!$omp do
-              do j=1,L
-                 E(j)   = E(j)   - H*D(j)
-                 work(j)= zero
+           ! form Q and reduced A
+           ! do-loop is split into 3 loops to make it easy to see.
+           ! which the original routines have.
+           do j=1,L
+              E(j)   = E(j)   - H*D(j)
+           end do
+           do j=mmynod+1,L,nnumnod ! 1,L
+              tmpD = D(j)
+              tmpE = E(j)
+              do k=j,L ! 1,L (if above sum is 1 to L.)
+                 A(k,j) = A(k,j) - tmpD*E(k) - tmpE*D(k)  ! A(k,j)=A(k,j)-D(j)*E(k)-E(j)*D(k)
               end do
-!$omp end do
-!$omp do
-              do j=mmynod+1,L,nnumnod ! 1,L
-                 tmpD = D(j)
-                 tmpE = E(j)
-                 do k=j,L ! 1,L (if above sum is 1 to L.)
-                    A(k,j) = A(k,j) - tmpD*E(k) - tmpE*D(k)  ! A(k,j)=A(k,j)-D(j)*E(k)-E(j)*D(k)
-                 end do
-                 !work(j) = A(L,j)
-              end do
-!$omp end do
-!$omp single
-              do j=mmynod+1,L,nnumnod ! 1,L
-                 work(j) = A(L,j)
-              end do
+              work(j) = A(L,j)
+           end do
 #if KEY_PARALLEL==1
-              if(nnumnod>1) call gcomb(work(1:L),L)
+           if(nnumnod>1) call gcomb(work(1:L),L)
 #endif
-!$omp end single
-!$omp end parallel
-           else
-              do j = mmynod+1,L,nnumnod ! 1, L
-                 F = D(j)
-                 G = A(j,j)*D(j) ! G = E(j)
-                 do k=j+1,L
-                    G    = G    + A(k,j) * D(k)
-                    E(k) = E(k) + A(k,j) * F
-                 end do
-                 E(j) = E(j) + G
-              end do
-#if KEY_PARALLEL==1
-              if(nnumnod>1) call gcomb(E(1:L),L)
-#endif
-              sum_f  = zero
-              do j=1, L
-                 E(j) = E(j)*r_H
-                 sum_f= sum_f + E(j)*D(j)
-              end do
-              H = half*sum_f*r_H  ! F / (H + H)
-
-              ! form Q and reduced A
-              ! do-loop is split into 3 loops to make it easy to see.
-              ! which the original routines have.
-              do j=1,L
-                 E(j)   = E(j)   - H*D(j)
-              end do
-              do j=mmynod+1,L,nnumnod ! 1,L
-                 tmpD = D(j)
-                 tmpE = E(j)
-                 do k=j,L ! 1,L (if above sum is 1 to L.)
-                    A(k,j) = A(k,j) - tmpD*E(k) - tmpE*D(k)  ! A(k,j)=A(k,j)-D(j)*E(k)-E(j)*D(k)
-                 end do
-                 work(j) = A(L,j)
-              end do
-#if KEY_PARALLEL==1
-              if(nnumnod>1) call gcomb(work(1:L),L)
-#endif
-           end if
         else
            ! L==1 case
            work(1) = A(L,L) ! A(1,1)
@@ -1125,9 +943,6 @@ module qm1_diagonalization
   !        COSMETIC CHANGES IN COMMENT CARDS ETC.
   !
   !
-#if KEY_PARALLEL==1
-  use parallel,only : mynod,numnod
-#endif
   implicit none
 
   integer :: M,NM,N,IERR
@@ -1146,12 +961,9 @@ module qm1_diagonalization
   real(chm_real),parameter :: GRPTOL = 0.001D0,EPSCAL = 0.5D0
   integer,parameter :: its_max=5
   integer :: ier=0
-  real(chm_real),pointer,save :: r_rv1(:)=>Null()
-  integer,pointer,save        :: j_cnt(:)=>Null()
 
 #if KEY_PARALLEL==1
   ! parallelization
-  integer :: mstart,mstop,nnumnod
   logical :: do_this_R
 #endif
 
@@ -1161,17 +973,12 @@ module qm1_diagonalization
            ' (AN ERROR HALT WILL OCCUR IF THE PI IS GREATER THAN 100)')
   !-----------------------------------------------------------------------
 
-  if(associated(r_rv1) .and. size(r_rv1)<n) deallocate(r_rv1)
-  if(.not.associated(r_rv1)) allocate(r_rv1(N),stat=ier)
-
-  if(associated(j_cnt) .and. size(j_cnt)<m) deallocate(j_cnt)
-  if(.not.associated(j_cnt)) allocate(j_cnt(M),stat=ier)
-
-#if KEY_PARALLEL==1
-  nnumnod = numnod
-  mstart = m*(mynod)/numnod + 1
-  mstop  = m*(mynod+1)/numnod
-#endif
+  ! memory allocated in setup_diag_array_info
+  !if(allocated(r_rv1) .and. size(r_rv1)<n) deallocate(r_rv1)
+  !if(.not.allocated(r_rv1)) allocate(r_rv1(N),stat=ier)
+  !
+  !if(allocated(j_cnt) .and. size(j_cnt)<m) deallocate(j_cnt)
+  !if(.not.allocated(j_cnt)) allocate(j_cnt(M),stat=ier)
 
   !
   !-----------------------------------------------------------------------
@@ -1246,8 +1053,8 @@ module qm1_diagonalization
         end if
 #if KEY_PARALLEL==1
         do_this_R =.true.
-        !if((R<mstart .or. R>mstop) .and. group==0) then
-        if(R<mstart .and. group==0) then
+        !if((R<mstart_einv .or. R>mstop_einv) .and. group==0) then
+        if(R<mstart_einv .and. group==0) then
            do_this_R=.false.
 
            ! find the first next checked R column, which is degenerated to the current R.
@@ -1430,7 +1237,7 @@ module qm1_diagonalization
         END IF
 #if KEY_PARALLEL==1
         !
-        end if  ! (GROUP/=0 .or. (R>=mstart .or. R<=mstop))
+        end if  ! (GROUP/=0 .or. (R>=mstart_einv .or. R<=mstop_einv))
 #endif
         X0 = X1
      end do loopRR
@@ -1472,9 +1279,6 @@ module qm1_diagonalization
   !
 #if KEY_PARALLEL==1
   use parallel
-!#if KEY_MNDOOPENMP==1  /*OpenMP specific*/
-!  use omp_lib
-!#endif                 /*OpenMP specific*/
 #endif
 
   implicit none
@@ -1486,37 +1290,14 @@ module qm1_diagonalization
   real(chm_real):: s, r_E
   !real(chm_real):: ddot_mn ! external function
 
-  ! parallelization
-  integer, save :: old_M = 0
-  integer, save :: mstart,mstop
-#if KEY_PARALLEL==1
-  integer,save  :: JPARPT_local(0:MAXNODE)
-#endif
   !
   if (m .eq. 0 .or. n .eq. 1) return
-  ! for parallelization
-  if(old_M /= M) then
-     old_M  = m
-     mstart = 1
-     mstop  = m
-#if KEY_PARALLEL==1
-     if(numnod>1) then
-        ! prepare array for vector allgather calls using VDGBRE
-        JPARPT_local(0)=0
-        do i=1,numnod
-           JPARPT_local(i)= (m*i/numnod)*NM ! for linear vector
-        end do
-        mstart = m*(mynod)/numnod + 1
-        mstop  = m*(mynod+1)/numnod
-     end if
-#endif
-  end if
   !
 !!  do i=2,n
 !!     if(E(i) /= zero) then
 !!        ! divisor below is negative of H formed in TRED1.
 !!        ! double division avoids possible underflow.
-!!        do j=mstart,mstop  ! 1,m
+!!        do j=mstart_trbk,mstop_trbk  ! 1,m
 !!           s = zero
 !!           do k=1,i-1
 !!              s = s + A(k,i)*Z(k,j)
@@ -1529,8 +1310,7 @@ module qm1_diagonalization
 !!     end if
 !!  end do
 
-!$omp parallel do private(i,k,s) NUM_THREADS(2)
-  do j=mstart,mstop  ! 1,m
+  do j=mstart_trbk,mstop_trbk  ! 1,m
      do i=2,n
         if(E(i) /= zero) then
            ! divisor below is negative of H formed in TRED1.
@@ -1546,10 +1326,9 @@ module qm1_diagonalization
         end if
      end do
   end do
-!$omp end parallel do
 
 #if KEY_PARALLEL==1
-  if(numnod>1) call VDGBRE(Z(1:NM,1:M),JPARPT_local)
+  if(numnod>1) call VDGBRE(Z(1:NM,1:M),JPARPT_trbk)
 #endif
 
   !

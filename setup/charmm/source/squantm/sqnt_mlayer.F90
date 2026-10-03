@@ -1197,46 +1197,58 @@ SUBROUTINE put_hlink_grads(NHLink,MAXCHL,IHOSTGUEST, &
   if(Qnoproj) then
 
      do i=1,NHLink
+        !!
+        !!    Find unit direction vector
+        !R_xyz(1) = xyz_hlink(4,i)-xyz_hlink(1,i)
+        !R_xyz(2) = xyz_hlink(5,i)-xyz_hlink(2,i)
+        !R_xyz(3) = xyz_hlink(6,i)-xyz_hlink(3,i)
         !
-        !    Find unit direction vector
-        R_xyz(1) = xyz_hlink(4,i)-xyz_hlink(1,i)
-        R_xyz(2) = xyz_hlink(5,i)-xyz_hlink(2,i)
-        R_xyz(3) = xyz_hlink(6,i)-xyz_hlink(3,i)
-
-        R_xyz_dist = SQRT(R_xyz(1)**2+R_xyz(2)**2+R_xyz(3)**2)
-        R_xyz_dist = one/R_xyz_dist
-
-        R_xyz(1) = R_xyz(1) * R_xyz_dist   ! R_H_ref(i)
-        R_xyz(2) = R_xyz(2) * R_xyz_dist   ! R_H_ref(i)
-        R_xyz(3) = R_xyz(3) * R_xyz_dist   ! R_H_ref(i)
+        !R_xyz_dist = SQRT(R_xyz(1)**2+R_xyz(2)**2+R_xyz(3)**2)
+        !R_xyz_dist = one/R_xyz_dist
         !
-        ! PRJF = F_doc_E, F: force on atom, E: direction unit vector
-        ! DXI  = PRJF*EX, DYI=...etc
+        !R_xyz(1) = R_xyz(1) * R_xyz_dist   ! R_H_ref(i)
+        !R_xyz(2) = R_xyz(2) * R_xyz_dist   ! R_H_ref(i)
+        !R_xyz(3) = R_xyz(3) * R_xyz_dist   ! R_H_ref(i)
+        !!
+        !! PRJF = F_doc_E, F: force on atom, E: direction unit vector
+        !! DXI  = PRJF*EX, DYI=...etc
         !    For link guest atom (mm-atom)
         iatom = IHOSTGUEST(1,i)
         jatom = IHOSTGUEST(2,i)
-        PRJF=dx(jatom)*R_xyz(1)+dy(jatom)*R_xyz(2)+dz(jatom)*R_xyz(3)
-        dxi =PRJF*R_xyz(1)
-        dyi =PRJF*R_xyz(2)
-        dzi =PRJF*R_xyz(3)
-        !
-        dx(jatom) = dx(jatom)-dxi
-        dy(jatom) = dy(jatom)-dyi
-        dz(jatom) = dz(jatom)-dzi
-        !ccc only project force on 2nd qm-atom side, and ignore on mm (or 1st qm) atom side
-        dx(jatom) = zero
-        dy(jatom) = zero
-        dz(jatom) = zero
-        !
-        !    For link host atom (qm-atom)
-        PRJF=dx(iatom)*R_xyz(1)+dy(iatom)*R_xyz(2)+dz(iatom)*R_xyz(3)
-        dxi =PRJF*R_xyz(1)
-        dyi =PRJF*R_xyz(2)
-        dzi =PRJF*R_xyz(3)
-        !
-        dx(iatom) = dx(iatom)-dxi
-        dy(iatom) = dy(iatom)-dyi
-        dz(iatom) = dz(iatom)-dzi
+        !PRJF=dx(jatom)*R_xyz(1)+dy(jatom)*R_xyz(2)+dz(jatom)*R_xyz(3)
+        !dxi =PRJF*R_xyz(1)
+        !dyi =PRJF*R_xyz(2)
+        !dzi =PRJF*R_xyz(3)
+        !!
+        !dx(jatom) = dx(jatom)-dxi
+        !dy(jatom) = dy(jatom)-dyi
+        !dz(jatom) = dz(jatom)-dzi
+        !!ccc only project force on 2nd qm-atom side, and ignore on mm (or 1st qm) atom side
+        !dx(jatom) = zero
+        !dy(jatom) = zero
+        !dz(jatom) = zero
+        !!
+        !!    For link host atom (qm-atom)
+        !PRJF=dx(iatom)*R_xyz(1)+dy(iatom)*R_xyz(2)+dz(iatom)*R_xyz(3)
+        !dxi =PRJF*R_xyz(1)
+        !dyi =PRJF*R_xyz(2)
+        !dzi =PRJF*R_xyz(3)
+        !!
+        !dx(iatom) = dx(iatom)-dxi
+        !dy(iatom) = dy(iatom)-dyi
+        !dz(iatom) = dz(iatom)-dzi
+
+        ! for link host atom (qm-atom)
+        PRJF=(one-R_H_ref(i))
+        dx(iatom) = dx(iatom) + PRJF*dx(jatom)
+        dy(iatom) = dy(iatom) + PRJF*dy(jatom)
+        dz(iatom) = dz(iatom) + PRJF*dz(jatom)
+
+        ! for link guest atom (mm-atom)
+        PRJF=R_H_ref(i)
+        dx(jatom) = dx(jatom)*PRJF
+        dy(jatom) = dy(jatom)*PRJF
+        dz(jatom) = dz(jatom)*PRJF
      end do
 
   else
@@ -1255,7 +1267,7 @@ SUBROUTINE put_hlink_grads(NHLink,MAXCHL,IHOSTGUEST, &
         R_xyz(2)  = xyz_hlink(5,iic)-xyz_hlink(2,iic)
         R_xyz(3)  = xyz_hlink(6,iic)-xyz_hlink(3,iic)
 
-        R_xyz_dist= SQRT(R_xyz(1)**2+R_xyz(2)**2+R_xyz(3)**3)
+        R_xyz_dist= SQRT(R_xyz(1)**2+R_xyz(2)**2+R_xyz(3)**2)
         R_xyz_dist= ONE/R_xyz_dist
         SMF(1,2)  = R_xyz(1)*R_xyz_dist
         SMF(2,2)  = R_xyz(2)*R_xyz_dist
@@ -1358,7 +1370,7 @@ SUBROUTINE CH2GMS_mlayer(natomx,nchmat,nbluch,ibluch, &
   real(chm_real)  xchm(*),ychm(*),zchm(*),qchm(*)
   real(chm_real)  tmpblur(*),ebluch(*),cgblch(*),sgblch(*),cbluch(*)
   !
-  INTEGER J,I,N,NBLUR
+  INTEGER J,I,N,NBLUR,natqm_2
   real(chm_real) SIGM1,SIGM2,SIGM3
   real(chm_real) RBR,FAC
   real(chm_real), parameter :: rtpipoh=0.5079490874739d0
@@ -1372,6 +1384,7 @@ SUBROUTINE CH2GMS_mlayer(natomx,nchmat,nbluch,ibluch, &
   IBLUCH(1:natomx) = 0
 
   n = 0
+  natqm_2 = natqm(2) 
   if(QBLUCH) then
      !     fill in blurred charges array
      if(recallint.ne.-1) then
@@ -1425,7 +1438,7 @@ SUBROUTINE CH2GMS_mlayer(natomx,nchmat,nbluch,ibluch, &
         end if
      end do
   else
-     do i=1,natqm_2+1,natomx
+     do i=natqm_2+1,natomx
         mm = mminb1_dual(i,2)
         if(mm.gt.0) then
            n = n + 1
@@ -1470,7 +1483,7 @@ SUBROUTINE CGREP_mlayer(NATOM,REPULS,DX,DY,DZ, &
   real(chm_real) REPULS,DX(*),DY(*),DZ(*)
   real(chm_real) ZAN(MAXGMS), C(3,MAZGMS)
   !
-  INTEGER I,J,N,KBLUCH,KKBLCH,NN,im,iq
+  INTEGER I,J,N,KBLUCH,KKBLCH,NN,im,iq,natqm_2
   real(chm_real) ERRF,ETMP,SIGM1,SIGM2,TSQP
   real(chm_real) Q1,Q2,X1,X2,Y1,Y2,Z1,Z2,R12,RR12,EL,ELR
   real(chm_real) X12,Y12,Z12,RBR
@@ -1492,6 +1505,9 @@ SUBROUTINE CGREP_mlayer(NATOM,REPULS,DX,DY,DZ, &
 #if KEY_PARALLEL==1
   IF (MYNOD.GT.0) RETURN
 #endif 
+
+  natqm_2 = natqm(2)
+
   !
   !     This loop is for QM nuclei - MM atoms electrostatic interaction
   !     It deals also with QM nuclei - Blurred charge interaction
@@ -1664,12 +1680,13 @@ SUBROUTINE CGREPE_mlayer(NATOM,Prnlev,ZAN,C,E,EG)
   real(chm_real) ZAN(MAXGMS),C(3,MAXGMS)
   real(chm_real) E, EG(3*MAXGMS)
   !
-  INTEGER I,J,N,KBLUCH,iq,im
+  INTEGER I,J,N,KBLUCH,iq,im,natqm_2
   real(chm_real) Q1,Q2,X1,X2,Y1,Y2,Z1,Z2,R12,RR12,EL
   real(chm_real) X12,Y12,Z12
   real(chm_real) REPULS
   !
   REPULS = ZERO
+  natqm_2= natqm(2)
 
   !     loop over qm atoms.
   do i=1,natqm_2

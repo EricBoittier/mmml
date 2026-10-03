@@ -21,9 +21,8 @@ contains
   use zstruc,only: CSR,CSW
   use zcs,only: cs_init,cs_copy
   use cpustruc,only: NUMHOOD,QCPUONES
+  use mpi_f08
   implicit none
-
-  include 'mpif.h'
 
   integer :: NIALL,NRALL,NQALL,sizeall
   integer,dimension(:),allocatable :: IALL
@@ -565,10 +564,11 @@ contains
   use memory
 !  use nbndcc_utilb
 !  use psf,only: NATOM
+  use mpi_f08
   implicit none
 
 #if KEY_PARALLEL==1
-  integer,allocatable,dimension(:) :: NCONFSS 
+  integer,allocatable,dimension(:) :: NCONFSS
 #endif
   integer,allocatable,dimension(:) :: BEGPT,ENDPT
   integer,allocatable,dimension(:) :: BEGINME
@@ -593,7 +593,6 @@ contains
   integer :: II,JJ,LASTCNF
   integer ::NUMNODES,MYHOOD,MYLOCRNKP
   integer(chm_int4) :: ALLCOMM
-  include 'mpif.h'
 
 !---------------------------------
 ! send size to head node

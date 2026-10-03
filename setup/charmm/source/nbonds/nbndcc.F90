@@ -765,7 +765,7 @@ end module bycc_mod
   use deriv  !temporary
   use machutil,only:die
 #if KEY_MPI==1 && KEY_PARALLEL==1
-  use mpi      
+  use mpi_f08      
 #endif
       implicit none
 ! *****************************************************************************
@@ -3783,8 +3783,8 @@ end module bycc_mod
         use dimens_fcm
         use parallel
         use spacdec
-#if KEY_SPACEDEC==1
-        use mpi      
+#if KEY_SPACDEC==1
+        use mpi_f08      
 #endif
         implicit none
       REAL*8 X(*),Y(*),Z(*)
@@ -3795,10 +3795,12 @@ end module bycc_mod
       INTEGER LOPNT,HIPNT,ATOM,COUNT,ierr,i
       INTEGER :: totrec,totsen
       integer :: totrcnt,totscnt,node2
-      integer*4 :: statigno(MPI_STATUS_SIZE)
-      integer*4 :: SENDLEN,RECELEN,mpidp,from,to4,tag
-      integer*4 :: mpicomw,ierr4,ihit,wstat(MPI_STATUS_SIZE)
-      integer*4,allocatable,dimension(:) :: reqs,reqr
+      TYPE(MPI_Status) :: statigno, wstat
+      integer*4 :: SENDLEN,RECELEN,from,to4,tag
+      TYPE(MPI_Datatype) :: mpidp
+      TYPE(MPI_Comm) :: mpicomw
+      integer*4 :: ierr4,ihit
+      TYPE(MPI_Request),allocatable,dimension(:) :: reqs,reqr
       real(chm_real),allocatable,dimension(:,:) :: xyzr,xyzs
       INTEGER NRCALL,NSCALL
 !
@@ -3824,7 +3826,7 @@ end module bycc_mod
       allocate(reqr(NROUND),reqs(NROUND),stat=ierr)
       mpicomw=COMM_CHARMM
       mpidp=MPI_DOUBLE_PRECISION
-      statigno(:)=MPI_STATUS_IGNORE(:)
+      statigno=MPI_STATUS_IGNORE
       TOTREC = 0
       TOTSEN = 0
 ! calculate lengths first, so we can do the memory allocation
@@ -3939,8 +3941,8 @@ end module bycc_mod
         use dimens_fcm
         use parallel
         use spacdec
-#if KEY_SPACEDEC==1
-        use mpi      
+#if KEY_SPACDEC==1
+        use mpi_f08      
 #endif
         implicit none
       REAL(chm_real) X(*),Y(*),Z(*)
@@ -3954,11 +3956,14 @@ end module bycc_mod
       real(chm_real),allocatable,dimension(:,:) :: xyzr,xyzs
       INTEGER NRCALL,NSCALL
 !
-!     We need everything integer*4 here, so it works in
-!     all environments ie. 32 bit and 64 bit
+!     mpi_f08 derived types for handles
 !
-      INTEGER*4 M_STAT(MPI_STATUS_SIZE,2),IE,REQ(2),IX,TAG
-      INTEGER*4 lto,lfrom,lls,llr,mpicomw,mpiint,mpidprec,i
+      TYPE(MPI_Status) :: M_STAT(2)
+      TYPE(MPI_Request) :: REQ(2)
+      INTEGER*4 IE,IX,TAG
+      INTEGER*4 lto,lfrom,lls,llr,i
+      TYPE(MPI_Comm) :: mpicomw
+      TYPE(MPI_Datatype) :: mpiint,mpidprec
 !
       TAG=1
       mpiint=MPI_INTEGER
@@ -4091,7 +4096,7 @@ end module bycc_mod
         use parallel
         use spacdec
 #if KEY_SPACDEC==1
-        use mpi       
+        use mpi_f08       
 #endif
         implicit none
       REAL(chm_real) X(*),Y(*),Z(*)
@@ -4102,10 +4107,12 @@ end module bycc_mod
       INTEGER LOPNT,HIPNT,ATOM,COUNT,ierr,i
       INTEGER :: totrec,totsen
       integer :: totrcnt,totscnt,node2
-      integer*4 :: statigno(MPI_STATUS_SIZE)
-      integer*4 :: SENDLEN,RECELEN,mpidp,from,to4,tag
-      integer*4 :: mpicomw,ierr4,ihit,wstat(MPI_STATUS_SIZE)
-      integer*4,allocatable,dimension(:) :: reqs,reqr
+      TYPE(MPI_Status) :: statigno, wstat
+      integer*4 :: SENDLEN,RECELEN,from,to4,tag
+      TYPE(MPI_Datatype) :: mpidp
+      TYPE(MPI_Comm) :: mpicomw
+      integer*4 :: ierr4,ihit
+      TYPE(MPI_Request),allocatable,dimension(:) :: reqs,reqr
       real(chm_real),allocatable,dimension(:,:) :: xyzr,xyzs
       INTEGER NRCALL,NSCALL
 !
@@ -4131,7 +4138,7 @@ end module bycc_mod
       allocate(reqr(NROUND),reqs(NROUND),stat=ierr)
       mpicomw=COMM_CHARMM
       mpidp=MPI_DOUBLE_PRECISION
-      statigno(:)=MPI_STATUS_IGNORE(:)
+      statigno=MPI_STATUS_IGNORE
       TOTREC = 0
       TOTSEN = 0
 ! calculate lengths first, so we can do the memory allocation
@@ -4249,7 +4256,7 @@ end module bycc_mod
         use parallel
         use spacdec
 #if KEY_SPACDEC==1
-        use mpi       
+        use mpi_f08       
 #endif
 
         implicit none
@@ -4260,10 +4267,12 @@ end module bycc_mod
         integer,parameter :: maxirounds = 2000*6 !(6=3rec+3sen)
         INTEGER ROUND,III,SENDLEN,RECELEN,BEGIN,IEND,PARTICLE
         INTEGER NODE2,LOPNT,HIPNT,ATOM,COUNT
-        integer*4 tag,sizer,to,from,sizes,ie,mpd,mcw,ixr,ixs
-        integer*4 ms(mpi_status_size,maxirounds),ihit
-        integer*4,allocatable,dimension(:) :: rqs, rqr
-        integer*4 :: statigno(MPI_STATUS_SIZE)
+        integer*4 tag,sizer,to,from,sizes,ie,ixr,ixs
+        TYPE(MPI_Datatype) :: mpd
+        TYPE(MPI_Comm) :: mcw
+        TYPE(MPI_Status) :: ms(maxirounds), statigno
+        integer*4 ihit
+        TYPE(MPI_Request),allocatable,dimension(:) :: rqs, rqr
         integer,allocatable,dimension(:) :: rqs2cpu,rqr2cpu
         type arofar
            real(chm_real),allocatable,dimension(:) :: b
@@ -4273,7 +4282,7 @@ end module bycc_mod
         tag=1
         mcw=mpi_comm_world
         mpd=mpi_double_precision
-        statigno(:)=MPI_STATUS_IGNORE(:)
+        statigno=MPI_STATUS_IGNORE
 
         !  We rxyz and sxyz to avoid overwrites!
         allocate(sxyz(numnod),rxyz(numnod))
@@ -4375,7 +4384,7 @@ end module bycc_mod
         use parallel
         use spacdec
 #if KEY_SPACDEC==1
-        use mpi       
+        use mpi_f08       
 #endif
 
         implicit none
@@ -4388,10 +4397,12 @@ end module bycc_mod
         INTEGER HIPNT,LOPNT,COUNT,NODE2
         INTEGER IEND,BEGIN
 !
-        integer*4 tag,sizer,to,from,sizes,ie,mpd,mcw,ixr,ixs
-        integer*4 ms(mpi_status_size,maxirounds),ihit
-        integer*4,allocatable,dimension(:) :: rqs, rqr
-        integer*4 :: statigno(MPI_STATUS_SIZE)
+        integer*4 tag,sizer,to,from,sizes,ie,ixr,ixs
+        TYPE(MPI_Datatype) :: mpd
+        TYPE(MPI_Comm) :: mcw
+        TYPE(MPI_Status) :: ms(maxirounds), statigno
+        integer*4 ihit
+        TYPE(MPI_Request),allocatable,dimension(:) :: rqs, rqr
         integer,allocatable,dimension(:) :: rqs2cpu,rqr2cpu
         type arofar
            real(chm_real),allocatable,dimension(:) :: b
@@ -4401,7 +4412,7 @@ end module bycc_mod
         tag=1
         mcw=mpi_comm_world
         mpd=mpi_double_precision
-        statigno(:)=MPI_STATUS_IGNORE(:)
+        statigno=MPI_STATUS_IGNORE
         !Use rxyz and sxyz to avoid overwrites during communication!
         allocate(sxyz(numnod),rxyz(numnod))
         allocate(rqs(numnod),rqr(numnod))

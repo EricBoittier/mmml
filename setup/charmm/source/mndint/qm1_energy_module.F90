@@ -3,79 +3,12 @@ module qm1_energy_module
   use number
   use qm1_constant
 
-  integer,save :: numat_local=-1, iqm_mode
-  logical,save :: do_am1_pm3=.false.
-  logical,save :: do_d_orbitals=.false.
-  integer,save,pointer :: ni_local(:)=>Null(),    &
-                          iorbs_local(:)=>NUll(), &
-                          ia_local(:)=>NUll(),    &
-                          ib_local(:)=>NUll(),    &
-                          ip_local(:)=>Null(),    &
-                          is_local(:)=>NUll(),    &
-                          iw_local(:)=>NUll(),    &
-                          Jmax_local(:)=>NUll()
-  real(chm_real),save,pointer :: ZS_local(:)=>Null(),    &
-                                 ZP_local(:)=>Null(),    &
-                                 ZD_local(:)=>Null()
-  real(chm_real),save,pointer :: BETAS_local(:)=>Null(), &
-                                 BETAP_local(:)=>Null(), &
-                                 BETAD_local(:)=>Null()
-  real(chm_real),save,pointer :: OMEGA_local(:)=>Null(), &
-                                 DELTA_local(:)=>Null(), &
-                                 CORE_local(:)=>Null()
-  real(chm_real),save,pointer :: GSS_local(:)=>Null(),   &
-                                 GSP_local(:)=>Null(),   &
-                                 GPP_local(:)=>Null(),   &
-                                 GP2_local(:)=>Null(),   &
-                                 HSP_local(:)=>Null(),   &
-                                 HPP_local(:)=>Null()
-  real(chm_real),save,pointer :: w_save(:,:)=>Null()
-  integer,save,pointer        :: int_ij(:)=>Null(),      &
-                                 int_kl(:)=>Null()
-  ! for core-core interactiosn
-  real(chm_real),save         :: PO_1_mm,PO_2_mm,PO_3_mm,PO_7_mm,PO_9_mm,DD_2_mm,DD_3_mm
-  real(chm_real),save,pointer :: ALP_local(:)=>Null(),   &
-                                 PO_1(:)=>Null(),        &  ! used in hhpair & other routines.
-                                 PO_2(:)=>Null(),        &
-                                 PO_3(:)=>Null(),        &
-                                 PO_7(:)=>Null(),        &
-                                 PO_9(:)=>Null(),        &
-                                 DD_2(:)=>Null(),        &
-                                 DD_3(:)=>Null()
-  integer,save,pointer        :: MALPB_local(:) =>Null()    ! mndo/d specific
-  real(chm_real),save,pointer :: ALPB_local(:,:)=>Null()    ! mndo/d specific
-  ! for gaussian core-core terms
-  integer,save,pointer        :: IMPAR_local(:)=>Null()
-  real(chm_real),save,pointer :: GUESS1_local(:,:)=>Null(), &
-                                 GUESS2_local(:,:)=>Null(), &
-                                 GUESS3_local(:,:)=>Null(), &
-                                 GNN_local(:)=>Null()
+  integer,save :: iqm_mode                    ! this variable is set at routine scf_energy
+  logical,save :: do_am1_pm3                  !
+  logical,save :: do_d_orbitals               !
 
-  !
-  ! for loop-up table type calculations.
-  ! mmint core-core interaction part.
-  logical, save, pointer :: q_unique_atom(:)=>Null()
-  integer, save, pointer :: i_index_look_up(:)=>Null()
-  real(chm_real),save,pointer :: r_core_val(:)=>Null(), &
-                                 coef_core_val(:,:,:,:)=>Null(), &
-                                 core_val_shift(:,:)=>Null(), &
-                                 core_cut_val(:)=>Null()
-  integer, save :: nunique_qm,i_npnt
-  real(chm_real),save :: dr_width,r_dr_width,rval_min,rval_max
-
-  ! betaij part.
-  logical, save, pointer :: q_unique_pair(:)=>Null()    ! size n*(n-1)
-  integer, save, pointer :: ij_pair_look_up(:)=>Null()  ! size n*(n-1), point which array should look.
-  integer, save :: iunique_cnt_beta,num_beta_pnt
-  real(chm_real),pointer :: r_beta_val(:)=>Null()       ! array of npoint
-  real(chm_real),save :: dr_width_beta,r_dr_width_beta,rval_min_beta,rval_max_beta
-
-  type,public :: look_up_beta
-     real(chm_real),pointer :: coef_val(:,:,:)=>Null() ! 4 x 14 x npoint
-     real(chm_real),pointer :: val_shift(:)=>Null()    ! array of 14
-    !! real(chm_real) :: dr_width,r_dr_width,rval_min,rval_max
-  end type look_up_beta
-  type(look_up_beta), save, pointer :: look_up_beta_r(:)=>Null()
+!!  ! other variables
+!!  integer, save :: nunique_qm
 
   contains
 
@@ -84,248 +17,39 @@ module qm1_energy_module
   !
   ! Prepare locally used variables.
   !
-  use qm1_info, only : qm_control_r,qm_main_r,qm_scf_main_r
-  use qm1_parameters, only : OMEGA,DELTA,CORE,BETAS,BETAP,BETAD,ALP,PO,DD, &
-                             ZS,ZP,ZD,GSS,GPP,GSP,GP2,HSP,HPP,REPD, &
-                             INTIJ,INTKL,INTREP,INTRF1,INTRF2, &
-                             MALPB,ALPB,IMPAR,GUESS1,GUESS2,GUESS3,GNN
+  use qm1_info, only : qm_main_c,qm_scf_main_c,qm_param_c,qm_control_c
   implicit none
 
-  integer :: i,j,ii,ni,nj,ia,iorbs,int1,int2
-  real(chm_real):: rf
-
-  ! check if memory has to be allocated.
-  if(numat_local.ne.qm_main_r%numat) then
-     numat_local=qm_main_r%numat
-
-     if(associated(ni_local)) then
-        deallocate(ni_local)
-        deallocate(iorbs_local)
-        deallocate(ia_local)
-        deallocate(ib_local)
-        deallocate(ip_local)
-        deallocate(is_local)
-        deallocate(iw_local)
-        deallocate(Jmax_local)
-        deallocate(BETAS_local)
-        deallocate(BETAP_local)
-        deallocate(OMEGA_local)
-        deallocate(DELTA_local)
-        deallocate(CORE_local)
-        deallocate(GSS_local)
-        deallocate(GSP_local)
-        deallocate(GPP_local)
-        deallocate(GP2_local)
-        deallocate(HSP_local)
-        deallocate(HPP_local)
-        deallocate(w_save)
-        deallocate(ALP_local)
-        deallocate(ZS_local)
-        deallocate(ZP_local)
-        deallocate(PO_1)
-        deallocate(PO_2)
-        deallocate(PO_3)
-        deallocate(PO_7)
-        deallocate(PO_9)
-        deallocate(DD_2)
-        deallocate(DD_3)
-     end if
-     if(associated(BETAD_local)) deallocate(BETAD_local)
-     if(associated(ZD_local))    deallocate(ZD_local)
-     if(associated(w_save)) then
-        deallocate(w_save)
-        deallocate(int_ij)
-        deallocate(int_kl)
-     end if
-     if(associated(MALPB_local)) deallocate(MALPB_local)
-     if(associated(ALPB_local))  deallocate(ALPB_local)
-     if(associated(IMPAR_local)) then
-        deallocate(IMPAR_local)
-        deallocate(GUESS1_local)
-        deallocate(GUESS2_local)
-        deallocate(GUESS3_local)
-        deallocate(GNN_local)
-     end if
-
-     ! now allocate memory
-     allocate(ni_local(qm_main_r%numat))
-     allocate(iorbs_local(qm_main_r%numat))
-     allocate(ia_local(qm_main_r%numat))
-     allocate(ib_local(qm_main_r%numat))
-     allocate(ip_local(qm_main_r%numat))
-     allocate(is_local(qm_main_r%numat))
-     allocate(iw_local(qm_main_r%numat))
-     allocate(Jmax_local(qm_main_r%numat))
-     allocate(BETAS_local(qm_main_r%numat))
-     allocate(BETAP_local(qm_main_r%numat))
-     allocate(OMEGA_local(qm_main_r%numat))
-     allocate(DELTA_local(qm_main_r%numat))
-     allocate(CORE_local(qm_main_r%numat))
-     allocate(GSS_local(qm_main_r%numat))
-     allocate(GSP_local(qm_main_r%numat))
-     allocate(GPP_local(qm_main_r%numat))
-     allocate(GP2_local(qm_main_r%numat))
-     allocate(HSP_local(qm_main_r%numat))
-     allocate(HPP_local(qm_main_r%numat))
-     if(qm_control_r%do_d_orbitals) then
-        allocate(w_save(243,qm_main_r%numat))
-        allocate(int_ij(243))
-        allocate(int_kl(243))
-     end if
-     allocate(ALP_local(qm_main_r%numat))
-     allocate(ZS_local(qm_main_r%numat))
-     allocate(ZP_local(qm_main_r%numat))
-     allocate(PO_1(qm_main_r%numat))
-     allocate(PO_2(qm_main_r%numat))
-     allocate(PO_3(qm_main_r%numat))
-     allocate(PO_7(qm_main_r%numat))
-     allocate(PO_9(qm_main_r%numat))
-     allocate(DD_2(qm_main_r%numat))
-     allocate(DD_3(qm_main_r%numat))
-
-     allocate(BETAD_local(qm_main_r%numat))
-     allocate(ZD_local(qm_main_r%numat))
-
-     if(qm_control_r%iqm_mode.eq.5) then
-        allocate(MALPB_local(qm_main_r%numat))
-        allocate(ALPB_local(qm_main_r%numat,qm_main_r%numat))
-     end if
-     if(qm_control_r%q_am1_pm3) then
-        allocate(IMPAR_local(qm_main_r%numat))
-        allocate(GUESS1_local(4,qm_main_r%numat))
-        allocate(GUESS2_local(4,qm_main_r%numat))
-        allocate(GUESS3_local(4,qm_main_r%numat))
-        allocate(GNN_local(qm_main_r%numat))
-     end if
-  else
-     if(.not.associated(ni_local)) call wrndie(-5,'<QMMM_module_prep>', &
-                         ' QMMM_module_prep memories are not allocated.')
-  end if
-
-  !
-  do_am1_pm3   =qm_control_r%q_am1_pm3
-  do_d_orbitals=qm_control_r%do_d_orbitals
-  iqm_mode     =qm_control_r%iqm_mode
+  integer :: i,ia,iorbs
 
   ! now start seting up.
-  do i=1,qm_main_r%numat
-     ni             = qm_main_r%nat(i)
-     ia             = qm_main_r%NFIRST(i)
-     iorbs          = qm_main_r%num_orbs(i)
-     ni_local(i)    = ni
-     iorbs_local(i) = iorbs
-     ia_local(i)    = ia
-     ib_local(i)    = qm_main_r%NLAST(i)
-     ip_local(i)    = qm_scf_main_r%NW(i)
-     is_local(i)    = qm_scf_main_r%indx(ia)+ia
-     iw_local(i)    = qm_scf_main_r%indx(iorbs)+iorbs
-     if(iorbs.eq.9) then
-        Jmax_local(i)=10
+  iqm_mode     = qm_control_c%iqm_mode        ! local variables
+  do_am1_pm3   = qm_control_c%q_am1_pm3       !
+  do_d_orbitals= qm_control_c%do_d_orbitals   !
+
+  do i=1,qm_main_c%numat
+     ia             = qm_main_c%NFIRST(i)
+     iorbs          = qm_main_c%num_orbs(i)
+     qm_param_c%ni_local(i)    = qm_main_c%nat(i)               ! atomic number
+     qm_param_c%iorbs_local(i) = qm_main_c%num_orbs(i)          ! norbs or num_orbs?
+     qm_param_c%ia_local(i)    = qm_main_c%NFIRST(i)            ! nfirst
+     qm_param_c%ib_local(i)    = qm_main_c%NLAST(i)             ! nlast
+     qm_param_c%ip_local(i)    = qm_scf_main_c%NW(i)            ! nw
+     qm_param_c%is_local(i)    = qm_scf_main_c%indx(ia)+ia
+     qm_param_c%iw_local(i)    = qm_scf_main_c%indx(iorbs)+iorbs
+     if(iorbs == 9) then
+        qm_param_c%Jmax_local(i)=10
      else
-        Jmax_local(i)=4
+        qm_param_c%Jmax_local(i)=4
      end if
-
-     OMEGA_local(i)= OMEGA(ni)
-     DELTA_local(i)= DELTA(ni)
-     CORE_local(i) = CORE(ni)
-     if(qm_main_r%uhf) then
-        GSS_local(i)  = GSS(ni)
-        GSP_local(i)  = GSP(ni)
-        GPP_local(i)  = GPP(ni)
-        GP2_local(i)  = GP2(ni)
-        HSP_local(i)  = HSP(ni)
-        HPP_local(i)  = HPP(ni)
-     else
-        GSS_local(i)  = GSS(ni)*PT5
-        GSP_local(i)  = GSP(ni)-HSP(ni)*PT5
-        GPP_local(i)  = GPP(ni)*PT5
-        GP2_local(i)  = GP2(ni)-HPP(ni)*PT5
-        HSP_local(i)  = HSP(ni)*PT75-GSP(ni)*PT25
-        HPP_local(i)  = HPP(ni)*PT75-GP2(ni)*PT25
-     end if
-
-     ! for resonance integrals.
-     BETAS_local(i)= BETAS(ni)
-     BETAP_local(i)= BETAP(ni)
-     ZS_local(i)   = ZS(ni)
-     ZP_local(i)   = ZP(ni)
-     if(iorbs.eq.9) then
-        BETAD_local(i)=BETAD(ni)
-        ZD_local(i)   =ZD(ni)
-        if(qm_main_r%uhf) then
-           do j=1,243
-              w_save(j,i) = REPD(INTREP(j),ni)
-           end do
-        else
-           do j=1,243
-              int1 = INTRF1(j)
-              int2 = INTRF2(j)
-              rf   = REPD(INTREP(j),ni)
-              if(int1.gt.0) rf = rf-PT25*REPD(int1,ni)
-              if(int2.gt.0) rf = rf-PT25*REPD(int2,ni)
-              w_save(j,i) = rf
-           end do
-        end if
-     end if
-
-     ! for core-core interactions & and repp.
-     ALP_local(i) = ALP(ni)
-     PO_1(i)      = PO(1,ni)
-     PO_2(i)      = PO(2,ni)
-     PO_3(i)      = PO(3,ni)
-     PO_7(i)      = PO(7,ni)
-     PO_9(i)      = PO(9,ni)
-
-     DD_2(i)      = DD(2,ni)
-     DD_3(i)      = DD(3,ni)
   end do
-
-  if(do_d_orbitals) then
-     do i=1,243
-        int_ij(i)=INTIJ(i)
-        int_kl(i)=INTKL(i)
-     end do
-  end if
-
-  ! for mm atoms
-  PO_1_mm = PO(1,0)
-  PO_2_mm = PO(2,0)
-  PO_3_mm = PO(3,0)
-  PO_7_mm = PO(7,0)
-  PO_9_mm = PO(9,0)
-  DD_2_mm = DD(2,0)
-  DD_3_mm = DD(3,0)
-
-  ! mndo/d specific
-  if(qm_control_r%iqm_mode.eq.5) then
-     do i=1,qm_main_r%numat
-        ni            = ni_local(i)
-        MALPB_local(i)= MALPB(ni)
-        do j=1,qm_main_r%numat
-           nj=ni_local(j)
-           ALPB_local(j,i)=ALPB(nj,ni)
-        end do
-     end do
-  end if
-
-  ! am1/pm3/am1/d specific.
-  if(qm_control_r%q_am1_pm3) then
-     ! allocate memory..
-     do i=1,numat_local
-        ni             = ni_local(i)
-        ii             = IMPAR(ni)
-        IMPAR_local(i) = ii
-        GUESS1_local(1:ii,i)=GUESS1(1:ii,ni)
-        GUESS2_local(1:ii,i)=GUESS2(1:ii,ni)
-        GUESS3_local(1:ii,i)=GUESS3(1:ii,ni)
-        GNN_local(i)=GNN(ni)
-     end do
-  end if
 
   return
   end subroutine QMMM_module_prep
 
-  subroutine betaij(I,J,NI,NJ,iorbs,jorbs,R,T)
+  subroutine betaij(NI,NJ,iorbs,jorbs,R,T,               &
+                    zsi,zpi,zdi,betas_i,betap_i,betad_i, &
+                    zsj,zpj,zdj,betas_j,betap_j,betad_j)
   !
   ! RESONANCE INTEGRALS IN LOCAL COORDINATES.
   !
@@ -340,14 +64,16 @@ module qm1_energy_module
 
   implicit none
 
-  integer :: I,J,NI,NJ,iorbs,jorbs
+  integer :: NI,NJ,iorbs,jorbs
   real(chm_real):: R,T(14)
+  real(chm_real):: zsi,zpi,zdi,betas_i,betap_i,betad_i,  &
+                   zsj,zpj,zdj,betas_j,betap_j,betad_j
 
   ! local variables:
   real(chm_real):: TT
 
   ! compute overlap integrals.
-  call overlp(i,j,ni,nj,iorbs,jorbs,R,T)
+  call overlp(ni,nj,iorbs,jorbs,R,T,zsi,zpi,zdi,zsj,zpj,zdj)
 
   ! initialization.
   !iorbs  = LORBS(ni)
@@ -362,56 +88,56 @@ module qm1_energy_module
   !         6. 9-9 (norbs=9, norbs=9).
   select case(iorbs+jorbs)
      case ( 2)                ! case 1
-        T(1) = PT5*(BETAS_local(I)+BETAS_local(J))*T(1)
+        T(1)  = PT5*(betas_i + betas_j)*T(1)
      case ( 5)                ! case 2
-        T(1) = PT5*(BETAS_local(I)+BETAS_local(J))*T(1)
-        T(2) = PT5*(BETAS_local(I)+BETAP_local(J))*T(2)
-        T(3) = PT5*(BETAP_local(I)+BETAS_local(J))*T(3)
+        T(1)  = PT5*(betas_i + betas_j)*T(1)
+        T(2)  = PT5*(betas_i + betap_j)*T(2)
+        T(3)  = PT5*(betap_i + betas_j)*T(3)
      case ( 8)                ! case 3
-        T(1) = PT5*(BETAS_local(I)+BETAS_local(J))*T(1)
-        T(2) = PT5*(BETAS_local(I)+BETAP_local(J))*T(2)
-        T(3) = PT5*(BETAP_local(I)+BETAS_local(J))*T(3)
-        TT   = PT5*(BETAP_local(I)+BETAP_local(J))
+        T(1)  = PT5*(betas_i + betas_j)*T(1)
+        T(2)  = PT5*(betas_i + betap_j)*T(2)
+        T(3)  = PT5*(betap_i + betas_j)*T(3)
+        TT    = PT5*(betap_i + betap_j)
         T(4:5) = TT*T(4:5)
      case (10)                ! case 4
-        T(1) = PT5*(BETAS_local(I)+BETAS_local(J))*T(1)
-        T(2) = PT5*(BETAS_local(I)+BETAP_local(J))*T(2)
-        T(3) = PT5*(BETAP_local(I)+BETAS_local(J))*T(3)
+        T(1)  = PT5*(betas_i + betas_j)*T(1)
+        T(2)  = PT5*(betas_i + betap_j)*T(2)
+        T(3)  = PT5*(betap_i + betas_j)*T(3)
 
-        T(6) = PT5*(BETAD_local(I)+BETAS_local(J))*T(6)
-        T(7) = PT5*(BETAS_local(I)+BETAD_local(J))*T(7)
+        T(6)  = PT5*(betad_i + betas_j)*T(6)
+        T(7)  = PT5*(betas_i + betad_j)*T(7)
      case (13)                ! case 5
-        T(1) = PT5*(BETAS_local(I)+BETAS_local(J))*T(1)
-        T(2) = PT5*(BETAS_local(I)+BETAP_local(J))*T(2)
-        T(3) = PT5*(BETAP_local(I)+BETAS_local(J))*T(3)
-        TT   = PT5*(BETAP_local(I)+BETAP_local(J))
+        T(1)  = PT5*(betas_i + betas_j)*T(1)
+        T(2)  = PT5*(betas_i + betap_j)*T(2)
+        T(3)  = PT5*(betap_i + betas_j)*T(3)
+        TT    = PT5*(betap_i + betap_j)
         T(4:5) = TT*T(4:5)
-        T(6)  = PT5*(BETAD_local(I)+BETAS_local(J))*T(6)
-        T(7)  = PT5*(BETAS_local(I)+BETAD_local(J))*T(7)
-        T(8)  = PT5*(BETAD_local(I)+BETAP_local(J))*T(8)
-        T(9)  = PT5*(BETAP_local(I)+BETAD_local(J))*T(9)
-        T(10) = PT5*(BETAD_local(I)+BETAP_local(J))*T(10)
-        T(11) = PT5*(BETAP_local(I)+BETAD_local(J))*T(11)
+        T(6)  = PT5*(betad_i + betas_j)*T(6)
+        T(7)  = PT5*(betas_i + betad_j)*T(7)
+        T(8)  = PT5*(betad_i + betap_j)*T(8)
+        T(9)  = PT5*(betap_i + betad_j)*T(9)
+        T(10) = PT5*(betad_i + betap_j)*T(10)
+        T(11) = PT5*(betap_i + betad_j)*T(11)
      case (18)                ! case 6
-        T(1) = PT5*(BETAS_local(I)+BETAS_local(J))*T(1)
-        T(2) = PT5*(BETAS_local(I)+BETAP_local(J))*T(2)
-        T(3) = PT5*(BETAP_local(I)+BETAS_local(J))*T(3)
-        TT   = PT5*(BETAP_local(I)+BETAP_local(J))
+        T(1)  = PT5*(betas_i + betas_j)*T(1)
+        T(2)  = PT5*(betas_i + betap_j)*T(2)
+        T(3)  = PT5*(betap_i + betas_j)*T(3)
+        TT    = PT5*(betap_i + betap_j)
         T(4:5) = TT*T(4:5)
-        T(6)  = PT5*(BETAD_local(I)+BETAS_local(J))*T(6)
-        T(7)  = PT5*(BETAS_local(I)+BETAD_local(J))*T(7)
-        T(8)  = PT5*(BETAD_local(I)+BETAP_local(J))*T(8)
-        T(9)  = PT5*(BETAP_local(I)+BETAD_local(J))*T(9)
-        T(10) = PT5*(BETAD_local(I)+BETAP_local(J))*T(10)
-        T(11) = PT5*(BETAP_local(I)+BETAD_local(J))*T(11)
-        TT    = PT5*(BETAD_local(I)+BETAD_local(J))
+        T(6)  = PT5*(betad_i + betas_j)*T(6)
+        T(7)  = PT5*(betas_i + betad_j)*T(7)
+        T(8)  = PT5*(betad_i + betap_j)*T(8)
+        T(9)  = PT5*(betap_i + betad_j)*T(9)
+        T(10) = PT5*(betad_i + betap_j)*T(10)
+        T(11) = PT5*(betap_i + betad_j)*T(11)
+        TT    = PT5*(betad_i + betad_j)
         T(12:14) = TT*T(12:14)
   end select
   return
   end subroutine betaij
 
 
-  subroutine core_repul(I,J,NI,NJ,R,WIJ,ENUCLR)
+  subroutine core_repul(I,J,NI,NJ,R,WIJ,ENUCLR,q_specific_pair)
   ! 
   ! CORE-CORE REPULSION FUNCTION IN MNDO-TYPE METHODS.
   ! CONTRIBUTION ENUCLR FROM A GIVEN ATOM PAIR I-J.
@@ -422,25 +148,23 @@ module qm1_energy_module
   ! R         DISTANCE IN ATOMIC UNITS (I).
   ! WIJ       TWO-CENTER INTEGRAL (SS,SS) FOR IOP.GT.-10 (O).
   !
-  !use chm_kinds
-  !use number
-  !use qm1_constant
   !use qm1_parameters, only : ALP,DD,PO,CORE, &
   !                           ALPB, MALPB      ! mndo/d only
-  !use qm1_info, only : qm_control_r
+  use qm1_info, only : qm_param_c
 
   implicit none
   !
   integer       :: I,J,NI,NJ
   real(chm_real):: R,WIJ,ENUCLR
+  logical       :: q_specific_pair
 
   ! local variables
   integer :: k,MALPNI,MALPNJ
-  real(chm_real):: ALPNI,ALPNJ,RIJ,ENI,ENJ,SCALE,ENUC,ENUC1 
+  real(chm_real):: ALPNI,ALPNJ,RIJ,ENI,ENJ,scale_val,ENUC,ENUC1 
 
   ! set:
-  ALPNI  = ALP_local(I)
-  ALPNJ  = ALP_local(J)
+  ALPNI  = qm_param_c%ALP(i)  ! ALP(ni)
+  ALPNJ  = qm_param_c%ALP(j)  ! ALP(nj)
   RIJ    = R*A0   ! CONVERT TO ANGSTROM.
 
   ! bond parameters in mndo/d (if defined).
@@ -451,46 +175,46 @@ module qm1_energy_module
   !            -if ALPB(nj,ni) is nonzero and positive.
   ! The standard ALPHA parameter ALP(ni) is used if any one of there
   ! conditions is not satisfied.
-  if(iqm_mode.eq.5) then  ! mndo/d
-     MALPni = MALPB_local(i)
-     MALPnj = MALPB_local(j)
-     if(MALPni.gt.0 .and. nj.le.MALPni) then
-        if(ALPB_local(j,i).gt.ZERO) ALPNI = ALPB_local(j,i)
+  if(iqm_mode == 5) then  ! mndo/d
+     MALPni = qm_param_c%MALPB(i)   ! MALPB(ni)
+     MALPnj = qm_param_c%MALPB(j)   ! MALPB(nj)
+     if(MALPni > 0 .and. nj <= MALPni) then
+        if(qm_param_c%ALPB(j,i) > ZERO) ALPNI = qm_param_c%ALPB(j,i)  ! ALPB(nj,ni)
      end if
-     if(MALPnj.gt.0 .and. ni.le.MALPnj) then
-        if(ALPB_local(i,j).gt.ZERO) ALPNJ = ALPB_local(i,j)
+     if(MALPnj > 0 .and. ni <= MALPnj) then
+        if(qm_param_c%ALPB(i,j) > ZERO) ALPNJ = qm_param_c%ALPB(i,j)  ! ALPB(ni,nj)
      end if
   end if
   ! calculate scale factor including expeonetial terms.
   ENI    = EXP(-ALPNI*RIJ)
-  if(NI.EQ.NJ) then
+  if(ALPNI == ALPNJ) then  ! (NI == NJ)
      ENJ = ENI
   else
      ENJ = EXP(-ALPNJ*RIJ)
   end if
-  SCALE  = ONE+ENI+ENJ
+  scale_val  = ONE+ENI+ENJ
 
   ! H-O or H-N pairs
-  if(ni.eq.1 .and. (nj.eq.7 .or. nj.eq.8)) then
-     scale=scale+(RIJ-one)*ENJ
-  else if(nj.eq.1 .and. (ni.eq.7 .or. ni.eq.8)) then
-     scale=scale+(RIJ-one)*ENI
+  if(ni == 1 .and. (nj == 7 .or. nj == 8)) then
+     scale_val = scale_val + (RIJ-one)*ENJ
+  else if(nj == 1 .and. (ni == 7 .or. ni == 8)) then
+     scale_val = scale_val + (RIJ-one)*ENI
   end if
 
   ! calculate basic replusive term.
   if (do_d_orbitals) then
      ! since RIJ=R*A0, RIJ/A0=R
      ! WIJ = EV/SQRT(RIJ*RIJ/(A0*A0)+(PO_9(i)+PO_9(j))**2)
-     WIJ = EV/SQRT(R*R+(PO_9(i)+PO_9(j))**2)
+     WIJ = EV/SQRT(R*R+(qm_param_c%po(9,i)+qm_param_c%po(9,j))**2)
   end if 
-  ENUC   = CORE_local(i)*CORE_local(j)*WIJ
+  ENUC   = qm_param_c%core(i)*qm_param_c%core(j)*WIJ  ! CORE(ni)*CORE(nj)*WIJ
 
   ! core-core replusion terms for AM1/PM3/AM1/d
   ENUC1  = ZERO
-  if(do_am1_pm3) call repam1_qmqm(i,j,NI,NJ,RIJ,ENUC1)
+  if(do_am1_pm3) call repam1_qmqm(i,j,NI,NJ,RIJ,ENUC1,q_specific_pair)
 
   ! Add AM1 core-core repulsion TERMS.
-  ENUCLR = ENUC*SCALE+ENUC1
+  ENUCLR = ENUC*scale_val + ENUC1
 
   return
   end subroutine core_repul
@@ -505,8 +229,8 @@ module qm1_energy_module
   ! PB(dim_linear_norbs)   UHF-BETA DENSITY MATRIX (O).
   ! 
   !use chm_kinds
-  use qm1_info, only : qm_main_r,qm_scf_main_r
-  use qm1_parameters, only : III,IIID ! ,CORE
+  use qm1_info, only : qm_main_c,qm_param_c  ! ,qm_scf_main_c
+  !use qm1_parameters, only : III,IIID       ! ,CORE
   !use number
   !use qm1_constant
 
@@ -518,12 +242,12 @@ module qm1_energy_module
   ! local variables
   integer :: i,j,k,kk,ia,is
   integer :: NSPORB,NI,IORBS
-  real(chm_real):: YY,W,TEMP,DA,DB,DC,FA,FB,charge
+  real(chm_real):: YY,W,TEMP,DA,DB,DC,FA,FB,charge,core
   real(chm_real),parameter :: r_12=1.0d0/twelve
 
 
   ! options.
-  charge = qm_main_r%qmcharge
+  charge = qm_main_c%qmcharge
 
   ! diagonal trial density matrix.
   K      = 0
@@ -532,46 +256,54 @@ module qm1_energy_module
   ! NSPORB : number of atomic orbitals initially populated.
   !          D-orbitals of main-group elements are not populated.
   !          P-orbitals of transition elementes are not populated.
-  NSPORB = qm_main_r%norbs
-  do i=1,qm_main_r%numat
-     ni     = ni_local(i)    ! qm_main_r%nat(i)
-     iorbs  = iorbs_local(i) ! qm_main_r%num_orbs(i)
-     if(iorbs.eq.9) then
-        if(III(ni).le.IIID(ni)) NSPORB=NSPORB-5
-        if(III(ni).gt.IIID(ni)) NSPORB=NSPORB-3
+  NSPORB = qm_main_c%norbs
+  do i=1,qm_main_c%numat
+     !ni     = qm_param_c%ni_local(i)    ! qm_main_c%nat(i)
+     !iorbs  = qm_param_c%iorbs_local(i) ! qm_main_c%num_orbs(i)
+     !if(iorbs == 9) then
+     !   if(qm_param_c%III(i) <= qm_param_c%IIID(i)) NSPORB=NSPORB-5  ! III(ni) <= IIID(ni)
+     !   if(qm_param_c%III(i) >  qm_param_c%IIID(i)) NSPORB=NSPORB-3  ! III(ni) >  IIID(ni)
+     !end if
+     if(qm_param_c%iorbs_local(i) == 9) then  ! iorbs == 9
+        if(qm_param_c%III(i) <= qm_param_c%IIID(i)) then
+           NSPORB=NSPORB-5
+        else
+           NSPORB=NSPORB-3
+        end if
      end if
   end do
   YY     = charge/real(NSPORB)
   ! now, loop over all atoms.
-  do i=1,qm_main_r%numat
-     ia     = ia_local(i)    ! qm_main_r%nfirst(I)
-     iorbs  = iorbs_local(i) ! qm_main_r%num_orbs(i)
-     is     = is_local(i)    ! qm_scf_main_r%indx(ia)+ia ! =ia*(ia+1)/2
-     ni     = ni_local(i)    ! qm_main_r%nat(I)
-     if(iorbs.eq.1) then
+  do i=1,qm_main_c%numat
+     ia     = qm_param_c%ia_local(i)    ! qm_main_c%nfirst(I)
+     iorbs  = qm_param_c%iorbs_local(i) ! qm_main_c%num_orbs(i)
+     is     = qm_param_c%is_local(i)    ! qm_scf_main_c%indx(ia)+ia ! =ia*(ia+1)/2
+     !!ni     = qm_param_c%ni_local(i)    ! qm_main_c%nat(I)
+     core   = qm_param_c%core(i)        ! CORE(qm_main_c%nat(i))
+     if(iorbs == 1) then
         ! atoms with an S-basis
-        PA(is) = (CORE_local(i)-YY)*PT5
-     else if(iorbs.eq.4) then
+        PA(is) = (core-YY)*PT5
+     else if(iorbs == 4) then
        ! atoms with an SP-basis.
-        W   = (CORE_local(i)*PT25-YY)*PT5
+        W             =(core*PT25-YY)*PT5
         PA(is)        = W
         PA(is+ia+1)   = W
         PA(is+2*ia+3) = W
         PA(is+3*ia+6) = W
-     else if(iorbs.eq.9 .and. (III(ni).le.IIID(ni))) then
+     else if((iorbs == 9) .and. (qm_param_c%III(i) <= qm_param_c%IIID(i))) then ! III(ni) <= IIID(ni)
         ! main-group elements with an SPD-basis.
-        W   = (CORE_local(i)*PT25-YY)*PT5
+        W             =(core*PT25-YY)*PT5
         PA(is)        = W
         PA(is+ia+1)   = W
         PA(is+2*ia+3) = W
         PA(is+3*ia+6) = W
-     else if(iorbs.eq.9 .and. (III(ni).gt.IIID(ni))) then
+     else if((iorbs == 9) .and. (qm_param_c%III(i) >  qm_param_c%IIID(i))) then ! (III(ni) >  IIID(ni)
         ! transition-metal elements with an SPD-basis.
         ! up to 10 electrons, put into S and D orbitals.
         ! more than 10 electrons, fill D orbitials and put the rest in S orbitail.
-        temp = CORE_local(i)-YY*six
-        if(temp.lt.ten) then
-           W   = temp*r_12      ! /twelve
+        temp = core-YY*six
+        if(temp < ten) then
+           W              = temp*r_12      ! /twelve
            PA(is)         = W
            PA(is+4*IA+10) = W
            PA(is+5*IA+15) = W
@@ -579,7 +311,7 @@ module qm1_energy_module
            PA(is+7*IA+28) = W
            PA(is+8*IA+36) = W
         else
-           W   = (temp-ten)*PT5
+           W              =(temp-ten)*PT5
            PA(is)         = W
            PA(is+4*ia+10) = one
            PA(is+5*ia+15) = one
@@ -592,9 +324,9 @@ module qm1_energy_module
 
   ! Use diagonal trial density matrix for UHF with Ktrial=0.
   ! perturb initial densiity matrices for UHF singlets.
-  if(qm_main_r%UHF) then
-     da  = real(qm_main_r%nalpha)
-     db  = real(qm_main_r%nbeta)
+  if(qm_main_c%UHF) then
+     da  = real(qm_main_c%nalpha)
+     db  = real(qm_main_c%nbeta)
      temp= two/(da+db)
      fa  = da*temp
      fb  = db*temp
@@ -602,11 +334,11 @@ module qm1_energy_module
         PB(i) = PA(i)*fb
         PA(i) = PA(i)*fa
      end do
-     if(qm_main_r%nalpha.eq.qm_main_r%nbeta) then
+     if(qm_main_c%nalpha == qm_main_c%nbeta) then
         da = 0.98D0
         db = two-da
         k  = 0
-        do j=1,qm_main_r%norbs
+        do j=1,qm_main_c%norbs
            k  = k+j
            dc = da
            da = db
@@ -631,8 +363,7 @@ module qm1_energy_module
   ! W(linear_fock2)    two-electron integrals (O).
   !
   !use chm_kinds
-  use qm1_info, only : qm_control_r,qm_main_r,qm_scf_main_r,mm_main_r
-  !use number  , only : zero
+  use qm1_info, only : qm_control_c,qm_main_c,qm_scf_main_c,mm_main_c,qm_param_c
   use qm1_mndod, only : reppd_qmqm,rotd
 #if KEY_PARALLEL==1
   use parallel
@@ -647,26 +378,30 @@ module qm1_energy_module
   integer :: i,j,k,ii,jj,ij,ia,ja,is,js,ip,jp,iw,jw,ijp,kr,ni,nj,ll,iorbs,jorbs
   integer :: iicnt,ipnt
   real(chm_real):: En,Hij,Wij,R,delr
-  logical :: qi_h,qj_h
+  logical :: qi_h,qj_h, q_specific_pair,qlocal
   integer :: istart_norbs,iend_norbs
 #if KEY_PARALLEL==1
-  integer :: ISTRT_CHECK            ! external function
+  !!integer :: ISTRT_CHECK            ! external function
   integer :: mmynod, nnumnod,icnt
 #endif
 
-  istart_norbs  = 1
-  iend_norbs    = qm_main_r%norbs
 #if KEY_PARALLEL==1
   mmynod  = mynod
   nnumnod = numnod
-  if(nnumnod>1) istart_norbs = ISTRT_CHECK(iend_norbs,qm_main_r%norbs)
+  !if(nnumnod>1) istart_norbs = ISTRT_CHECK(iend_norbs,qm_main_c%norbs)
+
+  istart_norbs = qm_main_c%norbs*mynod/numnod+1
+  iend_norbs   = qm_main_c%norbs*(mynod+1)/numnod
+#else
+  istart_norbs  = 1
+  iend_norbs    = qm_main_c%norbs
 #endif
 
   ! initialize some variables.
   kr     = 0
   Enuclr = zero
-  h(1:linear_norbs)=zero
-  w(1:linear_fock2)=zero
+  !h(1:linear_norbs)=zero    ! initialized in scf_energy
+  !w(1:linear_fock2)=zero    !
 
   ! Diagonal one-center terms: replace "call one_center_h(H)"
   !          as this was precomputed at the beginning of QM setup.
@@ -674,17 +409,17 @@ module qm1_energy_module
 
   ! note: this should be carefully handled in using parallel as H_1cent is filled for each atom 
   !       at the subroutine compute_one_center_h. So, either only fill for part of atoms based on
-  !       parallel partitioning or for 1:qm_main_r%norbs should be changed or do only for the
+  !       parallel partitioning or for 1:qm_main_c%norbs should be changed or do only for the
   !       master (or only one) node.
   !#if KEY_PARALLEL==1
   !!if(mmynod.eq.0) then
   !#endif
-  !!   h(qm_scf_main_r%imap_h(1:qm_main_r%norbs))=qm_scf_main_r%H_1cent(1:qm_main_r%norbs)
+  !!   h(qm_scf_main_c%imap_h(1:qm_main_c%norbs))=qm_scf_main_c%H_1cent(1:qm_main_c%norbs)
   !!#if KEY_PARALLEL==1
   !!end if
   !!#endif
-  !! taken cared for parallelization.
-  h(qm_scf_main_r%imap_h(istart_norbs:iend_norbs))=qm_scf_main_r%H_1cent(istart_norbs:iend_norbs)
+  !! taken care for parallelization.
+  h(qm_scf_main_c%imap_h(istart_norbs:iend_norbs))=qm_scf_main_c%H_1cent(istart_norbs:iend_norbs)
 
   ! loop over atom pairs for offdiagonal two-center terms.
   ! atoms i and j are identified at the beginning of the loop.
@@ -692,35 +427,40 @@ module qm1_energy_module
   icnt=0
 #endif
   iicnt=0
-  if(mm_main_r%q_lookup_beta) r_dr_width_beta = one/dr_width_beta
-
-  loopii: do i=2,qm_main_r%numat
-     ni     = ni_local(i)     ! qm_main_r%nat(i)
-     ia     = ia_local(i)     ! qm_main_r%nfirst(i)
-     is     = is_local(i)     ! qm_scf_main_r%indx(ia)+ia
-     iorbs  = iorbs_local(i)  ! qm_main_r%num_orbs(i)
-     iw     = iw_local(i)     ! qm_scf_main_r%indx(iorbs)+iorbs
-     ip     = ip_local(i)     ! qm_scf_main_r%NW(i)
+  loopii: do i=2,qm_main_c%numat
+     ni     = qm_param_c%ni_local(i)     ! qm_main_c%nat(i)
+     ia     = qm_param_c%ia_local(i)     ! qm_main_c%nfirst(i)
+     is     = qm_param_c%is_local(i)     ! qm_scf_main_c%indx(ia)+ia
+     iorbs  = qm_param_c%iorbs_local(i)  ! qm_main_c%num_orbs(i)
+     iw     = qm_param_c%iw_local(i)     ! qm_scf_main_c%indx(iorbs)+iorbs
+     ip     = qm_param_c%ip_local(i)     ! qm_scf_main_c%NW(i)
+     qlocal = .not.qm_param_c%q_atom_specific(i)
 
      qi_h   = ni.eq.1  ! h-atom?
      loopjj: do j=1,i-1
-        if(ni > 1 .or. ni_local(j) > 1) iicnt = iicnt + 1
+        if(ni > 1 .or. qm_param_c%ni_local(j) > 1) iicnt = iicnt + 1
 #if KEY_PARALLEL==1
         icnt = icnt + 1
         if(mmynod .ne. mod(icnt-1,nnumnod)) cycle loopjj
 #endif
-        nj     = ni_local(j)     ! qm_main_r%nat(J)
-        ja     = ia_local(j)     ! qm_main_r%nfirst(j)
-        js     = is_local(j)     ! qm_scf_main_r%indx(ja)+ja
-        jorbs  = iorbs_local(j)  ! qm_main_r%num_orbs(j)
-        jw     = iw_local(j)     ! qm_scf_main_r%indx(jorbs)+jorbs
-        jp     = ip_local(j)     ! qm_scf_main_r%NW(j)
+        nj     = qm_param_c%ni_local(j)     ! qm_main_c%nat(J)
+        ja     = qm_param_c%ia_local(j)     ! qm_main_c%nfirst(j)
+        js     = qm_param_c%is_local(j)     ! qm_scf_main_c%indx(ja)+ja
+        jorbs  = qm_param_c%iorbs_local(j)  ! qm_main_c%num_orbs(j)
+        jw     = qm_param_c%iw_local(j)     ! qm_scf_main_c%indx(jorbs)+jorbs
+        jp     = qm_param_c%ip_local(j)     ! qm_scf_main_c%NW(j)
+
+        if((ni==nj) .and. (.not.qm_param_c%q_atom_specific(j) .and. qlocal)) then
+           q_specific_pair =.false.
+        else
+           q_specific_pair =.true.  ! default, such that pair terms.
+        end if
 
         qj_h   = nj.eq.1 ! h-atom?
         ! for H-H pair.
         if(qi_h .and. qj_h) then
-           call hhpair (j,i,j,i,qm_main_r%qm_coord,Hij,Wij,En)
-           H(qm_scf_main_r%indx(ia)+ja) = Hij
+           call hhpair(j,i,j,i,qm_main_c%qm_coord,Hij,Wij,En,q_specific_pair)
+           H(qm_scf_main_c%indx(ia)+ja) = Hij
            H(is)  = H(is)-Wij
            H(js)  = H(js)-Wij
            Enuclr = Enuclr+En
@@ -731,65 +471,46 @@ module qm1_energy_module
            W(IJp) = Wij
         else 
            ! distance R (au) and rotation matrix.
-           call rotmat(J,I,JORBS,IORBS,qm_main_r%NUMAT,qm_main_r%qm_coord,R,qm_scf_main_r%YY)
+           call rotmat(J,I,JORBS,IORBS,qm_main_c%NUMAT,qm_main_c%qm_coord,R,qm_scf_main_c%YY)
            ! two-electron integrals in local coordinates & compute and store
            !              the semiempirical integrals.
-           call repp_qmqm(i,j,NI,NJ,R,qm_scf_main_r%RI,qm_scf_main_r%CORE_mat)
-           if(iorbs.ge.9 .or. jorbs.ge.9)  &
-              call reppd_qmqm(NI,NJ,R,qm_scf_main_r%RI,qm_scf_main_r%CORE_mat, &
-                              qm_scf_main_r%WW,IW,JW)
+           call repp_qmqm(i,j,NI,NJ,R,qm_scf_main_c%RI,qm_scf_main_c%CORE_mat,     &
+                          qm_param_c%LORBS(i),qm_param_c%LORBS(j),                 &
+                          qm_param_c%core(i), qm_param_c%core(j),                  &
+                          qm_param_c%po(1:9,i),qm_param_c%po(1:9,j),               &
+                          qm_param_c%dd(1:6,i),qm_param_c%dd(1:6,j),               &
+                          q_specific_pair)
+           if(iorbs>=9 .or. jorbs>=9)  &
+              call reppd_qmqm(i,j,NI,NJ,R,qm_scf_main_c%RI,qm_scf_main_c%CORE_mat, &
+                              qm_scf_main_c%WW,IW,JW, &
+                              qm_param_c%po(1:9,i),qm_param_c%po(1:9,j), &
+                              qm_param_c%dd(1:6,i),qm_param_c%dd(1:6,j), &
+                              qm_param_c%core)
            ! transform two-electron integrals to molecular coordinates.
-           if(iorbs.le.4 .and. jorbs.le.4) then
-              call rotate(IW,JW,IP,JP,KR,qm_scf_main_r%RI,qm_scf_main_r%YY, &
+           if(iorbs<=4 .and. jorbs<=4) then
+              call rotate(IW,JW,IP,JP,KR,qm_scf_main_c%RI,qm_scf_main_c%YY, &
                           W,W,linear_fock,linear_fock2,0)
            else
-              call rotd(qm_scf_main_r%WW,qm_scf_main_r%YY,IW,JW)
-              call w2mat(ip,jp,qm_scf_main_r%WW,W,linear_fock,iw,jw)
+              call rotd(qm_scf_main_c%WW,qm_scf_main_c%YY,IW,JW)
+              call w2mat(ip,jp,qm_scf_main_c%WW,W,linear_fock,iw,jw)
            end if
 
            ! resonance integrals.
-           if(mm_main_r%q_lookup_beta) then
-              if(r >= rval_min_beta .and. r <= rval_max_beta) then
-                 ipnt = ij_pair_look_up(iicnt)  ! the array counter.
-                 select case(iorbs+jorbs)
-                    case (2)
-                       ii=1
-                    case (5)
-                       ii=3
-                    case (8)
-                       ii=5
-                    case (10)
-                       ii=7
-                    case (13)
-                       ii=11
-                    case (18)
-                       ii=15
-                 end select
-                 jj  = int((r - rval_min_beta)*r_dr_width_beta) + 1
-                 delr= r - r_beta_val(jj)
-                 do k=1,ii
-                    qm_scf_main_r%T(k)=((look_up_beta_r(ipnt)%coef_val(1,k,jj) *delr + &
-                                         look_up_beta_r(ipnt)%coef_val(2,k,jj))*delr + &
-                                         look_up_beta_r(ipnt)%coef_val(3,k,jj))*delr + &
-                                         look_up_beta_r(ipnt)%coef_val(4,k,jj)       + &
-                                         look_up_beta_r(ipnt)%val_shift(k)
-                 end do
-              else
-                  call betaij(i,j,NI,NJ,iorbs,jorbs,R,qm_scf_main_r%T)
-              end if
-           else
-              call betaij(i,j,NI,NJ,iorbs,jorbs,R,qm_scf_main_r%T)
-           end if
-           call rotbet(IA,JA,IORBS,JORBS,qm_scf_main_r%T,qm_scf_main_r%YY,H,linear_norbs, &
-                       qm_scf_main_r%indx)
+           call betaij(ni,nj,iorbs,jorbs,R,qm_scf_main_c%T,                               &
+                       qm_param_c%zs(i),qm_param_c%zp(i),qm_param_c%zd(i),                &
+                       qm_param_c%betas(i),qm_param_c%betap(i),qm_param_c%betad(i),       &
+                       qm_param_c%zs(j),qm_param_c%zp(j),qm_param_c%zd(j),                &
+                       qm_param_c%betas(j),qm_param_c%betap(j),qm_param_c%betad(j))
+           call rotbet(IA,JA,IORBS,JORBS,qm_scf_main_c%T,qm_scf_main_c%YY,H,linear_norbs, &
+                       qm_scf_main_c%indx)
 
            ! core-electron attractions.
-           call rotcora_qmqm(IA,JA,IORBS,JORBS,IS,JS,qm_scf_main_r%CORE_mat, &
-                             qm_scf_main_r%YY,H,linear_norbs)
+           call rotcora_qmqm(IA,JA,IORBS,JORBS,IS,JS,qm_scf_main_c%CORE_mat, &
+                             qm_scf_main_c%YY,H,linear_norbs)
 
            ! core-core repulsions.
-           Wij = qm_scf_main_r%RI(1)
-           call core_repul(i,j,ni,nj,R,Wij,En)
+           Wij = qm_scf_main_c%RI(1)
+           call core_repul(i,j,ni,nj,R,Wij,En,q_specific_pair)
            Enuclr = Enuclr+En                    ! combined Enuclr in the parent routine.
         end if
      end do loopjj
@@ -800,7 +521,7 @@ module qm1_energy_module
   ! this should be done the same change for each node.
   ! Complete defintion of square matrix of MNDO two-electron integrals
   ! the MNDO integrals in square form is stored in the parent subroutine after gcomb!
-  !call wstore(W,linear_fock,0,qm_main_r%numat,qm_main_r%uhf)
+  !call wstore(W,linear_fock,0,qm_main_c%numat,qm_main_c%uhf)
 
   !
   return
@@ -839,8 +560,8 @@ module qm1_energy_module
 !     ! fill diagonal one-center terms.
 !     !
 !     !use chm_kinds
-!     use qm1_info, only : qm_main_r,qm_scf_main_r
-!     use qm1_parameters,only : USS,UPP,UDD
+!     use qm1_info, only : qm_main_c,qm_scf_main_c,qm_param_c
+!     !!use qm1_parameters,only : USS,UPP,UDD
 !
 !     real(chm_real):: H(*)
 !
@@ -850,21 +571,21 @@ module qm1_energy_module
 !     ! DIAGONAL ONE-CENTER TERMS.
 !     ! this can be done once at the beginning of QM setup.
 !     ! work on this later to make it go over the loop once.
-!     do i=1,qm_main_r%numat
-!        ni     = ni_local(i)    ! qm_main_r%NAT(i)
-!        ia     = ia_local(i)    ! qm_main_r%NFIRST(i)
-!        iorbs  = iorbs_local(i) ! qm_main_r%num_orbs(i)  ! = NLAST(I)-IA+1
-!        H(qm_scf_main_r%INDX(ia)+ia) = USS(ni)
-!        if(iorbs.ge.9) then
+!     do i=1,qm_main_c%numat
+!        ni     = qm_param_c%ni_local(i)    ! qm_main_c%NAT(i)
+!        ia     = qm_param_c%ia_local(i)    ! qm_main_c%NFIRST(i)
+!        iorbs  = qm_param_c%iorbs_local(i) ! qm_main_c%num_orbs(i)  ! = NLAST(I)-IA+1
+!        H(qm_scf_main_c%INDX(ia)+ia) = qm_param_c%USS(i)
+!        if(iorbs >= 9) then
 !           do j=ia+1,ia+3
-!              H(qm_scf_main_r%INDX(j)+j)  = UPP(ni)
+!              H(qm_scf_main_c%INDX(j)+j)  = qm_param_c%UPP(i)
 !           end do
 !           do j=ia+4,ia+8
-!              H(qm_scf_main_r%INDX(j)+j)  = UDD(ni)
+!              H(qm_scf_main_c%INDX(j)+j)  = qm_param_c%UDD(i)
 !           end do
-!        else if(iorbs.ge.4) then
+!        else if(iorbs >= 4) then
 !           do j=ia+1,ia+3
-!              H(qm_scf_main_r%INDX(j)+j)  = UPP(ni)
+!              H(qm_scf_main_c%INDX(j)+j)  = qm_param_c%UPP(i)
 !           end do
 !        end if
 !     end do
@@ -874,7 +595,7 @@ module qm1_energy_module
   end subroutine hcorep
 
 
-  subroutine hhpair(jqm,iqm,j,i,coord,hij,wij,enuclr)
+  subroutine hhpair(jqm,iqm,j,i,coord,hij,wij,enuclr,q_specific_pair)
   !
   ! integrals for a hydrogen-hydrogen pair.
   !
@@ -884,15 +605,13 @@ module qm1_energy_module
   ! HIJ     Two-center resonance integral (O).
   ! WIJ     Two-center two-electron integrals (SS,SS) (O).
   ! Enuclr  Contribution to core-core repulsion (O).
-  !use chm_kinds
-  !use number
-  !use qm1_constant
-  !use qm1_info, only : qm_control_r
+  use qm1_info, only : qm_param_c
   !use qm1_parameters, only : ZS,PO,BETAS,ALP
   !
   implicit none
 
   integer :: jqm,iqm,j,i
+  logical :: q_specific_pair
   real(chm_real):: COORD(3,*),HIJ,WIJ,ENUCLR
 
   ! local variables
@@ -900,22 +619,42 @@ module qm1_energy_module
   real(chm_real),parameter :: r_three=one/three, &
                               r_A0   =one/A0
 
+  ! the following (equations) needs to be checked.
   ! distance R (AU), and resonance integral Hij.
+  ! 1s-1s overlap integral
+  ! S(r_ij) = exp(-zr)*(1+zr+zr^2/3)
   r = SQRT((coord(1,j)-coord(1,i))**2+(coord(2,j)-coord(2,i))**2+(coord(3,j)-coord(3,i))**2)*r_A0
-  zr= zs_local(iqm)*r  ! zs(1)*r
-  ! resonance integral Hij.
-  if(zr.lt.bigexp) then
-     Hij = BETAS_local(iqm)*EXP(-zr)*(one+zr+zr*zr*r_three)
+  if(q_specific_pair) then
+     ! if two H atoms using different parameters
+     zr =PT5*(qm_param_c%ZS(iqm)+qm_param_c%ZS(jqm))*r  ! zs(1)*r
+     ! resonance integral Hij.
+     if(zr < bigexp) then
+        Hij = PT5*(qm_param_c%BETAS(iqm)+qm_param_c%BETAS(jqm))*EXP(-zr)*(one+zr+zr*zr*r_three)
+     else
+        Hij = zero
+     end if
+     ! two-electron integral Wij
+     Wij    = EV/SQRT(r*r + (qm_param_c%PO(1,iqm)+qm_param_c%PO(1,jqm))**2)
+     ! core-core replusion Enuclr.
+     Rij    = r*A0
+     Enuclr = Wij*(one + EXP(-qm_param_c%ALP(iqm)*Rij) + EXP(-qm_param_c%ALP(jqm)*Rij))
   else
-     Hij = zero
+     ! two h atoms with the same parameters 
+     zr= qm_param_c%ZS(iqm)*r  ! zs(1)*r
+     ! resonance integral Hij.
+     if(zr < bigexp) then
+        Hij = qm_param_c%BETAS(iqm)*EXP(-zr)*(one+zr+zr*zr*r_three)
+     else
+        Hij = zero
+     end if
+     ! two-electron integral Wij
+     Wij    = EV/SQRT(r*r+FOUR*qm_param_c%PO(1,iqm)**2)
+     ! core-core replusion Enuclr.
+     Rij    = r*A0
+     Enuclr = Wij*(one+two*(EXP(-qm_param_c%ALP(iqm)*Rij)))
   end if
-  ! two-electron integral Wij
-  Wij    = EV/SQRT(r*r+FOUR*PO_1(iqm)**2)
-  ! core-core replusion Enuclr.
-  Rij    = r*A0
-  Enuclr = Wij*(one+two*(EXP(-ALP_local(iqm)*Rij)))
   ! am1-type core-core terms
-  if(do_am1_pm3) call repam1_hh_pair(iqm,1,RIJ,ENUCLR)
+  if(do_am1_pm3) call repam1_hh_pair(iqm,jqm,1,RIJ,ENUCLR,q_specific_pair)
 
   return
   end subroutine hhpair
@@ -927,8 +666,8 @@ module qm1_energy_module
   ! and the core-core repulsions.
   !
   !use chm_kinds
-  use qm1_info, only : qm_control_r,qm_main_r,mm_main_r,qm_scf_main_r
-  use nbndqm_mod, only: map_qmatom_to_group,map_mmatom_to_group
+  use qm1_info, only : qm_control_c,qm_main_c,mm_main_c,qm_scf_main_c,qm_param_c
+  use nbndqm_mod, only: map_grp_c
   !use qm1_parameters, only : CORE,OMEGA,DELTA
   use qm1_mndod, only : reppd_qmmm
 #if KEY_PARALLEL==1
@@ -940,156 +679,88 @@ module qm1_energy_module
   integer :: dim_linear_norbs,m
   real(chm_real):: H(dim_linear_norbs),ENUCLR,enucqm
 
-  integer :: i,ij,jj,irs_qm,irs_mm,numqm
-  real(chm_real):: XCOORD(3,2),PTCHG,PTCHG_SIGN,R,scale,enuc,r_sq
-  real(chm_real):: RI_local(22),CORE_mat(10,2)
+  integer :: i,ij,jj,irs_qm,irs_mm,numqm,ni,iorbs,iw,ia,is,lorbs
+  real(chm_real):: XCOORD(3,2),PTCHG,PTCHG_SIGN,R,scale_val,enuc,r_sq,sw_scale
+  real(chm_real):: RI_local(22),CORE_mat(10,2),po_qm(9),po_mm(9),dd_qm(6),dd_mm(6)
+  integer       :: i_do_switching
   !
   integer :: mstart,mstop
+
+  numqm   = qm_main_c%numat
 #if KEY_PARALLEL==1
-  integer :: ISTRT_CHECK            ! for external function
-#endif
-
-  ! for look-up
-  real(chm_real):: rr_val,rr_min,rr_max,delr,scale2,enuc2,sw_scale
-  integer       :: i_do_switching
-
+  mstart  = mm_main_c%numatm*mynod/numnod+1
+  mstop   = mm_main_c%numatm*(mynod+1)/numnod
+#else
   mstart  = 1
-  mstop   = mm_main_r%numatm
-  numqm = qm_main_r%numat
-#if KEY_PARALLEL==1
-  if(numnod>1) mstart = ISTRT_CHECK(mstop,mm_main_r%numatm)
+  mstop   = mm_main_c%numatm
 #endif
+
+  !
+  po_mm(1:9) = qm_param_c%PO_mm(1:9)
+  dd_mm(1:6) = qm_param_c%DD_mm(1:6)
 
   ! 
   ! MM point charges (M.J.Field et al. J.Comput.Chem. 11, 700 (1990))
-  do m=mstart,mstop               ! 1,mm_main_r%numatm
-     !if(mm_main_r%mm_chrgs(m).ne.zero) then
-     ! in qmint, it loops over qm atoms.
-     ! call qmint(H,dim_linear_norbs,enucqm,mm_main_r%mm_coord(1:3,m), &
-     !            mm_main_r%mm_chrgs(m),                               &
-     !            qm_main_r%numat,qm_main_r%NAT,qm_main_r%NFIRST,      &
-     !            qm_main_r%num_orbs,qm_scf_main_r%indx,               &
-     !            qm_main_r%qm_coord,qm_scf_main_r%CORE_mat,           &
-     !            qm_scf_main_r%WW,qm_scf_main_r%RI,qm_scf_main_r%YY,  &
-     !            qm_control_r%q_am1_pm3)
+  do m=mstart,mstop               ! 1,mm_main_c%numatm
+     !if(mm_main_c%mm_chrgs(m).ne.zero) then
 
-     if(mm_main_r%q_cut_by_group .or. mm_main_r%q_switch) irs_mm = map_mmatom_to_group(m) 
+     if(mm_main_c%q_switch) irs_mm = map_grp_c%map_mmatom_to_group(m) 
 
-     XCOORD(1:3,1) = mm_main_r%mm_coord(1:3,m)
-     PTCHG         = mm_main_r%mm_chrgs(m)
-     if(PTCHG.ge.zero) then
+     XCOORD(1:3,1) = mm_main_c%mm_coord(1:3,m)
+     PTCHG         = mm_main_c%mm_chrgs(m)
+     if(PTCHG >= zero) then
         PTCHG_SIGN = one
      else
         PTCHG_SIGN =-one
      end if
      ! loop over qm atoms for each mm atom.
      ENUCQM = zero
-     if(mm_main_r%q_lookup) then
-        r_dr_width = one/dr_width
-        do i=1,numqm
-           XCOORD(1:3,2) = qm_main_r%qm_coord(1:3,i)
+     do i=1,numqm
+        XCOORD(1:3,2) = qm_main_c%qm_coord(1:3,i)
+        iorbs         = qm_param_c%iorbs_local(i)
+        ni            = qm_param_c%ni_local(i)
+        ia            = qm_param_c%ia_local(i)
+        is            = qm_param_c%is_local(i)
+        iw            = qm_param_c%iw_local(i)
+        !!lorbs         = qm_param_c%LORBS(i)     ! probably the same as iorbs
+        po_qm(1:9)    = qm_param_c%po(1:9,i)
+        dd_qm(1:6)    = qm_param_c%dd(1:6,i)
 
-           ! group-by-group-based cutoff case, skip the pair if its distance is longer than cutoff.
-           ! otherwise (default group-based case), include all mm atoms (default).
-           if(mm_main_r%q_cut_by_group) then
-              irs_qm = map_qmatom_to_group(i)
-              if(.not.mm_main_r%q_mmgrp_qmgrp_cut(irs_mm,irs_qm)) cycle
-           else if(mm_main_r%q_switch) then
-              irs_qm = map_qmatom_to_group(i)
-           end if
+        ! default group-based case, include all mm atoms (default).
+        if(mm_main_c%q_switch) irs_qm = map_grp_c%map_qmatom_to_group(i)
 
-           ! distance R (au) and rotation matrix.
-           call rotmat_qmmm(1,2,1,iorbs_local(i),2,XCOORD,R,qm_scf_main_r%YY)
-           ! local charge-electron attraction integrals.
-           call repp_qmmm(ni_local(i),0,i,R,RI_local,CORE_mat)
-           if(iorbs_local(i).ge.9) call reppd_qmmm(ni_local(i),0,R,RI_local,CORE_mat, &
-                                                   qm_scf_main_r%WW,iw_local(i),1)
+        ! distance R (au) and rotation matrix.
+        call rotmat_qmmm(1,2,1,iorbs,2,XCOORD,R,qm_scf_main_c%YY)
+        ! local charge-electron attraction integrals.
+        call repp_qmmm(ni,0,i,iorbs,R,RI_local,CORE_mat,po_qm,po_mm,dd_qm,dd_mm)
+        if(iorbs >= 9) call reppd_qmmm(ni,0,R,RI_local,CORE_mat, &
+                                       qm_scf_main_c%WW,iw,1,po_qm,po_mm,dd_qm,dd_mm)
 
-           ! multiplication by point charge.
-           sw_scale = one
-           if(mm_main_r%q_switch) then
-              i_do_switching = mm_main_r%q_mmgrp_qmgrp_swt(irs_mm,irs_qm)
-              ! apply switching function
-              if(i_do_switching > 0) sw_scale = mm_main_r%sw_val(i_do_switching)
-           end if
-           CORE_mat(1:Jmax_local(i),1) = CORE_mat(1:Jmax_local(i),1)*PTCHG*sw_scale
+        ! multiplication by point charge.
+        sw_scale = one
+        if(mm_main_c%q_switch) then
+           i_do_switching = mm_main_c%q_mmgrp_qmgrp_swt(irs_mm,irs_qm)
+           ! apply switching function
+           if(i_do_switching > 0) sw_scale = mm_main_c%sw_val(i_do_switching)
+        end if
+        CORE_mat(1:qm_param_c%Jmax_local(i),1) = CORE_mat(1:qm_param_c%Jmax_local(i),1)*PTCHG*sw_scale
 
-           ! contributions to the core hamiltonian.
-           call rotcora_qmmm(ia_local(i),0,iorbs_local(i),0,is_local(i),0,CORE_mat, &
-                             qm_scf_main_r%YY,H,dim_linear_norbs,mm_main_r%q_diag_coulomb)
-
-           ! contributions to the core-core repulsions
-           if(.not.mm_main_r%q_diag_coulomb) then
-              ij     = i_index_look_up(i)  ! matching atom id.
-              R      = R*A0
-              rr_val = r 
-              if(rr_val >= rval_min .and. rr_val <= rval_max) then
-                 jj = int( (rr_val-rval_min)*r_dr_width) + 1
-                 delr= rr_val - r_core_val(jj)
-                 scale=((coef_core_val(1,jj,1,ij)*delr +coef_core_val(2,jj,1,ij))*delr + &
-                         coef_core_val(3,jj,1,ij))*delr+coef_core_val(4,jj,1,ij) + &
-                         core_val_shift(1,ij)
-                 enuc = CORE_local(i)*RI_local(1)*(one+PTCHG_SIGN*scale)
-                 if(do_am1_pm3 .and. rr_val <= core_cut_val(ij)) then
-                    enuc = enuc + ((coef_core_val(1,jj,2,ij)*delr +coef_core_val(2,jj,2,ij))*delr + &
-                                    coef_core_val(3,jj,2,ij))*delr+coef_core_val(4,jj,2,ij) + &
-                                    core_val_shift(2,ij)
-                 end if
-              else
-                 scale= EXP(-OMEGA_local(i)*(R-DELTA_local(i)))+EXP(-five*R)
-                 enuc = CORE_local(i)*RI_local(1)*(one+PTCHG_SIGN*scale)
-                 if(do_am1_pm3) call repam1_qmmm(i,ni_local(i),0,R,enuc)
-              end if
-
-              ENUCQM = ENUCQM+enuc*sw_scale
-           end if
-        end do
-     else
-        do i=1,numqm
-           XCOORD(1:3,2) = qm_main_r%qm_coord(1:3,i)
-
-           ! group-by-group-based cutoff case, skip the pair if its distance is longer than cutoff.
-           ! otherwise (default group-based case), include all mm atoms (default).
-           if(mm_main_r%q_cut_by_group) then
-              irs_qm = map_qmatom_to_group(i)
-              if(.not.mm_main_r%q_mmgrp_qmgrp_cut(irs_mm,irs_qm)) cycle
-           else if(mm_main_r%q_switch) then
-              irs_qm = map_qmatom_to_group(i)
-           end if
-
-           ! distance R (au) and rotation matrix.
-           call rotmat_qmmm(1,2,1,iorbs_local(i),2,XCOORD,R,qm_scf_main_r%YY)
-           ! local charge-electron attraction integrals.
-           call repp_qmmm(ni_local(i),0,i,R,RI_local,CORE_mat)
-           if(iorbs_local(i).ge.9) call reppd_qmmm(ni_local(i),0,R,RI_local,CORE_mat, &
-                                                   qm_scf_main_r%WW,iw_local(i),1)
-
-           ! multiplication by point charge.
-           sw_scale = one
-           if(mm_main_r%q_switch) then
-              i_do_switching = mm_main_r%q_mmgrp_qmgrp_swt(irs_mm,irs_qm)
-              ! apply switching function
-              if(i_do_switching > 0) sw_scale = mm_main_r%sw_val(i_do_switching)
-           end if
-           CORE_mat(1:Jmax_local(i),1) = CORE_mat(1:Jmax_local(i),1)*PTCHG*sw_scale
-
-           ! contributions to the core hamiltonian.
-           call rotcora_qmmm(ia_local(i),0,iorbs_local(i),0,is_local(i),0,CORE_mat, &
-                             qm_scf_main_r%YY,H,dim_linear_norbs,mm_main_r%q_diag_coulomb)
+        ! contributions to the core hamiltonian.
+        call rotcora_qmmm(ia,0,iorbs,0,is,0,CORE_mat, &
+                          qm_scf_main_c%YY,H,dim_linear_norbs,mm_main_c%q_diag_coulomb)
    
-           ! contributions to the core-core repulsions.
-           if(.not.mm_main_r%q_diag_coulomb) then
-              R = R*A0
-              scale= EXP(-OMEGA_local(i)*(R-DELTA_local(i)))+EXP(-five*R)
-              enuc = CORE_local(i)*RI_local(1)*(one+PTCHG_SIGN*scale)
-              if(do_am1_pm3) call repam1_qmmm(i,ni_local(i),0,R,enuc)
+        ! contributions to the core-core repulsions.
+        if(.not.mm_main_c%q_diag_coulomb) then
+           R = R*A0
+           scale_val= EXP(-qm_param_c%OMEGA(i)*(R-qm_param_c%DELTA(i)))+EXP(-five*R)
+           enuc     = qm_param_c%core(i)*RI_local(1)*(one+PTCHG_SIGN*scale_val)
+           if(do_am1_pm3) call repam1_qmmm(i,ni,0,R,enuc)
 
-              ENUCQM = ENUCQM+enuc*sw_scale
-           end if
-        end do
-     end if
+           ENUCQM = ENUCQM+enuc*sw_scale
+        end if
+     end do
 
-     if(.not.mm_main_r%q_diag_coulomb) then
+     if(.not.mm_main_c%q_diag_coulomb) then
         ENUCLR = ENUCLR+enucqm*PTCHG  ! multiply by the MM point charge.
      end if
      !end if
@@ -1130,7 +801,7 @@ module qm1_energy_module
 !     ! PTCHG        value of the point charge in atomic units (I).
 !     !
 !     !use chm_kinds
-!     use qm1_info, only : qm_control_r
+!     use qm1_info, only : qm_control_c
 !     use qm1_mndod, only : reppd_qmmm
 !     use qm1_parameters, only : CORE,OMEGA,DELTA   
 !     !use number, only : zero,one
@@ -1157,7 +828,7 @@ module qm1_energy_module
 !     ! loop over qm atoms for each mm atom.
 !     ENUCQM = zero
 !     do i=1,numat
-!        !!!if(qm_main_r%hlink(i).gt.0) cycle; assume even h-link fully interacts with all MM atoms.
+!        !!!if(qm_main_c%hlink(i).gt.0) cycle; assume even h-link fully interacts with all MM atoms.
 !        ! local variables.
 !        ni    = NAT(i)
 !        iorbs = num_orbs(i)  ! NLAST(i)-NFIRST(i)+1
@@ -1174,14 +845,14 @@ module qm1_energy_module
 !        ! distance R (au) and rotation matrix.
 !        call rotmat(1,2,1,iorbs,2,XCOORD,R,YY)
 !        ! local charge-electron attraction integrals.
-!        call repp_qmmm(ni,0,i,R,RI,CORE_mat)
+!        call repp_qmmm(ni,0,i,lorbs,R,RI,CORE_mat,po_qm,po_mm,dd_qm,dd_mm)
 !        if(iorbs.ge.9) call reppd_qmmm(ni,0,R,RI,CORE_mat,WW,iw,1)
 !
 !        ! multiplication by point charge.
 !        CORE_mat(1:Jmax,1) = CORE_mat(1:Jmax,1)*PTCHG
 !
 !        ! contributions to the core hamiltonian.
-!        call rotcora_qmmm(ia,0,iorbs,0,is,0,CORE_mat,YY,H,lin_dim,mm_main_r%q_diag_coulomb)
+!        call rotcora_qmmm(ia,0,iorbs,0,is,0,CORE_mat,YY,H,lin_dim,mm_main_c%q_diag_coulomb)
 !
 !        ! contributions to the core-core repulsions.
 !        scale= EXP(-OMEGA(ni)*(R*A0-DELTA(ni)))+EXP(-five*R*A0)
@@ -1198,378 +869,49 @@ module qm1_energy_module
 !     !==================================================================
   end subroutine mmint
 
-  subroutine find_unique_qm(ntype)
-  !
-  ! Find the unique number of qm atoms. (need for the Grimme dispersion correction).
-  !
-  ! THis routine is only used to map with SCC DFTB data structure.
-  !
-  use mndo97, only   : nndim,izp
-  use qm1_info, only : qm_main_r
-
-  implicit none
-  integer :: ntype,i,j,ni,icnt
-  logical, pointer :: q_unique(:)=>Null()
-
-  !
-  allocate(q_unique(qm_main_r%numat))
-  ! find number of unique atoms.
-  izp(1) = 1
-  do i=2,qm_main_r%numat
-     ni          = qm_main_r%nat(i)
-     q_unique(i) =.true.
-     do j=1,i-1
-        if(ni == qm_main_r%nat(j)) then
-           ! find qm atom with the same atom type.
-           q_unique(i) =.false.
-           exit
-        end if
-     end do
-  end do
-  !
-  !total number of unique qm atoms.
-  nunique_qm= 1
-  izp(1)    = 1
-  do i=2,qm_main_r%numat
-     if(q_unique(i)) nunique_qm = nunique_qm + 1
-     izp(i) = nunique_qm  ! mapping to SCC DFTB format.
-  end do
-  ntype = nunique_qm
-  deallocate(q_unique)
-  return
-  end subroutine find_unique_qm
-
-  subroutine mmint_prep_core(dr,r_min,r_max,iunit)
-  !
-  ! Core-core potential  contributions from mm point charges to the Core hamiltonian.
-  ! Saved information for the coefficients and r_values.
-  !
-  use qm1_info, only : qm_main_r
-#if KEY_PARALLEL==1
-  use parallel 
-#endif
-  !
-  implicit none
-  real(chm_real):: dr,r_min,r_max
-  integer :: iunit
-  !
-  integer :: i,j,ii,ij,ni
-  real(chm_real):: rr
-  real(chm_real):: R,scale,enuc,enuc_1,enuc_2
-  real(chm_real),pointer :: core_val(:,:)=>Null()
-  logical :: q_core_zero_check
+!!  ! moved to qmmm_interface.F90
+!!  subroutine find_unique_qm(ntype_local)
+!!  !
+!!  ! Find the unique number of qm atoms. (need for the Grimme dispersion correction).
+!!  !
+!!  ! THis routine is only used to map with SCC DFTB data structure.
+!!  !
+!!  !use mndo97, only   : nndim ! ,izp
+!!  use qm1_info, only : qm_main_c
+!!
+!!  implicit none
+!!  integer :: ntype_local,i,j,ni,icnt
+!!  logical, allocatable :: q_unique(:)
+!!
+!!  !
+!!  allocate(q_unique(qm_main_c%numat))
+!!  ! find number of unique atoms.
+!!  do i=2,qm_main_c%numat
+!!     ni          = qm_main_c%nat(i)
+!!     q_unique(i) =.true.
+!!     do j=1,i-1
+!!        if(ni == qm_main_c%nat(j)) then
+!!           ! find qm atom with the same atom type.
+!!           q_unique(i) =.false.
+!!           exit
+!!        end if
+!!     end do
+!!  end do
+!!  !
+!!  !total number of unique qm atoms.
+!!  nunique_qm= 1
+!!  !izp(1)    = 1
+!!  do i=2,qm_main_c%numat
+!!     if(q_unique(i)) nunique_qm = nunique_qm + 1
+!!     !izp(i) = nunique_qm  ! mapping to SCC DFTB format.
+!!  end do
+!!  ntype_local = nunique_qm
+!!  deallocate(q_unique)
+!!  return
+!!  end subroutine find_unique_qm
 
 
-  ! contributions to the core-core repulsions.
-  if(associated(q_unique_atom)) deallocate(q_unique_atom)
-  if(.not.associated(q_unique_atom)) allocate(q_unique_atom(qm_main_r%numat))
-
-  if(associated(i_index_look_up)) deallocate(i_index_look_up)
-  if(.not.associated(i_index_look_up)) allocate(i_index_look_up(qm_main_r%numat))
-  ! find number of unique atoms.
-  q_unique_atom(1:qm_main_r%numat)=.true.
-  i_index_look_up(1) = 1
-  do i=2,qm_main_r%numat
-     ni=qm_main_r%nat(i)
-     i_index_look_up(i) = i
-     do j=1,i-1
-        if(ni == qm_main_r%nat(j)) then
-           ! find qm atom with the same atom type.
-           q_unique_atom(i)   =.false.
-           i_index_look_up(i) = j    ! so, later it looks for this value.
-           exit
-        end if
-     end do
-  end do
-  ! total number of unique qm atoms.
-  nunique_qm=0
-  do i=1,qm_main_r%numat
-     if(q_unique_atom(i)) then
-        nunique_qm = nunique_qm + 1
-        i_index_look_up(i) = nunique_qm  ! point the array position.
-     end if
-  end do
-
-  ! re-set i_index_look_up: i_index_look_up(i) should point the array position in coef values.
-  do i = 1,qm_main_r%numat
-     if(.not. q_unique_atom(i)) then
-        j = i_index_look_up(i)
-        i_index_look_up(i) = i_index_look_up(j)  
-     end if
-  end do
-
-  ! now, count the number of arrays.
-  i_npnt = 0
-  rr=r_min
-  do
-    i_npnt = i_npnt + 1
-    if(rr > r_max) exit
-    rr = rr + dr
-  end do
-
-  ! allocate memory
-  if(associated(r_core_val))     deallocate(r_core_val)
-  if(associated(coef_core_val))  deallocate(coef_core_val)
-  if(associated(core_val_shift)) deallocate(core_val_shift)
-  if(associated(core_cut_val))   deallocate(core_cut_val)
-  allocate(r_core_val(i_npnt),coef_core_val(4,i_npnt,2,nunique_qm),core_val_shift(2,nunique_qm))
-  allocate(core_cut_val(nunique_qm))
-
-  ! local memory
-  if(associated(core_val))      deallocate(core_val)
-  allocate(core_val(i_npnt,2))
-
-  core_cut_val(1:nunique_qm)=r_max
-  rr=r_min
-  ii=0
-  do i=1,qm_main_r%numat
-     if(q_unique_atom(i)) then
-        ii=ii+1
-        rr=r_min
-        ij=0
-!#if KEY_PARALLEL==1
-!        if(mynod == 0) then
-!#endif
-!           write(iunit,*) i_npnt,i,qm_main_r%nat(i)
-!#if KEY_PARALLEL==1
-!        end if
-!#endif
-        q_core_zero_check =.true.
-        do
-           r = rr
-           ij= ij+ 1
-           scale= EXP(-OMEGA_local(i)*(R-DELTA_local(i)))+EXP(-five*R)
-           enuc  = zero
-           if(do_am1_pm3) then
-              call repam1_qmmm(i,ni_local(i),0,R,enuc)
-              if(enuc .eq. zero .and. q_core_zero_check) then
-                 core_cut_val(ii) = r
-                 q_core_zero_check= .false.
-              end if
-           end if
-           r_core_val(ij) = rr
-           core_val(ij,1) = scale          ! scale values
-           core_val(ij,2) = enuc           ! negative mm charge
-           if(rr > r_max) exit
-           rr = rr + dr
-        end do
-
-        ! for scale values for mm particles. (see qm1_util_module.src)
-        call set_spline_lookup(i_npnt,dr,r_core_val,core_val(1:i_npnt,1), &
-                        coef_core_val(1:4,1:i_npnt,1,ii),        &
-                        core_val_shift(1,ii))
-!#if KEY_PARALLEL==1
-!        if(mynod == 0) then
-!#endif
-!           write(iunit,*) 'for scale values'
-!           write(iunit,*) dr_width,core_val_shift(1,ii)
-!           do j=1,i_npnt
-!              write(iunit,*) r_core_val(j),(coef_core_val(ij,j,1,ii),ij=1,4)
-!           end do
-!#if KEY_PARALLEL==1
-!        end if
-!#endif
-        !
-        ! for Gaussican core-core values. (see qm1_util_module.src)
-        call set_spline_lookup(i_npnt,dr,r_core_val,core_val(1:i_npnt,2), &
-                        coef_core_val(1:4,1:i_npnt,2,ii),        &
-                        core_val_shift(2,ii))
-!#if KEY_PARALLEL==1
-!        if(mynod == 0) then
-!#endif
-!           write(iunit,*) 'for Gaussian core values.'
-!           write(iunit,*) dr_width,core_val_shift(2,ii)
-!           do j=1,i_npnt
-!              write(iunit,*) r_core_val(j),(coef_core_val(ij,j,2,ii),ij=1,4)
-!           end do
-!#if KEY_PARALLEL==1
-!        end if
-!#endif
-     end if
-  end do
-  ! re-set r_min and r_max values to avoid large error near the ends.
-  !r_min = r_core_val(1)
-  r_max = r_core_val(i_npnt-2)
-  do i=1,nunique_qm
-     core_cut_val(i) = core_cut_val(i) + one
-     if(core_cut_val(i) > r_max) then
-        core_cut_val(i) = r_max
-     end if
-  end do
-  deallocate(core_val)
-  return
-  end subroutine mmint_prep_core
-
-
-  subroutine betaij_prep_lookup(dr,r_min,r_max)
-  !
-  ! Prepare look-up table for beta_ij values.
-  !
-  use qm1_info, only :qm_main_r,mm_main_r
-  implicit none
-
-  real(chm_real) :: dr,r_min,r_max
-
-  integer, pointer :: i_index_look_up_pair(:,:)=>Null() ! size 2 * n*(n-1)
-  real(chm_real),pointer :: beta_val(:,:)=>Null(), &
-                            coef_val(:,:)=>Null()
-  integer :: i,j,nt,nij,ij,ni,nj,ki,kj,ii,jj,iunique_cnt
-  integer :: iorbs,jorbs
-  integer :: ni_2,nj_2
-  logical :: do_match
-  real(chm_real) :: rr,tt(14)
-  
-  if(associated(q_unique_pair))        deallocate(q_unique_pair)
-  if(associated(ij_pair_look_up))      deallocate(ij_pair_look_up)
-  if(associated(i_index_look_up_pair)) deallocate(i_index_look_up_pair)
-
-  ! count the total number of pairs to be considered.
-  nt  = qm_main_r%numat
-  nij = 0
-  do i=2,qm_main_r%numat
-     ni     = ni_local(i)
-     do j=1,i-1
-        nj     = ni_local(j)
-        if(ni > 1 .or. nj > 1) then
-           nij= nij + 1
-        end if
-     end do
-  end do
-  nij = nt*(nt-1)
-  allocate(q_unique_pair(nij))
-  allocate(ij_pair_look_up(nij))
-  allocate(i_index_look_up_pair(2,nij))  ! (1,ij) : for i-th atom; (2,ij) for j-th atom.
-
-  q_unique_pair(1:nij) = .true.
-  ij = 0
-  iunique_cnt = 0
-  do i=2,nt
-     ni     = ni_local(i)
-     do j=1,i-1
-        nj     = ni_local(j)
-        if(ni > 1 .or. nj > 1) then
-           ij = ij + 1
-           i_index_look_up_pair(1,ij) = ni
-           i_index_look_up_pair(2,ij) = nj
-
-           do_match =.false.
-           do ki=1,ij-1
-              if(q_unique_pair(ki)) then
-                 ni_2 = i_index_look_up_pair(1,ki)
-                 nj_2 = i_index_look_up_pair(2,ki)
-                 if(ni==ni_2 .and. nj==nj_2) then
-                    do_match =.true.
-                    exit
-                 end if
-              end if
-           end do
-           if(do_match) then
-              q_unique_pair(ij)   =.false. ! there is an existing pair.
-              ij_pair_look_up(ij) = ij_pair_look_up(ki)
-           else
-              iunique_cnt=iunique_cnt+1
-              q_unique_pair(ij)   =.true.
-              ij_pair_look_up(ij) = iunique_cnt
-           end if
-        end if
-     end do
-  end do
-  deallocate(i_index_look_up_pair)
-
-  ! find num_beta_pnt
-  nij = 0
-  rr  =r_min
-  do
-    nij  = nij + 1
-    if(rr > r_max) exit
-    rr = rr + dr
-  end do
-  num_beta_pnt = nij
-
-  !
-  iunique_cnt_beta = iunique_cnt
-  if(associated(look_up_beta_r)) deallocate(look_up_beta_r)
-  if(associated(r_beta_val))     deallocate(r_beta_val)
-  allocate(r_beta_val(num_beta_pnt))
-  allocate(look_up_beta_r(iunique_cnt))
-
-  if(associated(beta_val)) deallocate(beta_val)
-  if(associated(coef_val)) deallocate(coef_val)
-  allocate(beta_val(num_beta_pnt,14))
-  allocate(coef_val(4,num_beta_pnt))
-
-  nij = 0
-  rr  = r_min
-  do
-     nij = nij + 1
-     r_beta_val(nij) = rr
-     if(rr > r_max) exit
-     rr = rr + dr
-  end do
-
-  ij = 0
-  iunique_cnt = 0
-  do i=2,nt
-     ni     = ni_local(i)
-     iorbs  = iorbs_local(i)
-     do j=1,i-1
-        nj     = ni_local(j)
-        jorbs  = iorbs_local(j)
-        if(ni > 1 .or. nj > 1) then
-           ij = ij + 1
-           if(q_unique_pair(ij)) then
-              ! do this pair.
-              iunique_cnt=iunique_cnt+1
-              select case(iorbs+jorbs)
-                 case (2)
-                    ii=1
-                 case (5)
-                    ii=3
-                 case (8)
-                    ii=5
-                 case (10)
-                    ii=7
-                 case (13)
-                    ii=11
-                 case (18)
-                    ii=15
-              end select
-
-              ! memory
-              if(associated(look_up_beta_r(iunique_cnt)%coef_val))  deallocate(look_up_beta_r(iunique_cnt)%coef_val)
-              if(associated(look_up_beta_r(iunique_cnt)%val_shift)) deallocate(look_up_beta_r(iunique_cnt)%val_shift)
-              allocate(look_up_beta_r(iunique_cnt)%coef_val(4,ii,num_beta_pnt))
-              allocate(look_up_beta_r(iunique_cnt)%val_shift(ii))
-              !
-              do ki = 1,num_beta_pnt
-                 call betaij(i,j,ni,nj,iorbs,jorbs,r_beta_val(ki),tt)
-                 beta_val(ki,1:ii) = tt(1:ii)
-              end do
-
-              ! 
-              do kj = 1, ii
-                 call set_spline_lookup(num_beta_pnt,dr,r_beta_val,beta_val(1:num_beta_pnt,kj), &
-                                        coef_val,look_up_beta_r(iunique_cnt)%val_shift(kj))
-                 ! copy
-                 do ki = 1, num_beta_pnt
-                    look_up_beta_r(iunique_cnt)%coef_val(1:4,kj,ki)=coef_val(1:4,ki)
-                 end do
-              end do
-           end if
-        end if
-     end do
-  end do
-  
-  ! re-set r_min and r_max values to avoid large error near the ends.
-  r_max = r_beta_val(num_beta_pnt-2) !
-
-  deallocate(coef_val)
-  deallocate(beta_val)
-  return
-  end subroutine betaij_prep_lookup
-
-
-  subroutine overlp (iqm,jqm,NI,NJ,iorbs,jorbs,rij,Z)
+  subroutine overlp (NI,NJ,iorbs,jorbs,rij,Z,zsi,zpi,zdi,zsj,zpj,zdj)
   !
   ! overlap integrals
   !
@@ -1578,22 +920,19 @@ module qm1_energy_module
   ! Rij       internuclear distance in atomic units (I)
   ! Z(i)      overlap integrals (O).
   ! 
-  !use chm_kinds
-  !use number
-  !use qm1_constant
   use qm1_parameters,only: III,IIID ! ,ZS,ZP,ZD
 
   implicit none
   !
-  integer :: iqm,jqm,Ni,Nj,iorbs,jorbs
-  real(chm_real):: Rij,Z(14)
+  integer :: NI,NJ,iorbs,jorbs
+  real(chm_real):: Rij,Z(14),zsi,zpi,zdi,zsj,zpj,zdj
 
   ! local variables
   logical :: DIFF
   integer :: i,j,ii,ij,jj,k
   integer :: N1,N2,N1P,N2P,NT
   integer :: ISP,IPS,IOR,JOR,N1D,N2D
-  real(chm_real):: ZSI,ZSJ,ZPI,ZPJ,ZDI,ZDJ,ZIMIN,ZJMIN
+  real(chm_real):: ZIMIN,ZJMIN
   real(chm_real):: FAC,SA,SB,PA,PB,W,D,E,rij2,rij3,rtmp2,rtmp3,rtmp5
   real(chm_real):: A(15),B(15)
   real(chm_real),parameter :: r_3   = one/three,    &
@@ -1606,23 +945,25 @@ module qm1_energy_module
   ! initialize the overlap array
   Z(1:14)=zero
   !
-  zsi    = ZS_local(iqm) ! ZS(ni)
-  zpi    = ZP_local(iqm) ! ZP(ni)
-  zsj    = ZS_local(jqm) ! ZS(nj)
-  zpj    = ZP_local(jqm) ! ZP(nj)
+  !!zsi    = ZS(ni)
+  !!zpi    = ZP(ni)
+  !!zsj    = ZS(nj)
+  !!zpj    = ZP(nj)
+  !!zdi    = ZD(ni)
+  !!zdj    = ZD(nj)
   rij2   = rij*rij
   rij3   = rij2*rij
 
   ! check for immediate return (overlaps below threshold).
   ZIMIN  = MIN(ZSI,ZPI)
   ZJMIN  = MIN(ZSJ,ZPJ)
-  if(iorbs.ge.9) ZIMIN = MIN(ZIMIN,ZD_local(iqm))  ! ZD(NI)
-  if(jorbs.ge.9) ZJMIN = MIN(ZJMIN,ZD_local(jqm))  ! ZD(NI)
+  if(iorbs >= 9) ZIMIN = MIN(ZIMIN,zdi)
+  if(jorbs >= 9) ZJMIN = MIN(ZJMIN,zdj)
   !if((PT5*(ZIMIN+ZJMIN)*rij).gt.BIGEXP) return
 
   ! n1, n2 : main quantum numbers for S-orbitals.
   ! n1p,n2p: main quantum numbers for P-orbitals.
-  diff   = zsi.ne.zpi .or. zsj.ne.zpj
+  diff   = zsi /= zpi .or. zsj /= zpj
   n1     = III(ni) 
   n2     = III(nj)
   n1p    = MAX(n1,2) ! MAX(III(ni),2)
@@ -1630,8 +971,8 @@ module qm1_energy_module
   nt     = n1+n2
 
   ! depending on main quantum numbers:
-  if(n1.le.3 .and. n2.le.3) then   ! low quantum number atoms.
-    if(n1.le.n2) then
+  if(n1 <= 3 .and. n2 <= 3) then   ! low quantum number atoms.
+    if(n1 <= n2) then
        ii  = n2*(n2-1)/2+n1
        isp = 2
        ips = 3
@@ -1673,14 +1014,12 @@ module qm1_energy_module
     select case(ii)   ! since 1<=n1<=3, 1<=n2<=3, 1<=ii<=6.
       case (1)   ! 1st row - 1st row overlaps
         call set(nt,zsi,zsj,A,B,rij)
-        if(ni.eq.nj) then
-           W   = (zsi*rij)**3
-        else
+        !if(ni == nj) then
+        !   W   = (zsi*rij)**3
+        !else
            W   = SQRT((zsi*zsj*rij2)**3)         ! rij*rij
-        end if
+        !end if
         Z(1)   = PT25*W*(A(3)*B(1)-B(3)*A(1))
-        !if(iorbs.eq.1 .and. jorbs.eq.1) return
-        !return
       case (2)   ! 1st row - 2nd row overlaps
         call set(nt,sa,sb,A,B,rij)
         rtmp3  = sa**3
@@ -1691,14 +1030,13 @@ module qm1_energy_module
            W   = SQRT((rtmp3)*(pb**5))*(rij2**2)*r_8   ! rij**4
         end if
         Z(isp) = W*fac*(A(3)*B(1)-B(3)*A(1)-A(4)*B(2)+B(4)*A(2))
-        !if (jor.lt.9) return
       case (3)   ! 2nd row - 2nd row overlaps
         call set(nt,zsi,zsj,A,B,rij)
-        if(ni.eq.nj) then
-           W   = r_16*(zsi*rij)**5
-        else
+        !if(ni == nj) then
+        !   W   = r_16*(zsi*rij)**5
+        !else
            W   = r_16*SQRT((zsi*zsj*rij2)**5)   ! rij*rij
-        end if
+        !end if
         Z(1)   = W*(A(5)*B(1)+B(5)*A(1)-two*A(3)*B(3))*r_3
         if(diff) then
            call set(nt,zsi,zpj,A,B,rij)
@@ -1716,15 +1054,14 @@ module qm1_energy_module
         Z(3)   = W*RT3*(D+E)
         if(diff) then
            call set(nt,zpi,zpj,A,B,rij)
-           if(ni.eq.nj) then
-             W = r_16*(zpi*rij)**5
-           else
+           !if(ni == nj) then
+           !  W = r_16*(zpi*rij)**5
+           !else
              W = r_16*SQRT((zpi*zpj*rij2)**5)
-           end if
+           !end if
         end if
         Z(4)   = W*(B(3)*(A(5)+A(1))-A(3)*(B(5)+B(1)))
         Z(5)   = PT5*W*(A(5)*(B(1)-B(3))-B(5)*(A(1)-A(3))-A(3)*B(1)+B(3)*A(1))
-        !if(iorbs.le.4 .and. jorbs.le.4) return
       case (4)   ! 1st row - 3rd row overlaps
         call set(nt,sa,sb,A,B,rij)
         rtmp3= sa**3
@@ -1736,7 +1073,6 @@ module qm1_energy_module
         end if
         Z(isp) = W*fac*(A(4)*(B(1)+B(3))+B(4)*(A(1)+A(3))   &
                        -B(2)*(A(3)+A(5))-A(2)*(B(3)+B(5)))
-        !if (jor.le.4) return
       case (5)   ! 2nd row - 3rd row overlaps
         call set(nt,sa,sb,A,B,rij)
         rtmp5 = sa**5
@@ -1765,14 +1101,13 @@ module qm1_energy_module
         Z(5)= PT5*W*( A(6)*(B(1)-B(3))+B(6)*(A(1)-A(3))  &
                      -A(5)*(B(2)-B(4))-B(5)*(A(2)-A(4))  &
                      -A(4)*B(1)-B(4)*A(1)+A(3)*B(2)+B(3)*A(2) )
-        !if(iorbs.le.4 .and. jorbs.le.4) return
       case (6)  ! 3rd row - 3rd row overlaps
         call set(nt,zsi,zsj,A,B,rij)
-        if(ni.eq.nj) then
-           W   = ((zsi*rij)**7)*r_480
-        else
+        !if(ni == nj) then
+        !   W   = ((zsi*rij)**7)*r_480
+        !else
            W   = SQRT((zsi*zsj*rij2)**7)*r_480
-        end if
+        !end if
         Z(1)=W*(A(7)*B(1)-three*(A(5)*B(3)-A(3)*B(5))-A(1)*B(7))*r_3
         if(diff) then
            call set(nt,zsi,zpj,A,B,rij)
@@ -1790,64 +1125,62 @@ module qm1_energy_module
         Z(3)   = W*RT3*(D-E)
         if(diff) then
            call set(nt,zpi,zpj,A,B,rij)
-           if(ni.eq.nj) then
-             W = ((zpi*rij)**7)*r_480
-           else
+           !if(ni == nj) then
+           !  W = ((zpi*rij)**7)*r_480
+           !else
              W = SQRT((zpi*zpj*rij2)**7)*r_480
-           end if
+           !end if
         end if
         Z(4)   = W*(A(3)*(B(7)+two*B(3))-A(5)*(B(1)+two*B(5))-B(5)*A(1)+A(7)*B(3))
         Z(5)   = PT5*W*(A(7)*(B(1)-B(3))     +B(7)*(A(1)-A(3))        &
                        +A(5)*(B(5)-B(3)-B(1))+B(5)*(A(5)-A(3)-A(1))   &
                        +two*A(3)*B(3))
-        !if(iorbs.le.4 .and. jorbs.le.4) return
     end select
   !
   ! overlaps involving higher rows.
-  else if(n1.gt.3 .or. n2.gt.3) then
+  else if(n1 > 3 .or. n2 > 3) then
      call set(n1 +n2 ,zsi,zsj,A,B,rij)
      Z(1)   = ss(n1 ,0,0,n2 ,0,zsi*rij,zsj*rij,A,B)
-     if(jorbs.ge.4) then
+     if(jorbs >= 4) then
         if(diff) call set(n1 +n2p,zsi,zpj,A,B,rij)
         Z(2) = ss(n1 ,0,0,n2p,1,zsi*rij,zpj*rij,A,B)
      end if
-     if(iorbs.ge.4) then
+     if(iorbs >= 4) then
         if(diff) call set(n1p+n2 ,zpi,zsj,A,B,rij)
         Z(3) = ss(n1p,1,0,n2 ,0,zpi*rij,zsj*rij,A,B)
      end if
-     if(iorbs.ge.4 .and. jorbs.ge.4) then
+     if(iorbs >= 4 .and. jorbs >= 4) then
         if(diff) call set(n1p+n2p,zpi,zpj,A,B,rij)
         Z(4) = ss(n1p,1,0,n2p,1,zpi*rij,zpj*rij,A,B)
         Z(5) = ss(n1p,1,1,n2p,1,zpi*rij,zpj*rij,A,B)
      end if
-     !if(iorbs.le.4 .and. jorbs.le.4) return
   end if
   ! returns, if not having d-orbitals.
-  if(iorbs.le.4 .and. jorbs.le.4) return
+  !if(iorbs <= 4 .and. jorbs <= 4) return
 
   ! overlaps involving D-orbitals.
-  if(iorbs.ge.9 .or. jorbs.ge.9) then
-     zdi    = ZD_local(iqm) ! ZD(ni)
-     zdj    = ZD_local(jqm) ! ZD(nj)
+  if(iorbs >= 9 .or. jorbs >= 9) then
+     !!zdi    = ZD(ni)
+     !!zdj    = ZD(nj)
      n1d    = IIID(ni) 
      n2d    = IIID(nj) 
-     if(iorbs.ge.9 .and. jorbs.le.4) then
+     if(iorbs >= 9 .and. jorbs <= 4) then
         call set(n1d+n2 ,zdi,zsj,A,B,rij)
         Z(6)  = ss(n1d,2,0,n2 ,0,zdi*rij,zsj*rij,A,B)
-        if(jorbs.eq.4) then
+        if(jorbs == 4) then
            call set(n1d+n2p,zdi,zpj,A,B,rij)
            Z(8)  = ss(n1d,2,0,n2p,1,zdi*rij,zpj*rij,A,B)
            Z(10) = ss(n1d,2,1,n2p,1,zdi*rij,zpj*rij,A,B)*three
         end if
-     else if(iorbs.le.4 .and. jorbs.ge.9) then
+     else if(iorbs <= 4 .and. jorbs >= 9) then
         call set(n1 +n2d,zsi,zdj,A,B,rij)
         Z(7)  = ss(n1 ,0,0,n2d,2,zsi*rij,zdj*rij,A,B)
-        if(iorbs.eq.4) then
+        if(iorbs == 4) then
            call set(n1p+n2d,zpi,zdj,A,B,rij)
            Z(9)  = ss(n1p,1,0,n2d,2,zpi*rij,zdj*rij,A,B)
            Z(11) = ss(n1p,1,1,n2d,2,zpi*rij,zdj*rij,A,B)*three
         end if
-     else if(iorbs.ge.9 .and. jorbs.ge.9) then
+     else if(iorbs >= 9 .and. jorbs >= 9) then
         call set(n1d+n2 ,zdi,zsj,A,B,rij)
         Z(6)  = ss(n1d,2,0,n2 ,0,zdi*rij,zsj*rij,A,B)
         call set(n1d+n2p,zdi,zpj,A,B,rij)
@@ -1876,10 +1209,6 @@ module qm1_energy_module
       ! on output:
       ! A and B are filled.
       !
-      !use chm_kinds
-      !use number
-      !use qm1_constant
-
       implicit none
 
       integer :: N
@@ -1921,13 +1250,13 @@ module qm1_energy_module
       ! orbtials with main quantum numbers up to 7.
       !
       ABSX   = abs(BETA)
-      if(ABSX.lt.CUTOFF) then
+      if(ABSX < CUTOFF) then
          ! zero argument
          B(1:n+1)=B0(1:n+1)
       else
          ! large argument
-         if((ABSX.gt.PT5 .and. n.le.5) .or. (ABSX.gt.one .and. n.le.7) .or. &
-            (ABSX.gt.two .and. n.le.10).or. (ABSX.gt.three)) then
+         if((ABSX > PT5 .and. n <= 5 ).or. (ABSX > one .and. n <= 7) .or. &
+            (ABSX > two .and. n <= 10).or. (ABSX > three)) then
             EXPX   = EXP(BETA)
             EXPMX  = one/EXPX
             RX     = one/BETA
@@ -1938,11 +1267,11 @@ module qm1_energy_module
             end do
          else
             ! small argument
-            if(ABSX.le.PT5) then
+            if(ABSX <= PT5) then
                last = 6
-            else if(ABSX.le.one) then
+            else if(ABSX <= one) then
                last = 7
-            else if(ABSX.le.two) then
+            else if(ABSX <= two) then
                last = 12
             else
                last = 15
@@ -1973,10 +1302,6 @@ module qm1_energy_module
       !                  Further restrictions are LA.le.Na, LB.le.Nb,
       !                                           MM.le.LA, and MM.le.LB.
       !
-      !use chm_kinds
-      !use number
-      !use qm1_constant
-
       implicit none
 
       integer :: NA,LA,MM,NB,LB
@@ -2030,27 +1355,26 @@ module qm1_energy_module
       X      = zero
       iexpn  =2*NA+1
       jexpn  =2*NB+1
-      reduced_factor=SQRT( ((ALPHA**iexpn)*(BETA**jexpn)) &
-                          /( FC(iexpn)    * FC(jexpn)   ) )
+      reduced_factor=SQRT(((ALPHA**iexpn)*(BETA**jexpn))/(FC(iexpn)*FC(jexpn)))
 
-      if(LA.eq.0 .and. LB .eq.0) then
-      ! overlap integrals involving S-functions.
+      if(LA == 0 .and. LB == 0) then
+         ! overlap integrals involving S-functions.
          iada   = IAD(NA+1)
          iadb   = IAD(NB+1)
          do i=0,na
             iba    = IBINOM(iada+i)
             do j=0,nb
                ibb    = iba*IBINOM(iadb+j)
-               if(MOD(j,2).eq.1) ibb=-ibb
+               if(MOD(j,2) == 1) ibb=-ibb
                ij     = i+j
                X      = X+float(ibb)*A(nab-ij)*B(ij+1)
             end do
          end do
          SS=X*PT5*reduced_factor
 
-      else if (LA.le.1 .and. LB.le.1) then 
-      ! overlap integrals involving P-functions.
-         if(M.le.0) then
+      else if (LA == 1 .and. LB == 1) then 
+         ! overlap integrals involving P-functions.
+         if(M <= 0) then
             ! special case M=0, S-P(SIGMA), P(SIGMA)-S, P(SIGMA)-P(SIGMA).
             iu     = MOD(LA,2)
             iv     = MOD(LB,2)
@@ -2070,7 +1394,7 @@ module qm1_energy_module
                      je     = jd+ke
                      do kf=0,nbmv
                         ibf    = ibe*IBINOM(iadnb+kf)
-                        if(MOD(kd+kf,2).eq.1) ibf=-ibf
+                        if(MOD(kd+kf,2) == 1) ibf=-ibf
                         X      = X+float(ibf)*A(ie-kf)*B(je+kf)
                      end do
                   end do
@@ -2078,7 +1402,7 @@ module qm1_energy_module
             end do
             ! overlap integral from reduced overlap integral.
             SS= X*SQRT(float((2*LA+1)*(2*LB+1))*PT25)*reduced_factor
-            if(MOD(lb,2).eq.1) SS=-SS
+            if(MOD(lb,2) == 1) SS=-SS
          else
             ! special case LA=LB=M=1, P(PI)-P(PI).
             iadna  = iad(NA)
@@ -2089,7 +1413,7 @@ module qm1_energy_module
                je     = ke+1
                do kf=0,NB-1
                   ibf = ibe*IBINOM(iadnb+kf)
-                  if(MOD(kf,2).eq.1) ibf=-ibf
+                  if(MOD(kf,2) == 1) ibf=-ibf
                   i=ie-kf
                   j=je+kf
                          !=(A(i)*B(j)-A(i)*B(j+2)-A(i-2)*B(j)+A(i-2)*B(j+2))
@@ -2098,12 +1422,12 @@ module qm1_energy_module
             end do
             ! overlap integral from reduced overlap integral.
             SS = X*PT75*reduced_factor
-            if(MOD(LB+MM,2).eq.1) SS=-SS
+            if(MOD(LB+MM,2) == 1) SS=-SS
          end if
 
       else
-      ! general case that LA .gt. 1 or LB .gt. 1, M.ge.0.
-      ! overlal integrals involving non-S functions.
+         ! general case that LA > 1 or LB > 1, M >= 0.
+         ! overlal integrals involving non-S functions.
          lam    = LA-M
          lbm    = LB-M
          iada   = iad(LA+1)+M
@@ -2146,7 +1470,7 @@ module qm1_energy_module
                               i      = iff-2*ka
                               do kb=0,M
                                  ibb    = iba*IBINOM(iadm+kb)
-                                 if(MOD(ka+kb+kd+kf,2).eq.1) ibb=-ibb
+                                 if(MOD(ka+kb+kd+kf,2) == 1) ibb=-ibb
                                  j      = jff+2*kb
                                  SUM    = SUM+float(ibb)*A(i)*B(j)
                               end do
@@ -2169,7 +1493,7 @@ module qm1_energy_module
          SS =X*((FC(M+2)*r_eight)**2)                                               &
               *SQRT(float(il)*FC(ik-M)*float(jl)*FC(jk-M)/(four*FC(ik+M)*FC(jk+M))) &
               *reduced_factor
-         if(MOD(LB+MM,2).eq.1) SS=-SS
+         if(MOD(LB+MM,2) == 1) SS=-SS
       end if
       return
       end function ss
@@ -2179,7 +1503,7 @@ module qm1_energy_module
   end subroutine overlp
 
 
-  subroutine repam1_qmqm(iqm,jqm,NI,NJ,R,ENUCLR)
+  subroutine repam1_qmqm(iqm,jqm,NI,NJ,R,ENUCLR,q_specific_pair)
   !
   ! Core repulsion function for AM1 and PM3.
   !
@@ -2187,108 +1511,128 @@ module qm1_energy_module
   ! 1. H-H pair is separated below as repam1_hh_pair.
   ! 2. QM-MM pair is separated below as repam1_qmmm.
   !
-  !use chm_kinds
-  !use number
-  !use qm1_constant
+  use qm1_info, only: qm_param_c
   use qm1_parameters, only :  BORON1,BORON2,BORON3 ! CORE,GNN,GUESS1,GUESS2,GUESS3,IMPAR
 
   implicit none
 
   integer :: iqm,jqm,ni,nj
   real(chm_real):: r,ENUCLR
+  logical :: q_specific_pair
 
   real(chm_real),parameter :: CUTOFF=25.0D0
 
   ! local variables
-  integer :: nk,nl,imx,ig,i
+  integer :: nk,nl,imx,i,j
   real(chm_real):: ADD,XX,GNIJ
 
   ADD    = ZERO
-  if((ni.eq.5.or.nj.eq.5).and.(iqm_mode.eq.2.or.iqm_mode.eq.4)) then
-     ! special section for AM1 and AM1/d: atom pairs involing Boron.
-     NK  = NI+NJ-5
-     if(NK.eq.1) then       ! B-H pair
-        NL=2
-     else if(NK.eq.6) then  ! B-C pair
-        NL=3
-     else if(NK.eq.9.or.NK.eq.17.or.NK.eq.35.or.NK.eq.53) then
-        NL=4                ! B-F/Cl/Br/I pairs
-     else 
-        NL=1                ! all others
+  if(ni==5.or.nj==5) then  ! special section for AM1 and AM1/d
+                           ! for atom pairs with Boron.
+     if(iqm_mode==2.or.iqm_mode==4) then
+        NK  = NI+NJ-5
+        if(NK == 1) then       ! B-H pair
+           NL=2
+        else if(NK == 6) then  ! B-C pair
+           NL=3
+        else if(NK == 9.or.NK == 17.or.NK == 35.or.NK == 53) then
+           NL=4                ! B-F/Cl/Br/I pairs
+        else 
+           NL=1                ! all others
+        end if
+        if(ni == 5) then
+           qm_param_c%impar(iqm) = 3
+           do i=1,3
+              qm_param_c%GUESS1(i,iqm)=BORON1(i,NL)
+              qm_param_c%GUESS2(i,iqm)=BORON2(i,NL)
+              qm_param_c%GUESS3(i,iqm)=BORON3(i,NL)
+           end do
+        else if(nj == 5) then
+           qm_param_c%impar(jqm) = 3
+           do i=1,3
+              qm_param_c%GUESS1(i,jqm)=BORON1(i,NL)
+              qm_param_c%GUESS1(i,jqm)=BORON2(i,NL)
+              qm_param_c%GUESS1(i,jqm)=BORON3(i,NL)
+           end do
+        end if
      end if
-     if(ni.eq.5) then
-        ig=iqm
-     else if(nj.eq.5) then
-        ig=jqm
-     end if
-     IMPAR_local(ig)=3
-     do i=1,3
-        GUESS1_local(I,ig)=BORON1(I,NL)
-        GUESS2_local(I,ig)=BORON2(I,NL)
-        GUESS3_local(I,ig)=BORON3(I,NL)
-     end do
   end if
   ! GENERAL SECTION: since it will be only called for QM-QM pair (also not h-h pair).
   ! NI .gt. 0: NI is qm atom, the same for NJ
-  do ig=1,IMPAR_local(iqm)
-     XX  = GUESS2_local(ig,iqm)*(R-GUESS3_local(ig,iqm))**2 
-     if(XX.LT.CUTOFF) ADD = ADD+GUESS1_local(ig,iqm)*EXP(-XX)
+  do i=1,qm_param_c%impar(iqm)
+     XX  = qm_param_c%GUESS2(i,iqm)*(r-qm_param_c%GUESS3(i,iqm))**2 
+     if(xx<cutoff) ADD = ADD + qm_param_c%GUESS1(i,iqm)*EXP(-XX)
   end do
-  !end if
-  if(NI.eq.NJ) then
-     ADD = ADD+ADD
-  else ! if(NJ.gt.0) then
-     do ig=1,IMPAR_local(jqm)
-        XX  = GUESS2_local(ig,jqm)*(R-GUESS3_local(ig,jqm))**2
-        if(XX.LT.CUTOFF) ADD = ADD+GUESS1_local(ig,jqm)*EXP(-XX)
-     end do
-  end if
-  ! Small modification for Gaussian Core-Core repulsion scaling.
-  !if (NI.gt.0) then
-  !   GNIJ= GNN_local(iqm)*CORE_local(iqm)
-  !else
-  !   GNIJ = one
-  !end if
-  !if (NJ.gt.0) GNIJ= GNIJ*GNN_local(jqm)*CORE_local(jqm)
-  GNIJ= GNN_local(iqm)*GNN_local(jqm)*CORE_local(iqm)*CORE_local(jqm)
 
-  ENUCLR = ENUCLR+GNIJ*ADD/R
+  if(q_specific_pair) then
+     ! two atoms with different set of parameters
+     do j=1,qm_param_c%impar(jqm)
+        XX  = qm_param_c%GUESS2(j,jqm)*(r-qm_param_c%GUESS3(j,jqm))**2
+        if(xx<cutoff) ADD = ADD + qm_param_c%GUESS1(j,jqm)*EXP(-XX)
+     end do
+
+     ! Gaussian Core-Core repulsion scaling.
+     GNIJ= qm_param_c%GNN(iqm)*qm_param_c%GNN(jqm)*qm_param_c%core(iqm)*qm_param_c%core(jqm)
+  else
+     ! two atoms with the same set of parameters
+     ADD = ADD+ADD
+
+     ! Gaussian Core-Core repulsion scaling.
+     GNIJ= qm_param_c%GNN(iqm)*qm_param_c%GNN(iqm)*qm_param_c%core(iqm)*qm_param_c%core(iqm)
+  end if
+  !
+  ENUCLR = ENUCLR+GNIJ*ADD/r
 
   return
   end subroutine repam1_qmqm
   !=====================================================================
 
 
-  subroutine repam1_hh_pair(iqm,NI,R,ENUCLR)
+  subroutine repam1_hh_pair(iqm,jqm,NI,R,ENUCLR,q_specific_pair)
   !
   ! Core repulsion function for AM1 and PM3 for H-H pair.
   !
   !use chm_kinds
-  use qm1_parameters, only : CORE,GNN,GUESS1,GUESS2,GUESS3,IMPAR
+  use qm1_info, only: qm_param_c
+  !!use qm1_parameters, only : CORE,GNN,GUESS1,GUESS2,GUESS3,IMPAR
   !use number,only : zero
 
   implicit none
 
-  integer :: iqm,ni
+  integer :: iqm,jqm,ni
   real(chm_real):: r,ENUCLR
+  logical :: q_specific_pair
 
   real(chm_real),parameter :: CUTOFF=25.0D0
 
   ! local variables
-  integer :: nk,nl,imx,ig
+  integer :: nk,nl,imx,i,j
   real(chm_real):: ADD,XX,GNIJ
 
   ADD    = ZERO
   ! since NI=NJ=1.
-  do ig=1,IMPAR_local(iqm)
-     XX  = GUESS2_local(ig,iqm)*(r-GUESS3_local(ig,iqm))**2
-     if(XX.LT.CUTOFF) ADD = ADD+GUESS1_local(ig,iqm)*EXP(-XX)
+  do i=1,qm_param_c%IMPAR(iqm)
+     XX  = qm_param_c%GUESS2(i,iqm)*(r-qm_param_c%GUESS3(i,iqm))**2
+     ADD = ADD + qm_param_c%GUESS1(i,iqm)*EXP(-XX)
   end do
-  ADD = ADD+ADD
-  ! Gaussian Core-Core repulsion scaling.
-  GNIJ= GNN_local(iqm)*GNN_local(iqm)*CORE_local(iqm)*CORE_local(iqm)
+  if(q_specific_pair) then
+     ! two H atoms with different set of parameters
+     do j=1,qm_param_c%IMPAR(jqm)
+        XX  = qm_param_c%GUESS2(j,jqm)*(r-qm_param_c%GUESS3(j,jqm))**2
+        ADD = ADD + qm_param_c%GUESS1(j,jqm)*EXP(-XX)
+     end do
+
+     ! Gaussian Core-Core repulsion scaling.
+     GNIJ= qm_param_c%GNN(iqm)*qm_param_c%GNN(jqm)*qm_param_c%core(iqm)*qm_param_c%core(jqm)
+  else
+     ! two H atoms with the same set of parameters
+     ADD = ADD+ADD
+
+     ! Gaussian Core-Core repulsion scaling.
+     GNIJ= qm_param_c%GNN(iqm)*qm_param_c%GNN(iqm)*qm_param_c%core(iqm)*qm_param_c%core(iqm)
+  end if
   !
-  ENUCLR = ENUCLR+GNIJ*ADD/R
+  ENUCLR = ENUCLR+GNIJ*ADD/r
 
   return
   end subroutine repam1_hh_pair
@@ -2302,6 +1646,7 @@ module qm1_energy_module
   !use chm_kinds
   !use number
   !use qm1_constant
+  use qm1_info, only: qm_param_c
   use qm1_parameters, only : BORON1,BORON2,BORON3 ! CORE,GNN,GUESS1,GUESS2,GUESS3,IMPAR
 
   implicit none
@@ -2317,40 +1662,24 @@ module qm1_energy_module
 
   ADD    = ZERO
   ! nj=0
-  if((ni.eq.5).and.(iqm_mode.eq.2.or.iqm_mode.eq.4)) then
+  if((ni == 5).and.(iqm_mode == 2 .or. iqm_mode == 4)) then
      ! special section for AM1 and AM1/d. atom pairs involing Boron.
-     !NK  = NI+NJ-5   ! since Nj=0 and Ni=5, NK=0
      NL=1                ! all others
-     IMPAR_local(iqm)=3
+     qm_param_c%impar(iqm) = 3
      do i=1,3
-        GUESS1_local(i,iqm)=BORON1(i,NL)
-        GUESS2_local(i,iqm)=BORON2(i,NL)
-        GUESS3_local(i,iqm)=BORON3(i,NL)
+        qm_param_c%GUESS1(i,iqm)=BORON1(i,NL)
+        qm_param_c%GUESS2(i,iqm)=BORON2(i,NL)
+        qm_param_c%GUESS3(i,iqm)=BORON3(i,NL)
      end do
   end if
   ! QM-MM specific...
   ! Since ni is qm atom, Ni>0, and since nj is mm atom, Nj=0
-  !if(NI.gt.0) then
-  do ig=1,IMPAR_local(iqm)
-     XX  = GUESS2_local(ig,iqm)*(R-GUESS3_local(ig,iqm))**2 
-     if(XX.LT.CUTOFF) ADD = ADD+GUESS1_local(ig,iqm)*EXP(-XX)
+  do i=1,qm_param_c%impar(iqm)
+     XX  = qm_param_c%GUESS2(i,iqm)*(R-qm_param_c%GUESS3(i,iqm))**2 
+     if(XX<cutoff) ADD = ADD + qm_param_c%GUESS1(i,iqm)*EXP(-XX)
   end do
-  !end if
-  !if(NI.eq.NJ) then
-  !   ADD = ADD+ADD
-  !else if(NJ.gt.0) then
-  !   do ig=1,IMPAR(nj)
-  !      XX  = GUESS2(ig,nj)*(R-GUESS3(ig,nj))**2
-  !      if(XX.LT.CUTOFF) ADD = ADD+GUESS1(ig,nj)*EXP(-XX)
-  !   end do
-  !end if
-  ! Small modification for Gaussian Core-Core repulsion scaling.
-  !if (NI.gt.0) then
-  GNIJ= GNN_local(iqm)*CORE_local(iqm)
-  !else
-  !   GNIJ = one
-  !end if
-  !if (NJ.gt.0) GNIJ= GNIJ*GNN(NJ)*CORE(NJ)
+  ! Gaussian Core-Core repulsion scaling.
+  GNIJ= qm_param_c%GNN(iqm)*qm_param_c%core(iqm)
 
   ENUCLR = ENUCLR+GNIJ*ADD/R
 
@@ -2359,7 +1688,9 @@ module qm1_energy_module
   !=====================================================================
 
 
-  subroutine repp_qmqm(iqm,jqm,NI,NJ,R,A,CORE_mat)
+  subroutine repp_qmqm(iqm,jqm,NI,NJ,R,A,CORE_mat,                    &
+                       iorbs,jorbs,coreni,corenj,po_i,po_j,dd_i,dd_j, &
+                       q_specific_pair)
   !
   ! calculation of the two-center two-electron integrals and the core-electron
   ! attraction integrals in local coordinates.
@@ -2379,20 +1710,18 @@ module qm1_energy_module
   ! in this case, PO(1,N) and PO(7,N) are the additive terms
   ! for the monopoles of SS and PP, respectively.
   !
-  !use chm_kinds
-  !use number
-  !use qm1_constant
-  use qm1_parameters, only : LORBS ! ,CORE,DD,PO
-  use qm1_info,only : qm_control_r
+  !!use qm1_info,only : qm_control_c
             
   implicit none
 
-  integer :: iqm,jqm,NI,NJ
+  integer :: iqm,jqm,NI,NJ,iorbs,jorbs
   real(chm_real):: R,A(22),CORE_mat(10,2)
+  real(chm_real):: coreni,corenj,PO_i(9),PO_j(9),DD_i(3),DD_j(3)
+  logical :: q_specific_pair
 
   ! local variables:
-  integer :: iorbs,jorbs,i
-  real(chm_real):: CORENI,CORENJ,COREV,R2,EE,DA,DB,QA,QB,             &
+  integer :: i
+  real(chm_real):: COREV,R2,EE,DA,DB,QA,QB,                           &
                    ACI,ACJ,ADD,ADE,ADI,ADJ,ADQ,AED,AEE,AEI,AEJ,AEQ,   &
                    AQD,AQE,AQI,AQJ,AQQ,DZE,EDZ,                       &
                    DXDX,DZDZ,EQXX,EQZZ,QXXE,QZZE,                     &
@@ -2432,26 +1761,26 @@ module qm1_energy_module
 
 
   ! initializations for point MM charge vs. QM charge.
-  iorbs  = LORBS(ni)
-  jorbs  = LORBS(nj)
-  coreni = CORE_local(iqm)  !CORE(ni)
-  corenj = CORE_local(jqm)  !CORE(nj)
+  !iorbs   = qm_param_c%LORBS(iqm) ! LORBS(ni)
+  !jorbs   = qm_param_c%LORBS(jqm) ! LORBS(nj)
+  !coreni  = qm_param_c%core(iqm)  ! CORE_local(iqm)  !CORE(ni)
+  !corenj  = qm_param_c%core(jqm)  ! CORE_local(jqm)  !CORE(nj)
   !
   R2        = R*R
-  AEE       =(PO_1(iqm)+PO_1(jqm))**2  ! (PO(1,ni)+PO(1,nj))**2
+  AEE       =(PO_i(1) + PO_j(1))**2  ! (PO(1,ni)+PO(1,nj))**2
   ! H - H pair
-  if(iorbs.le.1 .and. jorbs.le.1) then
+  if(iorbs <= 1 .and. jorbs <= 1) then
      EE     = one/SQRT(R2+AEE)
      A(1)   = EE*eV
      CORE_mat(1,1) = -CORENJ*A(1)
      CORE_mat(1,2) = -CORENI*A(1)
   ! Heavy atom - H pair
-  else if(iorbs.ge.4 .and. jorbs.le.1) then
-     DA     = DD_2(iqm) ! DD(2,ni)
-     QA     = DD_3(iqm) ! DD(3,ni)
+  else if(iorbs >= 4 .and. jorbs <= 1) then
+     DA     = DD_i(2)               ! DD(2,ni)
+     QA     = DD_i(3)               ! DD(3,ni)
      TWOQA  = QA+QA
-     ADE    = (PO_2(iqm)+PO_1(jqm))**2  ! (PO(2,ni)+PO(1,nj))**2
-     AQE    = (PO_3(iqm)+PO_1(jqm))**2  ! (PO(3,ni)+PO(1,nj))**2
+     ADE    = (PO_i(2)+PO_j(1))**2  ! (PO(2,ni)+PO(1,nj))**2
+     AQE    = (PO_i(3)+PO_j(1))**2  ! (PO(3,ni)+PO(1,nj))**2
      X(1)   = (R2+AEE)
      X(2)   = (R2+AQE)
      X(3)   = ((R+DA)**2+ADE)
@@ -2467,12 +1796,12 @@ module qm1_energy_module
      CORE_mat(1:4,1)= -CORENJ * A(1:4)
      CORE_mat(1,2)  = -CORENI * A(1)
   ! H - Heavy atom pair
-  else if(iorbs.le.1 .and. jorbs.ge.4) then
-     DB     = DD_2(jqm) ! DD(2,nj)
-     QB     = DD_3(jqm) ! DD(3,nj)
+  else if(iorbs <= 1 .and. jorbs >= 4) then
+     DB     = DD_j(2)               ! DD(2,nj)
+     QB     = DD_j(3)               ! DD(3,nj)
      TWOQB  = QB+QB
-     AED    = (PO_1(iqm)+PO_2(jqm))**2  ! (PO(1,ni)+PO(2,nj))**2
-     AEQ    = (PO_1(iqm)+PO_3(jqm))**2  ! (PO(1,ni)+PO(3,nj))**2
+     AED    = (PO_i(1)+PO_j(2))**2  ! (PO(1,ni)+PO(2,nj))**2
+     AEQ    = (PO_i(1)+PO_j(3))**2  ! (PO(1,ni)+PO(3,nj))**2
      X(1)   = (R2+AEE)
      X(2)   = (R2+AEQ)
      X(3)   = ((R-DB)**2+AED)
@@ -2492,19 +1821,19 @@ module qm1_energy_module
      CORE_mat(4,2) = -CORENI * A(12)
   ! Heavy atom - Heavy atom pair
   else
-     DA     = DD_2(iqm) ! DD(2,ni)
-     QA     = DD_3(iqm) ! DD(3,ni)
+     DA     = DD_i(2)               ! DD(2,ni)
+     QA     = DD_i(3)               ! DD(3,ni)
      TWOQA  = QA+QA
      TWOQA2 = TWOQA*TWOQA
      RPDA2  = (R+DA)**2
      RMDA2  = (R-DA)**2
      RP2QA2 = (R+TWOQA)**2
      RM2QA2 = (R-TWOQA)**2
-     ADE    = (PO_2(iqm)+PO_1(jqm))**2  ! (PO(2,ni)+PO(1,nj))**2
-     AQE    = (PO_3(iqm)+PO_1(jqm))**2  ! (PO(3,ni)+PO(1,nj))**2
-     ADD    = (PO_2(iqm)+PO_2(jqm))**2  ! (PO(2,ni)+PO(2,nj))**2
-     ADQ    = (PO_2(iqm)+PO_3(jqm))**2  ! (PO(2,ni)+PO(3,nj))**2
-     AQQ    = (PO_3(iqm)+PO_3(jqm))**2  ! (PO(3,ni)+PO(3,nj))**2
+     ADE    = (PO_i(2)+PO_j(1))**2  ! (PO(2,ni)+PO(1,nj))**2
+     AQE    = (PO_i(3)+PO_j(1))**2  ! (PO(3,ni)+PO(1,nj))**2
+     ADD    = (PO_i(2)+PO_j(2))**2  ! (PO(2,ni)+PO(2,nj))**2
+     ADQ    = (PO_i(2)+PO_j(3))**2  ! (PO(2,ni)+PO(3,nj))**2
+     AQQ    = (PO_i(3)+PO_j(3))**2  ! (PO(3,ni)+PO(3,nj))**2
      TWOQAQ = TWOQA2+AQQ
      X(1)   = R2+AEE
      X(2)   = R2+AQE
@@ -2520,9 +1849,61 @@ module qm1_energy_module
      X(12)  = RP2QA2+AQQ
      X(13)  = RM2QA2+AQQ
 
-     if(ni.ne.nj) then
-        DB     = DD_2(jqm) ! DD(2,nj)
-        QB     = DD_3(jqm) ! DD(3,nj)
+     if(ni == nj .and. q_specific_pair) then ! the same atom pairs with the same parameters
+        TWODA  = DA+DA
+        X(14)  = R2+ADD
+        X(15)  = RP2QA2+TWOQAQ
+        X(16)  = RM2QA2+TWOQAQ
+        X(17)  = R2+TWODA**2+ADD
+        X(18)  = (R-TWODA)**2+ADD
+        X(19)  = (R+TWODA)**2+ADD
+        X(20)  = RPDA2+TWOQA2+ADQ
+        X(21)  = RMDA2+TWOQA2+ADQ
+        X(22)  = (R+DA-TWOQA)**2+ADQ
+        X(23)  = (R-DA-TWOQA)**2+ADQ
+        X(24)  = (R+DA+TWOQA)**2+ADQ
+        X(25)  = (R-DA+TWOQA)**2+ADQ
+        X(26)  = R2+FOUR*TWOQA2+AQQ
+        X(27)  = R2+TWOQA2+TWOQAQ
+        X(28)  = (R+TWOQA+TWOQA)**2+AQQ
+        X(29)  = (R-TWOQA-TWOQA)**2+AQQ
+        RMQA2  = (R-QA)**2
+        RPQA2  = (R+QA)**2
+        DMADD  = (DA-QA)**2+ADQ
+        DPADD  = (DA+QA)**2+ADQ
+        X(30)  = RMQA2+DMADD
+        X(31)  = RPQA2+DMADD
+        X(32)  = RMQA2+DPADD
+        X(33)  = RPQA2+DPADD
+        X(1:33)= PXX(1:33)/SQRT(X(1:33))
+        EE     = X(1)
+        DZE    = X(3) +X(4)
+        QZZE   = X(2) +X(5) +X(6)
+        QXXE   = X(2) +X(7)
+        EDZ    =-DZE
+        EQZZ   = QZZE
+        EQXX   = QXXE
+        DXDX   = X(14)+X(17)
+        DZDZ   = X(14)+X(18)+X(19)
+        X89    = X(8) +X(9)
+        DZQXX  = X89  +X(20)+X(21)
+        QXXDZ  =-DZQXX
+        DZQZZ  = X89  +X(22)+X(23)+X(24)+X(25)
+        QZZDZ  =-DZQZZ
+        X1010  = X(10)+X(10)*PT5
+        X1111  = X(11)+X(11)
+        X1213  = X(12)+X(13)
+        QXXQXX = X1010+X1111+X(26)
+        QXXQYY = X1111+X(10)+X(27)
+        QXXQZZ = X(10)+X(11)+X1213+X(15)+X(16)
+        QZZQXX = QXXQZZ
+        QZZQZZ = X1010+X1213+X1213+X(28)+X(29)
+        DXQXZ  = X(30)+X(31)+X(32)+X(33)
+        QXZDX  =-DXQXZ
+        QXZQXZ = QXXQZZ
+     else                                    ! different atom pairs
+        DB     = DD_j(2)                ! DD(2,nj)
+        QB     = DD_j(3)                ! DD(3,nj)
         TWOQB  = QB+QB
         TWOQB2 = TWOQB*TWOQB
         TWOQBQ = TWOQB2+AQQ
@@ -2530,9 +1911,9 @@ module qm1_energy_module
         RMDB2  = (R-DB)**2
         RP2QB2 = (R+TWOQB)**2
         RM2QB2 = (R-TWOQB)**2
-        AED    = (PO_1(iqm)+PO_2(jqm))**2  ! (PO(1,ni)+PO(2,nj))**2
-        AEQ    = (PO_1(iqm)+PO_3(jqm))**2  ! (PO(1,ni)+PO(3,nj))**2
-        AQD    = (PO_3(iqm)+PO_2(jqm))**2  ! (PO(3,ni)+PO(2,nj))**2
+        AED    = (PO_i(1)+PO_j(2))**2  ! (PO(1,ni)+PO(2,nj))**2
+        AEQ    = (PO_i(1)+PO_j(3))**2  ! (PO(1,ni)+PO(3,nj))**2
+        AQD    = (PO_i(3)+PO_j(2))**2  ! (PO(3,ni)+PO(2,nj))**2
         X(14)  = R2+AEQ
         X(15)  = RMDB2+AED
         X(16)  = RPDB2+AED
@@ -2621,58 +2002,6 @@ module qm1_energy_module
         do I=62,69
            QXZQXZ = QXZQXZ+X(I)
         end do
-     else   ! meaning ni.eq.nj
-        TWODA  = DA+DA
-        X(14)  = R2+ADD
-        X(15)  = RP2QA2+TWOQAQ
-        X(16)  = RM2QA2+TWOQAQ
-        X(17)  = R2+TWODA**2+ADD
-        X(18)  = (R-TWODA)**2+ADD
-        X(19)  = (R+TWODA)**2+ADD
-        X(20)  = RPDA2+TWOQA2+ADQ
-        X(21)  = RMDA2+TWOQA2+ADQ
-        X(22)  = (R+DA-TWOQA)**2+ADQ
-        X(23)  = (R-DA-TWOQA)**2+ADQ
-        X(24)  = (R+DA+TWOQA)**2+ADQ
-        X(25)  = (R-DA+TWOQA)**2+ADQ
-        X(26)  = R2+FOUR*TWOQA2+AQQ
-        X(27)  = R2+TWOQA2+TWOQAQ
-        X(28)  = (R+TWOQA+TWOQA)**2+AQQ
-        X(29)  = (R-TWOQA-TWOQA)**2+AQQ
-        RMQA2  = (R-QA)**2
-        RPQA2  = (R+QA)**2
-        DMADD  = (DA-QA)**2+ADQ
-        DPADD  = (DA+QA)**2+ADQ
-        X(30)  = RMQA2+DMADD
-        X(31)  = RPQA2+DMADD
-        X(32)  = RMQA2+DPADD
-        X(33)  = RPQA2+DPADD
-        X(1:33)= PXX(1:33)/SQRT(X(1:33))
-        EE     = X(1)
-        DZE    = X(3) +X(4)
-        QZZE   = X(2) +X(5) +X(6)
-        QXXE   = X(2) +X(7)
-        EDZ    =-DZE
-        EQZZ   = QZZE
-        EQXX   = QXXE
-        DXDX   = X(14)+X(17)
-        DZDZ   = X(14)+X(18)+X(19)
-        X89    = X(8) +X(9)
-        DZQXX  = X89  +X(20)+X(21)
-        QXXDZ  =-DZQXX
-        DZQZZ  = X89  +X(22)+X(23)+X(24)+X(25)
-        QZZDZ  =-DZQZZ
-        X1010  = X(10)+X(10)*PT5
-        X1111  = X(11)+X(11)
-        X1213  = X(12)+X(13)
-        QXXQXX = X1010+X1111+X(26)
-        QXXQYY = X1111+X(10)+X(27)
-        QXXQZZ = X(10)+X(11)+X1213+X(15)+X(16)
-        QZZQXX = QXXQZZ
-        QZZQZZ = X1010+X1213+X1213+X(28)+X(29)
-        DXQXZ  = X(30)+X(31)+X(32)+X(33)
-        QXZDX  =-DXQXZ
-        QXZQXZ = QXXQZZ
      end if
      A(1)  = EE
      A(2)  = DZE
@@ -2709,17 +2038,17 @@ module qm1_energy_module
   ! for the Core-mat (SP basis). Omit the calculation for identical additive terms (SS=Core_mat). 
   ! This option is only valid for SP-type integrals in MNDO/d and AM1/d methods.
   if(do_d_orbitals) then
-     ACI    = PO_9(iqm) ! PO(9,ni)
-     ACJ    = PO_9(jqm) ! PO(9,nj)
+     ACI    = PO_i(9) ! PO(9,ni)
+     ACJ    = PO_j(9) ! PO(9,nj)
      ! electrons at atom A (ni) and Core of atom B (nj).
-     if(abs(ACJ-PO_1(jqm)).gt.small) then
-        CORE_mat(1,1) = -CORENJ*eV/SQRT(R2+(PO_1(iqm)+ACJ)**2)
-        if(iorbs.ge.4) then
-           DA     = DD_2(iqm)
-           QA     = DD_3(iqm)
-           AEJ    = (PO_7(iqm)+ACJ)**2
-           ADJ    = (PO_2(iqm)+ACJ)**2
-           AQJ    = (PO_3(iqm)+ACJ)**2
+     if(abs(ACJ-PO_j(1)) > small) then
+        CORE_mat(1,1) = -CORENJ*eV/SQRT(R2+(PO_i(1)+ACJ)**2)
+        if(iorbs >= 4) then
+           DA     = DD_i(2)
+           QA     = DD_i(3)
+           AEJ    = (PO_i(7)+ACJ)**2
+           ADJ    = (PO_i(2)+ACJ)**2
+           AQJ    = (PO_i(3)+ACJ)**2
            TWOQA  = QA+QA
            X(1)   = (R2+AEJ)
            X(2)   = (R2+AQJ)
@@ -2736,14 +2065,14 @@ module qm1_energy_module
         end if
      end if
      ! electrons at atom B (nj) and core of atom A (ni).
-     if(abs(ACI-PO_1(iqm)).gt.small) then
-        CORE_mat(1,2) = -CORENI*eV/SQRT(R2+(PO_1(jqm)+ACI)**2)
-        if(jorbs.ge.4) then
-           DB     = DD_2(jqm)
-           QB     = DD_3(jqm)
-           AEI    = (PO_7(jqm)+ACI)**2
-           ADI    = (PO_2(jqm)+ACI)**2
-           AQI    = (PO_3(jqm)+ACI)**2
+     if(abs(ACI-PO_i(1)) > small) then
+        CORE_mat(1,2) = -CORENI*eV/SQRT(R2+(PO_j(1)+ACI)**2)
+        if(jorbs >= 4) then
+           DB     = DD_j(2)
+           QB     = DD_j(3)
+           AEI    = (PO_j(7)+ACI)**2
+           ADI    = (PO_j(2)+ACI)**2
+           AQI    = (PO_j(3)+ACI)**2
            TWOQB  = QB+QB
            X(1)   = (R2+AEI)
            X(2)   = (R2+AQI)
@@ -2764,7 +2093,7 @@ module qm1_energy_module
   end subroutine repp_qmqm
 
 
-  subroutine repp_qmmm(NI,NJ,iqm,R,A,CORE_mat)
+  subroutine repp_qmmm(NI,NJ,iqm,lorbs,R,A,CORE_mat,PO_qm,PO_mm,DD_qm,DD_mm)
   !
   ! for MM charge: NJ=0
   !
@@ -2790,16 +2119,13 @@ module qm1_energy_module
   ! CHARGE WITHOUT BASIS ORBITALS. THE CHARGE IS 1 ATOMIC UNIT.
   ! THE VALUES OF DD(I,0) AND PO(I,0) ARE DEFINED TO BE ZERO.
   !
-  !use chm_kinds
-  !use number
-  !use qm1_constant
-  use qm1_parameters, only : LORBS ! ,CORE,DD,PO
-  use qm1_info, only : qm_control_r
+  !!use qm1_parameters, only : LORBS ! ,CORE,DD,PO
+  use qm1_info, only : qm_control_c
     
   implicit none
 
-  integer :: NI,NJ,iqm
-  real(chm_real):: R,A(22),CORE_mat(10,2)
+  integer :: NI,NJ,iqm,lorbs
+  real(chm_real):: R,A(22),CORE_mat(10,2),PO_qm(9),PO_mm(9),DD_qm(6),DD_mm(6)
 
   ! local variables:
   integer :: iorbs,jorbs,i
@@ -2827,26 +2153,24 @@ module qm1_energy_module
 
 
   ! initializations for point MM charge vs. QM charge.
-  iorbs  = LORBS(ni)  ! qm atom
-  !coreni = CORE_local(iqm)
-  !
+  iorbs  = lorbs      ! LORBS(ni)  ! qm atom
   jorbs  = 1          ! mm atom
   corenj = one
   !
   R2        = R*R
-  AEE       =(PO_1(iqm)+PO_1_mm)**2 ! (PO(1,ni)+PO(1,nj))**2
+  AEE       =(PO_qm(1)+PO_mm(1))**2 ! (PO(1,ni)+PO(1,nj))**2
   ! H - H pair
-  if(iorbs.le.1) then  ! (iorbs.le.1 .and. jorbs.le.1)
+  if(iorbs <= 1) then  ! (iorbs.le.1 .and. jorbs.le.1)
      EE     = one/SQRT(R2+AEE)
      A(1)   = EE*eV
      CORE_mat(1,1) = -CORENJ*A(1)
   ! Heavy atom - H pair
-  else if(iorbs.ge.4) then ! (iorbs.ge.4 .and. jorbs.le.1)
-     DA     = DD_2(iqm)  ! DD(2,ni)
-     QA     = DD_3(iqm)  ! DD(3,ni)
+  else if(iorbs >= 4) then ! (iorbs.ge.4 .and. jorbs.le.1)
+     DA     = DD_qm(2)  ! DD(2,ni)
+     QA     = DD_qm(3)  ! DD(3,ni)
      TWOQA  = QA+QA
-     ADE    = (PO_2(iqm)+PO_1_mm)**2  ! (PO(2,ni)+PO(1,nj))**2
-     AQE    = (PO_3(iqm)+PO_1_mm)**2  ! (PO(3,ni)+PO(1,nj))**2
+     ADE    = (PO_qm(2)+PO_mm(1))**2  ! (PO(2,ni)+PO(1,nj))**2
+     AQE    = (PO_qm(3)+PO_mm(1))**2  ! (PO(3,ni)+PO(1,nj))**2
      X(1)   = (R2+AEE)
      X(2)   = (R2+AQE)
      X(3)   = ((R+DA)**2+ADE)
@@ -2903,25 +2227,22 @@ module qm1_energy_module
 
 
   ! transform the integrals
-  !if(iw.eq.1 .and. jw.eq.1) then
-  !   continue
-  !else
-  if (iw.gt.1 .or. jw.gt.1) then
+  if (iw > 1 .or. jw > 1) then
      rsum(1:6)=yy(1:6,6)+yy(1:6,10)
 
      ! integral types (SS,PS) and (SS,PP).
-     if(jw.gt.1) then
+     if(jw > 1) then
         SSPB(IPP(1:3))= RI(5)*YY(1:3,2)  ! ipp=1,3,6
         SSPB(ISS(1:6))= RI(11)*YY(1:6,3)+RI(12)*rsum(1:6)
      end if
 
      ! integral types (PS,SS) and (PP,SS).
-     if(iw.gt.1) then
+     if(iw > 1) then
         rPASS(IPP(1:3))= RI(2)*YY(1:3,2)  ! ipp=1,3,6
         rPASS(ISS(1:6))= RI(3)*YY(1:6,3)+RI(4)*rsum(1:6)
      end if
 
-     if(iw.gt.1 .and. jw.gt.1) then
+     if(iw > 1 .and. jw > 1) then
         ! integral type (PS,PS) and auxiliary terms for (PS,PP).
         do i=1,6
            PSPS(i)= RI( 6)*YY(i,3)+RI( 7)*rsum(i)
@@ -2980,14 +2301,14 @@ module qm1_energy_module
   end if
 
   ! store integrals.
-  if(imode.eq.1) then   ! using linear array W.
+  if(imode == 1) then   ! using linear array W. (call from dhcore)
      k    = kr+1
      w(k) = RI(1)
      ! integral types (SS,PS) and (SS,PP).
-     if(jw.gt.1) w(k+1:k+9) = SSPB(1:9)
+     if(jw > 1) w(k+1:k+9) = SSPB(1:9)
      ! integral types (PS,SS) and (PP,SS).
-     if(iw.gt.1 .and. jw.eq.1) w(k+1:k+9) = rPASS(1:9)
-     if(iw.gt.1 .and. jw.gt.1) then
+     if(iw > 1 .and. jw == 1) w(k+1:k+9) = rPASS(1:9)
+     if(iw > 1 .and. jw > 1) then
         ! integral types (PS,SS) and (PP,SS).
         do i=1,9
            w(k+i*10) = rPASS(i)
@@ -3014,13 +2335,13 @@ module qm1_energy_module
            w(ij+ISS(1:6)) = PPPP(1:6,i)
         end do
      end if
-  else  ! imode == 0, using square array WW.
+  else  ! imode == 0, using square array WW. (call from hcorep)
      ww(ip,jp) = RI(1)
      ! integral type (SS,PS) and (SS,PP).
-     if(jw.gt.1) ww(ip,jp+1:jp+9) = SSPB(1:9)
+     if(jw > 1) ww(ip,jp+1:jp+9) = SSPB(1:9)
      ! integral type (PS,SS) and (PP,SS).
-     if(iw.gt.1) ww(ip+1:ip+9,jp) = rPASS(1:9)
-     if(iw.gt.1 .and. jw.gt.1) then
+     if(iw > 1) ww(ip+1:ip+9,jp) = rPASS(1:9)
+     if(iw > 1 .and. jw > 1) then
         ! integral type (PS,PS).
         ww(ip+1,jp+1) = PSPS(1)
         ww(ip+3,jp+1) = PSPS(2)
@@ -3063,9 +2384,6 @@ module qm1_energy_module
   ! YY()      PRECOMPUTED COMBINATION OF ROTATION MATRIX ELEMENTS (I).
   ! H(LM4)    ONE-ELECTRON MATRIX IN MOLECULAR COORDINATES (O).
   !
-  !use chm_kinds
-  !use qm1_info, only : qm_scf_main_r
-
   implicit none
 
   integer :: ia,ja,iorbs,jorbs,LM4,indx(*)
@@ -3079,13 +2397,13 @@ module qm1_energy_module
   ! S(I)-S(J)
   is     = indx(ia)+ja
   H(is)  = T(1)
-  if(iorbs.eq.1 .and. jorbs.eq.1) return
+  if(iorbs == 1 .and. jorbs == 1) return
 
   ! S(I)-P(J)
-  if(jorbs.ge.4) H(is+1:is+3) = T(2)*YY(1:3,2)
+  if(jorbs >= 4) H(is+1:is+3) = T(2)*YY(1:3,2)
 
   ! P(I)-S(J)
-  if(iorbs.ge.4) then
+  if(iorbs >= 4) then
      ix      = indx(ia+1)+ja
      iy      = indx(ia+2)+ja
      iz      = indx(ia+3)+ja
@@ -3093,7 +2411,7 @@ module qm1_energy_module
      H(iy)   = T(3)*YY(2,2)
      H(iz)   = T(3)*YY(3,2)
      ! P(I)-P(J).
-     if(jorbs.ge.4) then
+     if(jorbs >= 4) then
         T45     = T(4)-T(5)
         H(ix+1) = YY(1,3)*T45+T(5)
         H(ix+2) = YY(2,3)*T45
@@ -3111,12 +2429,12 @@ module qm1_energy_module
 
   ! section involving D-orbitals.
   ! D(I)-S(J)
-  if(iorbs.ge.9) then
+  if(iorbs >= 9) then
      do i=1,5
         H(indx(ia+3+i)+ja) = T(6)*YY(i,11)
      end do
      ! D(I)-P(J)
-     if(jorbs.ge.4) then
+     if(jorbs >= 4) then
         ij     = 0
         do i=1,5
            M      = indx(ia+3+i)+ja
@@ -3128,11 +2446,11 @@ module qm1_energy_module
      end if
   end if
   ! S(I)-D(J)
-  if(jorbs.ge.9) then
-     M      = indx(ia)+ja+3
+  if(jorbs >= 9) then
+     M          = indx(ia)+ja+3
      H(M+1:M+5) = T(7)*YY(1:5,11)
      ! P(I)-D(J)
-     if(iorbs.ge.4) then
+     if(iorbs >= 4) then
         do i=1,3
            M      = indx(ia+i)+ja+3
            do j=1,5
@@ -3141,7 +2459,7 @@ module qm1_energy_module
            end do
         end do
         ! D(I)-D(J)
-        if(iorbs.ge.9) then
+        if(iorbs >= 9) then
            HDD(1:15) = T(12)* YY(1:15,15)              &
                       +T(13)*(YY(1:15,21)+YY(1:15,28)) &
                       +T(14)*(YY(1:15,36)+YY(1:15,45))
@@ -3187,8 +2505,6 @@ module qm1_energy_module
   ! jp             indx(ja)+ja             NW(j)
   ! LMH            LM4                     LM6
   !
-  !use chm_kinds
-
   implicit none
 
   integer :: IA,JA,IORBS,JORBS,IP,JP,LMH
@@ -3199,7 +2515,7 @@ module qm1_energy_module
   real(chm_real):: HPP(6),HDP(15),HDD(15),YY_1(15),YY_2(15),YY_3(15)
 
   do kk=1,2
-     if(kk.eq.1) then
+     if(kk == 1) then
         is  = ip
         k   = ia-1
         L   = iorbs
@@ -3211,7 +2527,7 @@ module qm1_energy_module
 
      ! S-S
      H(is)  = H(is)+CORE_mat(1,kk)
-     if(L.ge.4) then
+     if(L >= 4) then
         ! intermediate results for P-P
         HPP(1:6)=CORE_mat(3,kk)*YY(1:6,3)+CORE_mat(4,kk)*(YY(1:6,6)+YY(1:6,10))
         ! P-S
@@ -3226,7 +2542,7 @@ module qm1_energy_module
         H(iy+1:iy+2)= H(iy+1:iy+2)+HPP(2:3)
         H(iz+1:iz+3)= H(iz+1:iz+3)+HPP(4:6)
 
-        if(L.ge.9) then
+        if(L >= 9) then
            ! intermediate results for D-P and D-D
            !YY_1(1:15)=CORE_mat( 8,kk)*(YY(1:15,18)+YY(1:15,25))
            !YY_2(1:15)=CORE_mat( 9,kk)*(YY(1:15,21)+YY(1:15,28))
@@ -3453,17 +2769,17 @@ module qm1_energy_module
   sqb    = SQRT(b)  ! =sqrt(x(1)**2+x(2)**2), if atoms are z-axix, it will be zero
   sb     = sqb/r    ! normalized sqb by r.
   ! check for special case (both atoms on z axis).
-  if(sb.gt.small) then  ! it atoms are on z-axis.
+  if(sb > small) then  ! it atoms are on z-axis.
      ca  = x(1)/sqb
      sa  = x(2)/sqb
      cb  = x(3)/r
   else
      SA  = zero
      SB  = zero
-     if(x(3).lt.zero) then
+     if(x(3) < zero) then
         CA  =-one
         CB  =-one
-     else if(x(3).gt.zero) then
+     else if(x(3) > zero) then
         CA  = one
         CB  = one
      else
@@ -3524,7 +2840,7 @@ module qm1_energy_module
            YY(4:6,KL) =p_tmp1(1:3)*p_tmp2(3)+p_tmp1(3)*p_tmp2(1:3)
         end do
      end do
-     if(iorbs.ge.9 .or. jorbs.ge.9) then
+     if(iorbs >= 9 .or. jorbs >= 9) then
         C2A    = two*CA*CA-one  
         C2B    = two*CB*CB-one  
         S2A    = two*SA*CA
@@ -3651,7 +2967,7 @@ module qm1_energy_module
   ! R         interatomic distance, in atomic units (O).
   ! YY()      precombined elements of the rotation matrix (O).
   !
-  !use qm1_info, only : mm_main_r
+  !use qm1_info, only : mm_main_c
   implicit none
 
   integer :: j,i,jorbs,iorbs,numatom
@@ -3684,36 +3000,36 @@ module qm1_energy_module
   ! the second index of YY(ij,kl) is a standard pair index:
   ! KL=(K*(K-1))/2+L, order of K and L as in integral evaluation.
 
-  x(1:3) = coord(1:3,j)-coord(1:3,i)
+  x(1:3)= coord(1:3,j)-coord(1:3,i)
 
-  b      = x(1)*x(1)+x(2)*x(2)
-  r      = SQRT(b+x(3)*x(3))
-  sqb    = SQRT(b)  ! =sqrt(x(1)**2+x(2)**2), if atoms are z-axix, it will be zero
-  sb     = sqb/r    ! normalized sqb by r.
+  b     = x(1)*x(1)+x(2)*x(2)
+  r     = SQRT(b+x(3)*x(3))
+  sqb   = SQRT(b)  ! =sqrt(x(1)**2+x(2)**2), if atoms are z-axix, it will be zero
+  sb    = sqb/r    ! normalized sqb by r.
   ! check for special case (both atoms on z axis).
-  if(sb.gt.small) then  ! it atoms are on z-axis.
-     ca  = x(1)/sqb
-     sa  = x(2)/sqb
-     cb  = x(3)/r
+  if(sb > small) then  ! it atoms are on z-axis.
+     ca = x(1)/sqb
+     sa = x(2)/sqb
+     cb = x(3)/r
   else
-     SA  = zero
-     SB  = zero
-     if(x(3).lt.zero) then
-        CA  =-one
-        CB  =-one
-     else if(x(3).gt.zero) then
-        CA  = one
-        CB  = one
+     SA = zero
+     SB = zero
+     if(x(3) < zero) then
+        CA =-one
+        CB =-one
+     else if(x(3) > zero) then
+        CA = one
+        CB = one
      else
-        CA  = zero
-        CB  = zero
+        CA = zero
+        CB = zero
      end if
   end if
-  R      = r*r_A0  ! /A0; convert distance to atomic unit.
+  R     = r*r_A0  ! /A0; convert distance to atomic unit.
 
   ! precombine rotation matrix elements: jorbs == 1
   ! for S-S pair..
-  YY(1,1)   = one
+  YY(1,1) = one
   if(iorbs >= 4) then
      ! Rotation matrix elements
      ! below, we only use the transpose of P
@@ -3818,7 +3134,7 @@ module qm1_energy_module
 !  !
 !  !use chm_kinds
 !  !use number, only : zero
-!  use qm1_info, only : qm_scf_main_r
+!  use qm1_info, only : qm_scf_main_c
 !
 !  implicit none
 !
@@ -3831,15 +3147,15 @@ module qm1_energy_module
 !
 !  SPCW   = zero
 !  do kl=1,LM6
-!     k      = qm_scf_main_r%IP1(kl)
-!     l      = qm_scf_main_r%IP2(kl)
+!     k      = qm_scf_main_c%IP1(kl)
+!     l      = qm_scf_main_c%IP2(kl)
 !     ckl(kl)= C3(k)*C4(l)
 !     if(k.ne.l) ckl(kl)=ckl(kl)+C3(l)*C4(k)
 !  end do
 !  do ij=1,LM6
 !     wij=DOT_PRODUCT(ckl(1:LM6),w(1:LM6,ij))
-!     I      = qm_scf_main_r%IP1(ij)
-!     J      = qm_scf_main_r%IP2(ij)
+!     I      = qm_scf_main_c%IP1(ij)
+!     J      = qm_scf_main_c%IP2(ij)
 !     cij    = C1(i)*C2(j)
 !     if(i.ne.j) cij=cij+C1(j)*C2(i)
 !     SPCW   = SPCW+cij*wij
@@ -3856,13 +3172,7 @@ module qm1_energy_module
   ! MODE= 0   include rhf one-center integrals and transpose.
   ! MODE= 1   include raw one-center integrals and transpose (UHF).
   !
-  !use chm_kinds
-  !use number
-  !use qm1_constant 
-  !use qm1_info, only : qm_main_r,qm_scf_main_r
-  !use qm1_parameters, only : GSS,GPP,GSP,GP2,HSP,HPP,REPD, &
-  !                           INTIJ,INTKL,INTREP,INTRF1,INTRF2
-  !
+  use qm1_info, only : qm_param_c  ! ,qm_main_c,qm_scf_main_c
 #if KEY_PARALLEL==1
   use parallel
 #endif
@@ -3908,56 +3218,57 @@ module qm1_energy_module
   ! include non-zero one-center terms.
   if(uhf) then
      do ii=istart,numat,nnumnod
-        ip  = ip_local(ii) ! nw(ii)
-        ni  = ni_local(ii) ! nat(ii)
-        w(ip,ip) = GSS_local(ii) ! GSS(ni)
-        iorbs    = iorbs_local(ii) ! num_orbs(ii)  ! NLAST(II)-NFIRST(II)+1
-        if(iorbs.ge.4) then
+        ip  = qm_param_c%ip_local(ii)          ! nw(ii)
+        !ni  = qm_param_c%ni_local(ii)         ! nat(ii)
+        w(ip,ip) = qm_param_c%GSS_local(ii)    ! GSS(ni)
+        !iorbs    = qm_param_c%iorbs_local(ii) ! num_orbs(ii)  ! NLAST(II)-NFIRST(II)+1
+        if(qm_param_c%iorbs_local(ii) >= 4) then  ! iorbs >= 4
            ipx = ip+2
            ipy = ip+5
            ipz = ip+9
-           GSPNI = GSP_local(ii) 
-           GPPNI = GPP_local(ii)
-           GP2NI = GP2_local(ii)
-           HSPNI = HSP_local(ii)
-           HPPNI = HPP_local(ii)
-           w(ipx ,ip  ) = GSPNI ! GSP(ni)
-           w(ipy ,ip  ) = GSPNI ! GSP(ni)
-           w(ipz ,ip  ) = GSPNI ! GSP(ni)
+           !GSPNI = qm_param_c%GSP_local(ii) 
+           !GPPNI = qm_param_c%GPP_local(ii)
+           !GP2NI = qm_param_c%GP2_local(ii)
+           !HSPNI = qm_param_c%HSP_local(ii)
+           !HPPNI = qm_param_c%HPP_local(ii)
+
+           w(ipx ,ip  ) = qm_param_c%GSP_local(ii)  ! GSPNI ! GSP(ni)
+           w(ipy ,ip  ) = qm_param_c%GSP_local(ii)  ! GSPNI ! GSP(ni)
+           w(ipz ,ip  ) = qm_param_c%GSP_local(ii)  ! GSPNI ! GSP(ni)
            !w(ip  ,ipx ) = GSPNI ! GSP(ni)
            !w(ip  ,ipy ) = GSPNI ! GSP(ni)
            !w(ip  ,ipz ) = GSPNI ! GSP(ni)
-           w(ipx ,ipx ) = GPPNI ! GPP(ni)
-           w(ipy ,ipy ) = GPPNI ! GPP(ni)
-           w(ipz ,ipz ) = GPPNI ! GPP(ni)
-           w(ipy ,ipx ) = GP2NI ! GP2(ni)
-           w(ipz ,ipx ) = GP2NI ! GP2(ni)
-           w(ipz ,ipy ) = GP2NI ! GP2(ni)
+           w(ipx ,ipx ) = qm_param_c%GPP_local(ii)  ! GPPNI ! GPP(ni)
+           w(ipy ,ipy ) = qm_param_c%GPP_local(ii)  ! GPPNI ! GPP(ni)
+           w(ipz ,ipz ) = qm_param_c%GPP_local(ii)  ! GPPNI ! GPP(ni)
+           w(ipy ,ipx ) = qm_param_c%GP2_local(ii)  ! GP2NI ! GP2(ni)
+           w(ipz ,ipx ) = qm_param_c%GP2_local(ii)  ! GP2NI ! GP2(ni)
+           w(ipz ,ipy ) = qm_param_c%GP2_local(ii)  ! GP2NI ! GP2(ni)
            !w(ipx ,ipy ) = GP2NI ! GP2(ni)
            !w(ipx ,ipz ) = GP2NI ! GP2(ni)
            !w(ipy ,ipz ) = GP2NI ! GP2(ni)
-           w(ip+1,ip+1) = HSPNI ! HSP(ni)
-           w(ip+3,ip+3) = HSPNI ! HSP(ni)
-           w(ip+6,ip+6) = HSPNI ! HSP(ni)
-           w(ip+4,ip+4) = HPPNI ! HPP(ni)
-           w(ip+7,ip+7) = HPPNI ! HPP(ni)
-           w(ip+8,ip+8) = HPPNI ! HPP(ni)
-           if(iorbs.ge.9) then
+           w(ip+1,ip+1) = qm_param_c%HSP_local(ii)  ! HSPNI ! HSP(ni)
+           w(ip+3,ip+3) = qm_param_c%HSP_local(ii)  ! HSPNI ! HSP(ni)
+           w(ip+4,ip+4) = qm_param_c%HPP_local(ii)  ! HPPNI ! HPP(ni)
+           w(ip+6,ip+6) = qm_param_c%HSP_local(ii)  ! HSPNI ! HSP(ni)
+           w(ip+7,ip+7) = qm_param_c%HPP_local(ii)  ! HPPNI ! HPP(ni)
+           w(ip+8,ip+8) = qm_param_c%HPP_local(ii)  ! HPPNI ! HPP(ni)
+           if(qm_param_c%iorbs_local(ii) >= 9) then ! iorbs >= 9
               ij0    = ip-1
               do i=1,243
                  !w(intij(i)+ij0,intkl(i)+ij0) = REPD(INTREP(i),ni)
-                 w(int_ij(i)+ij0,int_kl(i)+ij0) = w_save(i,ii)
+                 w(qm_param_c%int_ij(i)+ij0,qm_param_c%int_kl(i)+ij0) = qm_param_c%w_save(i,ii)
               end do
            end if
         end if
      end do
   else
      do ii=istart,numat,nnumnod
-        ip  = ip_local(ii) ! NW(ii)
-        ! ni  = ni_local(ii) ! nat(ii)
-        W(ip,ip) = GSS_local(ii) ! GSS_local(ii)*PT5  ! GSS(ni)*PT5
-        iorbs    = iorbs_local(ii) ! num_orbs(ii)  ! NLAST(II)-NFIRST(II)+1
-        if(iorbs.ge.4) then
+        ip  = qm_param_c%ip_local(ii) ! NW(ii)
+        ! ni  = qm_param_c%ni_local(ii) ! nat(ii)
+        w(ip,ip) = qm_param_c%GSS_local(ii) ! GSS_local(ii)*PT5  ! GSS(ni)*PT5
+        !iorbs    = qm_param_c%iorbs_local(ii) ! num_orbs(ii)  ! NLAST(II)-NFIRST(II)+1
+        if(qm_param_c%iorbs_local(ii) >= 4) then  ! iorbs >= 4
            ipx = ip+2
            ipy = ip+5
            ipz = ip+9
@@ -3968,33 +3279,33 @@ module qm1_energy_module
            !HPPNI = HPP(ni)*PT75-GP2(ni)*PT25
 
            ! already computed the following multiplications (see QMMM_module_prep)
-           GSPNI = GSP_local(ii) ! GSP_local(ii)-HSP_local(ii)*PT5
-           GPPNI = GPP_local(ii) ! GPP_local(ii)*PT5
-           GP2NI = GP2_local(ii) ! GP2_local(ii)-HPP_local(ii)*PT5
-           HSPNI = HSP_local(ii) ! HSP_local(ii)*PT75-GSP_local(ii)*PT25
-           HPPNI = HPP_local(ii) ! HPP_local(ii)*PT75-GP2_local(ii)*PT25
-           w(ipx ,ip  ) = GSPNI
-           w(ipy ,ip  ) = GSPNI
-           w(ipz ,ip  ) = GSPNI
+           !!GSPNI = qm_param_c%GSP_local(ii) ! GSP_local(ii)-HSP_local(ii)*PT5
+           !!GPPNI = qm_param_c%GPP_local(ii) ! GPP_local(ii)*PT5
+           !!GP2NI = qm_param_c%GP2_local(ii) ! GP2_local(ii)-HPP_local(ii)*PT5
+           !!HSPNI = qm_param_c%HSP_local(ii) ! HSP_local(ii)*PT75-GSP_local(ii)*PT25
+           !!HPPNI = qm_param_c%HPP_local(ii) ! HPP_local(ii)*PT75-GP2_local(ii)*PT25
+           w(ipx ,ip  ) = qm_param_c%GSP_local(ii)  ! GSPNI
+           w(ipy ,ip  ) = qm_param_c%GSP_local(ii)  ! GSPNI
+           w(ipz ,ip  ) = qm_param_c%GSP_local(ii)  ! GSPNI
            !w(ip  ,ipx ) = GSPNI
            !w(ip  ,ipy ) = GSPNI
            !w(ip  ,ipz ) = GSPNI
-           w(ipx ,ipx ) = GPPNI
-           w(ipy ,ipy ) = GPPNI
-           w(ipz ,ipz ) = GPPNI
-           w(ipy ,ipx ) = GP2NI
-           w(ipz ,ipx ) = GP2NI
-           w(ipz ,ipy ) = GP2NI
+           w(ipx ,ipx ) = qm_param_c%GPP_local(ii)  ! GPPNI
+           w(ipy ,ipy ) = qm_param_c%GPP_local(ii)  ! GPPNI
+           w(ipz ,ipz ) = qm_param_c%GPP_local(ii)  ! GPPNI
+           w(ipy ,ipx ) = qm_param_c%GP2_local(ii)  ! GP2NI
+           w(ipz ,ipx ) = qm_param_c%GP2_local(ii)  ! GP2NI
+           w(ipz ,ipy ) = qm_param_c%GP2_local(ii)  ! GP2NI
            !w(ipx ,ipy ) = GP2NI
            !w(ipx ,ipz ) = GP2NI
            !w(ipy ,ipz ) = GP2NI
-           w(ip+1,ip+1) = HSPNI
-           w(ip+3,ip+3) = HSPNI
-           w(ip+4,ip+4) = HPPNI  ! note this is right.
-           w(ip+6,ip+6) = HSPNI
-           w(ip+7,ip+7) = HPPNI
-           w(ip+8,ip+8) = HPPNI
-           if(iorbs.ge.9) then
+           w(ip+1,ip+1) = qm_param_c%HSP_local(ii)  ! HSPNI
+           w(ip+3,ip+3) = qm_param_c%HSP_local(ii)  ! HSPNI
+           w(ip+4,ip+4) = qm_param_c%HPP_local(ii)  ! HPPNI
+           w(ip+6,ip+6) = qm_param_c%HSP_local(ii)  ! HSPNI
+           w(ip+7,ip+7) = qm_param_c%HPP_local(ii)  ! HPPNI
+           w(ip+8,ip+8) = qm_param_c%HPP_local(ii)  ! HPPNI
+           if(qm_param_c%iorbs_local(ii) == 9) then ! iorbs >= 9
               ij0    = ip-1
               do i=1,243
                  !int1   = INTRF1(i)
@@ -4006,7 +3317,7 @@ module qm1_energy_module
 
                  !int1 = int_ij(i)+ij0
                  !int2 = int_kl(i)+ij0
-                 w(int_ij(i)+ij0,int_kl(i)+ij0) = w_save(i,ii)
+                 w(qm_param_c%int_ij(i)+ij0,qm_param_c%int_kl(i)+ij0) = qm_param_c%w_save(i,ii)
               end do
            end if
         end if

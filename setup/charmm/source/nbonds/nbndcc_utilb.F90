@@ -9,7 +9,8 @@
 !-------------------------------------------------------------------------------
  subroutine parstoperr(SUBNAME,ERRORNM,PSTATUS,PWARN,PQSINGLE,PQSTOP,PQERROR)
 #if KEY_PARALLEL==1
- use parallel,only: MYNODP 
+ use parallel,only: MYNODP
+ use mpi_f08
 #endif
 ! provides a clean message print or stop across all cpus.
 ! returns without action if warning level (def -5) is > charmm WRNLEV.
@@ -19,11 +20,8 @@
  character(len=*),intent(in) :: SUBNAME,ERRORNM
  integer,intent(in),optional :: PWARN !passed warning level
  integer(chm_int4),optional :: PSTATUS !mpi status var
- logical,intent(in),optional :: PQSINGLE,PQSTOP,PQERROR !flags for writing to 
+ logical,intent(in),optional :: PQSINGLE,PQSTOP,PQERROR !flags for writing to
 ! single cpu, stopping after print, printing "ERROR", all true by default.
-#if KEY_PARALLEL==1
- include 'mpif.h' 
-#endif
 !local
  logical :: QSINGLE,QSTOP,QERROR 
  integer(chm_int4) :: STATUS
@@ -83,12 +81,12 @@
 ! requires on the order of NUMNOD^2 words of memory
 !                                                            --RJP 5/2012
    use parallel,only: NUMNOD,MYNODP
+   use mpi_f08
    implicit none
    integer,dimension(:),allocatable,intent(in) :: NTCPUSEN,NTCPUREC !arrays of sending/receiving nodes
    integer,intent(in) :: NNTCPUSEN,NNTCPUREC !length of send/receive arrays
    integer,optional,intent(in) :: plabint  !integer label for debugging
    logical,optional,intent(in) :: pqverb !verbose flag
-   include 'mpif.h'
 ! local
    integer(chm_int4) :: status
    integer,dimension(:,:),allocatable :: DEBUGRECS,DEBUGSENDS,TOTALREC,TOTALSEN

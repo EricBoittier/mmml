@@ -124,8 +124,8 @@ int calcPotGrid(void * ocl_selected_device,
   ocl_check_status(status);
 
   cl_kernel pot_kernel;
-  status = ocl_compile_kernel(Kernels::generateProtGrid, "generateProtGrid",
-                              context, dev_id,
+  status = ocl_compile_kernel(Kernels::gpu_compat + "\n" + Kernels::generateProtGrid,
+                              "generateProtGrid", context, dev_id,
                               pot_kernel);
   if (status != CL_SUCCESS) {
     return status;
@@ -177,7 +177,7 @@ int calcPotGrid(void * ocl_selected_device,
   status = clSetKernelArg(pot_kernel, 13, sizeof(float), (void *) &ElecAttrEmax);
   ocl_check_status(status);
 
-  status = clSetKernelArg(pot_kernel, 14, sizeof(int), (void *) &CCELEC);
+  status = clSetKernelArg(pot_kernel, 14, sizeof(float), (void *) &CCELEC);
   ocl_check_status(status);
 
   status = clSetKernelArg(pot_kernel, 15, sizeof(int), (void *) &ElecMode);

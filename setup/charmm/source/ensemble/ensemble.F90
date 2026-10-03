@@ -12,7 +12,7 @@ subroutine ensini
   use ensemble
   use parallel, only: mynod,numnod,comm_charmm
   use param_store, only: set_param
-  use mpi
+  use mpi_f08
 
   implicit none
   
@@ -115,7 +115,7 @@ subroutine ensfin
   use ensemble
   use dimens_fcm
   use psf
-  use mpi
+  use mpi_f08
   use parallel,only:comm_charmm,mynod,numnod
   use parallel_groups,only:current_comm_index,allcomms
 #if KEY_PINS==1 /*(partial inf. swapping)*/
@@ -163,7 +163,7 @@ end subroutine ensfin
 !            ENS_GLOBAL_BARRIER
 !----------------------------------------------------------------------
 subroutine ens_global_barrier(ierror)
-  use mpi
+  use mpi_f08
   use ensemble
   use parallel,only:comm_charmm,mynod
   implicit none
@@ -197,7 +197,7 @@ subroutine ensprn(unum,message,l)
   use stream
   use ensemble
   use parallel, only:mynod,comm_charmm
-  use mpi
+  use mpi_f08
   implicit none
 
   character(len=*) message
@@ -206,7 +206,8 @@ subroutine ensprn(unum,message,l)
   integer i
   integer, parameter :: biglen=ensbfl*maxens
   character(len=biglen) msgarray
-  integer ierror,lenst,stat(mpi_status_size)
+  integer ierror,lenst
+  TYPE(MPI_Status) :: stat
 
   if(l == 0) return
   if(lmasternode)then
@@ -277,8 +278,8 @@ subroutine enscmd(comlyn,comlen)
       call evbsetup(comlyn, comlen)
 #if KEY_STRINGM==1
   else if (indxa(comlyn,comlen,'STRI')  >  0) then
-     CALL parse_string_commands(comlyn,comlen) ! parse string commands
-#endif 
+     CALL sm_main(comlyn,comlen) ! string method parser (see miscom.F90 'STRI')
+#endif
 #if KEY_ABPO==1
   else if (indxa(comlyn,comlen,'ABPO')  >  0) then
      call abpo_setup(comlyn,comlen) ! parse abpo commands
@@ -765,7 +766,7 @@ subroutine ensclo(comlyn,comlen)
   use dimens_fcm
   use string
   use machio
-  use mpi
+  use mpi_f08
   use parallel,only:comm_charmm
   implicit none
 
@@ -1115,7 +1116,7 @@ subroutine ensnensem(comlyn,comlen)
   use parallel
   use parallel_groups
   use param_store, only: set_param
-  use mpi
+  use mpi_f08
 
   implicit none
 
@@ -1123,12 +1124,13 @@ subroutine ensnensem(comlyn,comlen)
   integer comlen
 
   integer i,j,k,l,node, startnode, endnode, numnod_orig
-  integer ens_group, old_comm_charmm
-  integer,save :: orig_comm_charmm,orig_charmm_group,orig_mynod
-  integer new_charmm_group, new_comm_charmm, new_comm_charmm_index
-  integer master_group,     master_comm,      comm_master_index
+  TYPE(MPI_Group) :: ens_group, new_charmm_group, master_group, charmm_group
+  TYPE(MPI_Comm) :: old_comm_charmm, new_comm_charmm, master_comm
+  TYPE(MPI_Comm),save :: orig_comm_charmm
+  TYPE(MPI_Group),save :: orig_charmm_group
+  integer,save :: orig_mynod
+  integer new_comm_charmm_index, comm_master_index
   integer ierror,status, everb
-  integer charmm_group
 
   integer, allocatable, dimension(:) :: nodes, masternodes
   logical, save :: already_called = .false.
@@ -1198,7 +1200,7 @@ contains
          mynod,numnod,comm_charmm_index,new_comm_charmm_index)
     comm_charmm_index = new_comm_charmm_index
     call chmdealloc('ensemble.src','ensnensem','nodes',numnod,intg=nodes)
-    write(chint,'(i4)')new_comm_charmm
+    write(chint,'(i4)')new_comm_charmm%MPI_VAL
     call ensprint("setup_ens_comm_charmmcomm_ensemble",chint)
 
     numnod_orig = numnod
@@ -1232,14 +1234,18 @@ contains
     call comm_save(old_comm_charmm,new_comm_charmm,new_charmm_group, &
          mynod,numnod,comm_charmm_index,new_comm_charmm_index)
 
-    write(chint,'(i4)')new_comm_charmm
+    write(chint,'(i4)')new_comm_charmm%MPI_VAL
     call ensprint("setup_ens_comm_charmm comm_charmm rep",chint)
 
-    !--- Create COMM_MASTER communicator is the communicator 
+    !--- Create COMM_MASTER communicator is the communicator
     !---        between the master node only of each replica
     call mpi_comm_create(comm_charmm, master_group, COMM_MASTER, ierror)
-    write(chint,'(i4)')comm_master
+    write(chint,'(i4)')comm_master%MPI_VAL
     call ensprint("setup_ens_comm_charmm comm_master",chint)
+
+    ! A genuine multi-replica ensemble is now established (comm_master is a
+    ! real masters-only communicator, distinct from comm_charmm).
+    lensactive = .true.
 
     ensmasternod=-1
     if(lmasternode) then
@@ -1380,7 +1386,7 @@ subroutine ens_setup_stream_input()
   use string,only:cnvtuc
   use comand,only:comlyn_save,comlen_save
   use ensemble,only:lmasternode,ensprint,ensmasternod,comm_master
-  use mpi
+  use mpi_f08
 
   implicit none
   character(len=mxcmsz) :: line,linesav
@@ -1452,7 +1458,7 @@ subroutine ens_sync(comlyn,comlen)
   use memory
   use parallel
   use parallel_groups
-  use mpi
+  use mpi_f08
   use comand,only:comlyn_save,comlen_save
   implicit none
 
@@ -1482,7 +1488,7 @@ subroutine enstat()
   use ensemble
   use stream
   use dimens_fcm
-  use mpi
+  use mpi_f08
   use number,only:zero
   implicit none
 
@@ -1542,7 +1548,7 @@ subroutine ensswl(xold,yold,zold,xnew,ynew,znew,xcomp,ycomp,zcomp,natom)
   use comand
   use clcg_mod
   use parallel
-  use mpi
+  use mpi_f08
 #if KEY_PINS==1 /*(partial inf. swapping)*/
   use pins, only:lpins,isw_ensswl
 #endif /* (pins) */
@@ -1849,13 +1855,14 @@ subroutine ensscv(array,tmpv,natom,partner,sendfirst)
   use nose_mod
   use energym
   use parallel, only:mynod,numnod,comm_charmm
-  use mpi
+  use mpi_f08
   implicit none
   integer,intent(in) :: natom,partner
   real(chm_real),dimension(natom) :: array,tmpv
   logical,intent(in) :: sendfirst
 
-  integer ierror,stat(mpi_status_size)
+  integer ierror
+  TYPE(MPI_Status) :: stat
 
   if (sendfirst) then
      if(lmasternode)then
@@ -1913,7 +1920,7 @@ SUBROUTINE ENSAVE(PARMS,BUFF,PARML)
   !-----------------------------------------------------------------------
   use chm_kinds
   use ensemble
-  use mpi
+  use mpi_f08
   implicit none
 
   real(chm_real) PARMS(*), BUFF(*)
@@ -1943,7 +1950,7 @@ SUBROUTINE ENSAV3(PARMS,BUFF,PARML)
   !-----------------------------------------------------------------------
   use chm_kinds
   use ensemble
-  use mpi
+  use mpi_f08
   implicit none
   real(chm_real) PARMS(*), BUFF(*)
   INTEGER PARML,IERROR
@@ -1972,7 +1979,7 @@ SUBROUTINE ENSAV6(PARMS,BUFF,PARML)
   !-----------------------------------------------------------------------
   use chm_kinds
   use ensemble
-  use mpi
+  use mpi_f08
   implicit none
   real(chm_real) PARMS(*), BUFF(*)
   INTEGER PARML,IERROR
@@ -2004,7 +2011,7 @@ SUBROUTINE ENSS2(BXIJ,BYIJ,BZIJ,XIJBUF,YIJBUF,ZIJBUF,NPARM,RIJ,S2)
   !-----------------------------------------------------------------------
   use chm_kinds
   use ensemble
-  use mpi
+  use mpi_f08
   implicit none
   real(chm_real) BXIJ(*),BYIJ(*),BZIJ(*),XIJBUF(*),YIJBUF(*),ZIJBUF(*)
   real(chm_real) RIJ(*),S2(*)
@@ -2195,7 +2202,7 @@ subroutine ensexpavg2(dxk,dyk,dzk,hk,natom, &
   use ensemble
   use contrl
   use number
-  use mpi
+  use mpi_f08
   implicit none
   !
   real(chm_real) DXK(*),DYK(*),DZK(*),RCVDX(*),RCVDY(*),RCVDZ(*)
@@ -2426,7 +2433,7 @@ subroutine psync_ens()
   use dimens_fcm
   use ensemble
 #if KEY_CMPI==0
-  use mpi    
+  use mpi_f08    
 #endif
   implicit none
   integer status
@@ -2455,7 +2462,7 @@ subroutine ens_bcast_masters(array, length)
   use chm_kinds
   use dimens_fcm
   use ensemble
-  use mpi
+  use mpi_f08
 
   implicit none
   integer,intent(in) :: length
@@ -2479,7 +2486,7 @@ subroutine ens_bcast_all(array, length)
   use chm_kinds
   use dimens_fcm
   use ensemble
-  use mpi    
+  use mpi_f08    
   use parallel,only:comm_charmm
   implicit none
   integer,intent(in) :: length
@@ -2507,7 +2514,7 @@ subroutine psnd8_ens(array, length)
   use chm_kinds
   use dimens_fcm
   use ensemble
-  use mpi
+  use mpi_f08
   implicit none
   real(chm_real) array(*)
   integer length

@@ -1041,9 +1041,9 @@ SUBROUTINE IMINT4(X,Y,Z,DX,DY,DZ,EIMG,BNBND,BIMAG,BIMAGC, &
   !
   IF (bimagc%NIMNBS > 0 .OR. bimagc%NIMNBX > 0) THEN
      IMX=NATIM
-     DX(1:imx)=DX(I)*TWO
-     DY(1:imx)=DY(I)*TWO
-     DZ(1:imx)=DZ(I)*TWO
+     DX(1:imx)=DX(1:imx)*TWO
+     DY(1:imx)=DY(1:imx)*TWO
+     DZ(1:imx)=DZ(1:imx)*TWO
      IF (OPT == 1) THEN
         IF(UPPERT) THEN
            CALL NNLST2(NATIM,NIMGRP,bimag%IMBLOS, &

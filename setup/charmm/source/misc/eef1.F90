@@ -28,7 +28,7 @@ module eef1_mod
          AEMPIR,width, &
          RDEBYE,GALPHA,PSI0,GKAPPA,OFFST,TEMPR,VOLT,ACONS, &
          RCYL,RCRC,RPRB,APRB, &
-         PBDX,PBDY,PBDZ,PBX0,PBY0,PBZ0,PBV,RADU
+         PBDX,PBDY,PBDZ,PBX0,PBY0,PBZ0,PBV,RADU,RBIC
 
    real(chm_real),allocatable,dimension(:) :: GSOLV,VOLMI, &
          GREFI,GFREEI,SIGWI,FSIGWI, &
@@ -41,7 +41,7 @@ module eef1_mod
    LOGICAL LMEMBR
    LOGICAL LDEBYE
    LOGICAL LGOUY,LVOLT,LINF
-   LOGICAL LCYL,LPOR,LPRB,LCRC,LEPOR,LPB
+   LOGICAL LCYL,LPOR,LPRB,LCRC,LEPOR,LPB,LBIC
    LOGICAL LCURV,LVES,LTUB,LGC4CURVE
 
    CHARACTER(len=4) :: SLVNT,SLVNT2
@@ -92,7 +92,7 @@ contains
 !
 ! May 2018: Implicit Membrane Model 1 extension to curved membranes. Binod Nepal
 !
-!
+! Aug 2025: added bicelle code (modified parabolic pore)
    SUBROUTINE EEF1
   use consta
   use psf
@@ -215,13 +215,23 @@ contains
             LCYL = (RCYL.GT.ZERO)
             IF (LCYL) LEPOR = (INDXA(COMLYN,COMLEN,'EPOR') .GT. 0)
 ! Ro (RPRB) & k (APRB) for a parabolic pore
+            RBIC = GTRMF(COMLYN,COMLEN,'RBIC',ZERO)
             RPRB = GTRMF(COMLYN,COMLEN,'RPRB',ZERO)
             APRB = GTRMF(COMLYN,COMLEN,'APRB',ONE)
             LPRB = (RPRB.GT.ZERO)
+            LBIC = (RBIC.GT.ZERO)
 ! Ro (RCRC) for a circular pore
             RCRC = GTRMF(COMLYN,COMLEN,'RCRC',ZERO)
             LCRC = (RCRC.GT.ZERO)
             LPOR = (LCYL .OR. LPRB .OR. LCRC)
+! RBIC repurposes the parabolic-pore math with a different sign on
+! RPOR; combining it with any of the pore models double-applies F and
+! its derivatives. Reject the combination up front rather than silently
+! produce wrong energies / forces.
+            IF (LBIC .AND. LPOR) THEN
+               CALL WRNDIE(-2,'<EEF1>', &
+                 'RBIC is incompatible with RCYL, RPRB, and RCRC')
+            ENDIF
             IF (LGOUY.OR.LVOLT) THEN
                CONC= GTRMF(COMLYN,COMLEN,'CONC',ONE)
                VALENCE= GTRMI(COMLYN,COMLEN,'VALE',1)
@@ -455,8 +465,14 @@ contains
                 IF ((STR3.EQ.'NH3').OR.(STR3.EQ.'NC2').OR.(STR3.EQ.'OC ')) LCHA=.TRUE.
                 IF (LCHA) F(I)= MIN(TMP,1.0)
             ENDIF
-! PORE MODEL
+! PORE MODEL (bicelle is like parabolic pore but with diff def for g and RPOR)
             FF = F(I)
+            IF (LBIC) THEN
+              RPOR=RBIC-APRB*TMP**2
+              RC(I)= SQRT(X(I)**2+Y(I)**2)/RPOR
+              G = RC(I)**NSMP/(ONE+RC(I)**NSMP)
+              F(I) = F(I) + G -F(I)*G
+            ENDIF
             IF (LPOR) THEN
               IF (LCYL) THEN
                  RPOR=RCYL
@@ -521,6 +537,14 @@ contains
               ENDIF
             ENDIF
 ! PORE MODEL
+            IF (LBIC) THEN
+              DFDZ(I)= DFDZ(I)*(ONE-G)
+              DGDR= FLOAT(NSMP)*RC(I)**(NSMP-1)/(ONE+RC(I)**NSMP)**2
+              DFDR(I)= DGDR*(ONE-FF)
+              DRDZ(I)= TWO*(TWO*sign(ONE,Z(I))/WIDTH)* &
+                      RC(I)*APRB*TMP/RPOR
+              DFDZ(I)= DFDZ(I)+DFDR(I)*DRDZ(I)
+            ENDIF
             IF (LPOR) THEN
 ! for all pores
               DFDZ(I)= DFDZ(I)*(ONE-G)
@@ -571,7 +595,7 @@ contains
 #endif
 #endif
 ! all pores
-            IF (LPOR) THEN
+            IF (LPOR .OR. LBIC) THEN
               DFDX(I)= DFDR(I)*X(I)/RC(I)/RPOR**2
               DFDY(I)= DFDR(I)*Y(I)/RC(I)/RPOR**2
 #if KEY_PARALLEL==1
@@ -1017,7 +1041,7 @@ contains
                         ENDIF
 
 !  PORE MODEL
-                        IF (LPOR) THEN
+                        IF (LPOR .OR. LBIC) THEN
                            DX(I)= DX(I) - VJ*ARSQ*FSIGI*EXRI* &
                                   (GFREEI(I)-GFREEI2(I))*DFDX(I)
                            DX(J)= DX(J) - VI*ARSQ*FSIGJ*EXRJ* &
@@ -1298,6 +1322,12 @@ contains
                     IF (LCHA) F = MIN(TMP,1.0)
                   ENDIF
 ! PORE MODEL
+                  IF (LBIC) THEN
+                     RPOR= RBIC-APRB*TMP**2
+                     RC= SQRT(X(I)**2+Y(I)**2)/RPOR
+                     G = RC**NSMP/(ONE+RC**NSMP)
+                     F = F + G -F*G
+                  ENDIF
                   IF (LPOR) THEN
                      IF (LCYL) THEN
                         RPOR= RCYL

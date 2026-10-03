@@ -45,12 +45,12 @@ File: Afm,  Node: Function,  Previous: Syntax,  Up: Top,  Next: Top
 
 METHOD: one of CF, BMD, SMD
 
-ALPHA : force constant (in pN (CF) or pN/Å (SMD/BMD)) 
+ALPHA : force constant (in pN (CF) or pN/A (SMD/BMD)) 
 
-BETA  : cantilever speed (in Å/ps only for SMD)
+BETA  : cantilever speed (in A/ps only for SMD)
 
 IUNJ  : write the output 
-   istep rc[Å] rc_ref[Å] force[pN] energy[kcal/mol] on unit IUNJ
+   istep rc[A] rc_ref[A] force[pN] energy[kcal/mol] on unit IUNJ
 
 XIMAX : stops the run when the distance between the two selected atoms
    exceeds XIMAX

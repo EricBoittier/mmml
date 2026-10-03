@@ -22,8 +22,6 @@ module api_dataframe
           values
   end type t_dataframe
 
-#if KEY_LIBRARY == 1
-
 contains
 
   !> @brief allocate storage for a table and initialize table attributes
@@ -271,5 +269,5 @@ contains
     call dataframe_get_names(table, out_names)
     out_rows(1:dataframe_size) = table%values(1:dataframe_size)
   end subroutine dataframe_get
-#endif /* KEY_LIBRARY */
+
 end module api_dataframe

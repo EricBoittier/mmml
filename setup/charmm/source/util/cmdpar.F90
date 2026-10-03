@@ -80,16 +80,17 @@ module cmdpar
   !
   ! * DATA STRUCTURE *
   ! dimensioning: max size of table and of token and value strings
-  INTEGER,PARAMETER :: MAXPAR=10240,MXTLEN=32,MXVLEN=128
+  INTEGER,SAVE :: MAXPAR=10240
+  INTEGER,PARAMETER :: MXTLEN=32,MXVLEN=128
 
   ! the tokens
-  CHARACTER(len=MXTLEN),save :: TOKNAM(MAXPAR)
+  CHARACTER(len=MXTLEN),allocatable,save :: TOKNAM(:)
 
   ! the values
-  CHARACTER(len=MXVLEN),save :: VALNAM(MAXPAR)
+  CHARACTER(len=MXVLEN),allocatable,save :: VALNAM(:)
 
   ! lengths of token and value strings
-  integer,dimension(maxpar),save :: toklen,vallen
+  integer,allocatable,save :: toklen(:),vallen(:)
 
   ! number of current symbols in table
   integer,save :: numpar
@@ -102,6 +103,14 @@ contains
   !-------------------------------------------------------------------------
   subroutine cmdpar_init()
     integer :: i
+    if (allocated(toknam)) deallocate(toknam)
+    if (allocated(valnam)) deallocate(valnam)
+    if (allocated(toklen)) deallocate(toklen)
+    if (allocated(vallen)) deallocate(vallen)
+    allocate(toknam(maxpar))
+    allocate(valnam(maxpar))
+    allocate(toklen(maxpar))
+    allocate(vallen(maxpar))
     numpar = 0
     do i=1,maxpar
        toklen(i)=0
@@ -111,6 +120,32 @@ contains
     enddo
     return
   end subroutine cmdpar_init
+
+  !-------------------------------------------------------------------------
+  !               CMDPAR_REINIT
+  !-------------------------------------------------------------------------
+  subroutine cmdpar_reinit(newmaxpar)
+    integer, intent(in) :: newmaxpar
+    character(len=mxtlen),allocatable :: toknamtmp(:)
+    character(len=mxvlen),allocatable :: valnamtmp(:)
+    integer,allocatable :: toklentmp(:),vallentmp(:)
+    integer :: numpartmp
+    if (newmaxpar>maxpar) then
+       maxpar = newmaxpar
+       toknamtmp = toknam(1:numpar)
+       valnamtmp = valnam(1:numpar)
+       toklentmp = toklen(1:numpar)
+       vallentmp = vallen(1:numpar)
+       numpartmp = numpar
+       call cmdpar_init()
+       numpar=numpartmp
+       toknam(1:numpar) = toknamtmp(1:numpar)
+       valnam(1:numpar) = valnamtmp(1:numpar)
+       toklen(1:numpar) = toklentmp(1:numpar)
+       vallen(1:numpar) = vallentmp(1:numpar)
+    endif
+    return
+  end subroutine cmdpar_reinit
 
   !-------------------------------------------------------------------------
   !               PARNUM

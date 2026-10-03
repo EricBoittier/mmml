@@ -200,7 +200,7 @@ CONTAINS
   use psf
   use coord
   use parallel
-  use mpi
+  use mpi_f08
   use repdstr
   use stream
   use string
@@ -1182,7 +1182,7 @@ subroutine setup_nd(comlyn, comlen)
   use stream,      only: outu, iolev, prnlev
   use repdstr,     only: iunrex, irexfq, qrepdstr, qrexchg, temprx, nrepdstr, irepdstr, comm_rpg
   use param_store, only: set_param
-  use mpi
+  use mpi_f08
   ! ARGUMENTS
   implicit none
   character(len=*)      :: comlyn
@@ -1426,7 +1426,7 @@ end subroutine repdstr_allocate_dims
 !> Deallocate any memory allocated during repdstrmain 
 !<
 subroutine repdstr_deallocate
-  use mpi
+  use mpi_f08
   use memory
   use psf, only: natom
   implicit none
@@ -1470,7 +1470,7 @@ end subroutine repdstr_deallocate
                           ,BACKLS &
 #endif
                          )
-     use mpi
+     use mpi_f08
      use memory
      use parallel
      use repdstr
@@ -1483,7 +1483,10 @@ end subroutine repdstr_deallocate
      REAL(CHM_REAL),INTENT(IN)    :: WMAIN(*),EPOT
      REAL(CHM_REAL),INTENT(INOUT) :: VX(*),VY(*),VZ(*),XOLD(*),YOLD(*),ZOLD(*)
      INTEGER,INTENT(IN)           :: ISTEP
-     INTEGER,INTENT(OUT)          :: JHSTRT
+     ! INOUT, not OUT: JHSTRT is only assigned under QUPVELOC below, so
+     ! with INTENT(OUT) a rejected exchange handed the caller back an
+     ! undefined step-history counter.
+     INTEGER,INTENT(INOUT)        :: JHSTRT
      ! stupidva
      INTEGER,INTENT(INOUT)        :: IGVOPT
 #if KEY_TSM==1
@@ -1741,7 +1744,7 @@ end subroutine repdstr_deallocate
                          ,BACKLS &
 #endif
                         )
-     use mpi
+     use mpi_f08
      use psf
      use parallel
      use stream
@@ -1753,7 +1756,10 @@ end subroutine repdstr_deallocate
      ! Arguments
      REAL(CHM_REAL),INTENT(IN)    :: TEMPNEW,REXP
      REAL(CHM_REAL),INTENT(INOUT) :: VX(*),VY(*),VZ(*),XOLD(*),YOLD(*),ZOLD(*)
-     INTEGER,INTENT(OUT)          :: JHSTRT
+     ! INOUT, not OUT: JHSTRT is only assigned under QUPVELOC below, so
+     ! with INTENT(OUT) a rejected exchange handed the caller back an
+     ! undefined step-history counter.
+     INTEGER,INTENT(INOUT)        :: JHSTRT
      ! stupidva
      INTEGER,INTENT(INOUT)        :: IGVOPT
 #if KEY_TSM==1
@@ -1864,7 +1870,7 @@ end subroutine repdstr_deallocate
   ! be complete.
   SUBROUTINE SWAP_CRD(RANK,VX,VY,VZ)
      use psf
-     use mpi
+     use mpi_f08
      use stream
      use parallel
      use memory
@@ -1892,7 +1898,8 @@ end subroutine repdstr_deallocate
      real(chm_real),allocatable,dimension(:)     :: w
      real(chm_real)                              :: oldxtlabc(6),oldxucell(6),totvx,totvy,totvz
      logical                                     :: qcrys
-     integer                                     :: ierr,status(mpi_status_size),mr,sz,i
+     TYPE(MPI_Status)                             :: status
+     integer                                     :: ierr,mr,sz,i
      real(chm_real),allocatable,dimension(:,:,:) :: transf
 
      qcrys = (xtltyp.ne.'    ')
@@ -2059,7 +2066,7 @@ end subroutine repdstr_deallocate
 ! DEBUG - Use this to test if communicator has become invalidated
 subroutine check_bcast
   use parallel
-  use mpi
+  use mpi_f08
   use repdstr
   implicit none
   integer        :: testrank, itest, ierr
@@ -2107,7 +2114,7 @@ end subroutine check_bcast
 !<
 subroutine setup_repd_comms(numreps)
   ! USE STATEMENTS
-  use mpi
+  use mpi_f08
   use repdstr
   use stream, only: prnlev, outu
   use parallel, only: numnod, numnodg, mynodg, mynod
@@ -2115,7 +2122,8 @@ subroutine setup_repd_comms(numreps)
   implicit none
   integer, intent(in) :: numreps
   ! LOCAL VARIABLES
-  integer mycolor, ident, ierr, istat(mpi_status_size)
+  TYPE(MPI_Status) :: istat
+  integer mycolor, ident, ierr
 # if KEY_DEBUGREPD==1
   integer testrank, testsize ! DEBUG
 # endif
@@ -2152,7 +2160,7 @@ subroutine setup_repd_comms(numreps)
     call wrndie(-4,'<REPDSTR>','MPI_COMM_SPLIT for COMM_RPG failed.')
   comm_charmm = comm_rpg
 # if KEY_DEBUGREPD==1
-  write(100+mynodg,'(2(a,i10))') 'DBG: comm_charmm= ', comm_charmm, ' comm_rpg= ', comm_rpg
+  write(100+mynodg,'(2(a,i10))') 'DBG: comm_charmm= ', comm_charmm%MPI_VAL, ' comm_rpg= ', comm_rpg%MPI_VAL
   flush(100+mynodg)
 # endif
 
@@ -2246,14 +2254,15 @@ end subroutine set_my_sg_ft
 !> NOTE: Only needed for replica log output.
 !<
 subroutine set_sg_temperatures(neighbor, mytemp, nbrtemp)
-  use mpi
+  use mpi_f08
   ! ARGUMENTS
   implicit none
   integer, intent(in)         :: neighbor
   real(chm_real), intent(out) :: mytemp
   real(chm_real), intent(out) :: nbrtemp
   ! LOCAL VARIABLES
-  integer ierr, istat(mpi_status_size)
+  TYPE(MPI_Status) :: istat
+  integer ierr
 
   ! Get my SG temperature
   mytemp = my_sg_temperature()
@@ -2284,7 +2293,7 @@ subroutine write_log(qexc, istep, neighbor, exprob, ttemp, mytemp, emine, &
                      res_struct &                      ! Reservoir REMD
                     )
   ! USE STATEMENTS
-  use mpi
+  use mpi_f08
   use repdstr,     only: iunrex, irepdstr, nrepdstr, ewritu
   use stream,      only: prnlev
   ! ARGUMENTS
@@ -2310,7 +2319,8 @@ subroutine write_log(qexc, istep, neighbor, exprob, ttemp, mytemp, emine, &
   integer NUP, NDN, NAT, NTOT
   integer i, j
   ! MPI VARIABLES
-  integer ierr, istat(mpi_status_size)
+  TYPE(MPI_Status) :: istat
+  integer ierr
 
   NUP = nopp_up(currdim)
   NDN = nopp_down(currdim)
@@ -2515,7 +2525,7 @@ end subroutine coords_update
 !! recip nodes are currently with us and need to enter energy_recip. The
 !! coords_update routine should have been called prior.
 !<
-subroutine repd_energy(x,y,z)
+subroutine repd_energy(x,y,z,vx,vy,vz)
   ! USE STATEMENTS
   use bases_fcm,only: bnbnd,bimag
   use deriv,    only: dx,dy,dz
@@ -2535,6 +2545,7 @@ subroutine repd_energy(x,y,z)
   ! ARGUMENTS
   implicit none
   real(chm_real), dimension(:) :: x, y, z
+  real(chm_real), dimension(*), optional :: vx, vy, vz
 
 # if KEY_DOMDEC==1
   if (q_domdec) then
@@ -2556,7 +2567,11 @@ subroutine repd_energy(x,y,z)
 #if KEY_BLADE==1
   if (q_repd_want_blade) then
     ! call blade_energy(x, y, z)
-    call blade_repd_energy(x, y, z) ! Special subroutine to avoid system teardown/setup overhead
+    if (present(vx)) then
+      call blade_repd_energy(x, y, z, vx, vy, vz)
+    else
+      call blade_repd_energy(x, y, z)
+    endif
   else
 #endif
     call energy(x, y, z, dx, dy, dz, bnbnd, bimag, 0)
@@ -2586,7 +2601,7 @@ subroutine repd_restart_dynamics(x,y,z,wmain,vx,vy,vz,jhstrt,igvopt)
   call coords_update(x,y,z,wmain,vx,vy,vz)
   ! This energy call is needed so that DOMDEC nodes properly receive coords.
   ! TODO Only for DOMDEC?
-  call repd_energy(x, y, z)
+  call repd_energy(x, y, z, vx, vy, vz)
 end subroutine repd_restart_dynamics
 
 !*******************************************************************************
@@ -2595,7 +2610,7 @@ end subroutine repd_restart_dynamics
 !<
 subroutine repd_bcast_cell(x,y,z,wmain)
   ! USE STATEMENTS
-  use mpi
+  use mpi_f08
   use memory
   use image,    only: xtlabc, xucell, xnsymm
   use imgup,    only: upimag0
@@ -2622,7 +2637,7 @@ end subroutine repd_bcast_cell
 !<
 subroutine repd_swap_all(neighbor,qcrys,x,y,z,wmain,vx,vy,vz,xold,yold,zold)
   ! USE STATEMENTS
-  use mpi
+  use mpi_f08
   use psf,   only: natom
   use image, only: xtlabc
   ! ARGUMENTS
@@ -2632,7 +2647,8 @@ subroutine repd_swap_all(neighbor,qcrys,x,y,z,wmain,vx,vy,vz,xold,yold,zold)
   real(chm_real), dimension(:) :: x, y, z
   real(chm_real), dimension(*) :: wmain, vx, vy, vz, xold, yold, zold
   ! MPI VARIABLES
-  integer ierr, istat(mpi_status_size)
+  TYPE(MPI_Status) :: istat
+  integer ierr
 
   ! Exchange was accepted. Swap tags.
   call mpi_sendrecv_replace(reptag, 1, mpi_int, neighbor, 5, neighbor, 5, comm_rep_master, istat, ierr) 
@@ -2658,7 +2674,7 @@ end subroutine repd_swap_all
 !<
 subroutine send_sgld_info(eneigh, mytemp, neighbor)
   ! USE STATEMENTS
-  use mpi
+  use mpi_f08
   use consta, only: kboltz
   use sgld,   only: sgffi,psgldg,epotlf,epothf
   ! ARGUMENTS
@@ -2667,7 +2683,8 @@ subroutine send_sgld_info(eneigh, mytemp, neighbor)
   real(chm_real), intent(in)  :: mytemp   ! My temperature
   integer, intent(in)         :: neighbor ! Neighbors comm_rep_master rank
   ! MPI VARIABLES
-  integer ierr, istat(mpi_status_size)
+  TYPE(MPI_Status) :: istat
+  integer ierr
 
   ! Send all SGLD info to neighbor
   our_sgarray(1) = eneigh  ! pass in myepot
@@ -2691,7 +2708,7 @@ end subroutine send_sgld_info
 !<
 subroutine repd_swap_sgld(scalsg, neighbor, estourlf)
   ! USE STATEMENTS
-  use mpi
+  use mpi_f08
   use number, only: rsmall
   use psf,     only: natom, amass
   use sgld,    only: sgvx,sgvy,sgvz,sgkx,sgky,sgkz,epotlf,epothf
@@ -2708,7 +2725,8 @@ subroutine repd_swap_sgld(scalsg, neighbor, estourlf)
   real(chm_real) :: fact, dteflf, dtcflf, elfscale,scalrd
   integer i
   ! MPI VARIABLES
-  integer ierr, istat(mpi_status_size)
+  TYPE(MPI_Status) :: istat
+  integer ierr
  
   ! calcule magnitudes
     myvv2=SUM(sgvx*sgvx)+SUM(sgvy*sgvy)+SUM(sgvz*sgvz)
@@ -2750,7 +2768,7 @@ end subroutine repd_swap_sgld
 !<
 subroutine repd_bcast_sgld()
   ! USE STATEMENTS
-  use mpi
+  use mpi_f08
   use psf,  only: natom
   use sgld, only: epotlf,epothf,sgvx,sgvy,sgvz,sgkx,sgky,sgkz
   ! ARGUMENTS
@@ -2773,7 +2791,7 @@ end subroutine repd_bcast_sgld
 !<
 subroutine repd_bcast_all(qcrys,x,y,z,wmain,vx,vy,vz,xold,yold,zold)
   ! USE STATEMENTS
-  use mpi
+  use mpi_f08
   use psf, only: natom
   ! ARGUMENTS
   implicit none
@@ -2831,7 +2849,7 @@ subroutine phrex_exchange(x,y,z,wmain,vx,vy,vz,xold,yold,zold, &
                           ididphrex, &
                           istep,jhstrt,igvopt,neighbor,qcrys,rnum)
   ! USE STATEMENTS
-  use mpi
+  use mpi_f08
   use psf,      only: natom, nres, cg
   use consph,   only: tstate ! NOTE: tstate only allocated on rep masters
   use sgld,     only: qsgld
@@ -2856,7 +2874,8 @@ subroutine phrex_exchange(x,y,z,wmain,vx,vy,vz,xold,yold,zold, &
   ! loop var
   integer i
   ! MPI VARIABLES
-  integer ierr, istat(mpi_status_size)
+  TYPE(MPI_Status) :: istat
+  integer ierr
 
   qexc = .false.
   ph_delta = 0.d0
@@ -2962,7 +2981,7 @@ end subroutine phrex_exchange
 subroutine sgld_exchange(x,y,z,wmain,vx,vy,vz,xold,yold,zold,myepot,&
                                 ttemp,istep,jhstrt,igvopt,neighbor,qcrys,rnum)
   ! USE STATEMENTS
-  use mpi
+  use mpi_f08
   use repdstr,only: temprx
   use number, only: rsmall
   use stream, only: outu
@@ -2987,7 +3006,8 @@ subroutine sgld_exchange(x,y,z,wmain,vx,vy,vz,xold,yold,zold,myepot,&
   real(chm_real) :: scalesg        ! SGLD scaling factor
   logical        :: qexc           ! True if exchange is accepted
   ! MPI VARIABLES
-  integer ierr, istat(mpi_status_size)
+  TYPE(MPI_Status) :: istat
+  integer ierr
 
   mytemp = my_replica_temperature()
   nbrtemp = 0.d0
@@ -3064,7 +3084,7 @@ end subroutine sgld_exchange
 subroutine hamiltonian_exchange(x,y,z,wmain,vx,vy,vz,xold,yold,zold,myepot,&
                                 ttemp,istep,jhstrt,igvopt,neighbor,qcrys,rnum)
   ! USE STATEMENTS
-  use mpi
+  use mpi_f08
   use psf,      only: natom
   use consta,   only: kboltz
   use image,    only: xtlabc
@@ -3098,7 +3118,8 @@ subroutine hamiltonian_exchange(x,y,z,wmain,vx,vy,vz,xold,yold,zold,myepot,&
   real(chm_real) :: pvterm         ! Pressure/volume correction for NPT
   real(chm_real) :: estourlf, estnbrlf, scalesg
   ! MPI VARIABLES
-  integer ierr, istat(mpi_status_size)
+  TYPE(MPI_Status) :: istat
+  integer ierr
 
   mytemp = my_replica_temperature()
   nbrtemp = 0.d0
@@ -3274,7 +3295,7 @@ end subroutine hamiltonian_exchange
 subroutine temperature_exchange(x,y,z,wmain,vx,vy,vz,xold,yold,zold,myepot,&
                                 ttemp,istep,jhstrt,igvopt,neighbor,qcrys,rnum)
   ! USE STATEMENTS
-  use mpi
+  use mpi_f08
   use consta,   only: kboltz
   ! ARGUMENTS
   implicit none
@@ -3296,7 +3317,8 @@ subroutine temperature_exchange(x,y,z,wmain,vx,vy,vz,xold,yold,zold,myepot,&
   logical        :: qexc           ! True if exchange accepted
   real(chm_real) :: scaled         ! Velocity scaling factor
   ! MPI VARIABLES
-  integer ierr, istat(mpi_status_size)
+  TYPE(MPI_Status) :: istat
+  integer ierr
 
   mytemp = my_replica_temperature()
   nbrtemp = 0.d0
@@ -3399,7 +3421,7 @@ end function my_replica_temperature
 !<
 function nbr_temperature(ourtemp, neighbor)
   ! USE STATEMENTS
-  use mpi
+  use mpi_f08
   use repdstr, only: temprx
   ! ARGUMENTS
   implicit none
@@ -3408,7 +3430,8 @@ function nbr_temperature(ourtemp, neighbor)
   integer, intent(in)        :: neighbor
   ! LOCAL VARIABLES
   real(chm_real) :: nbrtemp
-  integer ierr, istat(mpi_status_size)
+  TYPE(MPI_Status) :: istat
+  integer ierr
 
   if (ndims .gt. 1) then
     ! Send my temperature, get neighbors temperature.
@@ -3428,7 +3451,7 @@ end function nbr_temperature
 !<
 function pv_correction(ourtemp, nbrtemp, neighbor)
   ! USE STATEMENTS
-  use mpi
+  use mpi_f08
   use energym, only: eprop,volume
   use consta,  only: kboltz
   use reawri,  only: refp, rpxx, rpyy, rpzz
@@ -3439,7 +3462,8 @@ function pv_correction(ourtemp, nbrtemp, neighbor)
   integer, intent(in)         :: neighbor
   ! LOCAL VARIABLES
   real(chm_real) :: ourpress, nbrpress, ourvol, nbrvol
-  integer ierr, istat(mpi_status_size)
+  TYPE(MPI_Status) :: istat
+  integer ierr
 
   ourpress = (refp(rpxx) + refp(rpyy) + refp(rpzz)) / 3.d0
   ourvol   = eprop(volume)
@@ -3514,7 +3538,7 @@ subroutine reservoir_exchange(rsv_id, x, y, z, wmain, vx, vy, vz, xold, yold, zo
                               ididphrex, &
                               myepot, ttemp, istep, jhstrt, iseed, iasvel, igvopt, qcrys)
   ! USE STATEMENTS
-  use mpi
+  use mpi_f08
 # if KEY_TSM==1
   use tsmh, only     : backls
 # endif
@@ -3779,15 +3803,18 @@ subroutine exchange_calc(x,y,z,wmain,vx,vy,vz,xold,yold,zold,myepot,&
 #                        endif
                          ,IDIDPHREX)
   ! USE STATEMENTS
-  use mpi
+  use mpi_f08
   use repdstr,  only: comm_rpg, qrexchgl
   use stream,   only: prnlev, outu
 # if KEY_DOMDEC==1
-  use domdec_common,   only: q_domdec, q_split
+  use domdec_common,   only: q_domdec, q_split, q_gpu
   use domdec_d2d_comm, only: copy_to_all
   use domdec_d2r_comm, only: send_stop_recip
   use domdec_dr_common,only: copy_to_recip, q_direct_node, q_recip_node,&
                              start_split_direct_recip, stop_split_direct_recip
+# if KEY_DOMDEC_GPU==1
+  use domdec_util_gpu_mod, only: wait_force_virial_energy_from_gpu
+# endif
 # endif
 # if KEY_OPENMM==1
   use omm_main, only : omm_change_lambda
@@ -3814,6 +3841,10 @@ subroutine exchange_calc(x,y,z,wmain,vx,vy,vz,xold,yold,zold,myepot,&
   repd_update_temps = .false.
 # if KEY_DOMDEC==1
   q_repd_domdec_split = .false.
+  ! Sync GPU before coordinate operations
+# if KEY_DOMDEC_GPU==1
+  if (q_domdec.and.q_gpu) call wait_force_virial_energy_from_gpu()
+# endif
   if (q_domdec.and.q_split) then
     q_repd_domdec_split = .true.
     ! Right now any pure recip nodes are waiting inside an energy_recip
@@ -3930,7 +3961,7 @@ end subroutine exchange_calc
   use psf
   use stream
   use parallel
-  use mpi
+  use mpi_f08
   use repdstr
   use memory
   use phmd !JAW
@@ -3986,7 +4017,8 @@ end subroutine exchange_calc
     real(chm_real) THETAFMLDS(nsitemld*nblock)     !GG: MSLD-compatibility
 #endif
     integer n6,ical,oldrep
-    integer ierr,status(mpi_status_size)
+    TYPE(MPI_Status) :: status
+    integer ierr
 
     integer                           :: iproto, jproto, ididphrex, phresstruct
     real(chm_real)                    :: ph_l, ph_m, ph_delta
@@ -4952,7 +4984,7 @@ end subroutine exchange_calc
   use psf
   use stream
   use parallel
-  use mpi
+  use mpi_f08
   use repdstr
   use memory
   use phmd !JW
@@ -4976,7 +5008,8 @@ end subroutine exchange_calc
     INTEGER ISTART,OLDREP,J
     REAL(chm_real) TEMNEW,RN,TOTVX,TOTVY,TOTVZ
     INTEGER ISEED,IASVEL,IGVOPT,JHSTRT
-    INTEGER IERR,STATUS(MPI_STATUS_SIZE)
+    TYPE(MPI_Status) :: STATUS
+    INTEGER IERR
 
 #if KEY_TSM==1
     INTEGER BACKLS(*)
@@ -5588,7 +5621,8 @@ end subroutine exchange_calc
     IF(QCRYS) CALL UPIMAG0(X,Y,Z,WMAIN,0)
 !    CALL NBONDS(X,Y,Z,BNBND,bimag)
     !CALL ENERGY(X,Y,Z,DX,DY,DZ,BNBND,BIMAG,0)
-    call repd_energy(x, y, z)
+    ! Synchronize the finalized coordinates and velocities before dynamics resumes.
+    call repd_energy(x, y, z, vx, vy, vz)
 #if KEY_BLOCK==1
     IF (QMSPHRX) THEN
        call msld_checkvariables(5) !GG: Variables  After Swap, After MC Exchange
@@ -5892,7 +5926,7 @@ end subroutine exchange_calc
      use clcg_mod,only: random
      use memory
      use dynutil, only: assvel
-     use mpi
+     use mpi_f08
 
      ! passed in variables
      logical, intent(in)          :: qhigh
@@ -6144,7 +6178,7 @@ end subroutine exchange_calc
      use shake
      use consta
      use parallel
-     use mpi
+     use mpi_f08
 
      LOGICAL,INTENT(IN)           :: QHIGH,QECOR
      REAL(CHM_REAL),INTENT(IN)    :: ECORTEMP
@@ -6370,12 +6404,13 @@ end subroutine exchange_calc
 !! @param sblen send buffer length.
 !<
 subroutine repd_rcvsend(rank, tag, rbuff, rblen, sbuff, sblen)
-   use mpi
+   use mpi_f08
    ! Subroutine variables
    real(chm_real), intent(inout), dimension(:) :: rbuff, sbuff
    integer, intent(in)                         :: rank, tag, rblen, sblen
    ! Local variables
-   integer :: ierr, status(mpi_status_size)
+   TYPE(MPI_Status) :: status
+   integer :: ierr
 
    call mpi_sendrecv( sbuff, sblen, MPI_REAL8, rank, tag, rbuff, rblen, &
                       MPI_REAL8, rank, tag, comm_universe, status, ierr )

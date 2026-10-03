@@ -559,7 +559,7 @@ called the POLYRATE hooks.
 3.B. Modifications and additions to CHARMM
 
      Only two modifications have been made in the CHARMM program:  (1)
-addition of a one-line keyword processing command in the charmm_main.src
+addition of a one-line keyword processing command in the charmm_main.F90
 module to initiate the subroutine call to CHARMMRATE; (2) addition of the
 CHARMMRATE module.
 

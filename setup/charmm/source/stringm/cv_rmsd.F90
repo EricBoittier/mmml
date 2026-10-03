@@ -417,7 +417,7 @@
        subroutine cv_rmsd_list(i)
        use cv_types
        use multicom_aux;
-       use mpi
+       use mpi_f08
        use chutil, only : atomid
        use stream
 !

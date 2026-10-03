@@ -70,39 +70,12 @@ set vmeth vfsw
   goto get_energy
     label return_2vfsw
 
-echo @{ed_vswi}   @{fd_vswi}
-echo @{ed_vshi}   @{fd_vshi}
-echo @{ed_vfsw}   @{fd_vfsw}
-
-if @{ed_vswi} gt 1.0e-4 then
-   echo "Test FAILED for DOMDEC ed_vswi"
-   stop
-endif
-
-if @{fd_vswi} gt 1.0e-4 then
-   echo "Test FAILED for DOMDEC fd_vswi"
-   stop
-endif
-
-if @{ed_vshi} gt 1.0e-4 then
-   echo "Test FAILED for DOMDEC ed_vshi"
-   stop
-endif
-
-if @{fd_vshi} gt 1.0e-4 then
-   echo "Test FAILED for DOMDEC fd_vshi"
-   stop
-endif
-
-if @{ed_vfsw} gt 1.0e-4 then
-   echo "Test FAILED for DOMDEC ed_vfsw"
-   stop
-endif
-
-if @{fd_vfsw} gt 1.0e-4 then
-   echo "Test FAILED for DOMDEC fd_vfsw"
-   stop
-endif
+@testcheck @{ed_vswi} 0.0 -1.0e-4 domdec_vdw_ed_vswi
+@testcheck @{fd_vswi} 0.0 -1.0e-4 domdec_vdw_fd_vswi
+@testcheck @{ed_vshi} 0.0 -1.0e-4 domdec_vdw_ed_vshi
+@testcheck @{fd_vshi} 0.0 -1.0e-4 domdec_vdw_fd_vshi
+@testcheck @{ed_vfsw} 0.0 -1.0e-4 domdec_vdw_ed_vfsw
+@testcheck @{fd_vfsw} 0.0 -1.0e-4 domdec_vdw_fd_vfsw
 
 !########### DOMDEC_GPU energies ############
 
@@ -128,43 +101,14 @@ set vmeth vfsw
   goto get_energy
     label greturn_2vfsw
 
-echo @{ed_vswi}   @{fd_vswi}
-echo @{ed_vshi}   @{fd_vshi}
-echo @{ed_vfsw}   @{fd_vfsw}
-
-if @{ed_vswi} gt 4.0e-3 then
-   echo "Test FAILED for DOMDEC_GPU ed_vswi"
-   stop
-endif
-
-if @{fd_vswi} gt 1.0e-4 then
-   echo "Test FAILED for DOMDEC_GPU fd_vswi"
-   stop
-endif
-
-if @{ed_vshi} gt 4.0e-3 then
-   echo "Test FAILED for DOMDEC_GPU ed_vshi"
-   stop
-endif
-
-if @{fd_vshi} gt 1.0e-4 then
-   echo "Test FAILED for DOMDEC_GPU fd_vshi"
-   stop
-endif
-
-if @{ed_vfsw} gt 4.0e-3 then
-   echo "Test FAILED for DOMDEC_GPU ed_vfsw"
-   stop
-endif
-
-if @{fd_vfsw} gt 1.0e-4 then
-   echo "Test FAILED for DOMDEC_GPU fd_vfsw"
-   stop
-endif
+@testcheck @{ed_vswi} 0.0 -4.0e-3 domdec_gpu_vdw_ed_vswi
+@testcheck @{fd_vswi} 0.0 -1.0e-4 domdec_gpu_vdw_fd_vswi
+@testcheck @{ed_vshi} 0.0 -4.0e-3 domdec_gpu_vdw_ed_vshi
+@testcheck @{fd_vshi} 0.0 -1.0e-4 domdec_gpu_vdw_fd_vshi
+@testcheck @{ed_vfsw} 0.0 -4.0e-3 domdec_gpu_vdw_ed_vfsw
+@testcheck @{fd_vfsw} 0.0 -1.0e-4 domdec_gpu_vdw_fd_vfsw
 
 endif
-
-echo "Test OK"
 
 stop
 
@@ -199,6 +143,15 @@ if @d .eq. 1 then
 
 else
 
+  ! WARNING: under a DOMDEC direct/recip split, "coor force"/"coor rms"
+  ! (via copy_to_all) are only valid on the DIRECT nodes -- which always
+  ! include node 0.  Reciprocal nodes return early from copy_to_all (by
+  ! design: reciprocal-space data only), so their ?rms (-> fd_@vmeth) is junk.
+  ! Safe here because the fd_* checks below go through @testcheck, which
+  ! reports from node 0 (the full-picture direct node) and never issues a
+  ! per-node "stop".  Do NOT turn those into "if @{fd_...} ... stop": a
+  ! per-node ?rms in control flow diverges between direct and recip nodes and
+  ! desyncs the parser's collective broadcasts (-> MPI_ERR_TRUNCATE).
   read coor card name @9/v1_@vmeth.cor
   coor rms comp
   set fd_@vmeth ?rms

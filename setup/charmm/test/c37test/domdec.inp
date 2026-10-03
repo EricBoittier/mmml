@@ -10,10 +10,11 @@ if ?domdec .ne. 1 then
    stop
 endif
 
-if ?NUMNODE .lt. 2 then
-   echo "Test NOT performed. This test may take > 5 min. with 1 process."
-   stop
-endif
+! This used to stop below 2 processes, on the grounds that one would take
+! more than the five minutes test.com allows.  Measured on current hardware it
+! takes 52 seconds of CPU on a DOMDEC build without a GPU, so the reason has
+! expired -- and the skip was blocking the one comparison that makes the GPU
+! section diagnosable, since it meant the GPU checks only ever ran in parallel.
 
 stream datadir.def
 
@@ -264,13 +265,7 @@ set flag return_dyn6
 goto run_dynamics
 label return_dyn6
 
-calc edd = ?ener
-calc diff = abs(@eold - @edd)
-echo @diff
-if diff gt 0.005 then
-   echo "Test failed (Run domdec in single precision)"
-   stop
-endif
+@testcheck ?ener @eold .000001 SINGLE_PRECISION_ENER
 
 calc viridd = ?viri
 calc pressidd = ?prsi
@@ -306,30 +301,21 @@ set flag return_dyn7
 goto run_dynamics
 label return_dyn7
 
-calc edd = ?ener
-calc diff = abs(@eold - @edd)
-echo @diff
-if diff gt 0.009 then
-   echo "Test failed (Run domdec on GPU)"
-   stop
-endif
-
-calc viridd = ?viri
-calc pressidd = ?prsi
-
-calc diff = abs(@viriold - @viridd)
-echo @diff
-if diff gt 0.003 then
-   echo "Test failed (Run domdec on GPU)"
-   stop
-endif
-
-calc diff = abs(@pressiold - @pressidd)
-echo @diff
-if diff gt 0.001 then
-   echo "Test failed (Run domdec on GPU)"
-   stop
-endif
+@testcheck ?ener  @eold .000001 GPU_ENER
+! The GPU virial cannot be held to the same tolerance as the GPU energy.
+! CudaEnergyVirial::calcVirial takes coordinates as float4 -- single precision
+! -- while accumulating into a double virmat, and the virial is a sum of r.F
+! with heavy cancellation, so the error in r surfaces there long before it
+! surfaces in the energy.  Measured against the CPU path on DHFR: the diagonal
+! components differ by 2e-6 to 5e-6 relative, VIXX and VIYY with opposite signs
+! so that they largely cancel in the trace, while the analytic Ewald self term
+! is bit-identical.  That is rounding, not a missing contribution.
+! 1e-5 leaves roughly a factor of ten over the largest difference seen and is
+! still far tighter than any real regression would need.
+! (?ener passes at 1e-6 but only by a factor of two, so it is a candidate for
+! the same treatment if it ever starts flickering.)
+@testcheck ?viri  @viriold .00001  GPU_VIRI
+@testcheck ?prsi  @pressiold .0001 GPU_PRESS
 
 endif
 

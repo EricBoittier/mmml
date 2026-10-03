@@ -1,4 +1,5 @@
-
+CHARMM Element doc/developer.info 1.1
+
 File: developer.info, Node: Top, Up: (charmm.info), Previous: (testcase.info), Next: (changelog.info)
 
 
@@ -311,10 +312,10 @@ which have been established towards this end are listed below.
                                   SEVEN=7.0D0
       integer(chm_int),parameter :: MAXATM=99999
 
-    See ltm/number_ltm.src for frequently used numbers.
+    See ltm/number_ltm.F90 for frequently used numbers.
     Real numbers may never be placed in a calling sequence.
     All physical constants should be declared as parameters in
-    ltm/consta_ltm.src
+    ltm/consta_ltm.F90
     Constants and numbers can be used by adding 
     
     use consta
@@ -355,7 +356,7 @@ which have been established towards this end are listed below.
     SUM or TYPE.
 
 18) All variables must be declared with a kind. Use the kinds available
-    in chm_kinds_ltm.src, the CHARMM variable kinds (chm_kinds) module.  If a 
+    in chm_kinds_ltm.F90, the CHARMM variable kinds (chm_kinds) module.  If a 
     new kind is used, add it to the chm_kinds module.
 
 19) All variables must be initialized before first use. Most
@@ -634,7 +635,7 @@ with cross-references showing the relationships between them.
 
      Doxygen also recognizes Fortran comments beginning with !> as text to
 include in the HTML output. Some examples of such comments are in
-source/pert/lambdadyn.src.
+source/pert/lambdadyn.F90.
 
      Before you run Doxygen on CHARMM code, download the Doxygen 1.6
 source distribution and apply tool/doxygen.patch as follows:

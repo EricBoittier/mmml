@@ -8,6 +8,7 @@
 #include "rng/rng_cpu.h"
 #include "holonomic/rectify.h"
 #include "io/io.h"
+#include "main/gpu_check.h"
 
 
 
@@ -94,6 +95,7 @@ void scale_box(System *system,real3_x scaleFactor)
 
   int N=system->state->atomCount;
   scale_box_kernel<<<(N+BLUP-1)/BLUP,BLUP,0,system->run->updateStream>>>(N,scaleFactor,(real3_x*)system->state->position_d);
+  gpuCheck(cudaGetLastError());
 
   // Nudge the system to remain centered on absolute harmonic restraints
   if (system->potential->harmCount) {
@@ -102,6 +104,7 @@ void scale_box(System *system,real3_x scaleFactor)
     shift.y=(1-scaleFactor.y)*system->potential->harmCenter.y;
     shift.z=(1-scaleFactor.z)*system->potential->harmCenter.z;
     shift_box_kernel<<<(N+BLUP-1)/BLUP,BLUP,0,system->run->updateStream>>>(N,shift,(real3_x*)system->state->position_d);
+    gpuCheck(cudaGetLastError());
   }
 
   // There might be better ways to rectify holonomic constraints after volume update, I just want to avoid having bonds change direction, which will mess with the velocities"
@@ -128,12 +131,7 @@ void pressure_coupling(System *system)
     energyOld=s->energy[eepotential];
 
     // and print it
-    if (system->verbose>0) {
-      for (int i=0; i<eeend; i++) {
-        fprintf(stdout," %12.4f",s->energy[i]);
-      }
-      fprintf(stdout,"\n");
-    }
+    if (system->verbose>0) display_nrg(system);
 
     s->backup_position();
 
@@ -150,7 +148,7 @@ void pressure_coupling(System *system)
   system->domdec->update_domdec(system,false);
   // nvtxRangePop();
   // nvtxRangePushA("calc_force");
-  p->calc_force(0,system); // 0 tells it to calculate energy freqNRG
+  p->calc_force(0,system,false); // 0 tells it to calculate energy freqNRG
   // nvtxRangePop();
 
   if (system->id==0) {
@@ -160,27 +158,22 @@ void pressure_coupling(System *system)
     energyNew=s->energy[eepotential];
 
     // and print it
-    if (system->verbose>0) {
-      for (int i=0; i<eeend; i++) {
-        fprintf(stdout," %12.4f",s->energy[i]);
-      }
-      fprintf(stdout,"\n");
-    }
+    if (system->verbose>0) display_nrg(system);
 
     // Compare energy
     N=s->atomCount-(2*p->triangleConsCount+p->branch1ConsCount+2*p->branch2ConsCount+3*p->branch3ConsCount);
     kT=s->leapParms1->kT;
     dW=energyNew-energyOld+r->pressure*(volumeNew-volumeOld)-N*kT*log(volumeNew/volumeOld);
     if (system->verbose>0) {
-      fprintf(stdout,"dW= %f, dV= %f\n",dW,volumeNew-volumeOld);
+      printlog("dW= %f, dV= %f\n",dW,volumeNew-volumeOld);
     }
     if (system->rngCPU->rand_uniform()<exp(-dW/kT)) { // accept move
       if (system->verbose>0) {
-        fprintf(stdout,"Volume move accepted. New volume=%f\n",volumeNew);
+        printlog("Volume move accepted. New volume=%f\n",volumeNew);
       }
     } else {
       if (system->verbose>0) {
-        fprintf(stdout,"Volume move rejected. Old volume=%f\n",volumeOld);
+        printlog("Volume move rejected. Old volume=%f\n",volumeOld);
       }
       s->restore_position();
     }

@@ -501,5 +501,44 @@ contains
     return
   end subroutine allocate_gamess
 
+  subroutine allocate_gamess_update()
+    use memory
+    use quantm,only:qmused_quantum
+    implicit none
+    character(len=*),parameter :: routine_name="allocate_gamess_update"
+    if(qmused_quantum.or.qmused_qchem.or.qmused_g09.or.qmused_turbo.or. &
+         qmused_gamess.or.qmused_sccdftb.or.qmused_mndo97.or.qmused_squantm &
+         .or.qmused_cadpac.or.qmused_nwchem) then
+       if(.not.allocated(igmsel)) call chmalloc(file_name,routine_name,'igmsel',maxaim,intg=igmsel)
+       if(.not.allocated(ndiv))   call chmalloc(file_name,routine_name,'ndiv',maxaim,intg=ndiv)
+       if(.not.allocated(zlhost)) call chmalloc(file_name,routine_name,'zlhost',maxaim,crl=zlhost)
+       if(.not.allocated(lqmgrp)) call chmalloc(file_name,routine_name,'lqmgrp',maxgrp,intg=lqmgrp)
+       if(.not.allocated(immlst)) call chmalloc(file_name,routine_name,'immlst',maxa,intg=immlst)
+    endif
+#if KEY_GAMESSUK==1
+    if(.not.allocated(igmsel)  call chmalloc(file_name,routine_name,'igmsel',MAXA,intg=igmsel)
+    if(.not.allocated(qqchg))  call chmalloc(file_name,routine_name,'qqchg',MAXA,crl=qqchg)
+    if(.not.allocated(fqqchg)) call chmalloc(file_name,routine_name,'fqqchg',MAXA,crl=fqqchg)
+    if(.not.allocated(a2mass)) call chmalloc(file_name,routine_name,'a2mass',MAXA,crl=a2mass)
+    if(.not.allocated(gmsmap)) call chmalloc(file_name,routine_name,'gmsmap',MAXA,intg=gmsmap)
+#endif 
+    if(qmused_quantum.or.qmused_qchem.or.qmused_g09.or.qmused_turbo.or. &
+         qmused_gamess.or.qmused_sccdftb.or.qmused_mndo97.or.qmused_squantm &
+         .or.qmused_gamessuk.or.qmused_nwchem) then
+       if(.not.allocated(qmckol)) call chmalloc(file_name,routine_name,'qmckol',maxa,crl=qmckol)
+       if(.not.allocated(qmclow)) call chmalloc(file_name,routine_name,'qmclow',maxa,crl=qmclow)
+       if(.not.allocated(qmcmul)) call chmalloc(file_name,routine_name,'qmcmul',maxa,crl=qmcmul)
+    endif
+    if(qmused_qchem.or.qmused_turbo.or.qmused_g09) then
+       if(.not.allocated(xtmpgrad))     call chmalloc(file_name,routine_name,'xtmpgrad',MAXA,crl=xtmpgrad)
+       if(.not.allocated(ytmpgrad))     call chmalloc(file_name,routine_name,'ytmpgrad',MAXA,crl=ytmpgrad)
+       if(.not.allocated(ztmpgrad))     call chmalloc(file_name,routine_name,'ztmpgrad',MAXA,crl=ztmpgrad)
+       if(.not.allocated(qcblkreorder)) call chmalloc(file_name,routine_name,'qcblkreorder',MAXA,intg=qcblkreorder)
+       if(.not.allocated(qcblksizes))   call chmalloc(file_name,routine_name,'qcblksizes',MAXA,intg=qcblksizes)
+       if(.not.allocated(mapff))        call chmalloc(file_name,routine_name,'mapff',MAXA,intg=mapff)
+    endif
+    return
+  end subroutine allocate_gamess_update
+
 end module gamess_fcm
 

@@ -6,9 +6,34 @@
 *
 
 if ?sccdftb .ne. 1 then
- echo "Test NOT performed."
+ echo ALANINE_SCC TESTCASE RESULT: SKIP
  stop
 endif
+
+stream datadir.def
+
+! SCC-DFTB needs SCCDFTB_DATA set to a directory holding the DFTB parameter
+! file sccdftb_ONCH.dat (not in the repo; contact Marcus Elstner).  genv aborts
+! hard when SCCDFTB_DATA is unset, so guard it and self-skip house-style when
+! the data is not provisioned.
+set sccdftbdir UNSET_SCCDFTB_DATA
+set oldbomlev ?bomlev
+bomlev -5
+genv sccdftbdir SCCDFTB_DATA
+bomlev @oldbomlev
+if @sccdftbdir eq UNSET_SCCDFTB_DATA then
+   echo ALANINE_SCC TESTCASE RESULT: SKIP
+   stop
+endif
+strc sccdat @sccdftbdir "/sccdftb_ONCH.dat"
+bomlev -5
+open unit 98 read form name @sccdat
+if ?iostat .ne. 1 then
+   echo ALANINE_SCC TESTCASE RESULT: SKIP
+   stop
+endif
+close unit 98
+bomlev @oldbomlev
 
 read rtf card
 * Taken from top_all22_prot.inp
@@ -227,11 +252,52 @@ scalar WMAIN set 4.0 sele qm .and. type QQ*  SHOW end
 
 ! Default SCF convergence is 1.d-7, which is fine.
 ! 1.d-6 would give not so accurate forces
-sccdftb remove chrg -1 sele qm end SCFT 0.00000001
+! SCFT is tightened from 1e-8 for the derivative check below.  The
+! finite-difference gradient inherits the SCF convergence as noise,
+! amplified by 1/step, and at 1e-8 with step 0.0005 that noise -- not
+! the analytic gradient -- set the agreement: 6.5e-3.  At 1e-12 the
+! same comparison lands at 7e-4.
+sccdftb remove chrg -1 sele qm end SCFT 1e-12 DATF @sccdat
 !
 ! -----------------------------------------------------------
 
 energy
+
+! A self-reported result short-circuits the comparison against the benchmark,
+! so whatever is not asserted here stops being checked at all.  Three of these
+! four need no reference value and hold for any Slater-Koster set:
+!
+!   net force      -- the forces on an isolated system must sum to zero
+!                     (Newton's third law); measured here at 7e-13.
+!   translation    -- a rigid shift must not change the energy.  Tolerance is
+!                     1e-4 because ?ENER comes back at print precision, five
+!                     decimals, so two identical energies can still differ in
+!                     the last digit; a real positional dependence would be
+!                     orders of magnitude larger.
+!   ?NOK           -- the analytic gradient against a finite-difference one,
+!                     i.e. the code against itself.
+!
+! QMEL is the one captured number, and it earns its place: the invariants
+! above are all satisfied by an energy that is self-consistent but wrong --
+! the wrong parameter file, or the wrong element assigned to every atom, which
+! is a live failure mode in this suite.  It is quoted for the 3ob set; another
+! set will differ, legitimately.
+set e0 = ?ener
+scalar dx stat
+set fx = ?stot
+scalar dy stat
+set fy = ?stot
+scalar dz stat
+set fz = ?stot
+calc fnet = abs(@fx) + abs(@fy) + abs(@fz)
+@testcheck @fnet 0 -0.000001 alanine_scc_netforce
+coor trans xdir 1.0 ydir 0.0 zdir 0.0 dist 3.7
+energy
+calc edrift = abs ( ?ener - @e0 )
+@testcheck @edrift 0 -0.0001 alanine_scc_translation
+coor trans xdir -1.0 ydir 0.0 zdir 0.0 dist 3.7
+energy
+@testcheck ?qmel -5551.81567 0.000001 alanine_scc_qmel
 
 scal xcomp = x
 scal ycomp = y
@@ -247,7 +313,14 @@ scal y = ycomp
 scal z = zcomp
 
 ! Check force with finite difference
-test first tol 0.0 step 0.0005 
+! Compare the analytic gradient against a finite-difference one.  `tol 0.0'
+! could never report agreement: TESTFD counts a component as OK when its
+! deviation is BELOW tol, and nothing is below zero, so ?NOK was always 0 and
+! this check has never said anything.  0.005 sits about seven times above the
+! measured worst component and still catches a sign error or a factor of two.
+! ?NOK is the count that agreed: three per free atom, and this system has 14.
+test first tol 0.005 step 0.0005
+@testcheck ?nok 42 -0.5 alanine_scc_dfirst
 
 STOP
 

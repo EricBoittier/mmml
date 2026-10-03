@@ -27,6 +27,8 @@ module qm1_constant
 
       integer,parameter   :: IZERO=0
 
+      real(chm_real),parameter :: minbig=-9999.0d0
+
 ! may not be used
 !      convert rad to deg; 180/Pi
 !      real(chm_real), parameter :: AFACT=57.29577951308232D0

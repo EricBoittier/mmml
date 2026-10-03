@@ -3,18 +3,16 @@ module abnerm
 contains
   !
   subroutine abner(comlyn,comlen &
-#if KEY_LIBRARY == 1
        , min_opts, abnr_opts &
-#endif /* KEY_LIBRARY */
        )
     !-----------------------------------------------------------------------
     !     ABNER performs an ABNR minimization.
     !
 #if KEY_CHEQ==1
-  use cheq,only:qmolc,cgfix,cgtmp,qnpart,molcgt     
+  use cheq,only:qmolc,cgfix,cgtmp,qnpart,molcgt
 #endif
 #if KEY_FLUCQ==1
-  use flucqm,only: fqseln                           
+  use flucqm,only: fqseln
 #endif
     !
   use chm_kinds
@@ -32,10 +30,10 @@ contains
   use string
 #if KEY_TSM==1
   use tsms_mod
-#endif 
+#endif
 #if KEY_FLUCQ==1
   use flucq
-#endif 
+#endif
   use parallel
   use repdstr
 #if KEY_DHDGB==1
@@ -43,9 +41,7 @@ contains
    use dhdgb
 #endif
 
-#if KEY_LIBRARY == 1
   use api_types, only: min_settings, min_abnr_settings
-#endif /* KEY_LIBRARY */
 
     implicit none
     !
@@ -54,10 +50,8 @@ contains
     INTEGER       COMLEN
     CHARACTER(len=*) COMLYN
 
-#if KEY_LIBRARY == 1
   type(min_settings), optional :: min_opts
   type(min_abnr_settings), optional :: abnr_opts
-#endif /* KEY_LIBRARY */
 
     !
     !     Local variables.
@@ -65,9 +59,9 @@ contains
     INTEGER :: &
          i, ncalls, &
          CONVRG, MINDIM, NSTEP, NVAR, TOLITR
-    
+
     LOGICAL :: QDEBUG, QLOCAL
-    
+
     REAL(chm_real) :: &
          EIGRNG, PSTRCT, SDSTP, STPLIM, &
          STRICT, TOLGRD, TOLFUN, TOLSTP, &
@@ -111,11 +105,10 @@ contains
           RETURN
        ENDIF
     ENDIF
-#endif 
+#endif
 
     QLOCAL = LMINUC
 
-#if KEY_LIBRARY == 1
     if (present(min_opts)) then
        nprint = min_opts%nprint
        nstep = min_opts%nstep
@@ -133,7 +126,6 @@ contains
        strict = abnr_opts%strict
        tolitr = abnr_opts%tolitr
     end if  ! present(abnr_opts)
-#endif /* KEY_LIBRARY */
 
     ! parse command line
     EIGRNG = GTRMF(COMLYN,COMLEN,'EIGR', EIGRNG)
@@ -189,7 +181,7 @@ contains
        ENDIF
        CALL MOLCGT(NATOM,CG,CGFIX)
     ENDIF
-#endif 
+#endif
     !
     !     Do some initial printing.
     !
@@ -222,7 +214,7 @@ contains
     !
     !
     !---NEEDS-WORK---------------------------------------------
-    !   these need to be chmalloc and 
+    !   these need to be chmalloc and
     !    need to be checked for 2 dimensional arrays
 
     ALLOCATE(EVAL(MINDIM),EVEC(MINDIM*MINDIM),FUNC(MINDIM+2))
@@ -243,17 +235,17 @@ contains
     !
     CALL GETVR1(MINXYZ,NATOM,VARB,IMOVE,X,Y,Z,LMINUC, &
 #if KEY_CHEQ==1
-         QCGMIN,CG, &              
+         QCGMIN,CG, &
 #endif
          XTLTYP,XTLABC,XTLREF, &
 #if KEY_FLUCQ==1
-         QFLUC,CG,FQSELN, &        
+         QFLUC,CG,FQSELN, &
 #endif
 #if KEY_FOURD==0
-         .FALSE.,(/ZERO/),(/0/) &  
+         .FALSE.,(/ZERO/),(/0/) &
 #endif
 #if KEY_FOURD==1
-         DIM4,FDIM,IMOVE4 &        
+         DIM4,FDIM,IMOVE4 &
 #endif
 #if KEY_DHDGB==1
 !AP/MF
@@ -277,17 +269,17 @@ contains
     !
     CALL PUTVR1(MINXYZ,NATOM,VARB,IMOVE,X,Y,Z, &
 #if KEY_CHEQ==1
-         QCGMIN,CG,CGFIX,CGTMP, &  
+         QCGMIN,CG,CGFIX,CGTMP, &
 #endif
          LMINUC,XTLTYP,XTLABC,XTLREF,.TRUE., &
 #if KEY_FLUCQ==1
-         QFLUC,CG,FQSELN, &        
+         QFLUC,CG,FQSELN, &
 #endif
 #if KEY_FOURD==0
-         .FALSE.,(/ZERO/),(/0/) &  
+         .FALSE.,(/ZERO/),(/0/) &
 #endif
 #if KEY_FOURD==1
-         DIM4,FDIM,IMOVE4 &        
+         DIM4,FDIM,IMOVE4 &
 #endif
 #if KEY_DHDGB==1
 !AP/MF
@@ -354,11 +346,11 @@ contains
        CALL PRINTE(OUTU, EPROP, ETERM, 'ABNR', 'MIN', &
             .TRUE., NCALLS, ZERO, SDSTP, .FALSE.)
     ELSE
-#endif 
+#endif
        CALL PRINTE(OUTU, EPROP, ETERM, 'ABNR', 'MIN', &
             .TRUE., NCALLS, ZERO, SDSTP, .TRUE.)
 #if KEY_REPDSTR==1
-    ENDIF                                       
+    ENDIF
 #endif
     !
     !     Clear up any temporary storage space.
@@ -367,7 +359,7 @@ contains
     deallocate(xredo,xreddf,usvd,vsvd,pgnrm)
     !     end stack
 #if KEY_CHEQ==1
-    if(allocated(cgfix))deallocate(cgfix,cgtmp)    
+    if(allocated(cgfix))deallocate(cgfix,cgtmp)
 #endif
     deallocate(grad,parm,varb,wrk1,wrk2,psgrad,pgrad)
     deallocate(pthtan,pthtan1,wrk4)
@@ -473,7 +465,7 @@ contains
     !     variable and gradient vectors as new points are placed in the list.
     !
 #if KEY_REPDSTR==1
-  use repdstr,only:psetloc,psetglob              
+  use repdstr,only:psetloc,psetglob
 #endif
 
   use chm_kinds
@@ -488,7 +480,7 @@ contains
   use minmiz_util_module, only: mintrj
   use replica_mod   ! jwchuneb
 #if KEY_RPATH==1
-  use epathmod,only: PJDX,PJDY,PJDZ,PSDX,PSDY,PSDZ,PTANX,PTANY,PTANZ 
+  use epathmod,only: PJDX,PJDY,PJDZ,PSDX,PSDY,PSDZ,PTANX,PTANY,PTANZ
 #endif
   use neb       ! jwchuneb
   use energym    ! jwchuneb
@@ -558,8 +550,8 @@ contains
        WRITE(OUTU,'(A)') &
             ' ABNER2> WARNING CI-NEB SHOULD NOT BE USED WITH ABNER'
     ENDIF
-#endif 
-#endif 
+#endif
+#endif
     !
     !     Do some initialisation.
     !
@@ -596,7 +588,7 @@ contains
     prtest=plnod0
 #else /**/
     prtest=prnlev
-#endif 
+#endif
     !write(50+mynodg,'(a,2i5,3l6)')'ABNR-x-0>mindim,dimsub,reset,sdflag,newstp=', &
     !     mindim,dimsub,reset,sdflag,newstp
 
@@ -646,9 +638,9 @@ contains
        CALL PSETLOC
        !write(50+mynodg,'(a,i5,f20.10)')'abnr>lbest,func(lbest)=',lbest,func(lbest)
     ENDIF
-#endif 
-#endif 
-#endif 
+#endif
+#endif
+#endif
     !
     !write(50+mynodg,'(a,2i5,3l6)')'ABNR-x-1>mindim,dimsub,reset,sdflag,newstp=', &
     !     mindim,dimsub,reset,sdflag,newstp
@@ -665,8 +657,8 @@ contains
        FUNC(LBEST)=FUNC(LBEST)-ERMS
        PFUNC(LBEST)=ERMS
     ENDIF    ! QPNEB
-#endif 
-#endif 
+#endif
+#endif
 
     !RCZ 91/11/20 GRADAV initialization moved here
     GRADAV = LENVEC(GRAD(1,LBEST),NP)
@@ -691,9 +683,9 @@ contains
     ENDIF
     !write(50+mynodg,'(a,2i4,2f20.10)')'ABNER-0b>me,np,gradav,nps=',mynod,np,gradav,nps
     !write(50+mynodg,*)'ABNER-0b>gradav,np,nps=',gradav,np,nps
-#endif 
-#endif 
-#endif 
+#endif
+#endif
+#endif
     IF(PFLAG)THEN
        GRADAV = GRADAV/SIGN(MAX(ABS(SQRTNP),RSMALL),SQRTNP)
     ELSE
@@ -715,8 +707,8 @@ contains
                ' TANGENT GRAD = ', PGNRM(LBEST)
        ENDIF
     ENDIF
-#endif 
-#endif 
+#endif
+#endif
 
     STEPAV = GRADAV
     !
@@ -739,7 +731,7 @@ contains
     !     Rearrange pointers.
     !
 #if KEY_REPLICA==1 && KEY_RPATH==1
-    IF(.NOT.QPNEB) THEN   
+    IF(.NOT.QPNEB) THEN
 #endif
        IF (NEWSTP) THEN
           IF (DIMSUB  <  MINDIM) DIMSUB = DIMSUB + 1
@@ -820,8 +812,8 @@ contains
           ENDIF
        ENDIF !NEWSTP
     ENDIF !QPNEB
-#endif 
-#endif 
+#endif
+#endif
     !
     !     Determine the new move for the NR step. Calculate the reduced
     !     derivative and second derivative matrix. Diagonalise the matrix
@@ -830,14 +822,14 @@ contains
     !
     IF (.NOT. SDFLAG) THEN
 #if KEY_REPLICA==1 && KEY_RPATH==1
-       IF(.NOT.QPNEB) THEN      
+       IF(.NOT.QPNEB) THEN
 #endif
 
           DO I = 1,DIMSUB
              CALL SUBVEC(PARM(1,LPREV(I)),PARM(1,LBEST),WRK2(1,I),NP)
              CALL SUBVEC(GRAD(1,LPREV(I)),GRAD(1,LBEST),WRK1(1,I),NP)
           enddo
-          
+
           !write(50+mynodg,*)'ABNER-1>ncalls,lprev1,lbest=',ncalls,lprev(1),lbest
           !write(50+mynodg,*)'ABNER-1a>parm(curr)='
           !write(50+mynodg,'(9f10.5)')(parm(i,lprev(1)),i=1,np)
@@ -880,9 +872,9 @@ contains
           ENDIF
           !write(50+mynodg,*)'ABNER-1c-a>vred=',(vred(i),i=1,dimsub)
           !write(50+mynodg,*)'ABNER-1d-a>secder=',(secder(i),i=1,dimsub*dimsub)
-#endif 
-#endif 
-#endif 
+#endif
+#endif
+#endif
 
           I = 0
           CALL EIGRS(SECDER,DIMSUB,11,EVAL,EVEC,DIMSUB,I)
@@ -942,9 +934,9 @@ contains
              RSDLEN=SQRT(GRADAV2)
              CALL PSETLOC
           ENDIF
-#endif 
-#endif 
-#endif 
+#endif
+#endif
+#endif
           !write(50+mynodg,*)'ABNER-3b>rsdlen,np=',rsdlen,np
           ! End repdstr
           RSDSCL = SDSTP / SIGN(MAX(ABS(RSDLEN),RSMALL),RSDLEN)
@@ -1020,7 +1012,7 @@ contains
           !c      SUBROUTINE SVD (NM, M, N, A, W, MATU, U, MATV, V, IERR, RV1)
 
           CALL SVD(2*MINDIM,2*DIMSUB,DIMSUB,SECDER1,WRK3,.TRUE.,USVD, &
-               .TRUE.,VSVD,J,XRED) 
+               .TRUE.,VSVD,J,XRED)
           XRED(1:DIMSUB)=zero
 
           IF (QDEBUG) THEN
@@ -1145,8 +1137,8 @@ contains
           ENDDO
 
        ENDIF ! QPNEB
-#endif 
-#endif 
+#endif
+#endif
     ENDIF ! SDFLAG
     CGSCL = ONE
     !
@@ -1158,14 +1150,14 @@ contains
     IF (SDFLAG) THEN
 
 #if KEY_REPLICA==1 && KEY_RPATH==1
-       IF(.NOT.QPNEB) THEN    
+       IF(.NOT.QPNEB) THEN
 #endif
 
           VRSDL(1:np) = GRAD(1:np,LBEST)
           TEMP = SQRTNP * GNRM(LBEST)
 
 #if KEY_REPDSTR==1 && KEY_REPLICA==1 && KEY_RPATH==1
-          IF(QREPDSTR.AND.QPATH)TEMP=NPS*GNRM(LBEST)  
+          IF(QREPDSTR.AND.QPATH)TEMP=NPS*GNRM(LBEST)
 #endif
           !write(50+mynodg,*)'ABNER-z>sqrtnp,nps,gnrm,temp=',sqrtnp,nps,gnrm(lbest),temp
 
@@ -1191,8 +1183,8 @@ contains
           ENDDO
 
        ENDIF ! QPNEB
-#endif 
-#endif 
+#endif
+#endif
     ENDIF ! SDFLAG
     !
     CALL SUBVEC(PARM(1,LBEST),VWRK,PARM(1,LNEW),NP)
@@ -1201,28 +1193,28 @@ contains
     !     get the partial lengths from other replicas:
     !write(50+mynodg,*)'ABNER-zz>stplen=',stplen
 #if KEY_REPDSTR==1 && KEY_REPLICA==1 && KEY_RPATH==1
-    IF(QREPDSTR.AND.QPATH)THEN     
+    IF(QREPDSTR.AND.QPATH)THEN
 #endif
 #if KEY_REPDSTR==1 && KEY_REPLICA==1 && KEY_RPATH==1
-       STPLEN2=STPLEN*STPLEN       
+       STPLEN2=STPLEN*STPLEN
 #endif
 #if KEY_REPDSTR==1 && KEY_REPLICA==1 && KEY_RPATH==1
-       if(mynod >0) stplen2=zero   
+       if(mynod >0) stplen2=zero
 #endif
 #if KEY_REPDSTR==1 && KEY_REPLICA==1 && KEY_RPATH==1
-       CALL PSETGLOB               
+       CALL PSETGLOB
 #endif
 #if KEY_REPDSTR==1 && KEY_REPLICA==1 && KEY_RPATH==1
-       CALL GCOMB(STPLEN2,1)       
+       CALL GCOMB(STPLEN2,1)
 #endif
 #if KEY_REPDSTR==1 && KEY_REPLICA==1 && KEY_RPATH==1
-       CALL PSETLOC                
+       CALL PSETLOC
 #endif
 #if KEY_REPDSTR==1 && KEY_REPLICA==1 && KEY_RPATH==1
-       STPLEN=SQRT(STPLEN2)        
+       STPLEN=SQRT(STPLEN2)
 #endif
 #if KEY_REPDSTR==1 && KEY_REPLICA==1 && KEY_RPATH==1
-    ENDIF                          
+    ENDIF
 #endif
     !
     IF (STPLEN  >  STPLIM .AND. .NOT. SDFLAG) THEN
@@ -1262,8 +1254,8 @@ contains
     IF(QPNEB) THEN
        VWRK1(1:np) = PGRAD(1:np) + VRSDL(1:np)
     ENDIF
-#endif 
-#endif 
+#endif
+#endif
     !
     !     Calculate new values for the funtion and its gradients.
     !
@@ -1313,9 +1305,9 @@ contains
     ENDIF
     !write(50+mynodg,*)'ABNER-zz1a>lnew,func(lnew)=',lnew,func(lnew)
     !write(50+mynodg,*)'ABNER-zz2a>eprop(grms)=',eprop(grms)
-#endif 
-#endif 
-#endif 
+#endif
+#endif
+#endif
     !
     CALL ENEOUT(OUTU,NCALLS,SDSTP,ZERO)
 #if KEY_RPATH==1
@@ -1359,9 +1351,9 @@ contains
        CALL PSETLOC
     ENDIF
     !write(50+mynodg,*)'ABNER-10b>gradav2,np,nps=',gradav2,np,nps
-#endif 
-#endif 
-#endif 
+#endif
+#endif
+#endif
     IF(PFLAG)THEN
        GRADAV2=GRADAV2/SIGN(MAX(ABS(SQRTNP),RSMALL),SQRTNP)
     ELSE
@@ -1387,8 +1379,8 @@ contains
     ENDIF
 
     FDIFF2 = GNRM(LNEW) - GNRM(LBEST)
-#endif 
-#endif 
+#endif
+#endif
 
     NEVAL = NEVAL + 1
     IF ((NEVAL-NEVAL0)  >  TOLITR) THEN
@@ -1424,9 +1416,9 @@ contains
        !write(50+mynodg,*)'ABNER-max1>pdmax=',pdmax
        DEALLOCATE(PDMAXS)
     ENDIF
-#endif 
-#endif 
-#endif 
+#endif
+#endif
+#endif
     !
     IF (PDMAX  <  PSTRCT) THEN
        CONVRG = 6
@@ -1435,7 +1427,7 @@ contains
     GRADAV = FMEM*GRADAV + (ONE-FMEM)*GNRM(LNEW)
     STEPAV = FMEM*STEPAV + (ONE-FMEM)*STPLEN
 #if KEY_REPLICA==1 && KEY_RPATH==1
-    IF(.NOT.QPNEB) THEN   
+    IF(.NOT.QPNEB) THEN
 #endif
        NEWSTP = (FDIFF  <=  STRICT)
        !write(50+mynodg,'(a,2f20.10,l6)')'ABNR-x-n>fdiff,strict,newstp=',fdiff,strict,newstp
@@ -1452,7 +1444,7 @@ contains
     !     Readjust the step length.
     !
 #if KEY_REPLICA==1 && KEY_RPATH==1
-    IF(.NOT.QPNEB) THEN  
+    IF(.NOT.QPNEB) THEN
 #endif
        RSDSLP = DOTVEC(VRSDL,GRAD(1,LNEW),NP)
        !
@@ -1465,9 +1457,9 @@ contains
           CALL GCOMB(RSDSLP,1)
           CALL PSETLOC
        ENDIF
-#endif 
-#endif 
-#endif 
+#endif
+#endif
+#endif
        !
        IF (QDEBUG) WRITE (OUTU,'(A,1PE12.4)') &
             ' Dot of residual and new gradient = ',RSDSLP
@@ -1579,8 +1571,8 @@ contains
        ENDIF
        IF (SDSTP  <  STPMIN) SDSTP = STPMIN
     ENDIF ! QPNEB
-#endif 
-#endif 
+#endif
+#endif
     !
     !     Convergence status.
     !
@@ -1619,7 +1611,7 @@ contains
     GNRM(1) = GNRM(LBEST)
     !
 #if KEY_REPDSTR==1
-    IF(QREPDSTR.AND.QPATH) EPROP(GRMS) = GNRM(1)  
+    IF(QREPDSTR.AND.QPATH) EPROP(GRMS) = GNRM(1)
 #endif
     !
     RETURN
@@ -1667,7 +1659,7 @@ contains
 #endif
 #if KEY_DHDGB==1
   use dhdgb,only:totals
-#endif 
+#endif
     implicit none
     LOGICAL QPCYCL,LPCIMG
     INTEGER I,IPT,NI,NSIZE,NREPL,NPATOMS,IREP(NREPL),J
@@ -1686,13 +1678,13 @@ contains
 
     CALL PUTVR1(MINXYZ,NATOM,F,IMOVE,PFX,PFY,PFZ, &
 #if KEY_CHEQ==1
-         .FALSE.,(/ZERO/),(/ZERO/),(/ZERO/), & 
+         .FALSE.,(/ZERO/),(/ZERO/),(/ZERO/), &
 #endif
          .FALSE.,'NONE',(/ZERO/),(/ZERO/),.FALSE., &
 #if KEY_FLUCQ==1
-         .FALSE.,(/ZERO/),(/0/), & 
+         .FALSE.,(/ZERO/),(/0/), &
 #endif
-         .FALSE.,(/ZERO/),(/0/)  & 
+         .FALSE.,(/ZERO/),(/0/)  &
 #if KEY_DHDGB==1
        ,QFHDGB=.FALSE.,SDEF=DUM_FHDGB, TOTALS=TOTALS &
 #endif
@@ -1700,11 +1692,11 @@ contains
 
     CALL PUTVR1(MINXYZ,NATOM,TAN,IMOVE,PX,PY,PZ, &
 #if KEY_CHEQ==1
-         .FALSE.,(/ZERO/),(/ZERO/),(/ZERO/), & 
+         .FALSE.,(/ZERO/),(/ZERO/),(/ZERO/), &
 #endif
          .FALSE.,'NONE',(/ZERO/),(/ZERO/),.TRUE., &
 #if KEY_FLUCQ==1
-         .FALSE.,(/ZERO/),(/0/), & 
+         .FALSE.,(/ZERO/),(/0/), &
 #endif
          .FALSE.,(/ZERO/),(/0/) &
 #if KEY_DHDGB==1
@@ -1742,18 +1734,18 @@ contains
 
     CALL GETVR1(MINXYZ,NATOM,F,IMOVE,PFX,PFY,PFZ,.FALSE., &
 #if KEY_CHEQ==1
-         .FALSE.,(/ZERO/), & 
+         .FALSE.,(/ZERO/), &
 #endif
          'NONE',(/ZERO/),(/ZERO/), &
 #if KEY_FLUCQ==1
-         .FALSE.,(/ZERO/),(/0/), & 
+         .FALSE.,(/ZERO/),(/0/), &
 #endif
          .FALSE.,(/ZERO/),(/0/)  &
 #if KEY_DHDGB==1
 !AP/MF
      ,.FALSE.,(/ZERO/),TOTALS &
 #endif
-    ) 
+    )
     !
     RETURN
   END SUBROUTINE PFORCE
@@ -1797,11 +1789,11 @@ contains
 
     CALL PUTVR1(MINXYZ,NATOM,F,IMOVE,PFX,PFY,PFZ, &
 #if KEY_CHEQ==1
-         .FALSE.,(/ZERO/),(/ZERO/),(/ZERO/), & 
+         .FALSE.,(/ZERO/),(/ZERO/),(/ZERO/), &
 #endif
          .FALSE.,'NONE',(/ZERO/),(/ZERO/),.FALSE., &
 #if KEY_FLUCQ==1
-         .FALSE.,(/ZERO/),(/0/), & 
+         .FALSE.,(/ZERO/),(/0/), &
 #endif
          .FALSE.,(/ZERO/),(/0/) &
 #if KEY_DHDGB==1
@@ -1811,11 +1803,11 @@ contains
 
     CALL PUTVR1(MINXYZ,NATOM,TAN,IMOVE,PX,PY,PZ, &
 #if KEY_CHEQ==1
-         .FALSE.,(/ZERO/),(/ZERO/),(/ZERO/), & 
+         .FALSE.,(/ZERO/),(/ZERO/),(/ZERO/), &
 #endif
          .FALSE.,'NONE',(/ZERO/),(/ZERO/),.TRUE., &
 #if KEY_FLUCQ==1
-         .FALSE.,(/ZERO/),(/0/), & 
+         .FALSE.,(/ZERO/),(/0/), &
 #endif
          .FALSE.,(/ZERO/),(/0/)  &
 #if KEY_DHDGB==1
@@ -1853,11 +1845,11 @@ contains
 
     CALL GETVR1(MINXYZ,NATOM,F,IMOVE,PFX,PFY,PFZ,.FALSE., &
 #if KEY_CHEQ==1
-         .FALSE.,(/ZERO/), & 
+         .FALSE.,(/ZERO/), &
 #endif
          'NONE',(/ZERO/),(/ZERO/), &
 #if KEY_FLUCQ==1
-         .FALSE.,(/ZERO/),(/0/), & 
+         .FALSE.,(/ZERO/),(/0/), &
 #endif
          .FALSE.,(/ZERO/),(/0/) &
 #if KEY_DHDGB==1
@@ -1879,7 +1871,7 @@ contains
     !
   use epathmod
 #if KEY_FLUCQ==1
-  use flucqm,only: fqseln,fqcfor          
+  use flucqm,only: fqseln,fqcfor
 #endif
 
   use chm_kinds
@@ -1927,11 +1919,11 @@ contains
     !
     CALL PUTVR1(MINXYZ,NATOM,VARB,IMOVE,PX,PY,PZ, &
 #if KEY_CHEQ==1
-         .FALSE.,(/ZERO/),(/ZERO/),(/ZERO/), & 
+         .FALSE.,(/ZERO/),(/ZERO/),(/ZERO/), &
 #endif
          .FALSE.,'NONE',(/ZERO/),(/ZERO/),.TRUE., &
 #if KEY_FLUCQ==1
-         .FALSE.,FQCFOR,FQSELN, & 
+         .FALSE.,FQCFOR,FQSELN, &
 #endif
          .FALSE.,(/ZERO/),(/0/) &
 #if KEY_DHDGB==1
@@ -1972,11 +1964,11 @@ contains
     PTHTAN1(1:NP)=zero
     CALL GETVR1(MINXYZ,NATOM,PTHTAN1,IMOVE,PX,PY,PZ,.FALSE., &
 #if KEY_CHEQ==1
-         .FALSE.,(/ZERO/), & 
+         .FALSE.,(/ZERO/), &
 #endif
          'NONE',(/ZERO/),(/ZERO/), &
 #if KEY_FLUCQ==1
-         .FALSE.,FQCFOR,FQSELN, & 
+         .FALSE.,FQCFOR,FQSELN, &
 #endif
          .FALSE.,(/ZERO/),(/0/) &
 #if KEY_DHDGB==1
@@ -2022,7 +2014,6 @@ contains
     ENDDO
     RETURN
   END SUBROUTINE PUTTAN
-#endif 
-#endif 
+#endif
+#endif
 end module abnerm
-

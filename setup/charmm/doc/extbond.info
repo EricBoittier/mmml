@@ -1,4 +1,8 @@
-		External Bond Module * 	
+CHARMM Element doc/extbond.info 1.1
+
+File: ExtBond, Node: Top, Up: (doc/commands.info), Next: Syntax
+
+		External Bond Module *
 by 
 Pierre-Andre Cazade
 Marco Pezzella 
@@ -18,17 +22,22 @@ CHARMM run. EXTBOND is called via the XTBD keyword.
 
 References: 
 [1] Oliver T. Unke and Markus Meuwly, J. Chem. Inf. Model., 2017, 57 (8),
-	pp 1923–1931
+	pp 1923-1931
 
 
-Syntax ::  Syntax of the EXTBOND module.
-Description :: A brief description of the module and how it works.
-Parameter file (optional) :: Shows how to use the parameter file. 
-Implemented Kernels :: Reproducing kernels available in the module.
-How to build the grid :: Brief description of how to build a grid.
-Example  :: Description of the example: N-Methylacetamide (NMA).
+* Menu:
 
-!--------------------------------Syntax--------------------------------! 
+* Syntax::               Syntax of the EXTBOND module.
+* Description::          A brief description of the module and how it works.
+* Parameter file::       Shows how to use the parameter file (optional).
+* Implemented Kernels::  Reproducing kernels available in the module.
+* How to build a grid::  Brief description of how to build a grid.
+* Example::              Description of the example: N-Methylacetamide (NMA).
+
+File: ExtBond, Node: Syntax, Up: Top, Next: Description, Previous: Top
+
+                                    Syntax
+
 
 XTBD  { READ UNIT integer }
 
@@ -84,7 +93,10 @@ correct dissociation energy. Due to the kernels implementiation, the
 asympotic energy needs to go to zero.
 
 
-!--------------------------------Description-------------------------------!
+File: ExtBond, Node: Description, Up: Top, Next: Parameter file, Previous: Syntax
+
+                                 Description
+
 
 EXTBOND is invoked by the XTBD command. At first the module reads the
 parameters for the new bond and the atoms involved. The new bond
@@ -97,7 +109,10 @@ No compatibility issues with other modules in CHARMM are registered.
 
 
 
-!-----------------------------Parameter file-----------------------------!
+File: ExtBond, Node: Parameter file, Up: Top, Next: Implemented Kernels, Previous: Description
+
+                                Parameter file
+
 The bond parameters can be given both: internally in the input file or
 externally.
 
@@ -134,7 +149,10 @@ RKHS
 9 10  pes 0 K1D -121.9746
 
 
-!-------------------------Implemented Kernels-------------------------!
+File: ExtBond, Node: Implemented Kernels, Up: Top, Next: How to build a grid, Previous: Parameter file
+
+                             Implemented Kernels
+
 
 For more details see reference [1].
 
@@ -180,7 +198,10 @@ exponentially. The kernel is only defined for values in the interval
 For most applications a chemical bond can be described by a Reciprocal
 Power N2 M6 Kernel (option "0").
 
-!------------------------- How to build a grid-------------------------!
+File: ExtBond, Node: How to build a grid, Up: Top, Next: Example, Previous: Implemented Kernels
+
+                             How to build a grid
+
 
 1) For each bond that should be reproduced by a kernel, perform an Ab
 Initio calculation along a scan of the bond.
@@ -195,7 +216,10 @@ increasing order of r in a csv file.
 3) Reference the energies to the asymptote E - E_asympt, such that
 E(r_asympt)=0.
 
-!-----------------------------------Example-----------------------------------!
+File: ExtBond, Node: Example, Up: Top, Previous: How to build a grid
+
+                                   Example
+
 
 The xtbd_nma.inp test case with the parameter xtbd_nma.para parameter
 file and the xtbd_pes.csv, that contains the kernel, are distributed

@@ -800,7 +800,7 @@
 #if KEY_PARALLEL==1
 !!  use parallel  
 #endif
-!!  use mpi
+!!  use mpi_f08
 !!    implicit none
 !!
 !!!Passed in

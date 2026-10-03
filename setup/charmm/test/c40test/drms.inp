@@ -216,9 +216,9 @@ rmsdyn orient firstu 101 drms begin 1 stop 3 iwrite 6  secu 102 beg2 1 stp2 2 -
   sele bynum 1:3 end sele bynum 4 end
 @qcheck ?totrms  3.0000 0.0001 drms_31
 if @testfail gt 0 then
-      echo drms testcase result: failed
+      echo drms testcase result: fail
 else
-      echo drms testcase result: passed
+      echo drms testcase result: pass
 endif
 
 stop

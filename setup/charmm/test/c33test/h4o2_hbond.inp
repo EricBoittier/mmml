@@ -7,11 +7,45 @@
 *
 
 if ?SCCDFTB .NE. 1 then
-  echo "Test NOT Performed."
+  echo H4O2_HBOND TESTCASE RESULT: SKIP
   STOP
 endif
 
 stream datadir.def
+
+! SCC-DFTB needs SCCDFTB_DATA pointing at a directory holding this test's
+! parameter file.  `genv' on an unset variable is a level-0 warning, which is
+! fatal at the default BOMLEV, so lower BOMLEV across the call and self-skip
+! when the data has not been provisioned here.  The file check matters as
+! well: SCCDFTB_DATA can be set while this particular file is absent, and
+! CHARMM then dies part way through reading parameters with no termination
+! line at all.
+set sccdftbdir UNSET_SCCDFTB_DATA
+set oldbomlev ?bomlev
+bomlev -5
+genv sccdftbdir SCCDFTB_DATA
+bomlev @oldbomlev
+if @sccdftbdir eq UNSET_SCCDFTB_DATA then
+   echo H4O2_HBOND TESTCASE RESULT: SKIP
+   stop
+endif
+! HBOND reads the correction parameter kl1 from the parameter file, and this
+! testcase asks for HBOND without D3RD or DHUB -- so dylcao.F skips the
+! Hubbard-derivative block entirely and reads kl1 from the record straight
+! after the pair list.  The shared sccdftb_ONCH.dat has Hubbard derivatives
+! there ('O' -0.1575), which is why this test dies inside a list-directed
+! read rather than reporting anything.  It needs a file laid out the way
+! data/sccdftb.dat.hbond is: pair lines, then kl1.  The generator does not
+! write one yet, so the check below turns that into a skip.
+strc sccdat @sccdftbdir "/sccdftb_ONCH_hbond.dat"
+bomlev -5
+open unit 98 read form name @sccdat
+if ?iostat .ne. 1 then
+   echo H4O2_HBOND TESTCASE RESULT: SKIP
+   stop
+endif
+close unit 98
+bomlev @oldbomlev
 
 OPEN UNIT 21 NAME @0top_all22_prot.inp READ FORM
 READ RTF card UNIT 21
@@ -44,13 +78,13 @@ scalar WMAIN set 3.0 sele (all) .and. type C*  SHOW end
 scalar WMAIN set 4.0 sele (all) .and. type H*  SHOW end
 
 ! ...... A standard calculation ...... 
-SCCDFTB remove CHRG 0 SELE all END TEMP 0.00 SCFT 0.00000001 
+SCCDFTB remove CHRG 0 SELE all END TEMP 0.00 SCFT 0.00000001 DATF @sccdat
 
 energy
 
-! ...... Include H-bond and Gaussian switching ...... 
-! ...... Need to include Gaussian switching para in relevant *.spl files ...... 
-SCCDFTB remove CHRG 0 SELE all END TEMP 0.00 SCFT 0.00000001 HBOND GAUSW 
+! ...... Include H-bond and Gaussian switching ......
+! ...... Need to include Gaussian switching para in relevant *.spl files ......
+SCCDFTB remove CHRG 0 SELE all END TEMP 0.00 SCFT 0.00000001 HBOND GAUSW DATF @sccdat
 
 energy
 

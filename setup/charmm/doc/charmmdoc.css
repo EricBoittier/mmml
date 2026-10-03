@@ -1,0 +1,227 @@
+/* CHARMM Documentation Stylesheet */
+
+:root {
+    --bg: #fafafa;
+    --text: #2d2d2d;
+    --link: #1a5fb4;
+    --link-visited: #613583;
+    --border: #ddd;
+    --section-bg: #fff;
+    --header-bg: #2d2d2d;
+    --header-text: #f0f0f0;
+    --nav-bg: #f0f0f0;
+    --code-bg: #f5f5f5;
+    --accent: #1a5fb4;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+html {
+    font-size: 16px;
+}
+
+body {
+    margin: 0;
+    padding: 0;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.5;
+}
+
+/* Page header with title */
+.page-header {
+    background: var(--header-bg);
+    color: var(--header-text);
+    padding: 1rem 2rem;
+    margin: 0;
+    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+}
+
+.page-header h1 {
+    margin: 0;
+    font-size: 1.3rem;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+}
+
+.page-header .nav {
+    margin-top: 0.4rem;
+    font-size: 0.85rem;
+}
+
+.page-header .nav a {
+    color: #a0c4ff;
+    text-decoration: none;
+    margin-right: 1.2rem;
+}
+
+.page-header .nav a:hover {
+    text-decoration: underline;
+    color: #fff;
+}
+
+/* Main content area */
+pre {
+    font-family: "SF Mono", "Menlo", "Consolas", "DejaVu Sans Mono", monospace;
+    font-size: 0.875rem;
+    line-height: 1.6;
+    margin: 0;
+    padding: 1.5rem 2rem;
+    max-width: 90rem;
+    overflow-x: auto;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+}
+
+/* Section dividers */
+.charmmdoc {
+    padding: 0.5rem 0;
+    margin: 0;
+    border-top: 1px solid var(--border);
+}
+
+/* First section has no top border */
+.charmmdoc:first-of-type {
+    border-top: none;
+}
+
+/* Links */
+a {
+    color: var(--link);
+    text-decoration: none;
+}
+
+a:visited {
+    color: var(--link-visited);
+}
+
+a:hover {
+    text-decoration: underline;
+}
+
+/* Back-to-top link at section starts */
+.charmmdoc > a[href="#Top"] {
+    display: inline-block;
+    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--accent);
+    padding: 0.2rem 0.6rem;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    margin-bottom: 0.5rem;
+    background: var(--nav-bg);
+}
+
+.charmmdoc > a[href="#Top"]:hover {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+    text-decoration: none;
+}
+
+/* Print styles */
+@media print {
+    .page-header {
+        background: none;
+        color: #000;
+        border-bottom: 2px solid #000;
+        padding: 0.5rem 0;
+    }
+
+    .page-header .nav {
+        display: none;
+    }
+
+    pre {
+        font-size: 0.8rem;
+        padding: 0.5rem 0;
+    }
+
+    a {
+        color: #000;
+        text-decoration: underline;
+    }
+}
+
+/* Index page */
+.index-body {
+    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    max-width: 60rem;
+    padding: 1.5rem 2rem;
+}
+
+.index-body h2 {
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin: 1.5rem 0 0.5rem;
+    color: var(--text);
+}
+
+.letter-nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+    margin: 0.8rem 0 1rem;
+    padding: 0.6rem 0;
+    border-bottom: 1px solid var(--border);
+}
+
+.letter-nav a {
+    display: inline-block;
+    width: 2rem;
+    height: 2rem;
+    line-height: 2rem;
+    text-align: center;
+    font-size: 0.85rem;
+    font-weight: 600;
+    border-radius: 4px;
+    background: var(--nav-bg);
+    color: var(--accent);
+    border: 1px solid var(--border);
+}
+
+.letter-nav a:hover {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+    text-decoration: none;
+}
+
+.index-body h3 {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--accent);
+    margin: 1.2rem 0 0.3rem;
+    padding-bottom: 0.2rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.index-body ul {
+    columns: 3;
+    column-gap: 2rem;
+    list-style: none;
+    padding: 0;
+    margin: 0 0 0.5rem;
+}
+
+.index-body li {
+    padding: 0.15rem 0;
+    font-size: 0.9rem;
+    break-inside: avoid;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    pre {
+        padding: 1rem;
+        font-size: 0.8rem;
+    }
+
+    .page-header {
+        padding: 0.8rem 1rem;
+    }
+}

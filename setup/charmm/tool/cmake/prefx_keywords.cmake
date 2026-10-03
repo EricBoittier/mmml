@@ -3,15 +3,16 @@ list(APPEND keywords
   GNU
   EXPAND
   PUTFCM
-  NOGRAPHICS)
+  NOGRAPHICS
+  CONFIGURE)
+
+if(APPLE)  # __APPLE__ is sometimes not defined for gfortran
+  list(APPEND keywords APPLE)
+endif()
 
 if(static)
   list(APPEND keywords STATIC)
-endif(static)
-
-if(as_library)
-  list(APPEND keywords LIBRARY)
-endif(as_library)
+endif()
 
 if(NOT lite)
   list(APPEND keywords
@@ -131,12 +132,12 @@ if(colfft AND FFTW_FOUND AND (NOT FFTWF_FOUND))
   list(APPEND keywords COLFFT_NOSP)
 endif()
 
-if(MPI_FOUND)
-    list(REMOVE_ITEM keywords TAMD)
-    list(APPEND keywords
-        MPI
-        PARALLEL
-        PARAFULL)
+if(MPI_Fortran_FOUND)
+  list(REMOVE_ITEM keywords TAMD)
+  list(APPEND keywords
+    MPI
+    PARALLEL
+    PARAFULL)
 endif()
 
 if(ljpme)
@@ -155,12 +156,21 @@ if(blade)
   list(APPEND keywords BLADE)
 endif()
 
-if(abpo)
-  list(APPEND keywords ABPO)
+if(eabf)
+  list(APPEND keywords EABF)
 endif()
 
 if(ensemble OR abpo)
   list(APPEND keywords ENSEMBLE)
+endif()
+
+# ABPO (adaptively biased path optimization) is gated on KEY_ABPO in the
+# source (source/ensemble/abpo.F90, abpo_ltm.F90, collvar.F90, ensemble.F90,
+# source/charmm/miscom.F90, source/energy/energy.F90, source/dynamc/dcntrl.F90).
+# It builds on the ENSEMBLE module (abpo.F90 does `use ensemble`), so abpo
+# implies ENSEMBLE (handled above) and additionally defines ABPO itself.
+if(abpo)
+  list(APPEND keywords ABPO)
 endif()
 
 if(nih)
@@ -170,7 +180,7 @@ if(nih)
     SAVEFCM
     SHAPES
     SGLD)
-endif(nih)
+endif()
 
 if(tsri)
   list(APPEND keywords
@@ -179,7 +189,7 @@ if(tsri)
     GBINLINE
     DMCONS
     RGYCONS)
-endif(tsri)
+endif()
 
 if(fftdock)
   list(APPEND keywords FFTDOCK)
@@ -191,20 +201,20 @@ endif()
 
 if(pipf)
   list(APPEND keywords PIPF)
-endif(pipf)
+endif()
 
 if(repdstr)
   list(APPEND keywords
     REPDSTR
     GENCOMM)
-endif(repdstr)
+endif()
 
 if(stringm)
   list(APPEND keywords
     STRINGM
     MULTICOM
     NEWBESTFIT)
-endif(stringm)
+endif()
 
 if(gamess)
   list(REMOVE_ITEM keywords QUANTUM)
@@ -220,15 +230,39 @@ if(OPENMM_FOUND)
     list(APPEND keywords OPENMM)
 endif()
 
+if(OpenMMTorch_FOUND)
+  list(APPEND keywords OMMTORCH)
+endif()
+
+#eemlp-begin
+if(mlmm)
+  list(APPEND keywords MLMM)
+endif()
+
+if(torch)
+  list(APPEND keywords MLPTORCH)
+endif()
+# eemlp-end
+
+
 if(EXAFMM_FOUND)
     list(APPEND keywords GRAPE LIBGRAPE)
 endif()
 
-if(CUDA_FOUND)
+if(cuda)
   list(APPEND keywords CUDA)
 endif()
 
-if(OpenCL_FOUND)
+if(metal)
+  list(APPEND keywords METAL)
+endif()
+
+# Gate on both `opencl` option and OpenCL_FOUND: the metal block in
+# CMakeLists.txt force-OFFs the `opencl` option (mutually exclusive)
+# but leaves OpenCL_FOUND set from the earlier find_package().  Using
+# OpenCL_FOUND alone would re-enable the OPENCL keyword on metal builds
+# and pull the OpenCL Fortran branch back in (link errors).
+if(opencl AND OpenCL_FOUND)
   list(APPEND keywords OPENCL)
 endif()
 
@@ -241,11 +275,11 @@ endif()
 
 if(quantum)
   list(APPEND keywords QUANTUM)
-endif(quantum)
+endif()
 
 if(qchem)
-  list(APPEND keywords QCHEM) 
-endif(qchem)
+  list(APPEND keywords QCHEM)
+endif()
 
 if(squantm)
   list(APPEND keywords SQUANTM)

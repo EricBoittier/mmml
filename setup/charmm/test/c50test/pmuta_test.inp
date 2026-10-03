@@ -1,0 +1,173 @@
+* testing pmuta.py patch residues...
+* parameters are as follows:
+* wt  - original residue
+* p   - patch residue name
+* res - result for this patch
+* r   - reverse patch name
+* to read coordinates for originally build residue
+* mr  - 3 letter name for the mutated residue 
+* this mr is to make sure the coordinates of the mutated
+* residue are the same so energies can be compared
+* in order to use this file with all_pmuta_test.py
+* comment the following set lines in the beginning
+* and rename into gen_pmuta_test.inp
+*
+
+set wt phe
+set p xf2k
+set r xk2f
+set res 58.513916
+set mr lys
+
+stre datadir.def
+
+open read card unit 10 name @0top_all36_prot.rtf
+read  rtf card unit 10
+
+open read card unit 20 name @0par_all36_prot.prm
+read para card unit 20 flex
+
+
+read rtf card append name @0all_mutations_prot.rtf
+
+read sequence card
+* tripeptide
+3
+ala @wt ala
+
+
+generate SEG1 setup !first none last none
+
+write coor card name @9@wt_0.cor
+
+! for testing purpose these IC commands are here... normally not needed ???
+! normally the backbone is already defined before mutation...
+
+ic seed 1 N 1 CA 1 C
+ic param
+ic build
+
+write coor card name @9@wt.cor
+
+write psf card name @9@wt.psf
+
+coor copy comp
+
+energy
+
+set e0 ?ener
+
+mini abnr nprint 100 nstep 10000
+
+set em0 ?ener
+
+coor orient
+
+write coor card name @9@wt_1.cor
+
+
+!bomlev -2 ! just to see what is needed
+
+patch @p seg1 2 seg1 1 seg1 3  setup
+
+auto angle dihe
+
+! we've got new atoms so we need ic (setup) to build coordinates for them...
+ic build
+
+hbuild  ! it doesn't hurt, I guess
+
+write coor card name @9@p_from_@wt.cor
+
+rena resn @mr sele resi 2  end
+
+!read coor card name @mr.cor
+! instead of reading them,  recreate them:
+coor init
+
+ic seed 1 N 1 CA 1 C
+ic param
+ic build
+
+write coor card name @9@mr.cor
+
+energy
+
+set e1 ?ener
+
+patch @r seg1 2 seg1 1 seg1 3  setup
+
+auto angle dihe
+
+! we've got new atoms so we need ic (setup) to build coordinates for them...
+ic build
+
+hbuild  ! it doesn't hurt, I guess
+
+write coor card name @9@p_from_@wt.cor
+
+rena resn @wt sele resi 2  end
+
+!read coor card name @mr.cor
+! instead of reading them,  recreate them:
+coor init
+
+ic seed 1 N 1 CA 1 C
+ic param
+ic build
+
+write coor card name @9@wt_x.cor
+
+energy
+
+set e2 ?ener
+
+stream @0test.str @e2 @e0 0.001 @p
+
+write psf card name @9@p_from_@wt.psf
+
+mini abnr nprint 100 nstep 10000
+
+set em1 ?ener
+
+stop
+
+coor orient
+write coor card name @p_from_@wt_1.cor
+
+! here we need a comparison
+! maybe we compare to the correct number which we get from the @res
+
+echo pass
+
+!stop
+
+
+! now see if we get the original???
+patch @r seg1 1 setup
+
+ic build
+
+hbuild  ! it doesn't hurt, I guess
+
+write coor card name @wt_from_@r.cor
+
+!rena resn tyr sele all end
+!read coor card name @wt.cor
+coor copy ! restore coordinates from the first build
+
+energy
+
+set e2 ?ener
+
+write psf card name @wt_from_@r.psf
+
+mini abnr nprint 100 nstep 10000
+
+set em2 ?ener
+write coor card name @wt_from_@r_1.cor
+
+echo energies: @e0 @em0 @e1 @em1 @e2 @em2
+
+
+stop

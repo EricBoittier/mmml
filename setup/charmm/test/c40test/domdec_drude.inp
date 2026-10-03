@@ -55,26 +55,27 @@ coor force comp
 !write coor comp card name force.crd
 calc eold = ?ener
 
-calc diff = abs(?ener - @enerc)
-if diff gt 0.000001 then
-   echo "Test failed, incorrect total in OLD charmm"
-   stop
-endif
+! Reference energy of this fixed geometry, so it is independent of the
+! random-number generator and of the number of ranks.  Keep the original
+! absolute 1e-6: `format (f16.6)' above rounds the substituted ?ENER to
+! six decimals, so this compares at print precision and is attainable.
+! Only the reporting changes -- the comparison itself already worked.
+@testcheck ?ener @enerc -0.000001 domdec_drude_energy_nondomdec
 
 energy domdec
 coor force
 !write coor card name force_dd.crd
 coor rms comp
 
-calc diff = abs(?ener - @eold)
-if diff gt 0.0001 then
-   echo "Test failed, incorrect total energy"
-   stop
-endif
+! DOMDEC has to reproduce the non-DOMDEC energy and forces for the same
+! coordinates; only the summation order differs.  This is the actual
+! point of the test.  The original absolute 1e-4 is kept.
+@testcheck ?ener @eold -0.0001 domdec_drude_energy_domdec
 
 if ?rms gt 0.0003 then
-   echo "Test failed, incorrect force"
-   stop
+   echo domdec_drude_force_domdec TESTCASE RESULT: FAIL
+else
+   echo domdec_drude_force_domdec TESTCASE RESULT: PASS
 endif
 
 !-----------------------------------------------------------
@@ -99,7 +100,13 @@ DrudeHardWall L_WALL 0.2 ! set the hard wall at 0.2 Angstrom
 !SB: optional: if uncommented, parallel runs with the old code should
 !    reproducible for diff. numbers of cores
 !
-random para
+! Seed explicitly: without a seed the generator takes one from the clock
+! and echoes it, so the `RANDSPEC> seeds' line differed on every run.
+! One seed is the portable spelling: the previous generator that
+! test.com selects with -prevclcg takes exactly one, and CLCG replicates
+! it across all four.  Passing four instead leaves three unconsumed
+! under -prevclcg and draws an "extraneous characters" warning.
+random para iseed 1
 !
 
 domdec off
@@ -109,6 +116,8 @@ dyna lang start  -
      firstt  240.0 finalt 300.0 iseed 1 2 3 4 -
      rbuf 0.0 tbath 300. -
      iunwri -1
+
+set enodd = ?ener
 
 open read unit 10 card name @0/ecor1_equil_drude.crd
 read coor unit 10 card
@@ -122,6 +131,28 @@ dyna lang start  -
      rbuf 0.0 tbath 300. -
      iunwri -1
 
-echo "Test OK"
+set edd = ?ener
+
+! Both Langevin runs have to stay on a physical trajectory.  These are
+! stochastic, so their endpoints are not comparable to a captured number
+! -- but a diverging or NaN run leaves the energy far from where it
+! started, and the test is written so that a NaN fails rather than
+! slipping through a `gt' comparison.  The 100 steps of Langevin heating
+! relax this system by about 2300 kcal/mol, so the band sits well above
+! that while staying orders of magnitude below a genuine blowup.
+calc devnodd = abs ( @enodd - @eold )
+calc devdd   = abs ( @edd - @eold )
+
+if @devnodd lt 10000 then
+   echo domdec_drude_dyna_nondomdec_stable TESTCASE RESULT: PASS
+else
+   echo domdec_drude_dyna_nondomdec_stable TESTCASE RESULT: FAIL
+endif
+
+if @devdd lt 10000 then
+   echo domdec_drude_dyna_domdec_stable TESTCASE RESULT: PASS
+else
+   echo domdec_drude_dyna_domdec_stable TESTCASE RESULT: FAIL
+endif
 
 stop

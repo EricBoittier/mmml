@@ -1,6 +1,10 @@
+module ecnstr_mod
+  implicit none
+contains
+
 subroutine ecnstr(ec,qcnstr,refx,refy,refz,kcnstr,natom, &
      kcexpn,xhscale,yhscale,zhscale,qtype, &
-     numhsets,typhset,ihset,qhnort,qhnotr, &
+     numhsets,typhset,parhset,ihset,qhnort,qhnotr, &
      x,y,z,dx,dy,dz, &
      qecont,econt,dd1,iupt,qsecd &
      ,numpca,pcax,pcay,pcaz &
@@ -25,8 +29,9 @@ subroutine ecnstr(ec,qcnstr,refx,refy,refz,kcnstr,natom, &
   use stream
   use memory
   use parallel
+  use cnst_fcm, only: hset_relative_partner
 #if KEY_DOMDEC==1
-  use domdec_common,only:q_domdec  
+  use domdec_common,only:q_domdec
 #endif
   implicit none
 
@@ -39,7 +44,7 @@ subroutine ecnstr(ec,qcnstr,refx,refy,refz,kcnstr,natom, &
   integer natom
   integer kcexpn(*)
   real(chm_real) xhscale(*),yhscale(*),zhscale(*)
-  integer qtype,numhsets,typhset(*),ihset(*)
+  integer qtype,numhsets,typhset(*),parhset(*),ihset(*)
   logical qhnort(*), qhnotr(*)
   real(chm_real) x(*),y(*),z(*),dx(*),dy(*),dz(*),dd1(*)
   logical qecont
@@ -108,8 +113,9 @@ subroutine ecnstr(ec,qcnstr,refx,refy,refz,kcnstr,natom, &
      ENDDO
      ALLOC=0
      DO ISET=1,NUMHSETS
-        ! do some simple checks
-        IF(TYPHSET(ISET).GT.0 .and. typhset(iset) .ne. 2) THEN
+        ! do some simple checks - best-fit (1) and relative (2) use ECNST2
+        ! and need the temporary atompr/bmass/ra/rb space sized below.
+        IF(TYPHSET(ISET).EQ.1 .OR. TYPHSET(ISET).EQ.2) THEN
            IF(QSECD) CALL WRNDIE(-2,'<ECNSTR>', &
                 'Second derivates not supported for best fit restraints')
            IF(QECONT) CALL WRNDIE(-2,'<ECNSTR>', &
@@ -143,7 +149,7 @@ subroutine ecnstr(ec,qcnstr,refx,refy,refz,kcnstr,natom, &
                       YHSCALE(ISET),ZHSCALE(ISET), &
                       ISET,IHSET,X,Y,Z,DX,DY,DZ, &
                       QECONT,ECONT,DD1,IUPT,QSECD &
-                      ,typhset(iset),(/0/),(/0/),(/0/) &
+                      ,typhset(iset),(/zero/),(/zero/),(/zero/) &
                       )
               endif
               if ( typhset(iset) == 3 .and. qtype == 2) then
@@ -159,7 +165,6 @@ subroutine ecnstr(ec,qcnstr,refx,refy,refz,kcnstr,natom, &
                          pcaz(ipcset,1:natom) &
                          )
                     ec = ec + epca
-                    write(*,*)'ipcset:',ipcset,epca,ec
                  enddo
               endif
 
@@ -190,16 +195,14 @@ subroutine ecnstr(ec,qcnstr,refx,refy,refz,kcnstr,natom, &
                    BMASS,RA,RB, &
                    DRA,DRB,DRTEMP)
 
-           ELSE IF(TYPHSET(ISET) == 2 .AND. QTYPE.LE.0) THEN
+           ELSE IF(TYPHSET(ISET) .EQ. 2  .AND. QTYPE.LE.0) THEN  ! relative best-fit restraint
               ! Process best-fit restraint energy for two PSF subsets
 #if KEY_DOMDEC==1
               if (q_domdec) then
                  call wrndie(-5,'<ecnstr>','Bestfit restraint not implemented on domdec')
               endif
 #endif 
-              JSET=TYPHSET(ISET)
-              IF(TYPHSET(JSET).NE.ISET) CALL WRNDIE(-4,'<ECNSTR>', &
-                   'Error in relative set types - coding error')
+              call hset_relative_partner(ISET, PARHSET, JSET)
               IF(ISET.LT.JSET) THEN  ! only process once (ISET<JSET)
                  NPAIR=NINSET(ISET)
                  IF(NPAIR.NE.NINSET(JSET)) CALL WRNDIE(-2,'<ECNSTR>', &
@@ -254,6 +257,8 @@ subroutine ecnstr(ec,qcnstr,refx,refy,refz,kcnstr,natom, &
 
   RETURN
 END SUBROUTINE ECNSTR
+
+end module ecnstr_mod
 
 SUBROUTINE ECNST1(EC,REFX,REFY,REFZ,KCNSTR,NATOM, &
      KCEXPN,XHSCALE,YHSCALE,ZHSCALE, &

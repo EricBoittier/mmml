@@ -1,0 +1,296 @@
+CHARMM Element doc/restraints.info 1.1
+
+File: Restraints, Node: Top, Up: (doc/commands.info), Next: Description
+
+                  Restraint support across energy engines
+
+
+        CHARMM can evaluate energies through five engines: its own CPU code,
+DOMDEC, DOMDEC_GPU, OpenMM and BLaDE.  They do not implement the same
+restraints.
+A restraint the CPU path honours may be translated by one engine, refused by
+another, and quietly left out by a third, so a script that is correct under
+one engine can be running different physics under another.
+
+This file records which engine honours which restraint.  It is derived from
+the code rather than from the other documentation files, because those were
+found to disagree with the code when this survey was made (see *note
+Doc drift::).
+
+
+* Menu:
+
+* Description::         What this file covers and how to read it
+* Table::               Restraint support by engine
+* CPU::                 The reference path
+* OpenMM::              What the OpenMM interface translates
+* BLaDE::               What the BLaDE interface translates
+* Domdec::              DOMDEC and DOMDEC_GPU
+* Reporting::           What happens when a restraint is not supported
+* Doc drift::           Where the other doc files disagree with the code
+* Verifying::           How to re-derive this table
+
+
+File: Restraints, Node: Description, Up: Top, Previous: Top, Next: Table
+
+                              Description
+
+        "Supported" here means the engine evaluates the restraint and
+includes it in the energy and the forces.  It does not mean the whole
+CHARMM command is available: several engines take only part of a restraint
+type, and those limits are given per engine below.
+
+The survey covers restraint energy terms as named in source/energy/energym.F90.
+Constraints that remove degrees of freedom (SHAKE, CONS FIX) are a different
+mechanism and are not covered here.
+
+
+File: Restraints, Node: Table, Up: Top, Previous: Description, Next: CPU
+
+                     Restraint support by engine
+
+                                        CPU  DOMDEC  DD_GPU  OpenMM  BLaDE
+  ------------------------------------- ---  ------  ------  ------  -----
+  CONS HARM absolute                    yes  yes     yes     part    part
+  CONS HARM relative/bestfit/RMSD       yes  no      no      no      no
+  Principal component harmonic (PCHARM) yes  yes*    yes*    yes     no
+  CONS DIHE                             yes  yes     yes     yes     yes
+  CONS RESD                             yes  yes     yes     yes!    part
+  CONS HMCM                             yes  yes     yes     NO-DYN  no
+  NOE distance restraints               yes  yes     yes     NO-DYN  part
+  MMFP GEO sphere/cylinder/plane        yes  yes     yes     yes     no
+  MMFP GEO COM bond/angle/dihedral      yes  yes     yes     part    yes
+  Distance matrix (DMC)                 yes  yes     yes     NO-DYN  no
+  RXNCOR umbrella                       yes  yes     yes     NO-DYN  no
+  Adaptive umbrella (ADUMB)             yes  yes     yes     NO-DYN  no
+  BLOCK CATS                            yes  part    part    NO-DYN  yes
+  Shape restraint (SHAP)                yes  no      no      NO-DYN  no
+  Puckering restraint (CPUC)            yes  no      no      NO-DYN  no
+  Internal coordinate (CIC)             yes  no      no      NO-DYN  no
+  Radius of gyration (RGY)              yes  yes     yes     NO-DYN  no
+  Pulling force (PULL)                  yes  yes     yes     NO-DYN  no
+  Droplet restraint (CDRO)              yes  yes     yes     NO-DYN  no
+  Solvent boundary (SBOU)               yes  yes*    yes*    NO-DYN  no
+  Dipole MMFP (MDIP)                    yes  yes     yes     NO-DYN  no
+
+  yes     evaluated, and it acts on the dynamics
+  no      not evaluated; see *note Reporting:: for whether you are told
+  part    some cases only; see that engine's section
+  NO-DYN  an ENERgy call reports it, but it does not act during dynamics
+          through that engine.  See below -- this is the dangerous one.
+  yes*    structurally the same as the rows around it, but not measured
+  yes!    measured working, with one reproducible crash: see *note OpenMM::
+
+DD_GPU is DOMDEC_GPU.  Its column is identical to DOMDEC's, and that is
+structural rather than coincidence: the restraint block in
+source/energy/energy.F90 sits after the q_gpu branch, which only reorders
+the bonded and nonbonded work, and every restraint guard tests q_domdec,
+which q_gpu implies.  A restraint added to one is added to both.
+
+                   Why NO-DYN and not simply "no"
+
+Everything in this table was measured, not inferred, with
+tool/restraint_matrix.  The measurement that matters is not whether the
+engine reports the right energy.  It is whether the restraint acts.
+
+For an ENERgy evaluation, CHARMM still computes the restraints OpenMM does
+not implement, and they appear in the reported total.  Nothing looks wrong.
+But dynamics through OpenMM is integrated inside OpenMM, using only the
+forces in the OpenMM System, and a restraint CHARMM computed on its own is
+not in there.
+
+Measured: DHFR in a cubic box, PULL force 500 on the CA atoms all in +x,
+200 steps of leapfrog dynamics from the same coordinates.
+
+  CPU      CA centroid moved  +0.633 Angstrom in x
+  OpenMM   CA centroid moved  -0.0008 Angstrom -- it did not move
+
+The restraint was reported by ENERgy in both cases.  It acted in one.
+
+So an energy comparison is not a test of restraint support for OpenMM, and
+a script that checks its restraint energy looks correct while running
+unrestrained dynamics.
+
+Two rows to read carefully:
+
+  - MMFP GEO is marked supported for both OpenMM and BLaDE, but the two
+    take disjoint parts of it.  OpenMM takes the geometric forms (sphere,
+    cylinder, plane); BLaDE refuses those and takes only the centre-of-mass
+    bond, angle and dihedral forms.  There is no MMFP GEO script that runs
+    the same way on both.
+
+  - BLaDE's whole column is unmeasured: it needs a CUDA build, which the
+    machine this survey was run on does not have.  It is read from the
+    code.  Run tool/restraint_matrix where a BLaDE build exists.
+
+File: Restraints, Node: CPU, Up: Top, Previous: Table, Next: OpenMM
+
+                           The reference path
+
+        The CPU path implements every restraint in the table.  It is the
+reference against which the others are read, and where a restraint's
+documented behaviour is defined.
+
+
+File: Restraints, Node: OpenMM, Up: Top, Previous: CPU, Next: BLaDE
+
+                 What the OpenMM interface translates
+
+        setup_restraints in source/openmm/omm_restraint.F90 wires five
+restraint types and no others:
+
+  setup_harm_restraints        CONS HARM
+  setup_pcharm_restraints      principal component harmonic
+  setup_resd_restraints        CONS RESD
+  setup_cons_dihe              CONS DIHE
+  setup_mmfpgeo_restraints     MMFP GEO
+
+Limits within those:
+
+  - CONS HARM: only the absolute form with XSCALE = YSCALE = ZSCALE = 1 and
+    a positive exponent.  A restraint set with scaling or a non-positive
+    exponent is not applied.
+  - MMFP GEO: sphere, cylinder and plane, in the inside, outside and
+    symmetric forms, plus the centre-of-mass distance form.
+
+Everything else in the table -- NOE, CONS HMCM, DMC, RXNCOR, ADUMB, BLOCK
+CATS, SHAP, RGY, PULL and the rest -- is not translated.  An active
+restraint of those types does not reach the OpenMM System, so it does not
+act during dynamics, even though an ENERgy call still reports its energy.
+That is the NO-DYN column entry; see *note Table:: for the measurement.
+
+One measured defect inside the supported set: a CONS RESD restraint that
+works under the CPU code and DOMDEC kills the run under OpenMM when the
+system is periodic with PME.  The process dies with no CHARMM message at
+all (exit 133).  The same RESD form in the non-periodic testcase
+c39test/omm_resdtest.inp passes, so the trigger is the periodic system
+rather than the restraint form.  Not yet root-caused.
+
+
+File: Restraints, Node: BLaDE, Up: Top, Previous: OpenMM, Next: Domdec
+
+                  What the BLaDE interface translates
+
+        source/blade_api/blade.F90 adds restraints through blade_add_noe,
+blade_add_harmonic, blade_add_boRest, blade_add_anRest, blade_add_diRest
+and blade_add_resd.
+
+Limits within those:
+
+  - CONS HARM: as for OpenMM, only the absolute form with unit scaling and
+    a positive exponent.
+  - NOE: NOESCA must be 1; i and j groups must hold exactly one atom each;
+    time averaging (NOETCN) is refused.
+  - MMFP GEO: only the centre-of-mass bond, angle and dihedral forms
+    (IGEO -1, -4, -5), and only the harmonic form (JGEO 3).  Groups must
+    hold one atom.  The geometric shapes are refused outright.
+  - CONS RESD: only a linear combination of exactly two distances.
+
+BLaDE computes the BLOCK CATS restraint in its own energy term rather than
+through the CHARMM one, which is why the table says "own" rather than "yes".
+
+
+File: Restraints, Node: Domdec, Up: Top, Previous: BLaDE, Next: Reporting
+
+                       DOMDEC and DOMDEC_GPU
+
+        DOMDEC is not a translation layer.  Restraints are computed by the
+same CPU code; what DOMDEC changes is which node computes them and whether
+the result is correct there.  Three groups:
+
+Refused outright.  These stop the run with WRNDIE:
+
+  Shape restraints, puckering restraints, internal coordinate restraints
+  (source/energy/energy.F90), and the relative, best-fit and RMSD forms of
+  CONS HARM (source/energy/ecnstr.F90).
+
+Handled by the constraint machinery.  Under a direct/reciprocal split,
+q_cons_node is set only on a reciprocal node, so energy_recip in
+source/energy/energy_util.F90 is the only path that computes these.  The
+values travel back to the direct nodes packed into auxdata by
+auxdata_kernel and unpacked by read_from_auxdata.  Those two routines are
+hand-mirrored: a term the sender packs and the receiver does not expect
+shifts every value after it.  The terms with a slot are
+
+  adaptive umbrella, CONS DIHE, NOE, CONS RESD, RXNCOR umbrella,
+  the distance matrix, CONS HMCM, and the density bias
+
+BLOCK CATS has no slot of its own and borrows the NOE one, which is why it
+is marked "part"; that borrow is deliberate and tracked for replacement.
+
+Note that the slot holding eterm(charm) carries the density bias, not the
+CONS HARM restraint.  CONS HARM needs no slot: ECNSTR is DOMDEC-aware and
+sums over the local atom list on each node.
+
+Everything else.  Evaluated in the ordinary energy path with no DOMDEC
+guard at all.  Some carry a rank-zero guard (MMFP GEO, radius of gyration)
+and some carry nothing.  They are marked "part" because they are outside
+both mechanisms above: nothing refuses them and nothing arranges for them
+under a split.  What each one actually reports in parallel has not been
+measured.
+
+Without a direct/reciprocal split the constraint-crossing question does not
+arise, but the refusals still apply.
+
+File: Restraints, Node: Reporting, Up: Top, Previous: Domdec, Next: Doc drift
+
+         What happens when a restraint is not supported
+
+        There is no single behaviour.  Three different things happen
+depending on which restraint and which engine, and only one of them stops
+the run:
+
+  1. WRNDIE.  BLaDE refuses its unsupported NOE, MMFP and RESD cases this
+     way, at a level that terminates.
+
+  2. A note in the output.  Both OpenMM and BLaDE report an unsupported
+     CONS HARM variant with a plain write at PRNLEV greater than 2.  Since
+     PRNLEV defaults to 5 this does appear in normal output, but it is not
+     a warning: it has no warning level, it does not raise the warning
+     count, and nothing downstream treats it as a problem.  In a long run
+     it scrolls past.
+
+  3. Nothing.  A restraint type the engine does not mention anywhere -- NOE
+     under OpenMM, CONS HMCM under either, and most of the lower half of
+     the table -- produces no message of any kind.  The run proceeds
+     without the restraint and nothing in the output says so.
+
+Case 3 is the one that produces wrong results with no evidence, and it
+covers the majority of the table.
+
+
+File: Restraints, Node: Doc drift, Up: Top, Previous: Reporting, Next: Verifying
+
+          Where the other doc files disagree with the code
+
+        Recorded as found, so that the disagreements are fixed rather than
+rediscovered:
+
+  - doc/openmm.info describes three restraint types (a CONS HARM subset,
+    CONS RESD and CONS DIHE).  The code supports five.  MMFP GEO and the
+    principal component harmonic restraints are not mentioned anywhere in
+    that file, so the entire MMFP GEO path through OpenMM is undocumented.
+
+  - doc/blade.info says "a few restraints are implemented, including
+    absolute position restraints, and NOE distance restraints", and that
+    only restraints involving a single atom or pair of atoms are supported.
+    The code also handles CONS DIHE, CONS RESD and the MMFP centre-of-mass
+    bond, angle and dihedral restraints.
+
+  - doc/domdec.info's list of supported constraints matches the code.  It
+    does not mention that BLOCK CATS borrows the NOE slot.
+
+
+File: Restraints, Node: Verifying, Up: Top, Previous: Doc drift
+
+                      How to re-derive this table
+
+        This table goes stale the moment an engine gains a restraint, so
+each column has one place to look:
+
+  OpenMM   setup_restraints and mask_eterms in
+           source/openmm/omm_restraint.F90
+  BLaDE    the blade_add_* calls in source/blade_api/blade.F90
+  DOMDEC   auxdata_kernel and read_from_auxdata in
+           source/energy/energy_util.F90, which must agree with each other
+  CPU      source/energy/energym.F90 for the term list

@@ -1,0 +1,2444 @@
+---------------------------------------------------------------------------
+CHARMM22.0.b  Release           April     22, 1991
+CHARMM22.0.b1 Release           September 30, 1991
+CHARMM22      Release           January    1, 1992
+     c22g1    Release           February  15, 1992
+     c22g2    Release           July       7, 1992
+
+CHARMM23.0
+     c23a1    Developmental     August    15, 1992
+     c23a2    Developmental     October   25, 1992
+     c23f     Developmental     March      1, 1993
+     c23f1    Developmental     March     15, 1993
+     c23f2    Developmental     August    15, 1993
+     c23f3    Release           February   1, 1994
+     c23f4    Release           August    15, 1994
+     c23f5    Release           March     15, 1995
+
+CHARMM 24.0
+     c24a1    Developmental     February  15, 1994
+     c24x1    Evaluation        February  15, 1994
+     c24a2    Developmental     August    15, 1994
+     c24a3    Developmental     March     15, 1995
+     c24b1    Release           August    15, 1995
+     c24b2    Release           February  15, 1996
+     c24g1    Release           August    15, 1996
+     c24g2    Release           February  15, 1997
+
+CHARMM 25.0
+     c25a0    Developmental     August    15, 1995
+     c25a1    Developmental     February  15, 1996
+     c25a2    Developmental     August    15, 1996
+     c25a3    Developmental     February  15, 1997
+     c25b1    Release           August    15, 1997
+     c25b2    Release           February  15, 1998
+
+CHARMM 26.0
+     c26a1    Developmental     August    15, 1997
+     c26a2    Developmental     February  15, 1998
+     c26b1    Release           September 30, 1998
+     c26b2    Release           February  15, 1999
+
+CHARMM 27.0
+     c27a1    Developmental     September 30, 1998
+     c27a2    Developmental     February  15, 1999
+     c27b1    Release           August    15, 1999
+     c27b2    Release           February  15, 2000
+     c27b3    Release           August    15, 2000
+     c27b4    Release           February  15, 2001
+
+CHARMM 28.0
+     c28a1    Developmental     August    15, 1999
+     c28a2    Developmental     February  15, 2000
+     c28a3    Developmental     August    15, 2000
+     c28a4    Developmental     February  15, 2001
+     c28b1    Release           August    15, 2001
+     c28b2    Release           February  15, 2002
+
+CHARMM 29.0
+     c29a1    Developmental     August    15, 2001
+     c29a2    Developmental     April     15, 2002
+     c29b1    Release           August    15, 2002
+     c29b2    Release           February  15, 2003
+
+CHARMM 30.0
+     c30a1    Developmental     August    15, 2002
+     c30a2    Developmental     February  15, 2003
+     c30a2x   Evaluation        February  15, 2003
+     c30b1    Release           August    15, 2003
+     c30b2    Release           February  15, 2004
+
+CHARMM 31.0
+     c31a1    Developmental     August    15, 2003
+     c31a2    Developmental     February  15, 2004
+     c31b1    Release           August    15, 2004
+     c31b2    Release           February  15, 2005
+
+CHARMM 32.0
+     c32a1    Developmental     August    15, 2004
+     c32a2    Developmental     February  15, 2005
+     c32b1    Release           August    15, 2005
+     c32b2    Release           February  15, 2006
+
+CHARMM 33.0
+     c33a1    Developmental     August    15, 2005
+     c33a2    Developmental     February  15, 2006
+     c33b1    Release           August    15, 2006
+     c33b2    Release           February  15, 2007
+
+CHARMM 34.0
+     c34a1    Developmental     August    15, 2006
+     c34a2    Developmental     February  15, 2007
+     c34b1    Release           August    15, 2007
+     c34b2    Release           February  15, 2008
+
+CHARMM 35.0
+     c35a1    Developmental     August    15, 2007
+     c35a2    Developmental     February  15, 2008
+     c35b1    Release           August    15, 2008
+     c35b2    Release           February  15, 2009
+     c35b3    Release           August    15, 2009
+     c35b4    Release           February  15, 2010
+     c35b5    Release           August    15, 2010
+     c35b6    Release           February  15, 2011
+
+CHARMM 36.0
+     c36a1    Developmental     August    15, 2008
+     c36a2    Developmental     February  15, 2009
+     c36a3    Developmental     August    15, 2009
+     c36a4    Developmental     February  15, 2010
+     c36a4r1  Developmental     May        1, 2010
+     c36a5    Developmental     August    15, 2010
+     c36a6    Developmental     February  15, 2011
+     c36b1    Release           August    15, 2011
+     c36b2    Release           February  15, 2012
+
+CHARMM 37.0
+     c37a1    Developmental     August    15, 2011
+     c37a2    Developmental     February  15, 2012
+     c37b1    Release           September 30, 2012
+     c37b2    Release           February  15, 2013
+
+CHARMM 38.0
+     c38a1    Developmental     September 30, 2012
+     c38a2    Developmental     February  15, 2013
+     c38b1    Release           August    15, 2013
+     c38b2    Release           February  15, 2014
+
+CHARMM 39.0
+     c39a1    Developmental     August    15, 2013
+     c39a2    Developmental     February  15, 2014
+     c39b1    Release           August    15, 2014
+     c39b2    Release           February  15, 2015
+
+CHARMM 40.0
+     c40a1    Developmental     August    15, 2014
+     c40a2    Developmental     February  15, 2015
+     c40b1    Release           August    15, 2015
+     c40b2    Release           February  15, 2016
+
+CHARMM 41.0
+     c41a1    Developmental     August    15, 2015
+     c41a2    Developmental     February  15, 2016
+     c41b1    Release           August    15, 2016
+     c41b2    Release           February  15, 2017
+
+CHARMM 42.0
+     c42a1    Developmental     August    15, 2016
+     c42a2    Developmental     February  15, 2017
+     c42b1    Release           August    15, 2017
+     c42b2    Release           February  15, 2018
+
+CHARMM 43.0
+     c43a1    Developmental     August    15, 2017
+     c43a2    Developmental     February  15, 2018
+     c43b1    Release           August    15, 2018
+     c43b2    Release           February  15, 2019
+
+CHARMM 44.0
+     c44a1    Developmental     August    15, 2018
+     c44a2    Developmental     February  15, 2019
+     c44b1    Release           August    15, 2019
+     c44b2    Release           February  15, 2020
+
+CHARMM 45.0
+     c45a1    Developmental     August    15, 2019
+     c45a2    Developmental     February  15, 2020
+     c45b1    Release           August    15, 2020
+     c45b2    Release           February  15, 2021
+
+CHARMM 46.0
+     c46a1    Developmental     August    15, 2020
+     c46a2    Developmental     February  15, 2021
+     c46b1    Release           August    15, 2021
+     c46b2    Release           February  15, 2022
+
+CHARMM 47.0
+     c47a1    Developmental     August    15, 2021
+     c47a2    Developmental     February  15, 2022
+     c47b1    Release           August    15, 2022
+     c47b2    Release           March      1, 2023
+
+CHARMM 48.0
+     c48a1    Developmental     August    15, 2022
+     c48a2    Developmental     March      1, 2023
+     c48b1    Release           August    15, 2023
+     c48b2    Release           February  15, 2024
+
+CHARMM 49.0
+     c49a1    Developmental     August    15, 2023
+     c49a2    Developmental     February  15, 2024
+     c49b1    Release           August    15, 2024
+     c49b2    Release           February  15, 2025
+
+CHARMM 50.0
+     c50a1    Developmental     August    15, 2024
+     c50a2    Developmental     February  15, 2025
+     c50b1    Release           August    15, 2025
+     c50b2    Release           February  15, 2026
+---------------------------------------------------------------------------
+
+[0] About CHARMM50 Development
+
+     At the 2024 CHARMM meeting (University of Maryland, Baltimore
+July 19-21, 2024) we decided to release CHARMM c50a1 incorporating enhancements
+and fixes from the development versions c49a1 and c49a2.
+
+The c50a1 release includes the enhancements and fixes to the development
+version c49a2 during the period of August 15, 2023 through August 15, 2024.
+
+==============================================================================
+
+[1] c50a1 Change Log
+
+     At the 2024 CHARMM meeting (University of Maryland, Baltimore
+July 19-21, 2024), we decided to release CHARMM c49b1 incorporating enhancements
+and fixes from the developmental c49a1 and c49a2 versions into the stable version.
+
+The c50a1 release includes the following enhancements and fixes from the
+developmental versions c49a1 and c49a2 during the development period of
+August 15, 2023 through August 15, 2024. A selection of these have been added
+to the stable version c48b2 to create the stable version c49b1.
+
+1.1 parallelize the coor surf command
+    Developer: James E. Gonzales II and Wonmuk Hwang
+    Institution: Texas A&M University
+    Date: 5 April 2024
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/233
+Git commit: 85fff475
+
+Description:
+The COOR SURFace command has been parallelized with MPI, speeding up the calculation.
+
+Files involved:
+source/misc/surfac.F90
+doc/corman.info
+test/c49test/sasa_mpi.inp
+test/data/asparag.dcd
+test/data/asparag.psf
+
+1.2 Blade ortho box bug fix and gpu select
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 2 May 2024
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/234
+Git commit: c54639ad
+
+Description:
+logic for broadcasting the bounds of the ortho box was backwards
+blade was missing the ability to specify the gpu by the index provided by the driver
+
+Sample input to reproduce the problem (or testcase):
+test/c47test/blade_energy.inp with environment variable OMP_NUM_THREADS=2
+
+Files involved:
+CMakeLists.txt
+source/blade/src/domdec/domdec.cu
+source/blade/src/main/defines.h
+source/blade/src/system/state.cxx
+source/blade/src/system/system.cxx
+source/blade/src/system/system.h
+source/blade_api/blade.F90
+source/blade_api/blade_ctrl.F90
+source/blade_api/blade_main.F90
+source/blade_api/dynamics.cxx
+
+1.3 Library fixes
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 23 May 2024
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/235
+Git commit: f9be7908
+
+Description:
+change compiler flag PIC to PIE for blade in shared library builds
+reduce the need for many imports to use pycharmm to write a whole simulation
+fix blade bug with broadcasting bounding box for multiple gpus
+
+Files involved:
+CMakeLists.txt
+source/blade/src/system/system.cxx
+source/manip/intcor2.F90
+tool/pycharmm/pycharmm/init.py
+tool/pycharmm/tests/aldidpep_build.py
+tool/pycharmm/tests/scriptFactoryTest.py
+tool/pycharmm/tests/testCDOCKER.py
+tool/pycharmm/tests/testCardIO.py
+tool/pycharmm/tests/testCharmmScript.py
+tool/pycharmm/tests/testCoordinates.py
+tool/pycharmm/tests/testCrystalImage.py
+tool/pycharmm/tests/testCustomDynam.py
+tool/pycharmm/tests/testDynamics.py
+tool/pycharmm/tests/testEnergy.py
+tool/pycharmm/tests/testFactsDockRescore.py
+tool/pycharmm/tests/testLingo.py
+tool/pycharmm/tests/testMLpot_fad_water.py
+tool/pycharmm/tests/testMinimize.py
+tool/pycharmm/tests/testNumpy.py
+tool/pycharmm/tests/testOMMD.py
+tool/pycharmm/tests/testOpenMM.py
+tool/pycharmm/tests/testPcaHarm.py
+tool/pycharmm/tests/testSelect.py
+tool/pycharmm/tests/testSelectScript.py
+tool/pycharmm/tests/testUserE.py
+tool/pycharmm/tests/test_join.py
+tool/pycharmm/tests/test_select_atoms.py
+
+1.4 Kai Toepfer: MMPOT code update
+    Developer: K. Töpfer, L.I. Vazquez-Salazar, O.T. Unke, M. Meuwly
+    Institution: University of Basel
+    Date: 9 July 2024
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/239
+Git commit: c9395acf
+
+Description:
+The MLpot extension in the PyCHARMM toolkit allows using a custom
+machine learning-based (ML) interaction potential based on the Asparagus
+program package (https://github.com/MMunibas/Asparagus.git) to apply,
+e.g., a PhysNet model potential (J. Chem. Theory Comput. 2019, 15, 3678-3693).
+This implementation allows the user to run mixed ML/MM simulations akin to
+the more widely known QM/MM simulations.
+
+Files involved:
+A tool/pycharmm/tests/data/fad_model/best/best_model.pt
+A tool/pycharmm/tests/data/fad_model/fad_physnet.json
+M source/api/api_func.F90
+M source/api/api_psf.F90
+M source/api/api_util.F90
+M source/gener/update.F90
+M source/image/upimag_util.F90
+M source/nbonds/heurist.F90
+M tool/pycharmm/pycharmm/energy_mlpot.py
+M tool/pycharmm/pycharmm/psf.py
+M tool/pycharmm/tests/testMLpot_fad_water.py
+D tool/pycharmm/tests/data/fad_model/best_loss.npz
+D tool/pycharmm/tests/data/fad_model/best_model.data-00000-of-00001
+D tool/pycharmm/tests/data/fad_model/best_model.index
+D tool/pycharmm/tests/data/fad_model/config.txt
+
+1.5 kmdcm: dcm tweaks to support kernels
+    Developer: Eric Boittier, Mike Devereux, M. Meuwly
+    Institution: University of Basel
+    Date: 11.7.2024
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/240
+Git commit: 8145d976
+
+Description:
+The DCM module for distributed point charge electrostatics is extended to allow
+charge positions to move as a function of molecular conformation, maintaining
+an accurate description of the molecular electric field across conformational
+space.
+
+Files Added:
+test/c46test/fmdcm_water.inp
+test/c49test/kmdcm_water.inp
+test/data/kmdcm/coefs0.txt
+test/data/kmdcm/coefs1.txt
+test/data/kmdcm/coefs10.txt
+test/data/kmdcm/coefs11.txt
+test/data/kmdcm/coefs12.txt
+test/data/kmdcm/coefs13.txt
+test/data/kmdcm/coefs14.txt
+test/data/kmdcm/coefs15.txt
+test/data/kmdcm/coefs16.txt
+test/data/kmdcm/coefs17.txt
+test/data/kmdcm/coefs2.txt
+test/data/kmdcm/coefs3.txt
+test/data/kmdcm/coefs4.txt
+test/data/kmdcm/coefs5.txt
+test/data/kmdcm/coefs6.txt
+test/data/kmdcm/coefs7.txt
+test/data/kmdcm/coefs8.txt
+test/data/kmdcm/coefs9.txt
+test/data/kmdcm/x_fit.txt
+test/data/water.kern
+
+Files Modified: source/nbonds/dcm.F90
+
+Files Removed: test/c47test/fmdcm_water.inp
+
+1.6 kernn module with associated test from Silvan Kaeser is added to CHARMM
+    Developer: Silvan Kaeser, Markus Meuwly
+    Institution: University of Basel
+    Date: 12.7.2024
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/241
+Git commit: 1d191d78
+
+Description:
+The KerNN module is geared towards efficient and high-quality intramolecular
+interactions for polyatomic molecules in CHARMM. This is achieved by
+replacing the CHARMM bonded contributions with predictions (energies and forces)
+from a small neural network (NN). The module is intended to be used for gas-phase
+spectroscopic studies and reactive dynamics or as a driver of the intramolecular
+contributions in condensed-phase simulations.
+
+Files Added:
+doc/kernn.info
+source/energy/kernn.F90
+test/c49test/kernn_h2co.inp
+test/c49test/wandb/b_hidden
+test/c49test/wandb/b_out
+test/c49test/wandb/meanE
+test/c49test/wandb/meank
+test/c49test/wandb/minr
+test/c49test/wandb/stdE
+test/c49test/wandb/stdk
+test/c49test/wandb/w_hidden
+test/c49test/wandb/w_in
+test/c49test/wandb/w_out
+test/data/wandb/b_hidden
+test/data/wandb/b_out
+test/data/wandb/meanE
+test/data/wandb/meank
+test/data/wandb/minr
+test/data/wandb/stdE
+test/data/wandb/stdk
+test/data/wandb/w_hidden
+test/data/wandb/w_in
+test/data/wandb/w_out
+
+Files Modified:
+source/charmm/miscom.F90
+source/energy/energy.F90
+
+1.7 Added support for extended Adaptive Biasing Force (eABF) method
+    Developer: Steven L. Austin and H. Lee Woodcock
+    Institution: University of South Florida
+    Date: July, 2024
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/243
+Git commit: ab68eb47
+
+Description:
+The extended adaptive biasing force (eABF) method is an enhanced sampling method designed to enable repetitive sampling of conformational transitions. With eABF, prohibitive energy barriers are effectively flattened by the application of a biasing force along a targeted collective variable (CV), for instance, along the root mean squared displacement (RMSD) of the protein backbone, to promote transitions to and from a reference structure (such as a crystal state).
+
+prefx Keys: EABF
+
+Added files:
+source/eabf/eabf_reference_set.F90
+source/eabf/eabf_parameters.F90
+source/eabf/eabf_rotation.F90
+source/eabf/eabf_write.F90
+source/eabf/eabf_selections.F90
+source/eabf/eabf_cycle.F90
+source/eabf/eabf_impulse_integrator.F90
+source/eabf/eabf_cv.F90
+source/eabf/eabf_spline.F90
+source/eabf/eabf_restart.F90
+source/ltm/eabf_ltm.F90
+tool/cmake/eabf_fortran_files.cmake
+test/data/deca_alanine.crd
+test/data/deca_alanine.psf
+test/c49test/eabf.inp
+
+Modified files:
+source/energy/energy.F90
+source/charmm/miscom.F90
+tool/cmake/prefx_keywords.cmake
+CMakeLists.txt
+configure
+
+1.8 vfswitch fix to openmm switching code
+     Developer: Charles L. Brooks III
+     Institution: University of Michigan
+     Date: 20 July 2024
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/244
+Git commit: c5e95b55
+
+Description:
+Added code to fix to openmm switching in charmm by editing the formula for some of
+the custom OpenMM objects.
+
+Files Involved:
+source/openmm/omm_switching.F90
+
+1.9 2024 UTA Developments -- middle-scheme SIN(R) thermostat
+     Developer: Kwangho Nam
+     Institution: University of Texas at Arlington
+     Date: July 22, 2024
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/245
+Git commit: fa96b87a
+
+Description:
+Implemented a middle-scheme SIN(R) thermostat for velocity Verlet and
+multiple time step, multiscale AI-QM/MM simulations using the MNDO97 module
+and Q-Chem package. In addition, introduced appropriate modifications to
+the MNDO97 module.
+
+Prefx Keys: MIDSINR
+
+Files Added:
+source/mndint/mndo97_mlayer.F90
+source/mndint/qm1_mmbond.F90
+test/cquantumtest/qmmm_mlayer_mndo97_qchem.inp
+
+Files Modified:
+CMakeLists.txt
+doc/mndo97.info
+source/charmm/miscom.F90
+source/dynamc/dcntrl.F90
+source/dynamc/dynamc4.F90
+source/dynamc/dynamc.F90
+source/dynamc/dynamvv.F90
+source/dynamc/dynio.F90
+source/dynamc/mts.F90
+source/energy/energy.F90
+source/gukint/gukini.F90
+source/io/coorio.F90
+source/ltm/gamess_ltm.F90
+source/ltm/mndo97_ltm.F90
+source/manip/scalar.F90
+source/mc/mcio.F90
+source/minmiz/minmiz.F90
+source/mndint/mndgho_module.F90
+source/mndint/mndini.F90
+source/mndint/mndo97_nbnd.F90
+source/mndint/qm1_const_ltm.F90
+source/mndint/qm1_energy_module.F90
+source/mndint/qm1_gradient_module.F90
+source/mndint/qm1_info.F90
+source/mndint/qm1_mndod_module.F90
+source/mndint/qm1_params.F90
+source/mndint/qm1_scf_module.F90
+source/mndint/qm1_util_module.F90
+source/mndint/qmmm_interface.F90
+source/mndint/dftd3_mndo.F90
+source/mndint/h4_correction.F90
+source/mndint/mndene.F90
+source/mndint/qm1_diagonalization_module.F90
+source/nbonds/ewald.F90
+source/nbonds/nbondg_expand.inc
+source/nbonds/nbondg.F90
+source/nbonds/pme.F90
+source/nbonds/qmmm_pme_module.F90
+source/nbonds/qmmm_ewald_module.F90
+source/quantum/nbndqm_ltm.F90
+source/quantum/qmevdw.F90
+source/quantum/qmnbnd.F90
+source/squantm/sqnt_mlayer.F90
+source/stringm/ftsm.F90
+source/stringm/smcv.F90
+test/cquantumtest/mndo97.inp
+test/cquantumtest/mndo97_ewald.inp
+tool/cmake/fortran_files.cmake
+
+Files Removed:
+source/mndint/qm1_cpmd.F90
+test/data/mndo.inp
+test/data/mndo_wat.inp
+
+1.10 modpsf: check for BISE and not BISECT script word
+     Developer: Bernie Brooks
+     Institution: NIH
+     Date: 24 July 2024
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/246
+Git commit: d116ac05
+
+Description:
+The subroutine patic2 checks for 'BISECT' instead of 'BISE' violating
+expected behavior from charmm command interpretation.
+
+Files Involved:
+source/gener/modpsf.F90
+
+1.11 Print config
+     Developer: Josh Buckner
+     Institution: University of Michigan
+     Date: 24 July 2024
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/247
+Git commit: 66e0e78d
+
+Description:
+Define a new charmm command 'conf' to print out the command line arguments
+to configure and cmake. Also print the original source directory.
+
+prefx Keys: CONFIGURE
+
+Files Added: tool/cmake/config.f90.in
+
+Files Modified:
+CMakeLists.txt
+configure
+doc/cmake.info
+doc/pycharmm.info
+source/charmm/miscom.F90
+source/dynamc/dcntrl.F90
+source/ltm/version_ltm.F90
+tool/cmake/prefx_keywords.cmake
+tool/pycharmm/pycharmm/settings.py
+
+1.12 fix linking switch for intel mkl library
+     Developer: Josh Buckner
+     Institution: University of Michigan
+     Date: 25 July 2024
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/248
+Git commit: 7b48867c
+
+Description:
+The linker switch -mkl=... is deprecated for -qmkl=...
+
+Files Involved: CMakeLists.txt
+
+1.13 Bugfix for NTOT > 2^28 fatal error
+     Developer: Rick Venable
+     Institution: NIH/NHLBI
+     Date: April 11, 2024
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/249
+Git commit: c127c930
+
+Description:
+Memory allocation was changed in correl.F90 to avoid a seg fault when computing
+a correlation function with more 2^28 or more input data points.
+The large space_sf array with pointers was replaced by allocation of some or
+all of the six arrays as needed.
+
+Calculation of correlation functions with more than 2^28 data points in
+the input time series triggers a fatal error. Changing
+the memory allocation scheme from a single large array with six pointers
+to one which allocates each array separately resolved the problem.
+CORFUN can now compute C(t) for an input time series with 300,000,000 points.
+
+Sample input to reproduce the problem (or testcase):
+Read a time series with 268,435,456 or more points, and attempt the CORFUN
+command above. Results in the error--
+
+CORREL>    corfun pxy pxy total @MXC nonorm
+Parameter: MXC -> "5000000"
+forrtl: severe (174): SIGSEGV, segmentation fault occurred
+
+Files Involved: source/correl/correl.F90
+
+1.14 Toppar updates 2024
+     Developer: Alex MacKerell
+     Institution: University of Maryland, Baltimore
+     Date: 1 August 2024
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/250
+Git commit: caf9c2e1
+
+Description:
+Summary of changes in version C49/50, 2024/7
+Toppar change log, 2023_7 to 2024_7
+All files in the toppar subdirectory that are included in the final
+release (eg. files in toppar_jul20/toppar) will be maintained in the
+Michigan GIT.  The procedure will allow for the files to be maintained
+locally at UMB and then uploaded into the git repository prior to new
+releases of CHARMM.
+
+Protein
+
+1a) New protein cofactore toppar stream file. Alexey Aleksandrov and
+Justin Lemkul. Contains a collection of flavins and folates from the
+Aleksandrov lab along with additional cofactors from the
+Lemkul. Additional cofactors will be added to this toppar file and
+test case.
+stream/prot/toppar_all36_prot_cofactors.str
+test/prot/test_all36_prot_cofators.inp
+1b) Parameter files associated with NBFIXes for cation-pi and
+salt-bridges from Chipot and coworkers added the charmm_modifications
+subdirectory
+
+Drude force field update: 2023 versions of main, carbohydrate,
+lipid and model compound toppar files.
+
+Drude toppar files and test case in drude/drude_toppar_2023.tgz. See
+00readme_2023_release.txt for details of the contents of the release.
+
+charmm_modifications: A new subdirectory, charmm_modifications, has
+been added. It contains toppar files and additional information
+associated parameter optimization efforts from different labs. These
+are untested beyond that done by the original authors.
+
+Files involved:
+toppar/charmm_modifications/
+  00readme
+  chipot_nbfix_2024.tgz
+
+toppar/drude/
+  drude_toppar_2023.tgz
+
+toppar/stream/prot/
+toppar_all36_prot_cofactors.str
+
+toppar/
+  par_all22_prot.prm
+  par_all36m_prot.prm
+  toppar_all.history
+  toppar_water_ions.str
+
+==============================================================================
+[2] c50a2 Change Log
+
+    The following changes were committed from August 15, 2024 through
+February 15, 2025.
+
+------------------------------------------------------------------------------
+2.1 fix PIPF compile
+Developer: Josh Buckner
+Institution: University of Michigan
+Date: 7 Aug 2024
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/253
+Git commit: 9929cdad
+
+Description:
+In a subroutine of dynio.F90, integer i,j is declared outside of a #if.
+In the same subroutine, inside #if KEY_PIPF==1, integer j is declared.
+This results in a compile time error for builds including the PIPF features.
+
+Files Involved: source/dynamc/dynio.F90
+
+2.2 html documentation and pycharmm improvements
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 23 May 2024
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/236
+Git commit: 7d54f299
+
+Description:
+Automatically create html documentation for charmm *.info files
+Automatically generate html documentation for pycharmm
+Always compile a shared library so that exe charmm and pycharmm can co-exist
+Add '--with-pycharmm' to install the pip python pycharmm package alongside
+exe charmm paste in the install path to the shared library so that
+ordinary users will not have to set CHARMM_LIB_DIR
+
+Files Added:
+tool/CharmmDocUtils.php
+tool/cmake/html_docu.cmake
+tool/cmake/pycharmm.cmake
+tool/info2html.py
+
+Files Modified:
+CMakeLists.txt
+configure
+doc/dcm.info
+doc/energy.info
+doc/mmpt.info
+doc/msmmpt.info
+doc/perturb.info
+doc/rdfsol.info
+doc/vibran.info
+tool/NewCharmmTree
+tool/cmake/prefx_keywords.cmake
+tool/pycharmm/pycharmm/lib.py
+tool/pycharmm/tests/aldidpep_build.py
+
+2.3 Allow different e14fac values
+    Developer: Charles L Brooks III
+    Institution: University of Michigan
+    Date: 7 June 2024
+
+Description:
+Added in remaining changes by luiscv to allow different e14fac values for
+different parts of the system.
+
+Files involved:
+source/api/api_psf.F90
+source/blade_api/blade.F90
+source/ltm/inbnd_ltm.F90
+source/manip/scalar.F90
+source/nbonds/nbutil.F90
+
+source/openmm/
+  omm_nbopts.F90
+  omm_nonbond.F90
+  omm_switching.F90
+
+tool/pycharmm/pycharmm/psf.py
+
+2.4 Check for case where cmake adds -Xclang causing linking error
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 28 August 2024
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/254
+Git commit: 3eca1f3e
+
+Description: When Appleclang C/C++ compilers are used with gfortran,
+cmake adds '-Xclang -fopenmp' to the link line. We use gfortran to link and
+gfortran errors on '-Xclang'.
+
+Files Involved: CMakeLists.txt
+
+2.5 eef1 bug fix
+    Developer: Themis Lazaridis
+    Institution: CUNY and the University of Michigan
+    Date: 11 Sept 2024
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/255
+Git commit: b0d3fb23
+
+Description: A bug in eef1.F90 in c48a1 and later versions:
+Line 516 should be changed from
+IF (LCHA) THEN
+to
+IF (LINF .AND. LCHA) THEN
+It only affects derivatives in implicit membrane simulations.
+
+Files Involved: source/misc/eef1.F90
+
+2.6 Install improvements
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 1 October 2024
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/256
+Git commit: 88626bd2
+
+Description:
+1. On configure, check for a python interpreter
+2. On install, convert doc/*.info files into html files and install
+into /html_doc
+3. On as-library install install pycharmm pip package and
+documentation into /html_doc/pycharmm
+4. Remove the need for setting environment variable CHARMM_LIB_DIR to use pycharmm
+
+Files involved:
+tool/cmake/html_docu.cmake
+tool/cmake/pycharmm.cmake
+tool/info2html.py
+CMakeLists.txt
+tool/NewCharmmTree
+tool/pycharmm/pycharmm/lib.py
+tool/pycharmm/tests/aldidpep_build.py
+tool/pycharmm/tests/testCardIO.py
+tool/pycharmm/tests/testCharmmScript.py
+tool/pycharmm/tests/testCustomDynam.py
+tool/pycharmm/tests/testEnergy.py
+tool/pycharmm/tests/testMinimize.py
+tool/pycharmm/tests/testNumpy.py
+tool/pycharmm/tests/testOpenMM.py
+tool/pycharmm/tests/testPcaHarm.py
+tool/pycharmm/tests/testUserE.py
+
+2.7 cuda and pycharmm build improvements
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 4 Oct 2024
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/257
+Git commit: c54e9eb0
+
+Description:
+1. pycharmm: remove chm_ prefix for auto import modules
+2. cmake: update cmake options
+3. cmake: cuda build related bugs
+4. cmake: new cuda build updates for omm plugins
+5. cmake: more cmake cuda updates; docu and help update
+
+Files involved:
+CMakeLists.txt
+configure
+doc/cmake.info
+doc/pycharmm.info
+source/openmm/plugins/MonteCarloBarostat2/CMakeLists.txt
+source/openmm/plugins/gbmv/CMakeLists.txt
+source/openmm/plugins/gbsw/CMakeLists.txt
+source/openmm/plugins/mses/CMakeLists.txt
+tool/cmake/prefx_keywords.cmake
+tool/pycharmm/pycharmm/init.py
+tool/pycharmm/tests/aldidpep_build.py
+tool/pycharmm/tests/testCDOCKER.py
+tool/pycharmm/tests/testCardIO.py
+tool/pycharmm/tests/testCharmmScript.py
+tool/pycharmm/tests/testCoordinates.py
+tool/pycharmm/tests/testCrystalImage.py
+tool/pycharmm/tests/testCustomDynam.py
+tool/pycharmm/tests/testDynamics.py
+tool/pycharmm/tests/testEnergy.py
+tool/pycharmm/tests/testFactsDockRescore.py
+tool/pycharmm/tests/testLingo.py
+tool/pycharmm/tests/testMLpot_fad_water.py
+tool/pycharmm/tests/testMinimize.py
+tool/pycharmm/tests/testNumpy.py
+tool/pycharmm/tests/testOMMD.py
+tool/pycharmm/tests/testOpenMM.py
+tool/pycharmm/tests/testPcaHarm.py
+tool/pycharmm/tests/testSelect.py
+tool/pycharmm/tests/testSelectScript.py
+tool/pycharmm/tests/testUserE.py
+tool/pycharmm/tests/test_join.py
+tool/pycharmm/tests/test_select_atoms.py
+
+2.8 CMAKE_CUDA_ARCHITECTURES
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 9 October 2024
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/258
+Git commit: fc3afc21
+
+Description:
+Remove homegrown solution nvcc_arch_target and replace with
+cmake native CMAKE_CUDA_ARCHITECTURES.
+
+Files involved:
+CMakeLists.txt
+configure
+doc/cmake.info
+
+2.9 Clear facts
+    Developer: Charles L. Brooks III
+    Institution: University of Michigan
+    Date: 10 October 2024
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/259
+Git commit: cb494322
+
+Description:
+New keyword for FACTS: CLEA;
+This parameter deallocates the FACTS allocated data
+structures enable multiple calls to FACTS setup in
+single input script.
+
+Files involved:
+test/c50test/facts_clear_p19.inp
+tool/pycharmm/tests/testFACTS_score.py
+doc/facts.info
+source/misc/fctall.F90
+tool/pycharmm/pycharmm/cdocker.py
+
+2.10 Variable e14fac
+     Developer: Charles L. Brooks III
+     Institution: University of Michigan
+     Date: 11 October 2024
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/260
+Git commit: e09d5e92
+
+Description:
+In order to enable the use of e14fac values that differ within your system,
+e.g., if you wanted to run gaff ligands or LigParGen ligands with c36
+proteins this functionality utilizes an NATOM array set-up in scalar with
+scalar e14f set <value> <selection>
+that is then propgated to OpenMM's MD engine or BLaDE for energy or
+dynamics calls.
+If a fixed constant e14fac value is to be used, OpenMM and BLaDE now use
+the same NATOM array of e14ff values, but all values are the same.
+We note that this option is presently only accessible in the CHARMM/BLaDE API
+and the CHARMM/OpenMM API.
+VARIABLE E14FAC VALUES ARE NOT SUPPORTED ON OTHER CHARMM ENERGY ROUTINES
+
+Files involved:
+tool/pycharmm/tests/lig_test
+tool/pycharmm/tests/test_e14fac-openmm+blade.ipynb
+tool/pycharmm/tests/test_e14fac-openmm+blade.py
+doc/blade.info
+doc/openmm.info
+source/ltm/inbnd_ltm.F90
+source/manip/scalar.F90
+source/energy/eutil.F90
+source/nbonds/nbonds.F90
+source/nbonds/nbutil.F90
+source/blade_api/blade.F90
+source/openmm/omm_nonbond.F90
+source/openmm/omm_switching.F90
+
+2.11 Remove LIBRARY prefx keyword
+     Developer: Josh Buckner
+     Institution: University of Michigan
+     Date: 23 Oct 2024
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/261
+Git commit: a4b6a041
+
+Description:
+As a first step to building charmm bug free as a library and an executable
+linked to the library, the LIBRARY keyword has been removed. The resulting
+executable has been tested against the current c50a1 and all issues
+have been resolved.
+
+Files involved:
+source/api/api_crystal.F90
+source/api/api_dataframe.F90
+source/api/api_dynamics.F90
+source/api/api_energy.F90
+source/api/api_eval.F90
+source/api/api_image.F90
+source/api/api_ktable.F90
+source/api/api_lambdata.F90
+source/api/api_minimize.F90
+source/api/api_msldata.F90
+source/api/api_nbonds.F90
+source/api/api_read.F90
+source/api/api_select.F90
+source/api/api_velos.F90
+source/blade_api/blade_main.F90
+source/dynamc/dcntrl.F90
+source/dynamc/dynamc.F90
+source/energy/energy.F90
+source/io/parmio.F90
+source/minmiz/abner.F90
+source/minmiz/minmiz.F90
+source/minmiz/steepd.F90
+source/util/random.F90
+tool/cmake/prefx_keywords.cmake
+
+2.12 Build dynamic library by default
+     Developer: Josh Buckner
+     Institution: University of Michigan
+     Date: 25 October 2024
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/262
+Git commit: d3a344c4
+
+Description:
+By default, build charmm as a dynamic library.
+Use that library to link into an exe and for pycharmm.
+
+Files involved:
+CMakeLists.txt
+configure
+doc/cmake.info
+doc/pycharmm.info
+tool/pycharmm/pycharmm/lib.py
+
+2.13 Title: OpenMM 8.2 LangevinIntegrator becomes LangevinMiddleIntegrator
+     Developer: Josh Buckner
+     Institution: University of Michigan
+     Date: 22 Nov 2024
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/263
+Git commit: 077a1890
+
+Description:
+The OpenMM API for integrators has changed with OpenMM 8.2.
+OpenMM 8.2 LangevinIntegrator becomes LangevinMiddleIntegrator and
+LangevinIntegrator is maybe a base class. A CPP protected block is added
+specifically for OpenMM 8.2 where LangevinIntegrator becomes
+LangevinMiddleIntegrator.
+
+Files Involved:
+source/fftdock/openmm_dock.F90
+source/openmm/omm_main.F90
+
+2.14 pycharmm flexible CDOCKER output improvements
+     Developer: Yujin Wu
+     Institution: University of Michigan
+     Date: 9 December 2024
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/264
+Git commit: e1a43fc4
+
+Description:
+1. The nature of the flexible CDOCKER will cluster the docking poses and
+compute the final energy based on each cluster. The cluster information
+(radius, membership) is now output in the final tsv files.
+2. This information is also represented in the pdb files.
+3. A brief summary of how Flexible CDOCKER is set up and explanation of the
+final results is automatically saved in the file "output".
+4. cluster.log (i.e., the clustering information) generated by mmtsb is also
+saved so that one could always double check the result.
+
+Files involved:
+tool/pycharmm/pycharmm/cdocker.py
+tool/pycharmm/tests/testFactsDockRescore.py
+
+2.15 Fix for OpenMM 8.2 and the MSES plugin
+     Developer: Josh Buckner
+     Institution: University of Michigan
+     Date: 17 December 2024
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/265
+Git commit: 057f8378
+
+Description:
+1. The MSES OpenMM plugin did not compile using OpenMM 8.2;
+the OpenMM C++ API changed.
+2. The 'html' cmake option wasn't applied to pycharmm documentation
+making it impossible to turn that feature off.
+
+Files Involved:
+source/openmm/plugins/mses/CMakeLists.txt
+source/openmm/plugins/mses/platforms/cuda/CudaMSESKernels.cpp
+tool/cmake/pycharmm.cmake
+
+2.16 BLaDE minimization, MSLD CATS bugfixes, BLaDE large system bug, etc
+     Developer: Ryan Hayes
+     Institution: UC Irvine
+     Date: 2025-01-02
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/266
+Git commit: 2d7167f4
+
+Description:
+1. added rudimentary minimization to BLaDE,
+2. fixed a bug with Virial calculation in CATS,
+3. fixed a bug with large million atom systems being able to run in BLaDE,
+4. added new MSLD biases, and
+5. several other features/bugfixes
+
+Files Involved:
+source/pert/lambdadyn.F90
+source/energy/energy.F90
+source/blade/src//
+
+2.17 Pycharmm chsize
+     Developer: Josh Buckner
+     Institution: University of Michigan
+     Date: 7 January 2025
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/267
+Git commit: 359aa963
+
+Description:
+Allow the user to update the size of CHARMM fixed storage arrays in python
+as long as it's the first thing they do before importing the pycharmm module.
+
+Files involved:
+source/api/api_dimens.F90
+tool/pycharmm/pycharmm_init/init.py
+tool/pycharmm/pycharmm_init/settings.py
+tool/pycharmm/tests/testDimens.py
+source/api/api_init.F90
+tool/cmake/fortran_files.cmake
+tool/cmake/pycharmm.cmake
+tool/pycharmm/pycharmm/init.py
+tool/pycharmm/pycharmm/lib.py
+
+2.18 PyCHARMM / Asparagus
+     Developer: Kai Töpfer
+     Institution: University of Basel
+     Date: 8 Jan 2025
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/268
+Git commit: 74e50efb
+
+Description:
+Implementing the split of the MLPot modules energy contribution by adding
+the internal ML atom potential to the user energy (USER) and
+the fluctuating ML charges/static MM charges electrostatic Coulomb interaction
+to the electrostatic potential contribution (ELEC).
+
+Files involved:
+tool/pycharmm/pycharmm/tests/testMLpot.py
+tool/pycharmm/pycharmm/tests/data/ammonia.pdb
+tool/pycharmm/pycharmm/tests/data/model_nh3
+source/api/api_func.f90
+source/energy/energy.f90
+tool/pycharmm/pycharmm/energy_mlpot.py
+tool/pycharmm/pycharmm/lib.py
+tool/pycharmm/pycharmm/psf.py
+doc/mlpot.info
+
+Files removed:
+tool/pycharmm/pycharmm/tests/testMLpot_fad_water.py
+tool/pycharmm/pycharmm/tests/data/fad_water.cor
+tool/pycharmm/pycharmm/tests/data/fad_model
+
+2.19 fmdcm 1-cos(theta)^2 update
+     Developer: Eric Boittier
+     Institution: University of Basel
+     Date: 15.1.2025
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/270
+Git commit: 4a0b33d5
+
+Description: Added a keyword (‘COSA') to switch from polynomials as a function
+of \theta to (1 - cos**2 (\theta)).
+
+Files involved:
+source/nbonds/dcm.F90
+test/c50test/fmdcm_test.inp
+test/c50test/fmdcm-changes
+
+2.20 Changed doc/facts.info to update the documentation and added new test
+    Developer: Giuseppe Giangreco
+    Institution: University of Zurich
+    Date: 15 January 2025
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/269
+Git commit: 1811270e
+
+Description:
+1. The file doc/facts.info has been updated and expanded with additional comments
+in the nodes 'Description' and 'Examples'.
+2. A new test ( test/c49test/facts_p22_tau_pept.inp ) has been added.
+It is a short Langevin dynamics run.
+
+Files involved:
+test/c49test/facts_p22_tau_pept.inp
+doc/facts.info
+
+2.21 BLaDE optimization for non-alchemical systems
+    Developer: Ryan Hayes
+    Institution: University of California Irvine
+    Date: 2025-01-21
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/271
+Git commit:  ec3c9a7e
+
+Description: Set nbdirect kernel up as a template for alchemical and
+non-alchemical simulations, so non-alchemical simulations don't waste
+resources for alchemical bookkeeping. 10% performance improvement.
+
+Files involved: source/blade/src/nbdirect/nbdirect.cu
+
+2.22 Interfacing the new July 15, 2024 (R2) version of GAMESS to CHARMM
+     Developer : Milan Hodoscek
+     Institution : NIC, Ljubljana, SI
+     Date : 15 January 2024
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/272
+Git commit: fd375bb3
+
+Summary : Interfacing the new July 15, 2024 (R2) version of GAMESS to CHARMM
+Detailed Description: There is new version of GAMESS available (July 15, 2024)
+which is now interfaced with the CHARMM program. The main changes are in
+the scripts to support compiling GAMESS with the CHARMM program into
+a single executable. No changes in the CHARMM code itself are needed.
+
+Files involved:
+source/gamint/CMakeLists.txt
+tool/gmscomp
+doc/gamess.info
+
+2.23 Test and configure fixes
+     Developer: Josh Buckner, David Braun, Stanislav Cherepanov
+     Institution: University of Michigan
+     Date: 10 February 2025
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/273
+Git commit: 7e3c8d88
+
+Description:
+1. several tests are not compatible with parallel runs
+2. some people do not want python pip packages installed
+3. missing functionality: read a sequence from a coor file
+
+Files Involved:
+test/c47test/blade_energy.inp
+test/c47test/blade_md.inp
+test/c49test/mobhym2.inp
+CMakeLists.txt
+configure
+tool/pycharmm/pycharmm/read.py
+
+2.24 pycharmm test cleanup
+     Developer: Charlie Brooks
+     Institution: University of Michigan
+     Date: 15 February 2025
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/274
+Git commit: 9ef0a717
+
+Description:
+1. testOpenMM.py -- OpenMM serialization to xml from charmm is crashing during
+fetching the default periodic box vectors. The tolerance variable to test
+PASS/FAIL should be set to tol to 1.5e-3.
+2. testPcaHarm.py -- Only tests the use of the User function in python
+EnerFunc (user energy) for the fully harmonic restraints.
+Changing cons_harm.setup_pca to cons_harm_setup_absolute causes test to pass.
+The test should be renamed to testUserHarm.py
+3. test_e14fac-openmm+blade.py — Remove hard coded environment variable
+CHARMM_LIB_DIR at the beginning.
+4. testFactsDockRescore.py — Fix a merge problem toward the end of this script.
+Some changes needed in cdocker.py to make this test run correctly. Also,
+the Reference energy should be re-defined after fixing cdocker.py.
+
+Files Involved:
+tool/pycharmm/tests/test_e14fac-openmm+blade.py
+tool/pycharmm/tests/testOpenMM.py
+tool/pycharmm/tests/testPcaHarm.py ==> tool/pycharmm/tests/testUserHarm.py
+tool/pycharmm/pycharmm/cdocker.py
+tool/pycharmm/tests/testFactsDockRescore.py
+tool/pycharmm/tests/testOpenMM.py
+
+2.25 fill in some necessary pycharmm functions
+     Developer: Charles Brooks
+     Institution: University of Michigan
+     Date: 15 February 2025
+
+Description:
+Fill in some necessary pycharmm functionality.
+
+Files involved:
+tool/pycharmm/tests/test_hmr.py
+tool/pycharmm/pycharmm/coor.py
+tool/pycharmm/pycharmm/crystal.py
+tool/pycharmm/pycharmm/lingo.py
+tool/pycharmm/pycharmm/psf.py
+tool/pycharmm/pycharmm/scalar.py
+doc/crystl.info
+source/api/api_crystal.F90
+source/api/api_image.F90
+source/api/api_scalar.F90
+source/image/crystal.F90
+source/manip/corman.F90
+
+==============================================================================
+[3] c50b1 Change Log
+
+     At the 2025 CHARMM meeting (Florida State University
+July 18-20, 2025), we decided to release CHARMM c50b1 incorporating
+enhancements and fixes from the developmental c50a1 and c50a2 versions into
+the stable version.
+
+The c50b1 release includes the following enhancements and fixes from the
+developmental versions c50a1 and c50a2 during the development period of
+August 15, 2024 through August 15, 2025. These have been added to the
+stable version c49b2 to create the stable version c50b1.
+
+3.1 kernn module with associated test from Silvan Kaeser is added to CHARMM
+    Developer: Silvan Kaeser, Markus Meuwly
+    Institution: University of Basel
+    Date: 12.7.2024
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/241
+Git commit: 1d191d78
+
+Description:
+The KerNN module is geared towards efficient and high-quality intramolecular
+interactions for polyatomic molecules in CHARMM. This is achieved by
+replacing the CHARMM bonded contributions with predictions (energies and forces)
+from a small neural network (NN). The module is intended to be used for gas-phase
+spectroscopic studies and reactive dynamics or as a driver of the intramolecular
+contributions in condensed-phase simulations.
+
+Files Added:
+doc/kernn.info
+source/energy/kernn.F90
+test/c49test/kernn_h2co.inp
+test/c49test/wandb/b_hidden
+test/c49test/wandb/b_out
+test/c49test/wandb/meanE
+test/c49test/wandb/meank
+test/c49test/wandb/minr
+test/c49test/wandb/stdE
+test/c49test/wandb/stdk
+test/c49test/wandb/w_hidden
+test/c49test/wandb/w_in
+test/c49test/wandb/w_out
+test/data/wandb/b_hidden
+test/data/wandb/b_out
+test/data/wandb/meanE
+test/data/wandb/meank
+test/data/wandb/minr
+test/data/wandb/stdE
+test/data/wandb/stdk
+test/data/wandb/w_hidden
+test/data/wandb/w_in
+test/data/wandb/w_out
+
+Files Modified:
+source/charmm/miscom.F90
+source/energy/energy.F90
+
+3.2 Added support for extended Adaptive Biasing Force (eABF) method
+    Developer: Steven L. Austin and H. Lee Woodcock
+    Institution: University of South Florida
+    Date: July, 2024
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/243
+Git commit: ab68eb47
+
+Description:
+The extended adaptive biasing force (eABF) method is an enhanced sampling method designed to enable repetitive sampling of conformational transitions. With eABF, prohibitive energy barriers are effectively flattened by the application of a biasing force along a targeted collective variable (CV), for instance, along the root mean squared displacement (RMSD) of the protein backbone, to promote transitions to and from a reference structure (such as a crystal state).
+
+prefx Keys: EABF
+
+Added files:
+source/eabf/eabf_reference_set.F90
+source/eabf/eabf_parameters.F90
+source/eabf/eabf_rotation.F90
+source/eabf/eabf_write.F90
+source/eabf/eabf_selections.F90
+source/eabf/eabf_cycle.F90
+source/eabf/eabf_impulse_integrator.F90
+source/eabf/eabf_cv.F90
+source/eabf/eabf_spline.F90
+source/eabf/eabf_restart.F90
+source/ltm/eabf_ltm.F90
+tool/cmake/eabf_fortran_files.cmake
+test/data/deca_alanine.crd
+test/data/deca_alanine.psf
+test/c49test/eabf.inp
+
+Modified files:
+source/energy/energy.F90
+source/charmm/miscom.F90
+tool/cmake/prefx_keywords.cmake
+CMakeLists.txt
+configure
+
+3.3 2024 UTA Developments -- middle-scheme SIN(R) thermostat
+    Developer: Kwangho Nam
+    Institution: University of Texas at Arlington
+    Date: July 22, 2024
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/245
+Git commit: fa96b87a
+
+Description:
+Implemented a middle-scheme SIN(R) thermostat for velocity Verlet and
+multiple time step, multiscale AI-QM/MM simulations using the MNDO97 module
+and Q-Chem package. In addition, introduced appropriate modifications to
+the MNDO97 module.
+
+Prefx Keys: MIDSINR
+
+Files Added:
+source/mndint/mndo97_mlayer.F90
+source/mndint/qm1_mmbond.F90
+test/cquantumtest/qmmm_mlayer_mndo97_qchem.inp
+
+Files Modified:
+CMakeLists.txt
+doc/mndo97.info
+source/charmm/miscom.F90
+source/dynamc/dcntrl.F90
+source/dynamc/dynamc4.F90
+source/dynamc/dynamc.F90
+source/dynamc/dynamvv.F90
+source/dynamc/dynio.F90
+source/dynamc/mts.F90
+source/energy/energy.F90
+source/gukint/gukini.F90
+source/io/coorio.F90
+source/ltm/gamess_ltm.F90
+source/ltm/mndo97_ltm.F90
+source/manip/scalar.F90
+source/mc/mcio.F90
+source/minmiz/minmiz.F90
+source/mndint/mndgho_module.F90
+source/mndint/mndini.F90
+source/mndint/mndo97_nbnd.F90
+source/mndint/qm1_const_ltm.F90
+source/mndint/qm1_energy_module.F90
+source/mndint/qm1_gradient_module.F90
+source/mndint/qm1_info.F90
+source/mndint/qm1_mndod_module.F90
+source/mndint/qm1_params.F90
+source/mndint/qm1_scf_module.F90
+source/mndint/qm1_util_module.F90
+source/mndint/qmmm_interface.F90
+source/mndint/dftd3_mndo.F90
+source/mndint/h4_correction.F90
+source/mndint/mndene.F90
+source/mndint/qm1_diagonalization_module.F90
+source/nbonds/ewald.F90
+source/nbonds/nbondg_expand.inc
+source/nbonds/nbondg.F90
+source/nbonds/pme.F90
+source/nbonds/qmmm_pme_module.F90
+source/nbonds/qmmm_ewald_module.F90
+source/quantum/nbndqm_ltm.F90
+source/quantum/qmevdw.F90
+source/quantum/qmnbnd.F90
+source/squantm/sqnt_mlayer.F90
+source/stringm/ftsm.F90
+source/stringm/smcv.F90
+test/cquantumtest/mndo97.inp
+test/cquantumtest/mndo97_ewald.inp
+tool/cmake/fortran_files.cmake
+
+Files Removed:
+source/mndint/qm1_cpmd.F90
+test/data/mndo.inp
+test/data/mndo_wat.inp
+
+3.4 Install improvements
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 1 October 2024
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/256
+Git commit: 88626bd2
+
+Description:
+1. On configure, check for a python interpreter
+2. On install, convert doc/*.info files into html files and install
+into /html_doc
+3. On as-library install install pycharmm pip package and
+documentation into /html_doc/pycharmm
+4. Remove the need for setting environment variable CHARMM_LIB_DIR to use pycharmm
+
+Files involved:
+tool/cmake/html_docu.cmake
+tool/cmake/pycharmm.cmake
+tool/info2html.py
+CMakeLists.txt
+tool/NewCharmmTree
+tool/pycharmm/pycharmm/lib.py
+tool/pycharmm/tests/aldidpep_build.py
+tool/pycharmm/tests/testCardIO.py
+tool/pycharmm/tests/testCharmmScript.py
+tool/pycharmm/tests/testCustomDynam.py
+tool/pycharmm/tests/testEnergy.py
+tool/pycharmm/tests/testMinimize.py
+tool/pycharmm/tests/testNumpy.py
+tool/pycharmm/tests/testOpenMM.py
+tool/pycharmm/tests/testPcaHarm.py
+tool/pycharmm/tests/testUserE.py
+
+3.5 cuda and pycharmm build improvements
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 4 Oct 2024
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/257
+Git commit: c54e9eb0
+
+Description:
+1. pycharmm: remove chm_ prefix for auto import modules
+2. cmake: update cmake options
+3. cmake: cuda build related bugs
+4. cmake: new cuda build updates for omm plugins
+5. cmake: more cmake cuda updates; docu and help update
+
+Files involved:
+CMakeLists.txt
+configure
+doc/cmake.info
+doc/pycharmm.info
+source/openmm/plugins/MonteCarloBarostat2/CMakeLists.txt
+source/openmm/plugins/gbmv/CMakeLists.txt
+source/openmm/plugins/gbsw/CMakeLists.txt
+source/openmm/plugins/mses/CMakeLists.txt
+tool/cmake/prefx_keywords.cmake
+tool/pycharmm/pycharmm/init.py
+tool/pycharmm/tests/aldidpep_build.py
+tool/pycharmm/tests/testCDOCKER.py
+tool/pycharmm/tests/testCardIO.py
+tool/pycharmm/tests/testCharmmScript.py
+tool/pycharmm/tests/testCoordinates.py
+tool/pycharmm/tests/testCrystalImage.py
+tool/pycharmm/tests/testCustomDynam.py
+tool/pycharmm/tests/testDynamics.py
+tool/pycharmm/tests/testEnergy.py
+tool/pycharmm/tests/testFactsDockRescore.py
+tool/pycharmm/tests/testLingo.py
+tool/pycharmm/tests/testMLpot_fad_water.py
+tool/pycharmm/tests/testMinimize.py
+tool/pycharmm/tests/testNumpy.py
+tool/pycharmm/tests/testOMMD.py
+tool/pycharmm/tests/testOpenMM.py
+tool/pycharmm/tests/testPcaHarm.py
+tool/pycharmm/tests/testSelect.py
+tool/pycharmm/tests/testSelectScript.py
+tool/pycharmm/tests/testUserE.py
+tool/pycharmm/tests/test_join.py
+tool/pycharmm/tests/test_select_atoms.py
+
+3.6 CMAKE_CUDA_ARCHITECTURES
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 9 October 2024
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/258
+Git commit: fc3afc21
+
+Description:
+Remove homegrown solution nvcc_arch_target and replace with
+cmake native CMAKE_CUDA_ARCHITECTURES.
+
+Files involved:
+CMakeLists.txt
+configure
+doc/cmake.info
+
+3.7 Clear facts
+    Developer: Charles L. Brooks III
+    Institution: University of Michigan
+    Date: 10 October 2024
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/259
+Git commit: cb494322
+
+Description:
+New keyword for FACTS: CLEA;
+This parameter deallocates the FACTS allocated data
+structures enable multiple calls to FACTS setup in
+single input script.
+
+Files involved:
+test/c50test/facts_clear_p19.inp
+tool/pycharmm/tests/testFACTS_score.py
+doc/facts.info
+source/misc/fctall.F90
+tool/pycharmm/pycharmm/cdocker.py
+
+3.8 Remove LIBRARY prefx keyword
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 23 Oct 2024
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/261
+Git commit: a4b6a041
+
+Description:
+As a first step to building charmm bug free as a library and an executable
+linked to the library, the LIBRARY keyword has been removed. The resulting
+executable has been tested against the current c50a1 and all issues
+have been resolved.
+
+Files involved:
+source/api/api_crystal.F90
+source/api/api_dataframe.F90
+source/api/api_dynamics.F90
+source/api/api_energy.F90
+source/api/api_eval.F90
+source/api/api_image.F90
+source/api/api_ktable.F90
+source/api/api_lambdata.F90
+source/api/api_minimize.F90
+source/api/api_msldata.F90
+source/api/api_nbonds.F90
+source/api/api_read.F90
+source/api/api_select.F90
+source/api/api_velos.F90
+source/blade_api/blade_main.F90
+source/dynamc/dcntrl.F90
+source/dynamc/dynamc.F90
+source/energy/energy.F90
+source/io/parmio.F90
+source/minmiz/abner.F90
+source/minmiz/minmiz.F90
+source/minmiz/steepd.F90
+source/util/random.F90
+tool/cmake/prefx_keywords.cmake
+
+3.9 Build dynamic library by default
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 25 October 2024
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/262
+Git commit: d3a344c4
+
+Description:
+By default, build charmm as a dynamic library.
+Use that library to link into an exe and for pycharmm.
+
+Files involved:
+CMakeLists.txt
+configure
+doc/cmake.info
+doc/pycharmm.info
+tool/pycharmm/pycharmm/lib.py
+
+3.10 OpenMM 8.2 LangevinIntegrator becomes LangevinMiddleIntegrator
+     Developer: Josh Buckner
+     Institution: University of Michigan
+     Date: 22 Nov 2024
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/263
+Git commit: 077a1890
+
+Description:
+The OpenMM API for integrators has changed with OpenMM 8.2.
+OpenMM 8.2 LangevinIntegrator becomes LangevinMiddleIntegrator and
+LangevinIntegrator is maybe a base class. A CPP protected block is added
+specifically for OpenMM 8.2 where LangevinIntegrator becomes
+LangevinMiddleIntegrator.
+
+Files Involved:
+source/fftdock/openmm_dock.F90
+source/openmm/omm_main.F90
+
+3.11 Pycharmm flexible CDOCKER output improvements
+     Developer: Yujin Wu
+     Institution: University of Michigan
+     Date: 9 December 2024
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/264
+Git commit: e1a43fc4
+
+Description:
+1. The nature of the flexible CDOCKER will cluster the docking poses and
+compute the final energy based on each cluster. The cluster information
+(radius, membership) is now output in the final tsv files.
+2. This information is also represented in the pdb files.
+3. A brief summary of how Flexible CDOCKER is set up and explanation of the
+final results is automatically saved in the file "output".
+4. cluster.log (i.e., the clustering information) generated by mmtsb is also
+saved so that one could always double check the result.
+
+Files involved:
+tool/pycharmm/pycharmm/cdocker.py
+tool/pycharmm/tests/testFactsDockRescore.py
+
+3.12 Fix for OpenMM 8.2 and the MSES plugin
+     Developer: Josh Buckner
+     Institution: University of Michigan
+     Date: 17 December 2024
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/265
+Git commit: 057f8378
+
+Description:
+1. The MSES OpenMM plugin did not compile using OpenMM 8.2;
+the OpenMM C++ API changed.
+2. The 'html' cmake option wasn't applied to pycharmm documentation
+making it impossible to turn that feature off.
+
+Files Involved:
+source/openmm/plugins/mses/CMakeLists.txt
+source/openmm/plugins/mses/platforms/cuda/CudaMSESKernels.cpp
+tool/cmake/pycharmm.cmake
+
+3.13 BLaDE minimization, MSLD CATS bugfixes, BLaDE large system bug, etc
+     Developer: Ryan Hayes
+     Institution: UC Irvine
+     Date: 2025-01-02
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/266
+Git commit: 2d7167f4
+
+Description:
+1. added rudimentary minimization to BLaDE,
+2. fixed a bug with Virial calculation in CATS,
+3. fixed a bug with large million atom systems being able to run in BLaDE,
+4. added new MSLD biases, and
+5. several other features/bugfixes
+
+Files Involved:
+source/pert/lambdadyn.F90
+source/energy/energy.F90
+source/blade/src//
+
+3.14 Pycharmm chsize
+     Developer: Josh Buckner
+     Institution: University of Michigan
+     Date: 7 January 2025
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/267
+Git commit: 359aa963
+
+Description:
+Allow the user to update the size of CHARMM fixed storage arrays in python
+as long as it's the first thing they do before importing the pycharmm module.
+
+Files involved:
+source/api/api_dimens.F90
+tool/pycharmm/pycharmm_init/init.py
+tool/pycharmm/pycharmm_init/settings.py
+tool/pycharmm/tests/testDimens.py
+source/api/api_init.F90
+tool/cmake/fortran_files.cmake
+tool/cmake/pycharmm.cmake
+tool/pycharmm/pycharmm/init.py
+tool/pycharmm/pycharmm/lib.py
+
+3.15 Changed doc/facts.info to update the documentation and added new test
+     Developer: Giuseppe Giangreco
+     Institution: University of Zurich
+     Date: 15 January 2025
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/269
+Git commit: 1811270e
+
+Description:
+1. The file doc/facts.info has been updated and expanded with additional comments
+in the nodes 'Description' and 'Examples'.
+2. A new test ( test/c49test/facts_p22_tau_pept.inp ) has been added.
+It is a short Langevin dynamics run.
+
+Files involved:
+test/c49test/facts_p22_tau_pept.inp
+doc/facts.info
+
+3.16 BLaDE optimization for non-alchemical systems
+     Developer: Ryan Hayes
+     Institution: University of California Irvine
+     Date: 2025-01-21
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/271
+Git commit:  ec3c9a7e
+
+Description: Set nbdirect kernel up as a template for alchemical and
+non-alchemical simulations, so non-alchemical simulations don't waste
+resources for alchemical bookkeeping. 10% performance improvement.
+
+Files involved: source/blade/src/nbdirect/nbdirect.cu
+
+3.17 Interfacing the new July 15, 2024 (R2) version of GAMESS to CHARMM
+     Developer : Milan Hodoscek
+     Institution : NIC, Ljubljana, SI
+     Date : 15 January 2024
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/272
+Git commit: fd375bb3
+
+Summary : Interfacing the new July 15, 2024 (R2) version of GAMESS to CHARMM
+Detailed Description: There is new version of GAMESS available (July 15, 2024)
+which is now interfaced with the CHARMM program. The main changes are in
+the scripts to support compiling GAMESS with the CHARMM program into
+a single executable. No changes in the CHARMM code itself are needed.
+
+Files involved:
+source/gamint/CMakeLists.txt
+tool/gmscomp
+doc/gamess.info
+
+3.18 Test and configure fixes
+     Developer: Josh Buckner, David Braun, Stanislav Cherepanov
+     Institution: University of Michigan
+     Date: 10 February 2025
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/273
+Git commit: 7e3c8d88
+
+Description:
+1. several tests are not compatible with parallel runs
+2. some people do not want python pip packages installed
+3. missing functionality: read a sequence from a coor file
+
+Files Involved:
+test/c47test/blade_energy.inp
+test/c47test/blade_md.inp
+test/c49test/mobhym2.inp
+CMakeLists.txt
+configure
+tool/pycharmm/pycharmm/read.py
+
+3.19 pycharmm test cleanup
+     Developer: Charlie Brooks
+     Institution: University of Michigan
+     Date: 15 February 2025
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/274
+Git commit: 9ef0a717
+
+Description:
+1. testOpenMM.py -- OpenMM serialization to xml from charmm is crashing during
+fetching the default periodic box vectors. The tolerance variable to test
+PASS/FAIL should be set to tol to 1.5e-3.
+2. testPcaHarm.py -- Only tests the use of the User function in python
+EnerFunc (user energy) for the fully harmonic restraints.
+Changing cons_harm.setup_pca to cons_harm_setup_absolute causes test to pass.
+The test should be renamed to testUserHarm.py
+3. test_e14fac-openmm+blade.py — Remove hard coded environment variable
+CHARMM_LIB_DIR at the beginning.
+4. testFactsDockRescore.py — Fix a merge problem toward the end of this script.
+Some changes needed in cdocker.py to make this test run correctly. Also,
+the Reference energy should be re-defined after fixing cdocker.py.
+
+Files Involved:
+tool/pycharmm/tests/test_e14fac-openmm+blade.py
+tool/pycharmm/tests/testOpenMM.py
+tool/pycharmm/tests/testPcaHarm.py ==> tool/pycharmm/tests/testUserHarm.py
+tool/pycharmm/pycharmm/cdocker.py
+tool/pycharmm/tests/testFactsDockRescore.py
+tool/pycharmm/tests/testOpenMM.py
+
+3.20 fill in some necessary pycharmm functions
+     Developer: Charles Brooks
+     Institution: University of Michigan
+     Date: 15 February 2025
+
+Description:
+Fill in some necessary pycharmm functionality.
+
+Files involved:
+tool/pycharmm/tests/test_hmr.py
+tool/pycharmm/pycharmm/coor.py
+tool/pycharmm/pycharmm/crystal.py
+tool/pycharmm/pycharmm/lingo.py
+tool/pycharmm/pycharmm/psf.py
+tool/pycharmm/pycharmm/scalar.py
+doc/crystl.info
+source/api/api_crystal.F90
+source/api/api_image.F90
+source/api/api_scalar.F90
+source/image/crystal.F90
+source/manip/corman.F90
+
+3.21 Changed doc/facts.info to update the documentation and added new test
+     Developer: Giuseppe Giangreco
+     Institution: University of Zurich
+     Date: 15 January 2025
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/269
+Git commit: 1811270e
+
+Description:
+1. The file doc/facts.info has been updated and expanded with additional comments
+in the nodes 'Description' and 'Examples'.
+2. A new test ( test/c49test/facts_p22_tau_pept.inp ) has been added.
+It is a short Langevin dynamics run.
+
+Files involved:
+test/c49test/facts_p22_tau_pept.inp
+doc/facts.info
+
+3.22 BLaDE optimization for non-alchemical systems
+     Developer: Ryan Hayes
+     Institution: University of California Irvine
+     Date: 2025-01-21
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/271
+Git commit:  ec3c9a7e
+
+Description: Set nbdirect kernel up as a template for alchemical and
+non-alchemical simulations, so non-alchemical simulations don't waste
+resources for alchemical bookkeeping. 10% performance improvement.
+
+Files involved: source/blade/src/nbdirect/nbdirect.cu
+
+3.23 Interfacing the new July 15, 2024 (R2) version of GAMESS to CHARMM
+     Developer : Milan Hodoscek
+     Institution : NIC, Ljubljana, SI
+     Date : 15 January 2024
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/272
+Git commit: fd375bb3
+
+Summary : Interfacing the new July 15, 2024 (R2) version of GAMESS to CHARMM
+Detailed Description: There is new version of GAMESS available (July 15, 2024)
+which is now interfaced with the CHARMM program. The main changes are in
+the scripts to support compiling GAMESS with the CHARMM program into
+a single executable. No changes in the CHARMM code itself are needed.
+
+Files involved:
+source/gamint/CMakeLists.txt
+tool/gmscomp
+doc/gamess.info
+
+3.24 Test and configure fixes
+     Developer: Josh Buckner, David Braun, Stanislav Cherepanov
+     Institution: University of Michigan
+     Date: 10 February 2025
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/273
+Git commit: 7e3c8d88
+
+Description:
+1. several tests are not compatible with parallel runs
+2. some people do not want python pip packages installed
+3. missing functionality: read a sequence from a coor file
+
+Files Involved:
+test/c47test/blade_energy.inp
+test/c47test/blade_md.inp
+test/c49test/mobhym2.inp
+CMakeLists.txt
+configure
+tool/pycharmm/pycharmm/read.py
+
+3.25 pycharmm test cleanup
+     Developer: Charlie Brooks
+     Institution: University of Michigan
+     Date: 15 February 2025
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/274
+Git commit: 9ef0a717
+
+Description:
+1. testOpenMM.py -- OpenMM serialization to xml from charmm is crashing during
+fetching the default periodic box vectors. The tolerance variable to test
+PASS/FAIL should be set to tol to 1.5e-3.
+2. testPcaHarm.py -- Only tests the use of the User function in python
+EnerFunc (user energy) for the fully harmonic restraints.
+Changing cons_harm.setup_pca to cons_harm_setup_absolute causes test to pass.
+The test should be renamed to testUserHarm.py
+3. test_e14fac-openmm+blade.py — Remove hard coded environment variable
+CHARMM_LIB_DIR at the beginning.
+4. testFactsDockRescore.py — Fix a merge problem toward the end of this script.
+Some changes needed in cdocker.py to make this test run correctly. Also,
+the Reference energy should be re-defined after fixing cdocker.py.
+
+Files Involved:
+tool/pycharmm/tests/test_e14fac-openmm+blade.py
+tool/pycharmm/tests/testOpenMM.py
+tool/pycharmm/tests/testPcaHarm.py ==> tool/pycharmm/tests/testUserHarm.py
+tool/pycharmm/pycharmm/cdocker.py
+tool/pycharmm/tests/testFactsDockRescore.py
+tool/pycharmm/tests/testOpenMM.py
+
+3.26 Fill in some necessary pycharmm functions
+     Developer: Charles Brooks
+     Institution: University of Michigan
+     Date: 15 February 2025
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/275
+Git commit: 255006ea
+
+Description:
+Fill in some necessary pycharmm functionality.
+
+Files involved:
+tool/pycharmm/tests/test_hmr.py
+tool/pycharmm/pycharmm/coor.py
+tool/pycharmm/pycharmm/crystal.py
+tool/pycharmm/pycharmm/lingo.py
+tool/pycharmm/pycharmm/psf.py
+tool/pycharmm/pycharmm/scalar.py
+doc/crystl.info
+source/api/api_crystal.F90
+source/api/api_image.F90
+source/api/api_scalar.F90
+source/image/crystal.F90
+source/manip/corman.F90
+
+3.27 Restore deleted additions to energy; put debugging code behind prnlev 6
+     Developer: Themis Lazaridis
+     Institution: CUNY
+     Date: 25 February 2025
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/276
+Git commit: 6096acc1
+
+Description:
+Some additions to the energy calculation were inadvertently deleted by a commit.
+Debugging code from inbond_ltm was spamming up the output
+
+Files involved:
+source/energy/energy.F90
+source/ltm/inbnd_ltm.F90
+source/nbonds/nbonds.F90
+
+3.28 Fixes needed for blade rhdo
+     Developer: Charles L. Brooks III
+     Institution: University of Michigan
+     Date: 23 March 2025
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/277
+Git commit: 952ef6f1
+
+Description:
+BLADE RHDO throws errors complaining about crystal symmetry.
+
+Files Involved:
+source/api/api_crystal.F90
+source/image/crystal.F90
+
+3.29 More detailed dcm warnings
+     Developer: Mike Devereux
+     Institution: University of Basel
+     Date: 25 March 2025
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/278
+Git commit: f8cb05da
+
+Description:
+Added a more detailed warning to the DCM routine to try to prevent mistakes where users
+do not zero charges for DCM residues in the CHARMM topology file
+
+Files involved:
+source/nbonds/dcm.F90
+
+3.30 Bug fix for psf.hmr
+     Developer: Stanislav Cherepanov
+     Institution: University of Michigan
+     Date: 25 March 2025
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/279
+Git commit: 73904a44
+
+Description:
+A small fix for psf.hmr, which threw a python error when called with an empty
+exclusion list psf.hmr(resnames_exclude=[]) or without providing
+a list psf.hmr() When an empty list is passed for resnames_exclude,
+the not_waters variable isn’t being defined (since the loop used to build it
+doesn’t run). To resolve this, the new function checks whether resnames_exclude
+is None and, if so, sets it to ['TIP3’] ensuring water residues are excluded
+by default. Now if you call psf.hmr() without parameters then TIP3 waters are
+automatically excluded. Now if you explicitly pass an empty list
+psf.hmr(resnames_exclude=[]) then no residues are excluded and TIP3 waters
+will be processed (hmred). Replaced the for loop to build
+the not_waters boolean array with numpy.isin which is  more concise and efficient.
+
+Files involved:
+tool/pycharmm/pycharmm/psf.py
+
+3.31 Minor updates to rhdo fix
+     Developer: Ryan Hayes
+     Institution: University of California at Irvine
+     Date: 27 March 2025
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/280
+Git commit: 4a690e56
+
+Description:
+Remove the periodic box corrections for xtlacc from get_xtlacc.
+
+Files Involved:
+source/image/crystal.F90
+
+3.32 Update charmm build system to use new intel llvm compilers
+     Developer: Josh Buckner
+     Institution: University of Michigan
+     Date: 7 May 2025
+
+Merge request:https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/281
+Git commit: 7439e23a
+
+Description:
+The classic intel compilers are deprecated and no longer shipped with
+intel's compiler suite.
+
+Files Involved:
+configure
+
+3.33 RMSDyn changes
+    Developer: Robert Petrella
+    Institution: Harvard University
+    Date: 10 May 2025
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/282
+Git commit: 545408aa
+
+Description:
+Addition of 'DIAG' keyword to RMSDynam command, which allows
+the output of the diagonal of the traj-traj RMSD matrix--
+i.e., it allows for a clean frame-by-frame RMSD comparison of
+the trajectories. There is an optional offset of 'offs'
+number of skip-sized chunks of the second trajectory relative
+to the first.
+
+Files involved:
+doc/dynamc.info
+source/manip/rmsdyn.F90
+
+3.34 KUNIT energy file output for OpenMM
+     Developer: Charles L. Brooks III
+     Institution: University of Michigan
+     Date: 3 June 2025
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/283
+Git commit: f6936ad4
+
+Description:
+When running a regular CHARMm production simulation using a restart file on CPU,
+the simulation proceeds as normal and outputs a .ene energy table as expected.
+When running the same simulation with a restart file but now using OpenMM GPU,
+the simulation proceeds as normal and outputs a .ene energy table but
+the step count in the energy table seems to be reset rather than starting
+from the step specified in the restart file.
+
+This commit adds KUNIT energy output files to CHARMM/OpenMM.
+
+Files involved:
+source/dynamc/dcntrl.F90
+source/openmm/omm_main.F90
+test/c50test/omm_kunit.inp
+
+3.35 gukini.F90 and new GAMESS support
+     Developer: Milan Hodoscek
+     Institution: NIC, Slovenia
+     Date: 18 July 2025
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/284
+Git commit: a9080466
+
+Description:
+Build problems with the current gukini.F90. It has few typos for GAMESS.
+Fixing few lines in the gukini.F90 so it is compiling for
+GAMESS keyword. At the same time also added support for compiling the
+latest version of GAMESS (July 15, 2024)
+
+Files involved:
+source/gukint/gukini.F90
+source/gamint/CMakeList.txt
+tool/gmscomp
+
+==============================================================================
+[4] c50b2 Change Log
+
+    The following changes were committed from August 15, 2025
+    through January 15, 2026.
+
+------------------------------------------------------------------------------
+4.1 Mscale docu and test improvements
+    Developer: Milan Hodoscek
+    Institution: NIC, Slovenia
+    Date: 20 August 2025
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/287
+Git commit: 318774d8
+
+Description:
+Update build instructions in documentation for mscale.
+Add testcheck to c35test/mscale.inp to report pass/fail.
+
+Files involved:
+doc/mscale.info
+test/c35test/mscale.inp
+
+4.2 Html build and pycharmm build update
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 26 August 2025
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/288
+Git commit: e07d8d8d
+
+Description:
+Added out file argument for info2html.py instead of relying on shell output
+redirection. Now html docu build is compatible with tcsh.
+Added index.py to produce an index.html file for all the html docu files
+generated.
+Added pyproject.toml to modernize pycharmm build process.
+Moved setup.py options to pyproject.toml.
+Added proper dependencies for pycharmm install.
+Now if a python file is edited, pycharmm will be reinstalled.
+
+Files involved:
+tool/cmake/html_docu.cmake
+tool/cmake/pycharmm.cmake
+tool/index.py
+tool/info2html.py
+tool/pycharmm/pyproject.toml
+tool/pycharmm/setup.py
+
+4.3 Custom python dynamics callback update
+    Developer: Charles L Brooks III
+    Institution: University of Michigan
+    Date: 12 Sept 2025
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/293
+Git commit: 0a6fa970
+
+Description:
+Updated custom dynamics to add current coordinates as well as xold, xnew and vx
+added control to have dynamics exit if condition is met based on vaules computed
+from velocities or positions
+
+Files involved:
+source/api/api_custom.F90
+source/dynamc/dcntrl.F90
+tool/pycharmm/pycharmm/custom.py
+tool/pycharmm/tests/testCustomDynam.py
+
+4.4 OpenMM 8.4 plugin compatibility fix
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 10 Nov 2025
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/294
+Git commit: 54b6fdcd
+
+Description:
+With OpenMM 8.4, the class OpenCLNonbondedUtilities lacks ParameterInfo.
+It has been moved to ComputeParameterInfo which takes a different number and
+different types of arguments.
+
+Sample input to reproduce the problem (or testcase): compile with OpenMM and OpenCL
+
+Files involved:
+source/openmm/plugins/gbsw/platforms/opencl/OpenCLGBSWKernels.cpp
+
+4.5 Domdec gpu, cuda 13, and cmake 4 compatibility fixes
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 2 December 2025
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/295
+Git commit: 2890ea12
+
+Description:
+cudaThreadSynchronize has finally been removed from the cuda toolkit.
+Template function reduce_force in domdec_gpu requires an extra compiler switch
+to compile with cuda 13. Some versions of cmake 4 complain about
+cmake_minimum_version being set below 3.5
+
+Sample input to reproduce the problem (or testcase):
+./configure -u ... && make ... install
+
+Files involved:
+CMakeLists.txt
+source/domdec_gpu/Matrix3d.cu
+
+4.6 Dimens changes for cgenff 5 and some additional documentation
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 15 Jan 2026
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/296
+Git commit: 3c5ff140
+
+Description:
+Cgenff 5 changes require much larger default maxnbf and maxcp.
+Users need documentation on how to fix SIGILL crashes in some cases.
+It would be useful to print the location of the charmm shared library from
+the python prompt.
+
+Files involved:
+source/ltm/dimens_ltm.F90
+configure and doc/cmake.info
+tool/pycharmm/pycharmm/init.py
+tool/pycharmm/pycharmm/lib.py
+
+4.7 Cuda toolkit 13 min supported gpu arch is 75
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 15 Jan 2026
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/297
+Git commit: 0776c904
+
+Description:
+CUDA Toolkit 13 has deprecated gpu architectures 50 and below.
+The minimum supported and default is now 75.
+
+Sample input to reproduce the problem (or testcase):
+compile time problem
+
+Files involved:
+CMakeLists.txt
+
+4.8 Illegal instruction while executing function uninf
+    Developer: Josh Buckner
+    Institution: University of Michigan
+    Date: 20 Jan 2026
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/298
+Git commit: fc5b71e6
+
+Description:
+When charmm is compiled on one of our compute nodes (a newish intel server) and
+run as an executable on our login node (an older intel server),
+it crashes (SIGILL) during startup complaining about an illegal instruction
+traced back to the uninf C++ function.
+
+Sample input to reproduce the problem (or testcase):
+crash during startup
+
+Files involved:
+source/charmm/iniall.F90
+source/machdep/startup.F90
+source/machdep/uninf.cpp
+
+4.9 Fix for cmake grabbing base env python in a conda env
+    Developer: David L. Braun
+    Institution: University of Michigan
+    Date: 21 Jan 2026
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/299
+Git commit: bd634d47
+
+Description:
+Before the fix, sometimes cmake would find the base conda environment's python
+rather than the active conda environment's python.
+
+Sample input to reproduce the problem (or testcase):
+configure time issue
+
+Files involved:
+CMakeLists.txt
+tool/cmake/pycharmm.cmake
+tool/cmake/html.cmake
+
+4.10 Do not register mcbarostat2 cuda & opencl kernels if no platform
+     Developer: Josh Buckner
+     Institution: University of Michigan
+     Date: 22 January 2026
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/300
+Git commit: 0925a904
+
+Description:
+Before the fix, when charmm is built on a machine with a gpu,
+running charmm on a non-gpu node and using an openmm related command resulted
+in an OpenMM Exception and crash.
+
+Sample input to reproduce the problem (or testcase):
+c37test/omm_acetate.inp
+
+Files involved:
+source/openmm/plugins/MonteCarloBarostat2/platforms/cuda/src/CudaCharmmKernelFactory.cpp
+source/openmm/plugins/MonteCarloBarostat2/platforms/opencl/src/OpenCLCharmmKernelFactory.cpp
+
+4.11 Two small fixes: openmm version and pycharmm coor.show()
+     Developer: Josh Buckner
+     Institution: University of Michigan
+     Date: 26 January 2026
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/301
+Git commit: 9e23db87
+
+Description:
+When configuring with GCC on macOS, OpenMM 8.4 reports being version ".4"
+pycharmm.coor.show() does not take any arguments like a selection
+
+Files involved:
+CMakeLists.txt
+tool/pycharmm/pycharmm/coor.py
+
+4.12 Build fixes: pdoc dependencies and ljpme with OpenMM Torch
+     Developer: Josh Buckner
+     Institution: University of Michigan
+     Date: 29 January 2026
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/302
+Git commit: eb925f96
+
+Description:
+pip install pycharmm was not a dependency of the pdoc documentation generation.
+This caused pdoc to error out at build time. ljpme sets the compiler flag
+-std=c++11 overriding the -std=c++17 needed by OpenMM Torch
+
+Files involved:
+tool/cmake/pycharmm.cmake
+CMakeLists.txt
+
+4.13 Added call to psfsum in delete_x so counters will be updated
+     Developer: Charles L. Brooks III
+     Institution: University of Michigan
+     Date: 4 February 2026
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/303
+Git commit: e48bc9ca
+
+Description:
+I added the missing call to api_psf.F90 for calls to delete_x
+(bonds, angles, dihedrals, impropers, maps, conn) so that
+the variable counters will be properly updated.
+
+Sample input to reproduce the problem (or testcase): na
+
+Files involved:
+source/api/api_psf.F90
+
+4.14 "Error combining shaketypes" on macOS
+     Developer: Josh Buckner
+     Institution: University of Michigan
+     Date: 4 February 2026
+
+Merge request: https://charmm-dev.org:1976/bucknerj/dev-release/-/merge_requests/304
+Git commit: 5e26948b
+
+Description:
+On macOS with a "library" build, dynamics with domdec and fast shake
+results in an "Error combining shaketypes" early exit.
+
+Sample input to reproduce the problem (or testcase):
+test/c37test/domdec.inp
+
+Files involved:
+source/domdec/domdec_shake.inp

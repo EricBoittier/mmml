@@ -33,41 +33,20 @@ module tsmh
   !  BACKLS:           "BACK" ATOM LIST
   INTEGER SNPRTT
   !*** clbiii mod for ub
-#if KEY_IF==1 || KEY_CMAP==1
-  !
-#endif
   !!      PARAMETER (SNPRTT=16)
-#if KEY_ELSE==1
-  !
-#endif
   !!      PARAMETER (SNPRTT=14)
-#if KEY_ENDIF==1
-  !
-#endif
 !!!      PARAMETER (SNPRTT=12)
 !!!***end of clbiii mod for ub
-  !! 
+  !!
   !!      INTEGER SNPERT,REACLS,PRODLS,BSKIPR,BSKIPP,ASKIPR,ASKIPP
   !!      INTEGER PSKIPR,PSKIPP,ISKIPR,ISKIPP,PIGGLS,BACKLS
 !!!*** clbiii mod for ub
   !!      INTEGER UBSKIPR, UBSKIPP
   !!
-#if KEY_IF==1 || KEY_CMAP==1
-  !
-#endif
   !!      INTEGER CTSKIPR,CTSKIPP
-#if KEY_ENDIF==1
-  !
-#endif
   !!      COMMON /NPERT/ SNPERT,REACLS,PRODLS,BSKIPR,BSKIPP,ASKIPR, &
   !!                     ASKIPP,UBSKIPR, UBSKIPP, &
-#if KEY_IF==1 || KEY_CMAP==1
-  !
-#endif
   !!                     CTSKIPR,CTSKIPP, &
-#if KEY_ENDIF==1
-  !
-#endif
   !!                     PSKIPR,PSKIPP,ISKIPR,ISKIPP,PIGGLS,BACKLS
 !!!      COMMON /NPERT/ SNPERT,REACLS,PRODLS,BSKIPR,BSKIPP,ASKIPR,
 !!!     1               ASKIPP,PSKIPR,PSKIPP,ISKIPR,ISKIPP,PIGGLS,BACKLS

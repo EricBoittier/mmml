@@ -113,6 +113,7 @@ update lrc -
 
 energy
 
+bomlev -1 ! avoid issues from old automode
 dynamics cpt leap start pconstant pmass 400.0 pref 1.0 pgamma 20.0 -
         tbath 300.0 hoover  tmass 100.0  reft 300.0 -
         nstep 110  timestp 0.002  -

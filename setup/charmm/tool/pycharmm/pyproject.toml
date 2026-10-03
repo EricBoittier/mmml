@@ -1,0 +1,60 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = 'pycharmm'
+version = '0.0.0'
+readme = 'Readme.md'
+maintainers = [ { name = 'Josh Buckner', email = 'bucknerj@umich.edu' } ]
+description = 'a python library for molecular dynamics with CHARMM'
+requires-python = '>=3.4'
+dependencies = ['pandas', 'numpy', 'scipy']
+
+[project.optional-dependencies]
+# Needed only by pycharmm.ligandff, which builds CHARMM force fields for small
+# molecules from AMBER GAFF2. Kept out of `dependencies` so a normal pycharmm
+# install stays light and `import pycharmm` never requires them; install with
+# `pip install pycharmm[ligandff]`. AmberTools (antechamber/parmchk2/tleap) is a
+# separate, non-pip requirement for building (not for reading) a force field.
+ligandff = ['parmed', 'rdkit']
+
+# ---------------------------------------------------------------------
+# Lint config: pyflakes-clean is the standard for the test suite.
+# After the test-migration audit (May 2026) the suite passed
+# `python -m pyflakes tests/test_*.py` with zero warnings. To verify
+# locally:
+#
+#     cd tool/pycharmm
+#     python -m pyflakes tests/test_*.py
+#
+# Should print nothing and exit 0. Any new warning means a regression
+# -- run pytest first to confirm the change is safe, then either fix
+# the warning or, if it's intentional (e.g. a load-bearing keep-alive
+# binding), document why in a comment near the offending line.
+# ---------------------------------------------------------------------
+
+[tool.ruff]
+# Standardization pass for the pyCHARMM test suite (Aug 2026): consistent
+# formatting + a green lint guardrail. `ruff format` owns line wrapping.
+line-length = 100
+target-version = "py39"
+
+[tool.ruff.lint]
+# Auto-fixable / high-signal groups enforced now. flake8-pytest-style (PT)
+# and flake8-simplify (SIM) surface real cleanups but need manual review,
+# so they are deferred to a follow-up rather than enforced here.
+select = ["E4", "E7", "E9", "F", "I", "W", "UP", "B"]
+
+[tool.ruff.lint.per-file-ignores]
+# pycharmm has import-time side effects, so these scripts import it after
+# their own setup runs (intentional; not a top-of-file import).
+# I001: the import ORDER is the thing under test here -- one branch must
+# import pycharmm before mpi4py (see the module docstring). Sorting the
+# imports collapses both branches into the same thing and leaves the
+# regression guard silently testing nothing, which is exactly what had
+# happened to it before.
+"tests/_mpi_worker.py" = ["E402", "I001"]
+"tests/test_torch_constantforce.py" = ["E402"]
+# i-j-k-l is the standard dihedral atom-index naming (GETICV convention).
+"tests/test_correl.py" = ["E741"]

@@ -415,6 +415,17 @@ set s3 = ?nsel
 define tmp select sl4 end
 set s4 = ?nsel
 
+! Shell partition counts -- phase 1 (no images, uniform 3.75 A thickness).
+! These are integer atom counts produced by the SHELL module's partitioning
+! algorithm and are deterministic across platforms / parallel configs.
+! This is what shell.inp actually validates -- the incidental energy lines
+! before this can drift with env/MPI without indicating a real regression.
+! Use negative tolerance (-0.5) to force absolute integer-exact comparison.
+@testcheck @s1  36 -0.5 shell_phase1_s1
+@testcheck @s2 138 -0.5 shell_phase1_s2
+@testcheck @s3 120 -0.5 shell_phase1_s3
+@testcheck @s4  54 -0.5 shell_phase1_s4
+
 ! uncomment these to get a picture
 !!!  open unit 1 form write name sl1.pdb
 !!!  write coor pdb unit 1 select sl1 end
@@ -502,6 +513,12 @@ define tmp select sl3 end
 set s3a = ?nsel
 define tmp select sl4 end
 set s4a = ?nsel
+
+! Shell partition counts -- phase 2 (no images, custom bounds 3.0/5.0/8.0/10.0).
+@testcheck @s1a  18 -0.5 shell_phase2_s1a
+@testcheck @s2a  63 -0.5 shell_phase2_s2a
+@testcheck @s3a 108 -0.5 shell_phase2_s3a
+@testcheck @s4a  60 -0.5 shell_phase2_s4a
 
 ! uncomment these to get a picture
 !!!  open unit 1 form write name sl1a.pdb
@@ -619,6 +636,13 @@ set s3i = ?nsel
 define tmp select sl4 end
 set s4i = ?nsel
 
+! Shell partition counts -- phase 3 (with crystal images + PME,
+! uniform 3.75 A thickness).
+@testcheck @s1i  36 -0.5 shell_phase3_s1i
+@testcheck @s2i 162 -0.5 shell_phase3_s2i
+@testcheck @s3i 105 -0.5 shell_phase3_s3i
+@testcheck @s4i  45 -0.5 shell_phase3_s4i
+
 calc ds1 = @s1i - @s1
 calc ds2 = @s2i - @s2
 calc ds3 = @s3i - @s3
@@ -668,10 +692,19 @@ set s3ia = ?nsel
 define tmp select sl4 end
 set s4ia = ?nsel
 
+! Shell partition counts -- phase 4 (with crystal images + PME,
+! custom bounds 3.0/5.0/8.0/10.0).
+@testcheck @s1ia  18 -0.5 shell_phase4_s1ia
+@testcheck @s2ia  84 -0.5 shell_phase4_s2ia
+@testcheck @s3ia 153 -0.5 shell_phase4_s3ia
+@testcheck @s4ia  87 -0.5 shell_phase4_s4ia
+
 calc ds1 = @s1ia - @s1a
 calc ds2 = @s2ia - @s2a
 calc ds3 = @s3ia - @s3a
 calc ds4 = @s4ia - @s4a
+
+echo shell test failures: @testfail
 
 STOP
 

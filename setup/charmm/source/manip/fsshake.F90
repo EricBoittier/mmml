@@ -388,11 +388,11 @@ contains
     enddo
     nother = nconst - nwater
     if(nother > 0) &
-         call sort(nother,exch5,order5,itemp,jtemp,ktemp,0,0,0,0,3)
+         call sort(nother,exch5,order5,itemp,jtemp,ktemp,(/0/),(/0/),(/0/),(/0/),3)
     if(nwater > 0)then
        ibegin = nother + 1
        call sort(nwater,exch5,order5,itemp(ibegin),jtemp(ibegin), &
-            ktemp(ibegin),0,0,0,0,3)
+            ktemp(ibegin),(/0/),(/0/),(/0/),(/0/),3)
     endif
     !
     !     Now we copy the sorted temporary arrays into the constraint arrays.
@@ -495,7 +495,7 @@ contains
     enddo
     !---------------------------------------------------------------
     if(nother > 0) &
-         call sort(mshkgp,exch5,order5,nshkgp,bshkgp,0,0,0,0,0,2)
+         call sort(mshkgp,exch5,order5,nshkgp,bshkgp,(/0/),(/0/),(/0/),(/0/),(/0/),2)
     nsh1=0
     nsh2=0
     nsh3=0

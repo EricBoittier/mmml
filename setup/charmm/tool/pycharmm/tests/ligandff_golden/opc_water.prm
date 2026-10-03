@@ -1,0 +1,36 @@
+*>>>>>>>> All-Hydrogen Parameter File for Proteins from AMBER parm19sb <<<<<<
+*>>>>>>>>>>>>>> Includes phi, psi cross-term map (CMAP) <<<<<<<<<<<<<<<<
+*>>>>>>>>>>>>>>>>>>>>>>> C. L. Brooks III <<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+*
+
+ATOMS
+MASS  -1  LP     0.00000 ! EPW
+MASS  -1  HW     1.00800 ! H1
+MASS  -1  OW    16.00000 ! O
+
+BONDS
+! atom types   Kb    b0
+HW   HW    553.000   1.3712
+HW   OW    553.000   0.8724
+LP   OW    553.000   0.1594
+
+ANGLES
+! atom types     Ktheta    Theta0
+HW   OW   HW     55.000   103.60
+
+DIHEDRALS
+! atom types     Kchi    n    delta
+
+
+IMPROPERS
+! atom types     Kpsi    n    delta
+
+
+NONBONDED nbxmod 5 atom cdiel switch vatom vdistance vswitch -
+cutnb 14.0 ctofnb 12.0 ctonnb 10.0 eps 1.0 e14fac 0.8333 wmin 1.5
+!type  ignored   epsilon  Rmin/2   ignored   epsilon,1-4    Rmin/2,1-4
+HW     0.000000   0.000000   0.000000   0.000000   0.000000   0.000000
+LP     0.000000   0.000000   0.000000   0.000000   0.000000   0.000000
+OW     0.000000  -0.212801   1.777167   0.000000  -0.106400   1.777167
+
+END

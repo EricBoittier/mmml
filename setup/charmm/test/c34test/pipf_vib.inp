@@ -12,6 +12,13 @@ if ?pipf .ne. 1 then
  stop
 endif
 
+! PIPF is not parallelized (no MPI reductions in source/pipf), so it must be
+! run serially -- skip under >1 MPI process, same as pipf_test3.
+if ?numnode .gt. 1 then
+ echo "cpipftest/pipf_vib> PIPF test NOT performed (serial only)."
+ stop
+endif
+
 set name NMA
 read rtf card
 * NMA TOPOLOGY FILE

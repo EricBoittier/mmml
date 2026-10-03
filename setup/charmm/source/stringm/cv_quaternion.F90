@@ -206,7 +206,7 @@
        subroutine quat_list(i)
        use stream
        use multicom_aux;
-       use mpi
+       use mpi_f08
 !
  character(len=132)::info(21)=(/'','','','','','','','','','','','','','','','','','','','',''/);! output buffer
 !
@@ -804,7 +804,7 @@
 ! NOTE that this is a local print!
 ! use stream
        use multicom_aux;
-       use mpi
+       use mpi_f08
 !
        integer :: iunit
 ! locals
@@ -825,23 +825,23 @@
 ! use stream
 !
        use multicom_aux;
-       use mpi
+       use mpi_f08
 !
 #if (KEY_PARALLEL==1)
 #if (KEY_SINGLE==1)
- integer :: mpifloat=MPI_REAL 
+ TYPE(MPI_Datatype) :: mpifloat=MPI_REAL 
 #endif
 #if (KEY_SINGLE==0)
- integer :: mpifloat=MPI_REAL8 
+ TYPE(MPI_Datatype) :: mpifloat=MPI_REAL8 
 #endif
 #if (KEY_INTEGER8==0)
- integer :: mpiint=MPI_INTEGER 
+ TYPE(MPI_Datatype) :: mpiint=MPI_INTEGER 
 #endif
 #if (KEY_INTEGER8==1)
- integer :: mpiint=MPI_INTEGER8 
+ TYPE(MPI_Datatype) :: mpiint=MPI_INTEGER8 
 #endif
- integer :: mpichar=MPI_CHARACTER
- integer :: mpibool=MPI_LOGICAL
+ TYPE(MPI_Datatype) :: mpichar=MPI_CHARACTER
+ TYPE(MPI_Datatype) :: mpibool=MPI_LOGICAL
 #endif
        integer iunit
 ! locals

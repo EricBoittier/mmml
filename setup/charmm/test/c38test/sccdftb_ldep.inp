@@ -6,9 +6,36 @@
 bomlev 0
 
 if ?sccdftb .NE. 1 then
-  echo 'For running this test sccdftb needs to be not availabe, compile charmm with flag "T".'
+  echo SCCDFTB_LDEP TESTCASE RESULT: SKIP
   stop
 endif
+
+! This one needs l-dependent Hubbard values and spin constants for Cu, which
+! the 3ob set does not carry at all, so the file below has to be supplied by
+! hand -- the generator in the testing repository will not produce it.  WMAIN
+! numbers the QM atoms Cu, H, N, and CHARMM indexes the element list in the
+! file by WMAIN, so the order in the name is the order it must be in.
+!
+! Without the guard the run dies inside the parameter read with no termination
+! line and nothing about parameters in the message.
+set sccdftbdir UNSET_SCCDFTB_DATA
+set oldbomlev ?bomlev
+bomlev -5
+genv sccdftbdir SCCDFTB_DATA
+bomlev @oldbomlev
+if @sccdftbdir eq UNSET_SCCDFTB_DATA then
+   echo SCCDFTB_LDEP TESTCASE RESULT: SKIP
+   stop
+endif
+strc sccdat @sccdftbdir "/sccdftb_CUHN.dat"
+bomlev -5
+open unit 98 read form name @sccdat
+if ?iostat .ne. 1 then
+   echo SCCDFTB_LDEP TESTCASE RESULT: SKIP
+   stop
+endif
+close unit 98
+bomlev @oldbomlev
 
 read rtf card
 * generic top file for "cuII_nh3-4_P2.xyz"
@@ -180,7 +207,7 @@ scalar wmain set 1.0 sele (qm) .and. type Cu* end
 scalar wmain set 2.0 sele (qm) .and. type H* end
 scalar wmain set 3.0 sele (qm) .and. type N* end
 
-sccdftb remove d3rd hbon ldep chrg 2.0 unpe 1.0 sele qm end scft 1.0d-10 temp=0.0 
+sccdftb remove d3rd hbon ldep chrg 2.0 unpe 1.0 sele qm end scft 1.0d-10 temp=0.0 datf @sccdat
 
 !open unit 30 write file name trj.dcd
 !energy

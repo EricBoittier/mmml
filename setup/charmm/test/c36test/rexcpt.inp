@@ -191,5 +191,5 @@ stop
 
 label fail
 
-echo TESTCASE RESULT: FAILED
+echo REXCPT TESTCASE RESULT: FAIL
 stop

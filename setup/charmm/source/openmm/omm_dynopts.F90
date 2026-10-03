@@ -3,13 +3,20 @@ module omm_dynopts
    use stream, only: OUTU, PRNLEV
    implicit none
 
+   integer, parameter :: BARO_NONE = 0
+   integer, parameter :: BARO_ISOTROPIC = 1
+   integer, parameter :: BARO_ANISOTROPIC = 2
+   integer, parameter :: BARO_MEMBRANE = 3
+
    type omm_dynopts_t
       real(chm_real) :: collisionFrequency, frictionCoefficient
       real(chm_real) :: temperatureReference, pressureReference, variableTS_tol
       real(chm_real) :: surfaceTension, numberInterfaces
       real(chm_real) :: pressureIn3Dimensions(3)
       integer :: pressureFrequency
-      logical :: qAndersen, qPressure, qVariable, qLangevin, qPressure2
+      integer :: barostatType = BARO_NONE
+      logical :: qAndersen, qVariable, qLangevin, qPressure2
+      logical :: qPressure = .false.
       logical :: omm_qrexchg, omm_updateT = .false.
       character(len=10) :: frictionSource
    end type omm_dynopts_t
@@ -69,6 +76,19 @@ contains
          opts%surfaceTension = opts%surfaceTension * opts%numberInterfaces
          opts%qPressure2 = any(opts%pressureIn3Dimensions /= ZERO) &
                .or. opts%surfaceTension /= ZERO
+
+         ! Determine which native OpenMM barostat to use
+         if (opts%qPressure2) then
+            if (opts%surfaceTension /= ZERO) then
+               ! Modes 3 & 4: surface tension active -> membrane barostat
+               opts%barostatType = BARO_MEMBRANE
+            else
+               ! Modes 1 & 2: no surface tension -> anisotropic barostat
+               opts%barostatType = BARO_ANISOTROPIC
+            endif
+         else
+            opts%barostatType = BARO_ISOTROPIC
+         endif
       endif
 
       opts%qVariable = indxa(comlyn,comlen,'VARI') > 0
@@ -82,12 +102,6 @@ contains
          call wrndie(-1, caller, &
                'Andersen or Langevin heatbath required with MC barostat in OpenMM.')
       endif
-#if KEY_OPENMM==0
-      if (opts%qPressure .and. opts%qPressure2) then
-         call wrndie(-5, caller, &
-               'PRMC options PRXX, PRYY, PRZZ, TENS require OpenMM with CHARMM plugin.')
-      endif
-#endif 
    end function omm_parse_options
 
    !> Outputs a description of temperature and pressure control options.
@@ -180,4 +194,3 @@ contains
    end function same_dynopts
 
 end module omm_dynopts
-

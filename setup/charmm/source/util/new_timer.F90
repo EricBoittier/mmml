@@ -133,16 +133,16 @@ contains
   ! * Does gcomb for direct and recip separately
   ! *
   subroutine comm_buf(buf, q_direct_node, comm_direct, comm_recip)
-    use mpi
+    use mpi_f08
     use memory
     use parallel
     implicit none
     ! Input / Output
     real(chm_real) buf(MAXTIME+1)
     logical, intent(in) :: q_direct_node
-    integer, intent(in) :: comm_direct, comm_recip
+    TYPE(MPI_Comm), intent(in) :: comm_direct, comm_recip
     ! Variables
-    integer comm_charmm_save
+    TYPE(MPI_Comm) :: comm_charmm_save
 
     comm_charmm_save = comm_charmm
     if (q_direct_node) then
@@ -168,18 +168,22 @@ contains
 # endif /* KEY_DOMDEC */
     use stream
 #if KEY_PARALLEL==1
-    use parallel      
+    use parallel
+#endif
+#if KEY_DOMDEC==1
+    use mpi_f08
 #endif
     ! VO : limit output when running string; otherwise get nearly identical output from each replica
 #if KEY_MULTICOM==1 && KEY_STRINGM==1
     use multicom_aux
-    use mpi, only : MPI_UNDEFINED
+    use mpi_f08, only : MPI_UNDEFINED
 #endif
     use number
     implicit none
 #   if KEY_DOMDEC==1
     logical, intent(in) :: q_split, q_direct_node, q_recip_node
-    integer, intent(in) :: ndirect, nrecip, comm_direct, comm_recip
+    integer, intent(in) :: ndirect, nrecip
+    TYPE(MPI_Comm), intent(in) :: comm_direct, comm_recip
     logical, intent(in) :: q_root ! True if my rank (mynod_split) is 0 after direc/recip split
 #   endif
     integer i,j,k

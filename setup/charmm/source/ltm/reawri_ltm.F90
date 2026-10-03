@@ -66,6 +66,7 @@ module reawri
 !      QCONZ   - Flag for constant z-spacing with constant surface tension
 !      QISO    - Flag for isotropic pressure scaling
 !      GAM     - the product of gamma, timestep, and timfac
+!      DYN_TBATH - Langevin bath temperature between dynamics calls
 !      KBT     - Boltzmann constant times bath temperature
 !
 ! for constant temperature
@@ -95,7 +96,7 @@ module reawri
               NSAVX, MXYZ, IUNXYZ, IUNQMC, NSAVQ, IUPTEN, IPTFRQ
 ! reals
       real(chm_real)  DELTA, TIMEST, FIRSTT, FINALT, TWINDL, TWINDH, &
-              TEMINC, ECHECK, REFP(6), REFPI(6), REFPF(6), TCOUPL, TREF, &
+              TEMINC, ECHECK, DYN_TBATH, REFP(6), REFPI(6), REFPF(6), TCOUPL, TREF, &
               PWMAT(6), PWINV(6), PRFWD(6), PALPHA, PBFACT, PVFACT, &
               TMASS, REFT, SURFT, GAM, KBT, TSTRUC 
 !
@@ -109,7 +110,7 @@ module reawri
 contains
   subroutine reawri_init
     use number
-    use consta,only:roomt
+    use consta,only:roomt,kboltz
     iunrea=-1
     iunwri=-1
     iuncrd=-1
@@ -134,6 +135,8 @@ contains
     timest = 0.001 ! beware of roundoff
     firstt = ZERO
     finalt=roomt
+    dyn_tbath=roomt
+    kbt=roomt*kboltz
     tstruc=fmark
     twindl=-10.0_chm_real
     twindh=10.0_chm_real
@@ -147,4 +150,3 @@ contains
   end subroutine reawri_init
 
 end module reawri
-

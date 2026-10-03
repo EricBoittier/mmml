@@ -664,7 +664,7 @@ endif
 use param_store, only: get_param, find_param
 use stream          
 use ensemble         
-use mpi            
+use mpi_f08
 use contrl          
 use number          
 use chm_kinds

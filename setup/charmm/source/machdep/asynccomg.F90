@@ -21,31 +21,31 @@ contains
 #if KEY_PARINFNTY
      use parallel,only: qinfinity
 #endif
+     use mpi_f08
      implicit none
      integer, intent(in) :: NROUND  !number of rounds of receives
      integer,intent(in),dimension(:) :: NODARR,RECVMNY  ! NODARR array of "nodes", indexed by round
                                                         ! RECVMNY size of receives, indexed by "nodes" --i.e. values of nodarr
-     integer(chm_int4),allocatable,dimension(:),intent(inout) :: RHANDLES
+     TYPE(MPI_Request),allocatable,dimension(:),intent(inout) :: RHANDLES
      type(AROFAR),allocatable,dimension(:),optional,intent(inout) :: PRRBUF
      type(AROFAR_I4),allocatable,dimension(:),optional,intent(inout) :: PRIBUF
      type(AROFAR_I8),allocatable,dimension(:),optional,intent(inout) :: PRI8BUF
-     integer(chm_int4),intent(in),optional :: PCCATOR  !communicator
+     TYPE(MPI_Comm),intent(in),optional :: PCCATOR  !communicator
      integer,intent(in),dimension(:),optional :: PNMAP   !maps round to rank of "from" process in current communicator
      integer(chm_int4),intent(in),optional :: PTYPE  !optional   !passed additional mpi tag. sends and receives must match; def = 1
      integer, intent(in),optional :: PDATAWID   !passed width of incoming data (# columns); deflt is 1
      integer, intent(in), optional :: plabint
 !     logical :: qmemerror
 !
-     include 'mpif.h'
 
 ! local
-     integer(chm_int4) :: CCATOR  !communicator
+     TYPE(MPI_Comm) :: CCATOR  !communicator
      integer(chm_int4),dimension(:),allocatable :: NMAP   !maps round to rank of "from" process in current communicator
      integer(chm_int4) :: TYPE  ! type (mpi tag)
      integer :: DATAWID    ! width of data (number of columns)
-     integer(chm_int4) :: statigno(MPI_STATUS_SIZE)
      integer :: RECVND,IBEGIN,IEND,RECVLEN,COUNT,III,ATOM,ROUND
-     integer(chm_int4) :: RSIZE,FROM,IE,MPIDOUB,MPINT,MPINT8,myid
+     TYPE(MPI_Datatype) :: MPIDOUB,MPINT,MPINT8
+     integer(chm_int4) :: RSIZE,FROM,IE,myid
      integer :: R8SIZE
      integer(chm_int4) :: ihit  !temporary
      logical :: QINTBUF,QRELBUF,QINT8BUF
@@ -57,9 +57,8 @@ contains
      if(qinfinity) return 
 #endif
      MPINT=MPI_INTEGER
-     MPINT8=MPI_INTEGER8  
+     MPINT8=MPI_INTEGER8
      MPIDOUB=MPI_DOUBLE_PRECISION
-     STATIGNO(:)=MPI_STATUS_IGNORE(:)
 !
 
 ! Process optional arguments
@@ -116,12 +115,8 @@ contains
      DATAWID = 1
      if(present(PDATAWID)) DATAWID = PDATAWID
 
-!deallocate(RHANDLES)
-     if(allocated(RHANDLES)) call chmdealloc('asynccomg.src','ASYNCLST_RG','RHANDLES',NROUND,ci4=RHANDLES)
-!allocate(RHANDLES(NROUND))
-     call chmalloc('asynccomg.src','ASYNCLST_RG','RHANDLES',NROUND,ci4=RHANDLES)
-
-     RHANDLES = 0
+     if(allocated(RHANDLES)) deallocate(RHANDLES)
+     allocate(RHANDLES(NROUND))
 !
      DO ROUND = 1,NROUND
        ROUNDI4 = ROUND
@@ -176,36 +171,36 @@ contains
      use memory
 !     use spacdat_mod, only: AROFAR,AROFAR_I4,AROFAR_I8
      use parallel, only: MYNODP !temporary
+     use mpi_f08
      implicit none
 
      integer, intent(in) :: NROUND     ! number of sends
      integer,intent(in),dimension(:) :: NODARR  ! maps round to corresponding part of sendlst (e.g. CPU)
      integer,intent(in),dimension(:),target :: SENDLST  ! send list
      integer,intent(in),dimension(:) :: SENDHI,SENDMNY   ! marker arrays for sendlist
-     integer(chm_int4),allocatable,dimension(:),intent(out) :: SHANDLES   !mpi handles for posted sends
+     TYPE(MPI_Request),allocatable,dimension(:),intent(out) :: SHANDLES   !mpi handles for posted sends
      type(AROFAR_I4),allocatable,dimension(:),optional,intent(inout) :: PSIBUF   !send data buffer (passed in/out b/c deallocated later)
      type(AROFAR_I8),allocatable,dimension(:),optional,intent(inout) :: PSI8BUF   !send data buffer (passed in/out b/c deallocated later)
      type(AROFAR),allocatable,dimension(:),optional,intent(inout) :: PSRBUF   !send data buffer
-     integer(chm_int4),intent(in),optional :: PCCATOR  !(passed) communicator; default is MPI_COMM_WORLD
+     TYPE(MPI_Comm),intent(in),optional :: PCCATOR  !(passed) communicator; default is MPI_COMM_WORLD
      integer,intent(in),optional,dimension(:) :: PNMAP   !maps round to rank of "to" process in current communicator; def is nodarr
      integer(chm_int4),intent(in),optional :: PTYPE  !optional   !passed additional mpi tag. sends and receives must match; def = 1
      integer, intent(in),optional :: PDATAWID   !passed width of data (# columns); deflts o/w taken fr size of array
      real(chm_real),intent(in),dimension(:,:),optional,target :: PRDATA
      integer,intent(in),dimension(:,:),optional,target :: PIDATA  !data arrays using SENDLST as index
-     real(chm_real),intent(in),dimension(:),optional,target :: PXX,PYY,PZZ 
+     real(chm_real),intent(in),dimension(:),optional,target :: PXX,PYY,PZZ
      integer,intent(in),optional :: plabint
 !
-     include 'mpif.h'
 ! local variables/arrays
      real(chm_real),dimension(:,:),pointer :: RARDATA   !array holding real data to be sent  (e.g. coordinates); default is null
      integer,dimension(:,:),pointer :: IARDATA   !array holding integer data to be sent  (e.g. atom numbers); default is SENDLST
      integer :: DATAWID    ! width of data (number of columns)
      integer(chm_int4) :: TYPE  ! type (mpi tag)
      integer(chm_int4),dimension(:),allocatable :: NMAP   !maps round to rank of "to" process in current communicator; def is nodarr -1
-     integer(chm_int4) :: CCATOR  !communicator; default is MPI_COMM_WORLD
-     integer(chm_int4) :: statigno(MPI_STATUS_SIZE)
+     TYPE(MPI_Comm) :: CCATOR  !communicator; default is MPI_COMM_WORLD
      integer :: SENDND,IBEGIN,IEND,SENDLEN,COUNT,III,ROWIND,ROUND,PX,PY,PZ,PT,COLIND
-     integer(chm_int4) :: TO,SSIZE,IE,MPIDOUB,STATUS,IHIT,MPINT,MPINT8
+     TYPE(MPI_Datatype) :: MPIDOUB,MPINT,MPINT8
+     integer(chm_int4) :: TO,SSIZE,IE,STATUS,IHIT
      integer :: S8SIZE
      real(chm_real),target,dimension(1) :: RNULL
      logical :: QINTDATA,QRELDATA,QXYZDATA,QDEFDATA,QPSIBUF,QPSI8BUF
@@ -218,16 +213,11 @@ contains
 !--------------------------------------------------------------------------------------------------------------------------
      MPIDOUB=mpi_double_precision
      MPINT=MPI_INTEGER
-     MPINT8=MPI_INTEGER8  
-     statigno(:)=MPI_STATUS_IGNORE(:)
+     MPINT8=MPI_INTEGER8
 
       pass = pass + 1
-!deallocate(SHANDLES)
-     if(allocated(SHANDLES)) call chmdealloc('asynccomg.src','ASYNCLST_SG','SHANDLES',NROUND,ci4=SHANDLES)
-!allocate(SHANDLES(NROUND))
-     call chmalloc('asynccomg.src','ASYNCLST_SG','SHANDLES',NROUND,ci4=SHANDLES)
-
-     SHANDLES = 0
+     if(allocated(SHANDLES)) deallocate(SHANDLES)
+     allocate(SHANDLES(NROUND))
 !
 ! process optional arguments and perform internal checks
 ! label
@@ -476,11 +466,12 @@ contains
      use memory
      use parallel
 !     use spacdat_mod,only: AROFAR,AROFAR_I4,AROFAR_I8
+     use mpi_f08
      implicit none
      integer,intent(in) :: NROUND
      integer,intent(inout),dimension(:) :: RECVLST   !by default, received data (integers); otherwise points to rows of received data
      integer,intent(in),dimension(:) :: RECVHI,RECVMNY,NODARR
-     integer*4,allocatable,dimension(:),intent(inout) :: RHANDLES
+     TYPE(MPI_Request),allocatable,dimension(:),intent(inout) :: RHANDLES
      type(AROFAR),allocatable,dimension(:),intent(inout),optional :: PRRBUF
      type(AROFAR_I4),allocatable,dimension(:),intent(inout),optional :: PRIBUF
      type(AROFAR_I8),allocatable,dimension(:),intent(inout),optional :: PRI8BUF
@@ -491,11 +482,9 @@ contains
      logical,intent(in),optional :: PADD  !true if accumulating data, def = .false.
      integer, intent(in), optional :: plabint
      integer :: pass=0
-     include 'mpif.h'
 
 ! local
      integer(chm_int4) :: NROUNDI4
-     integer(chm_int4) :: statigno(MPI_STATUS_SIZE)
      integer*4 to,from,sizes,ie,IHIT
      integer :: NODE2,IBEGIN,IEND,RECVLEN,COUNT,III,ROWIND,ROUND,PX,PY,PZ,PT,COLIND
      logical :: QINTDATA,QRELDATA,QXYZDATA,QDEFDATA,QPRIBUF,QPRI8BUF
@@ -503,8 +492,10 @@ contains
      logical :: LADD
      integer :: labint, sizetemp
      integer :: I8HIT
-     integer(chm_int4) :: recvd_count,ierr,STATUS(MPI_STATUS_SIZE),datatype !for debug
-     integer(chm_int4) :: MPIDOUB,MPINT,MPINT8  !for debug
+     integer(chm_int4) :: recvd_count,ierr !for debug
+     TYPE(MPI_Status) :: STATUS !for debug
+     TYPE(MPI_Datatype) :: datatype !for debug
+     TYPE(MPI_Datatype) :: MPIDOUB,MPINT,MPINT8  !for debug
      logical :: QASYNCGDEB !for debug
 !  end of declarations
 !-------------------------------------------------------------------------------------------------------------------
@@ -650,12 +641,10 @@ contains
 #if KEY_PARINFNTY==1
      if(qinfinity) return 
 #endif
-     statigno(:)=MPI_STATUS_IGNORE(:)
-     
 !
      DO ROUND=1,NROUND
        if(.not.QASYNCGDEB) then
-         call mpi_waitany(NROUNDI4,RHANDLES,IHIT,STATIGNO,IE)
+         call mpi_waitany(NROUNDI4,RHANDLES,IHIT,MPI_STATUS_IGNORE,IE)
        else
          datatype = MPIDOUB
          if(QPRIBUF) datatype = MPINT 
@@ -803,7 +792,7 @@ contains
        deallocate(PRI8BUF)
       endif
      endif
-     call chmdealloc('asynccomg.src','ASYNCLST_WRG','RHANDLES',NROUND,ci4=RHANDLES)
+     deallocate(RHANDLES)
 
 !
     END SUBROUTINE ASYNCLST_WRG
@@ -817,20 +806,18 @@ contains
      use parallel,only: qinfinity
 #endif
 !     use spacdat_mod,only: AROFAR,AROFAR_I4,AROFAR_I8
+     use mpi_f08
      implicit none
      integer,intent(in),dimension(:) :: NODARR  !maps round to corresponding part of sendlst (e.g. CPU)
      integer,intent(in),dimension(:) :: SENDMNY   !marker arrays for sendlist
-     integer*4,allocatable,dimension(:),intent(inout) :: SHANDLES
+     TYPE(MPI_Request),allocatable,dimension(:),intent(inout) :: SHANDLES
      type(AROFAR),allocatable,dimension(:),optional :: PSRBUF
      type(AROFAR_I4),allocatable,dimension(:),optional :: PSIBUF
      type(AROFAR_I8),allocatable,dimension(:),optional :: PSI8BUF
      integer,intent(in) :: NROUND
 
-     include 'mpif.h'
-
 ! local
      integer(chm_int4) :: NROUNDI4
-     integer(chm_int4) :: statigno(MPI_STATUS_SIZE)
      integer*4 ie,STATUS,IHIT
      integer :: ROUND,SENDLEN,NODE
      logical :: QINTBUF,QRELBUF
@@ -842,7 +829,6 @@ contains
 #if KEY_PARINFNTY==1
      if(qinfinity) return 
 #endif
-     statigno(:)=MPI_STATUS_IGNORE(:)
 ! process optionals
      if((present(PSIBUF)).or.(present(PSI8BUF))) then
       QINTBUF = .true.
@@ -863,7 +849,7 @@ contains
 !
 !call mpi_waitall(ix,rq,ms,ie) ! this is also not so bad ???
      do ROUND=1,NROUND
-        call mpi_waitany(NROUNDI4,SHANDLES,IHIT,STATIGNO,IE)
+        call mpi_waitany(NROUNDI4,SHANDLES,IHIT,MPI_STATUS_IGNORE,IE)
         IF(IHIT.LE.0) then
           call parstoperr('<ASYNCLST_WSG>','SEND ARRAY HANDLE = 0, MISSING HANDLE')
         ENDIF
@@ -880,7 +866,7 @@ contains
      else
         deallocate(PSRBUF) 
      endif
-     call chmdealloc('asynccomg.src','ASYNCLST_WSG','SHANDLES',NROUND,ci4=SHANDLES)
+     deallocate(SHANDLES)
 
     END SUBROUTINE ASYNCLST_WSG
 

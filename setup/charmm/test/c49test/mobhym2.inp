@@ -3,6 +3,11 @@
 
 ! This test is a bit slow, sorry. Large system.
 
+if ?numnode .ne. 1 then
+  echo "Test NOT performed in parallel."
+  stop
+endif
+
 stream datadir.def
 set testname mobhym2
 
@@ -24,7 +29,7 @@ stream unit 11
 open read unit 11 card name @0mobhy.str
 stream unit 11
 
-! generate psf 
+! generate psf
 
 open read unit 10 card name @0m2proa.crd
 read sequ coor unit 10
@@ -65,7 +70,7 @@ crystal read card
 * crystal
 *
  SYMMETRY
- (X,Y,Z)                                 
+ (X,Y,Z)
  END
 
  IMAGES
@@ -115,7 +120,7 @@ nbonds atom vatom vfswitch bygr -
 define prot sele segid PRO* end
 
 MMFP
-GEO rcm planar zref 0.0 zdir 1.0 force 100.0 droff 0.0 sele PROT .or. resn POPC end 
+GEO rcm planar zref 0.0 zdir 1.0 force 100.0 droff 0.0 sele PROT .or. resn POPC end
 GEO rcm cylinder Xref -4.34 Yref 7.0 Zref 0.0 XDIR 0.0 YDIR 0.0 ZDIR 1.0 -
     harmonic FORCE 1.0 select .not. hydrogen .and. PROT end
 GEO planar zref 0.0 zdir 1.0 force 10.0 droff 27.0 sele resn H3O end
@@ -129,7 +134,7 @@ shake bonh param nores sele atom hydr * OH2 end sele atom hydr * H3 end
 donor remove sele .not. (atom HYDR * H*) end show
 acceptor remove sele .not. (resn TIP3 .or. resn H3O) end
 
-hbonds ihbfrq 10 cuthb 3.1 
+hbonds ihbfrq 10 cuthb 3.1
 skipe hbond imhb
 mobhy ihopfr 10 ntit 4 nh3o 1 ebbr @0mobhy.prm PROA 16 U2 PROB 16 U2 PROC 16 U2 -
       PROD 16 U2 maft nstep 40 volt 5.0 width 55 sele resn H3O end
@@ -148,7 +153,7 @@ set temp = 303.15
 DYNA CPT leap nstep 50 timestep 0.002 echeck -1 -
      nprint 10 iprfrq 1000 ntrfrq 5000 -
      iunrea -1 iunwri -1 iuncrd -1 iunvel -1 kunit -1 nsavc 0 nsavv 0 -
-     PCONS pint pref 1.0 pmass @Pmass pgamma 20.0 - 
+     PCONS pint pref 1.0 pmass @Pmass pgamma 20.0 -
      HOOVER reft @temp tmass 2000.0 tbath @temp firstt @temp -
      iseed 548587696 134859505 970795875 78686970
 

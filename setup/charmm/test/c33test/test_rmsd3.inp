@@ -137,14 +137,19 @@ calc offset = @offset + 0.5
 if offset le 5 goto loop1
 
 prnlev -5 @pnode
-wrnlev -5 
+wrnlev -5 @pnode
 
 calc boffset = @boffset + 1
 
 if boffset le 5 goto loop2
 
 prnlev 5 @pnode
-wrnlev 5
+! `wrnlev' needs the same node qualifier as `prnlev': non-master ranks
+! start with WRNLEV=-5 so that only the master narrates, and a bare
+! `wrnlev' is applied on every rank, which puts them back to work.  Every
+! WRNDIE warning is then emitted once per rank, and the copies interleave
+! with the master's output in a different order on every run.
+wrnlev 5 @pnode
 
 skip none
 

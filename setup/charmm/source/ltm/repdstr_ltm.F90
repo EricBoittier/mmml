@@ -2,6 +2,9 @@ module repdstr
   use chm_kinds
   use dimens_fcm
   use parallel, only: maxnode
+#if KEY_MPI==1
+  use mpi_f08, only: MPI_Comm
+#endif
   implicit none
 
 #if KEY_REPDSTR==0 /* repdstr_fcm */
@@ -27,7 +30,8 @@ module repdstr
 !-----------------------------------------------------------------------
       LOGICAL QREPDSTR,QRDQTT,QWRQTT,QREXCHG,QREXCHGL,QEXPT,QEX2D,QEXBK
       logical :: qrepioset, qrepdnames = .true.
-      INTEGER NREPDSTR,IREPDSTR,IREXFQ,COMM_UNIVERSE,COMM_RPG
+      TYPE(MPI_Comm) :: COMM_UNIVERSE,COMM_RPG
+      INTEGER NREPDSTR,IREPDSTR,IREXFQ
       INTEGER ITDRB,REPSEED,IOLORIG,PRNLORIG,WRNLORIG,IOON,IUNREX,NATREPCMD
       integer NREPT,NREPX,IRBK,EWRITU
       integer,parameter  :: NWREX=1000
@@ -45,12 +49,12 @@ module repdstr
       real(chm_real) TEMPRX(MAXNODE)
 
       logical,save :: qrepmaster         ! True if this thread is master of this replica group
-      integer,save :: comm_rep_master    ! MPI comm for all COMM_RPG masters
+      TYPE(MPI_Comm),save :: comm_rep_master    ! MPI comm for all COMM_RPG masters
 #endif /* (check_dependency)*/
 
 contains
   subroutine repdstr_iniall
-    use mpi
+    use mpi_f08
     implicit none
     ioon=0
     qrdqtt=.false.

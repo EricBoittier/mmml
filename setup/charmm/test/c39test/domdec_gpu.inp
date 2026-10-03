@@ -1,16 +1,57 @@
-*  Benchmark dynamics for DHFR in a cubic box of
-*  solvent using PBC w/ PME.  Total system contains 23,558 atoms,
-*  21,069 atoms associated with water molecules and 2589 protein atoms.
+*  DOMDEC_GPU test: CPU DOMDEC vs GPU DOMDEC for DHFR in a cubic box of
+*  solvent using PBC w/ PME.  Total system contains 23,558 atoms, 21,069
+*  atoms associated with water molecules and 2589 protein atoms.
 *
 
-! APH 2013: Tests domdec_gpu functionality
+! PART 1 compares the CPU-DOMDEC and GPU-DOMDEC energies and forces at
+! one and the same geometry, with no SHAKE and nothing else in between,
+! so the two sets of numbers are directly comparable.  PART 2 runs the
+! same short dynamics down both paths, with SHAKE on for both, and
+! compares the two paths again at each trajectory's final geometry.
+!
+! The GPU force terms are evaluated in single precision, so agreement is
+! expected only to roundoff.  Measured spreads on an RTX 5000 Ada
+! (2026-08, master b328d39ae) were, relative:
+!
+!    total energy 2.1e-07   VDW 7.3e-07   ELEC 7.8e-08
+!    BOND 4.5e-07   ANGL 3.1e-08   RMS force 3.4e-05
+!    10-step trajectory agreement 8.7e-08
+!
+! The tolerances below sit one to two orders above those, and three or
+! more orders below anything a real DOMDEC_GPU error would produce.  A
+! borderline failure should be judged against the numbers above rather
+! than silently loosened.
+!
+! APH 2013.  Rewritten as a self-checking test 2026-08: this test used
+! to end in an unconditional 'echo Test OK' and compared nothing at all.
+! It also switched SHAKE on between the CPU and the GPU energy call, so
+! the printed CPU energy was unSHAKEn while the printed GPU energy was
+! SHAKEn.  The two differed by 741 kcal/mol, and that gap was read as a
+! GPU failure when in fact nothing was wrong.  The old version wrote the
+! CPU and GPU coordinates and forces to @9 and then never compared them.
+! The comparisons are all done in the run now.  The four @9 files are
+! still written, but note what they are: the coordinates and forces at
+! the END of each PART 2 trajectory, not the PART 1 geometry the energy
+! and force checks run on.
 
 if ?domdec_g .ne. 1 then
+   echo domdec_gpu TESTCASE RESULT: SKIP
    echo "Test NOT performed. DOMDEC_GPU must be defined in pref.dat"
    stop
 endif
 
 stream datadir.def
+
+! Relative tolerances.  See the header for the measured spreads.
+set etol   = 1e-5    ! energies, CPU vs GPU at the same geometry
+set ftol   = 1e-3    ! RMS force difference / RMS force
+! dyntol is deliberately much looser than the 8.7e-08 measured: it is the
+! only check that compares two separately integrated trajectories rather
+! than two evaluations of one geometry, so it is the one check that could
+! drift with the GPU model.  It is a coarse "did the GPU integrator stay
+! on the rails" test; the sharp checks are the same-geometry ones above
+! and the two DYNA_*GEOM checks, which run at @etol.
+set dyntol = 1e-3    ! CPU vs GPU trajectory after 10 steps
 
 open unit 1 read form name @0/top_all22_prot.inp
 read rtf card unit 1
@@ -42,45 +83,186 @@ crystal build cutoff 11 noper 0
 image byseg xcen 0.0 ycen 0.0 zcen 0.0 select segid 5dfr end
 image byres xcen 0.0 ycen 0.0 zcen 0.0 select segid wat end
 
-format (f16.6)
+! enough digits that the comparisons below are not limited by printing
+format (f20.10)
 
 energy e14fac 1.5 eps 1.0 cutnb 11 cutim 11 ctofnb 9 ctonnb 7.5 vshi -
      Ewald kappa 0.320 pmEwald order 4 fftx 64 ffty 64 fftz 64
 
-! **** Calculate energy using CPU DOMDEC ****
+! =====================================================================
+! PART 1: CPU DOMDEC vs GPU DOMDEC at the same geometry
+!
+! No SHAKE and no dynamics anywhere in this part.  Both calls see the
+! coordinates just read from @0/5dfr_solv.crd, so every term must agree
+! to single-precision roundoff.  The bonded terms are the useful tell:
+! BOND and ANGL depend on nothing but the geometry, so if they disagree
+! the two calls were not looking at the same structure.
+! =====================================================================
+
 energy domdec dlb off gpu off
+set ecpu    = ?ener
+set bondcpu = ?bond
+set anglcpu = ?angl
+set vdwcpu  = ?vdw
+set eleccpu = ?elec
+
+coor force comp
+scalar xcomp store 1
+scalar ycomp store 2
+scalar zcomp store 3
+
+! RMS of the per-atom CPU force magnitude, to make the force comparison
+! below a relative one
+scalar xcomp store 4
+scalar xcomp *store 4
+scalar ycomp store 5
+scalar ycomp *store 5
+scalar zcomp store 6
+scalar zcomp *store 6
+scalar 5 +store 4
+scalar 6 +store 4
+scalar wcomp recall 4
+scalar wcomp stat
+calc frmscpu = sqrt ( ?save )
+
+energy domdec dlb off gpu on
+set egpu    = ?ener
+set bondgpu = ?bond
+set anglgpu = ?angl
+set vdwgpu  = ?vdw
+set elecgpu = ?elec
+
+echo ============================================================
+echo PART 1: CPU DOMDEC vs GPU DOMDEC, same geometry, no SHAKE
+echo ============================================================
+echo   total  CPU @ecpu    GPU @egpu
+echo   BOND   CPU @bondcpu GPU @bondgpu
+echo   ANGL   CPU @anglcpu GPU @anglgpu
+echo   VDW    CPU @vdwcpu  GPU @vdwgpu
+echo   ELEC   CPU @eleccpu GPU @elecgpu
+
+@testcheck @egpu    @ecpu    @etol DOMDEC_GPU_ETOT
+@testcheck @bondgpu @bondcpu @etol DOMDEC_GPU_BOND
+@testcheck @anglgpu @anglcpu @etol DOMDEC_GPU_ANGL
+@testcheck @vdwgpu  @vdwcpu  @etol DOMDEC_GPU_VDW
+@testcheck @elecgpu @eleccpu @etol DOMDEC_GPU_ELEC
+
+! Forces too: a wrong GPU force with a right total energy is a real
+! failure mode, and the energy checks above cannot see it.
+! store 1,2,3 hold the CPU force; subtract it from the GPU force,
+! square, sum, and average to get the RMS force difference.
+coor force comp
+scalar 1 mult -1.0
+scalar 2 mult -1.0
+scalar 3 mult -1.0
+scalar xcomp +store 1
+scalar ycomp +store 2
+scalar zcomp +store 3
+scalar 1 store 4
+scalar 2 store 5
+scalar 3 store 6
+scalar 4 *store 1
+scalar 5 *store 2
+scalar 6 *store 3
+scalar 3 +store 1
+scalar 2 +store 1
+scalar wcomp recall 1
+scalar wcomp stat
+calc dfrms = sqrt ( ?save )
+calc frel  = @dfrms / @frmscpu
+
+echo   RMS force CPU @frmscpu  RMS difference @dfrms  relative @frel
+
+@testcheck @frel 0 @ftol DOMDEC_GPU_FORCE
+
+! =====================================================================
+! PART 2: short dynamics down both paths
+!
+! SHAKE is on for both runs and both start from the same coordinates, so
+! the two trajectories are comparable.  After each run the final geometry
+! is handed to the other path, which gives two more same-geometry CPU vs
+! GPU energy comparisons -- this time on a structure that came out of
+! dynamics, with the neighbour list rebuilt along the way.
+! =====================================================================
+
 shake fast bonh tol 1.0e-8 para
 
-set flag return_dyn1
+! ---- CPU DOMDEC dynamics ----
+open unit 1 read form name @0/5dfr_solv.crd
+read coor card unit 1
+close unit 1
+
+energy domdec dlb off gpu off
+
+set flag = return_dyn1
 goto run_dynamics
 label return_dyn1
 
+energy
+set ecdyn = ?ener
 write coor card name @9/cpu_xyz.crd
 coor force comp
 write coor comp card name @9/cpu_force.crd
 
-! **** Calculate energy using GPU DOMDEC ****
+! same geometry, other path
+energy domdec dlb off gpu on
+set ecdyng = ?ener
+
+! ---- GPU DOMDEC dynamics, same starting coordinates ----
 open unit 1 read form name @0/5dfr_solv.crd
 read coor card unit 1
 close unit 1
 
 energy domdec dlb off gpu on
 
-set flag return_dyn2
+set flag = return_dyn2
 goto run_dynamics
 label return_dyn2
 
+energy
+set egdyn = ?ener
 write coor card name @9/gpu_xyz.crd
 coor force comp
 write coor comp card name @9/gpu_force.crd
 
-echo "Test OK"
+! same geometry, other path
+energy domdec dlb off gpu off
+set egdync = ?ener
+
+echo ============================================================
+echo PART 2: after 10 steps of dynamics, SHAKE on for both paths
+echo ============================================================
+echo   CPU-dynamics geometry: CPU @ecdyn  GPU @ecdyng
+echo   GPU-dynamics geometry: GPU @egdyn  CPU @egdync
+
+@testcheck @ecdyng @ecdyn  @etol   DOMDEC_GPU_DYNA_CPUGEOM
+@testcheck @egdync @egdyn  @etol   DOMDEC_GPU_DYNA_GPUGEOM
+@testcheck @egdyn  @ecdyn  @dyntol DOMDEC_GPU_DYNA_TRAJECTORY
+
+! =====================================================================
+! Verdict.  Each @testcheck above already prints its own
+! '<label> TESTCASE RESULT: PASS|FAIL' line and bumps testfail, which is
+! what the test harness scores on; this is the one-line summary.
+! =====================================================================
+
+format (i5)
+incr testfail by 0        ! print the count as an integer, not 6.0000000000
+
+echo ============================================================
+echo domdec_gpu: @testfail check(s) failed
+if @testfail .gt. 0 then
+   echo domdec_gpu TESTCASE RESULT: FAIL
+else
+   echo domdec_gpu TESTCASE RESULT: PASS
+endif
 
 stop
 
 ! ************************************
 ! ******* Run dynamics ***************
 ! ************************************
+! Called twice, once per path, so that both trajectories use exactly the
+! same integrator settings.
 
 label run_dynamics
 

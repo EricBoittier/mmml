@@ -281,6 +281,7 @@ contains
   !> @return 1 if success
   integer(c_int) function psf_delete_atoms(select_atoms, isort) bind(c)
     use, intrinsic :: iso_c_binding, only: c_int
+    use stream, only: outu
     use psf, only: natom
     use modpsf, only: delete_atoms
 
@@ -297,6 +298,7 @@ contains
 
     psf_delete_atoms = -1
     call delete_atoms(select_atoms, lsort, .true.)
+    call psfsum(outu)
     psf_delete_atoms = 1
   end function psf_delete_atoms
 
@@ -311,6 +313,7 @@ contains
   !> @return 1 if success
   integer(c_int) function psf_delete_bonds(iselect, jselect, isort) bind(c)
     use, intrinsic :: iso_c_binding, only: c_int
+    use stream, only: outu
     use psf, only: natom
     use modpsf, only: delete_bonds
 
@@ -328,6 +331,7 @@ contains
     psf_delete_bonds = -1
     call delete_bonds(iselect, jselect, lsort, .false., .true.)
     psf_delete_bonds = 1
+    call psfsum(outu)
   end function psf_delete_bonds
 
   !> @brief delete selected angles from psf
@@ -339,6 +343,7 @@ contains
     use, intrinsic :: iso_c_binding, only: c_int
     use psf, only: natom
     use modpsf, only: delete_angles
+    use stream, only: outu
 
     implicit none
 
@@ -353,6 +358,7 @@ contains
 
     psf_delete_angles = -1
     call delete_angles(iselect, jselect, lsort, .false., .true.)
+    call psfsum(outu)
     psf_delete_angles = 1
   end function psf_delete_angles
 
@@ -365,6 +371,7 @@ contains
     use, intrinsic :: iso_c_binding, only: c_int
     use psf, only: natom
     use modpsf, only: delete_dihedrals
+    use stream, only: outu
 
     implicit none
 
@@ -379,6 +386,7 @@ contains
 
     psf_delete_dihedrals = -1
     call delete_dihedrals(iselect, jselect, lsort, .false., .true.)
+    call psfsum(outu)
     psf_delete_dihedrals = 1
   end function psf_delete_dihedrals
 
@@ -391,6 +399,7 @@ contains
     use, intrinsic :: iso_c_binding, only: c_int
     use psf, only: natom
     use modpsf, only: delete_impropers
+    use stream, only: outu
 
     implicit none
 
@@ -405,6 +414,7 @@ contains
 
     psf_delete_impropers = -1
     call delete_impropers(iselect, jselect, lsort, .false., .true.)
+    call psfsum(outu)
     psf_delete_impropers = 1
   end function psf_delete_impropers
 
@@ -417,6 +427,7 @@ contains
     use, intrinsic :: iso_c_binding, only: c_int
     use psf, only: natom
     use modpsf, only: delete_cmaps
+    use stream, only: outu
 
     implicit none
 
@@ -431,6 +442,7 @@ contains
 
     psf_delete_cmaps = -1
     call delete_cmaps(iselect, jselect, lsort, .false., .true.)
+    call psfsum(outu)
     psf_delete_cmaps = 1
   end function psf_delete_cmaps
 
@@ -443,6 +455,7 @@ contains
     use, intrinsic :: iso_c_binding, only: c_int
     use psf, only: natom
     use modpsf, only: delete_connectivity
+    use stream, only: outu
 
     implicit none
 
@@ -457,6 +470,7 @@ contains
 
     psf_delete_conn = -1
     call delete_connectivity(iselect, jselect, lsort, .false.)
+    call psfsum(outu)
     psf_delete_conn = 1
   end function psf_delete_conn
   

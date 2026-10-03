@@ -34,9 +34,14 @@ def _lib():
     # defined above that line, so truncate the source before it and exec only
     # the pure-Python definitions.
     source = _VENDORED_LIB.read_text(encoding="utf-8")
-    marker = "\ncharmm_lib = CharmmLib("
-    if marker in source:
-        source = source.split(marker, 1)[0]
+    # Exec only the pure resolvers. c52a1's loader import (and the historical
+    # CharmmLib() call) would initialize CHARMM.
+    for marker in (
+        "\ncharmm_lib = CharmmLib(",
+        "\nfrom pycharmm.loader import lib as charmm",
+    ):
+        if marker in source:
+            source = source.split(marker, 1)[0]
     exec(compile(source, str(_VENDORED_LIB), "exec"), ns)
     required = ("charmm_lib_suffix", "resolve_charmm_lib_path", "_discover_repo_charmm_lib")
     missing = [name for name in required if name not in ns]

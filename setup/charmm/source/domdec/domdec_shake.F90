@@ -85,7 +85,7 @@ contains
     use memory,only:chmalloc,chmdealloc
     use domdec_common,only:nthread
     use parallel,only:mynod, mynodp, numnod, comm_charmm
-    use mpi
+    use mpi_f08
     use number,only:zero
     implicit none
     ! Input
@@ -109,7 +109,13 @@ contains
     integer pair_base, trip_base, quad_base, water_base
     integer ierror
 
-    !------------------------------------------------------------------------------------
+#if KEY_APPLE == 1
+!! On macOS, mpi_allreduce(mpi_in_place,... ) results in garbage
+!! if charmm is built as a library instead of a monolithic exe
+!! one workaround is to not use mpi_in_place on Apple products
+    integer :: dummy(natom)
+#endif /* KEY_APPLE */
+
     call chmalloc('domdec_shake.src','init_shake','num_list',4,numnod,intg=num_list)
     call chmalloc('domdec_shake.src','init_shake','nrecv',numnod,intg=nrecv)
     call chmalloc('domdec_shake.src','init_shake','disp',numnod,intg=disp)
@@ -282,10 +288,20 @@ contains
        endif
     enddo
 
+#if KEY_APPLE == 1
+    !! see comment at dummy definition
+    dummy(1:natom) = 0
+    call mpi_allreduce(shaketype, dummy, natom, mpi_integer, mpi_sum, comm_charmm, ierror)
+    if (ierror /= mpi_success) then
+       call wrndie(-5,'<domdec_shake>','init_shake: Error in mpi_allreduce')
+    endif
+    shaketype(1:natom) = dummy(1:natom)
+#else /* KEY_APPLE */
     call mpi_allreduce(mpi_in_place, shaketype, natom, mpi_integer, mpi_sum, comm_charmm, ierror)
     if (ierror /= mpi_success) then
        call wrndie(-5,'<domdec_shake>','init_shake: Error in mpi_allreduce')
     endif
+#endif /* KEY_APPLE */
 
     ! Check and remove test bit from shaketype
     do i=1,natom
@@ -297,10 +313,21 @@ contains
        shaketype(i) = iand(shaketype(i), B'111')
     enddo
 
+
+#if KEY_APPLE == 1
+    !! see comment at dummy definition
+    dummy(1:natom) = 0
+    call mpi_allreduce(shakeind, dummy, natom, mpi_integer, mpi_sum, comm_charmm, ierror)
+    if (ierror /= mpi_success) then
+       call wrndie(-5,'<domdec_shake>','init_shake: Error in mpi_allreduce')
+    endif
+    shakeind(1:natom) = dummy(1:natom)
+#else /* KEY_APPLE */
     call mpi_allreduce(mpi_in_place, shakeind, natom, mpi_integer, mpi_sum, comm_charmm, ierror)
     if (ierror /= mpi_success) then
        call wrndie(-5,'<domdec_shake>','init_shake: Error in mpi_allreduce')
     endif
+#endif /* KEY_APPLE */
 
     sizeof_pair_t = sizeof(shakepair_tbl(1))
     sizeof_trip_t = sizeof(shaketrip_tbl(1))

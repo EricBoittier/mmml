@@ -196,6 +196,73 @@ Module facts_module
    ! new
    integer :: iacmax,ierr,ierr2, fctszi
    logical :: fctavw, fctcho, fcterr
+
+   ! new for clear
+   integer :: arraysize
+   ! -------------------------------------------------------------------
+   ! Array deallocation to clear FACTS function, thus allowing multiple invocations in a single run
+   if (indxa(comlyn,comlen,'CLEA')  >  0) then ! Clear the allocated arrays
+      if(prnlev>2) write(outu,'(a)') 'FCTINI> Clearing all FACTS allocated structures'
+
+      if(allocated(fctcgs)) then
+         arraysize = size(fctcgs) 
+
+         call chmdealloc('fctall.src','FCTINI','fctcgs'   , arraysize, crl=fctcgs   , ierr=ierr2, qdie=.true.)
+         call chmdealloc('fctall.src','FCTINI','fctslfw'  , arraysize, crl=fctslfw  , ierr=ierr2, qdie=.true.)
+         call chmdealloc('fctall.src','FCTINI','fctnpc'   , arraysize, crl=fctnpc   , ierr=ierr2, qdie=.true.)
+         call chmdealloc('fctall.src','FCTINI','fctvdwfac', arraysize, crl=fctvdwfac, ierr=ierr2, qdie=.true.)
+         call chmdealloc('fctall.src','FCTINI','fctvdwalp', arraysize, crl=fctvdwalp, ierr=ierr2, qdie=.true.)
+
+         if(allocated(fctidx)) arraysize = size(fctidx)
+         call chmdealloc('fctall.src','fctini','fctidx', arraysize, intg=fctidx, ierr=ierr2, qdie=.true.)
+      endif
+
+      if(allocated(fctrvw)) then
+         arraysize = size(fctrvw)
+
+         call chmdealloc('fctall.src','FCTINI','fctrvw'     , arraysize, crl=fctrvw     , ierr=ierr2, qdie=.true.)
+         call chmdealloc('fctall.src','FCTINI','fctcsc'     , arraysize, crl=fctcsc     , ierr=ierr2, qdie=.true.)
+         call chmdealloc('fctall.src','FCTINI','fctscf'     , arraysize, crl=fctscf     , ierr=ierr2, qdie=.true.)
+         call chmdealloc('fctall.src','FCTINI','fctnps'     , arraysize, crl=fctnps     , ierr=ierr2, qdie=.true.)
+
+         arraysize = size(fctvdwalpha)
+         call chmdealloc('fctall.src','FCTINI','fctvdwalpha', max(fctmvw,maxval(iac)), crl=fctvdwalpha, ierr=ierr2, qdie=.true.)
+
+      endif
+
+
+      if(allocated(FCTBND%fct1ilo)) then
+         arraysize = size(FCTBND%fct1ilo)
+
+         call chmdealloc('fctall.src','FCTINI','FCT1ILO', arraysize,  intg=FCTBND%fct1ilo, ierr=ierr2, qdie=.true.)
+         call chmdealloc('fctall.src','FCTINI','FCT2ILO', arraysize,  intg=FCTBND%fct2ilo, ierr=ierr2, qdie=.true.)
+         
+         arraysize = size(FCTBND%fct1jnb)
+         call chmdealloc('fctall.src','FCTINI','FCT1JNB', arraysize, intg=FCTBND%fct1jnb, ierr=ierr2, qdie=.true.)
+         call chmdealloc('fctall.src','FCTINI','FCT2JNB', arraysize, intg=FCTBND%fct2jnb, ierr=ierr2, qdie=.true.)
+
+      endif
+
+      if(allocated(FCTBND%fct3ilo)) then
+         arraysize = size(FCTBND%fct3ilo)
+
+         call chmdealloc('fctall.src','FCTINI','FCT3ILO', arraysize, intg=FCTBND%fct3ilo, ierr=ierr2, qdie=.true.)
+         call chmdealloc('fctall.src','FCTINI','FCT4ILO', arraysize, intg=FCTBND%fct4ilo, ierr=ierr2, qdie=.true.)
+
+         arraysize = size(FCTBND%fct3jnb)
+         call chmdealloc('fctall.src','FCTINI','FCT3JNB', arraysize  , intg=FCTBND%fct3jnb, ierr=ierr2, qdie=.true.)
+         call chmdealloc('fctall.src','FCTINI','FCT4JNB', arraysize  , intg=FCTBND%fct4jnb, ierr=ierr2, qdie=.true.)
+      endif
+
+      !if (allocated(member)) then
+      !   arraysize = size(member)
+      !   call chmdealloc(filez,subroutinz,arrayz, arraysize, intg=member, ierr=ierr2, qdie=.true.)
+      !endif
+      ! Set the flag to invoke FACTS.
+      fctrun=.false.
+      return
+   endif
+
    ! -------------------------------------------------------------------
    ! Array allocation - local
    ierr2=0
@@ -9098,6 +9165,21 @@ Module facts_module
    fctvdwepsotn = 'OT'
    fctvdwepshtn = 'HT'
 
+   ! These four are set below only if the loaded parameters actually define
+   ! the TIP3P water types OT and HT.  A protein-only parameter set does not
+   ! -- test_facts_score loads par_all36m_prot.prm -- and they are locals, so
+   ! they were then whatever the stack held.  fctvdwfac is meant to come out
+   ! zero in that case, because fctvdwalp is zero unless VDWnnn alphas were
+   ! given; but zero times an uninitialised value is not zero, it is whatever
+   ! that value was, and if it was a NaN the nonpolar energy FCTNPL and the
+   ! total energy became NaN with it.  That is why only the FIRST FACTS call
+   ! in a process was affected: later calls reused a stack slot holding the
+   ! previous call's finite numbers.
+   fctvdwepsot = zero
+   fctvdwsigot = zero
+   fctvdwepsht = zero
+   fctvdwsight = zero
+
    do i=1,natc
       if (atc(i)==fctvdwepsotn) then
          fctvdwepsot = eff(itc(i))
@@ -9108,6 +9190,16 @@ Module facts_module
          fctvdwsight = vdwr(itc(i))
       endif
    enddo
+
+   ! Asking for the Gallicchio solute-solvent vdW term without the water
+   ! types it is parameterised against would now silently give zero instead
+   ! of a wrong number, which is better but still not what was asked for.
+   if (fctvdwepsot == zero .and. any(fctvdwalp(1:natom) /= zero)) then
+      call wrndie(-1, '<FCTINI>', &
+           'FACTS solute-solvent vdW alphas were given, but the loaded ' // &
+           'parameters define no OT/HT water types to pair them with, so ' // &
+           'that term is zero.  Load a parameter set that includes TIP3P.')
+   endif
 
    do i=1,natom
       fctvdweps = eff(itc(iac(i)))
@@ -9782,6 +9874,19 @@ Module facts_module
       fcthhh  = zero
       fctvsg  = zero
       fctusg  = zero
+
+      ! fctwsg, fctvdwen and fctvdwdf are automatic arrays like the ones
+      ! above, but were never initialised: they are written only inside the
+      ! per-atom branch below, and read unconditionally when fctnpol is
+      ! assembled.  Any atom that misses that branch therefore contributed
+      ! whatever was on the stack, so the FIRST fctene call in a process --
+      ! the one that gets fresh stack rather than the previous call's values
+      ! -- could return a NaN nonpolar energy (FCTNPL) and hence a NaN total.
+      ! It showed up as an OpenBLAS-only test failure, since what happens to
+      ! be lying in that memory depends on the libraries loaded.
+      fctwsg   = zero
+      fctvdwen = zero
+      fctvdwdf = zero
 
       fctself = zero
       fctnpol = zero
@@ -12676,6 +12781,13 @@ Module facts_module
       fctnp1=zero
       fctnp2=zero
       fctnp3=zero
+
+      ! Same uninitialised automatic arrays as in fctene above, with the same
+      ! exposure: written only inside the per-atom branch, read when fctnp3
+      ! is accumulated and again when copied into wmain for printing.
+      fctwsg   = zero
+      fctvdwen = zero
+      fctvdwdf = zero
 
       fct01ss = zero
 

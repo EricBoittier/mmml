@@ -65,16 +65,62 @@ SUBROUTINE PFINT(COMLYN,COMLEN)
   QVPOL = INDXA(COMLYN, COMLEN, 'VPOL') .GT. 0
   ! DYNA (ext Lagrangian)
   QPFDYN = INDXA(COMLYN, COMLEN, 'DYNA') .GT. 0
-  IF (PRNLEV.GE.2) THEN
-     IF (QPFDYN) THEN
-        WRITE(OUTU,*) 'PFINT> Induced dipoles in PIPF ', &
-             'are computed dynamically '
-        WRITE(OUTU,*) '       with an extended Lagrangian '
+  !
+  ! NB: this block used to be wrapped in IF (PRNLEV.GE.2) THEN ... ENDIF
+  ! at this point, with the matching ENDIF some 165 lines below.  That
+  ! wrapper was wrong: it gated not only the WRITE(OUTU,...) PFINT>
+  ! header lines (which legitimately want a print-level guard) but also
+  ! every state-modifying call inside -- the GTRM[F|I] keyword reads
+  ! that populate UMAS / TSTAU / NHFLAG / NUFRS / DTHRES / ITRMX /
+  ! QUEANG / PFCTOF / NPDAMP / DPFAC / PFMODE / NAVDIP / QPFEX / NPFPR /
+  ! NPFIM, the ``chmalloc('IUMAS')`` of the per-atom dipole mass array,
+  ! the ``CALL ASGUMAS(UMAS,IUMAS)`` that initialises it, and the
+  ! PFBASETUP / QPFBA Nose-Hoover bath-association checks.  On non-master
+  ! MPI ranks, which run with PRNLEV=0 by default, every one of those
+  ! initialisations was being silently skipped -- leaving IUMAS
+  ! unallocated, NHFLAG at its module default, and the rest of the
+  ! PIPF dipole-dynamics state inconsistent with what the master had
+  ! parsed from the user's "pipf dyna ..." command.
+  !
+  ! Confirmed by stderr-print debug at the top of PFDYN:
+  !   @@DEBUG@@ PFDYN entry mynod= 0  IUMAS_alloc= T  NHFLAG= 1
+  !   @@DEBUG@@ PFDYN entry mynod= 1  IUMAS_alloc= F  NHFLAG= 0  (pre-fix)
+  !   @@DEBUG@@ PFDYN entry mynod= 1  IUMAS_alloc= T  NHFLAG= 1  (post-fix)
+  !
+  ! CHARMM's parallel I/O plumbing silently discards WRITE(OUTU,...)
+  ! on non-master ranks (OUTU isn't connected when IOLEV<0), so the
+  ! unguarded WRITE(OUTU,...) lines below continue to print only on the
+  ! master in practice; the difference is that the state-modifying
+  ! work also runs everywhere now.
+  !
+  ! Scope note: dropping this wrapper makes PFINT's per-rank state
+  ! consistent but is NOT sufficient on its own to make c33test/
+  ! pipf_test3 pass.  That test exercises ``pipf dyna`` extended-
+  ! Lagrangian dipole dynamics under MPI; once the PFINT state is
+  ! consistent across ranks the dynamics still bombs at step ~10-13
+  ! with an ``ERROR IN SHAKEA: DEVIATION IN SHAKE TOO LARGE'' followed
+  ! by ``ENERGY CHANGE TOLERANCE EXCEEDED'' -- a deeper parallel-PIPF
+  ! issue (no GCOMB reductions on the dipole forces; ``grep -nE
+  ! 'GCOMB|VDGBR' source/pipf/pfdyn.F90'' returns nothing) that needs
+  ! its own dedicated fix.  This commit makes ``pipf dyna`` correct
+  ! up to that next-layer parallel bug rather than starting from the
+  ! random-state cliff edge.
+  IF (QPFDYN) THEN
+        IF (PRNLEV.GE.2) THEN
+           WRITE(OUTU,*) 'PFINT> Induced dipoles in PIPF ', &
+                'are computed dynamically '
+           WRITE(OUTU,*) '       with an extended Lagrangian '
+        END IF
 
         ! UMAS (fictious mass associated with dipole)
         UMAS=GTRMF(COMLYN,COMLEN,'UMAS',UMDEF)
         IF (PRNLEV.GE.2) WRITE(OUTU,10) UMAS
-        call chmalloc('pfdyn.src','PFINT','IUMAS',NATOM,crl=IUMAS)
+        ! Allocate the per-atom dipole-mass array once; guard so that
+        ! re-issuing "pipf dyna" in the same run (e.g. to change UMAS/UINT
+        ! between dynamics segments) refreshes the masses via ASGUMAS
+        ! without double-allocating IUMAS.
+        if (.not. allocated(IUMAS)) &
+             call chmalloc('pfdyn.src','PFINT','IUMAS',NATOM,crl=IUMAS)
         CALL ASGUMAS(UMAS,IUMAS)
 10      FORMAT(1X,'PFINT> Fictitious mass of dipole: ', &
              'UMAS [(ps/e*A)^2*kcal/mol] = ', F12.5)
@@ -127,10 +173,10 @@ SUBROUTINE PFINT(COMLYN,COMLEN)
            ENDIF
            !               ...CONV (dipole convergence criteria)
            DTHRES = GTRMF(COMLYN,COMLEN,'CONV',TRDEF)
-           WRITE(OUTU,30) DTHRES
+           IF (PRNLEV.GE.2) WRITE(OUTU,30) DTHRES
            !               ...ITER (max. iteration)
            ITRMX = GTRMI(COMLYN,COMLEN,'ITER',ITDEF)
-           WRITE(OUTU,*)'PFINT> Max. ITER = ', ITRMX
+           IF (PRNLEV.GE.2) WRITE(OUTU,*)'PFINT> Max. ITER = ', ITRMX
         ENDIF
 
         ! ANGL (calcualte the average angle of dynamical dipole with electric field)
@@ -144,85 +190,96 @@ SUBROUTINE PFINT(COMLYN,COMLEN)
         END IF
         ! induced dipole calculated by matrix inverse
      ELSEIF(QMINV) THEN
-        WRITE(OUTU,*) 'PFINT> Induced dipoles are ', &
-             'determined by matrix inversion in PIPF'
-        IF (QMPOL) THEN
-           WRITE(OUTU,*) 'PFINT> Molecular polarizability is ', &
-                'calculated by matrix inversion in PIPF'
-        ENDIF
-        IF (QVPOL) THEN
-           WRITE(OUTU,*) 'PFINT> Vibrational analysis with ', &
-                'polarization'
+        IF (PRNLEV.GE.2) THEN
+           WRITE(OUTU,*) 'PFINT> Induced dipoles are ', &
+                'determined by matrix inversion in PIPF'
+           IF (QMPOL) THEN
+              WRITE(OUTU,*) 'PFINT> Molecular polarizability is ', &
+                   'calculated by matrix inversion in PIPF'
+           ENDIF
+           IF (QVPOL) THEN
+              WRITE(OUTU,*) 'PFINT> Vibrational analysis with ', &
+                   'polarization'
+           ENDIF
         ENDIF
         !
         ! Otherwise, use a classical iterative process
         !
      ELSE
-        WRITE(OUTU,*) 'PFINT> Induced dipoles are ', &
+        IF (PRNLEV.GE.2) WRITE(OUTU,*) 'PFINT> Induced dipoles are ', &
              'determined iteratively in PIPF'
 
         ! CONV (dipole convergence criteria)
         DTHRES = GTRMF(COMLYN,COMLEN,'CONV',TRDEF)
-        WRITE(OUTU,30) DTHRES
+        IF (PRNLEV.GE.2) WRITE(OUTU,30) DTHRES
 30      FORMAT(1X,'PFINT> Dipole CONV (Deby/center) = ', F12.5)
 
         ! ITER (max. iteration)
         ITRMX = GTRMI(COMLYN,COMLEN,'ITER',ITDEF)
-        WRITE(OUTU,*)'PFINT> Max. ITER = ', ITRMX
+        IF (PRNLEV.GE.2) WRITE(OUTU,*)'PFINT> Max. ITER = ', ITRMX
 
      ENDIF
 
      ! CTOF (energy cut-off)
      PFCTOF = GTRMF(COMLYN,COMLEN,'CTOF',-1.0D0)
-     IF (PFCTOF .LE. 0.0D0) THEN
-        WRITE(OUTU,*)'PFINT> Dipole CTOF: use non-bonded cutoff'
-     ELSE
-        WRITE(OUTU,40) PFCTOF
+     IF (PRNLEV.GE.2) THEN
+        IF (PFCTOF .LE. 0.0D0) THEN
+           WRITE(OUTU,*)'PFINT> Dipole CTOF: use non-bonded cutoff'
+        ELSE
+           WRITE(OUTU,40) PFCTOF
+        ENDIF
      ENDIF
 40   FORMAT(1X,'PFINT> Dipole CTOF = ', F12.5)
 
      ! DAMP (damping)
      NPDAMP=GTRMI(COMLYN,COMLEN,'DAMP',0)
      IF (NPDAMP .EQ. 0) THEN
-        WRITE(OUTU,*)'PFINT> DAMP = ', NPDAMP, '(no damping)'
+        IF (PRNLEV.GE.2) WRITE(OUTU,*)'PFINT> DAMP = ', NPDAMP, &
+             '(no damping)'
      ELSE IF (NPDAMP .EQ. 1) THEN
         DPFAC = GTRMF(COMLYN,COMLEN,'AFAC',AFDEF)
-        WRITE(OUTU,*)'PFINT> DAMP = ', NPDAMP, '(Thole roh2)'
-        WRITE(OUTU,50) DPFAC
+        IF (PRNLEV.GE.2) THEN
+           WRITE(OUTU,*)'PFINT> DAMP = ', NPDAMP, '(Thole roh2)'
+           WRITE(OUTU,50) DPFAC
+        ENDIF
      ELSE IF (NPDAMP .EQ. 2) THEN
         DPFAC = GTRMF(COMLYN,COMLEN,'AFAC',AFDEF)
-        WRITE(OUTU,*)'PFINT> DAMP = ', NPDAMP, '(Thole roh4)'
-        WRITE(OUTU,50) DPFAC
+        IF (PRNLEV.GE.2) THEN
+           WRITE(OUTU,*)'PFINT> DAMP = ', NPDAMP, '(Thole roh4)'
+           WRITE(OUTU,50) DPFAC
+        ENDIF
      ELSE
         CALL WRNDIE(-1,'<PFINT>', 'DAMP>2 not available')
         NPDAMP = 0
-        WRITE(OUTU,*)'PFINT> Set DAMP = 0 and continue'
+        IF (PRNLEV.GE.2) WRITE(OUTU,*)'PFINT> Set DAMP = 0 and continue'
      ENDIF
 50   FORMAT(1X,'PFINT> Gaussian width AFAC = ', F12.5)
 
      ! PFMODE (start point for iteration)
      PFMODE = GTRMI(COMLYN,COMLEN,'PFMD',0)
-     IF(PFMODE .EQ. 0) THEN
-        WRITE(OUTU,*) 'PFINT> PFMD = ',PFMODE, 'iteration start ', &
-             'from 0 dipole'
-     ELSE IF(PFMODE .EQ. 1) THEN
-        WRITE(OUTU,*) 'PFINT> PFMD = ',PFMODE, 'iteration start ', &
-             'from last dynamics step'
-     ELSE
-        WRITE(OUTU,*) 'PFINT> PFMD = ',PFMODE, 'invalid mode'
+     IF (PRNLEV.GE.2) THEN
+        IF(PFMODE .EQ. 0) THEN
+           WRITE(OUTU,*) 'PFINT> PFMD = ',PFMODE, 'iteration start ', &
+                'from 0 dipole'
+        ELSE IF(PFMODE .EQ. 1) THEN
+           WRITE(OUTU,*) 'PFINT> PFMD = ',PFMODE, 'iteration start ', &
+                'from last dynamics step'
+        ELSE
+           WRITE(OUTU,*) 'PFINT> PFMD = ',PFMODE, 'invalid mode'
+        ENDIF
      ENDIF
 
      ! AVDP (print dipole info)
      NAVDIP=GTRMI(COMLYN,COMLEN,'AVDP',0)
      IF (NAVDIP .GT. 0) THEN
-        WRITE(OUTU,*)'PFINT> Ave. dips. are calculated ',    &
+        IF (PRNLEV.GE.2) WRITE(OUTU,*)'PFINT> Ave. dips. are calculated ', &
              'based on units of ', NAVDIP, 'atoms'
      ENDIF
 
      ! EXCL (exlusion of 1-4 polarization)
      QPFEX = INDXA(COMLYN, COMLEN, 'EXCL') .GT. 0
      IF (QPFEX) THEN
-        WRITE(OUTU,*)'PFINT> EXCL: exclude 1-4 polarization'
+        IF (PRNLEV.GE.2) WRITE(OUTU,*)'PFINT> EXCL: exclude 1-4 polarization'
      ENDIF
      !
      ! GET THE NUMBER OF PRIMARY CELL ATOMS AND TOTAL NUMBER OF
@@ -230,8 +287,6 @@ SUBROUTINE PFINT(COMLYN,COMLEN)
      !
      NPFPR = NATOM
      NPFIM = NATIM
-
-  ENDIF
 
 #endif  /* KEY_PIPF == 0 */
 
@@ -851,6 +906,79 @@ END SUBROUTINE ASGUMAS
 
 
 !----------------------------------------------------------------------
+SUBROUTINE PFVSEED(UINDO,VUIND,PMASSU,DELTA)
+  !----------------------------------------------------------------------
+  ! Assign the initial velocities of the extended-Lagrangian induced
+  ! dipoles from a Maxwell-Boltzmann distribution at temperature TSTAU
+  ! (the "tsta" keyword), the dipole analogue of ASSVEL for the atoms.
+  !
+  ! For each dipole degree of freedom the velocity is drawn from a
+  ! Gaussian of zero mean and standard deviation SQRT(k_B*TSTAU/m),
+  ! where m = PMASSU(I) is the fictitious dipole mass.  The same CLCG
+  ! stream (IPFVSD) and Gaussian option (IPFVGO) as the atomic
+  ! velocity assignment are used, captured by DCNTRL; the draw is made
+  ! here (after ASSVEL has already run) so the atomic-velocity random
+  ! stream is unchanged from previous behaviour.
+  !
+  ! The leapfrog integrator in PFDYN represents the dipole velocity as
+  ! the central difference VUIND = (UINDN-UINDO)/(2*DELTA).  To make
+  ! the first step carry the drawn velocity we back-step the previous
+  ! dipole position by one dipole time step: UINDO = UIND - VUIND*DELTA
+  ! (UIND(0) has already been bootstrapped by DPFST at this point).
+  ! For TSTAU<=0 the dipoles start cold (VUIND=0, UINDO=UIND).
+  !----------------------------------------------------------------------
+  use chm_kinds
+  use consta
+  use dimens_fcm
+  use number
+  use psf
+  use stream
+  use pipfm
+  implicit none
+  !
+  real(chm_real) UINDO(3,*),VUIND(3,*),PMASSU(*),DELTA
+  !
+  INTEGER I,M
+  real(chm_real) SD,VEL
+  !
+  ! Cold default: dipoles at rest -- zero velocity and a Verlet history
+  ! UINDO=UIND that reconstructs to zero velocity on the first step.
+  DO I = 1, NATOM
+     DO M = 1, 3
+        VUIND(M,I) = ZERO
+        UINDO(M,I) = UIND(M,I)
+     ENDDO
+  ENDDO
+  !
+  IF (TSTAU .GT. ZERO) THEN
+     ! Warm start: overwrite each dipole-centre velocity with a Maxwell-
+     ! Boltzmann draw at TSTAU and back-step its Verlet history so the
+     ! reconstructed velocity matches the draw.  Atoms with no dipole mass
+     ! (PMASSU<=0) keep the cold assignment above.
+     DO I = 1, NATOM
+        IF (PMASSU(I) .GT. ZERO) THEN
+           SD = SQRT(KBOLTZ*TSTAU/PMASSU(I))
+           DO M = 1, 3
+              CALL GAUSSI(ZERO,SD,VEL,IPFVSD,IPFVGO)
+              VUIND(M,I) = VEL
+              UINDO(M,I) = UIND(M,I) - VEL*DELTA
+           ENDDO
+        ENDIF
+     ENDDO
+     IF (PRNLEV .GE. 2) WRITE(OUTU,20) TSTAU
+20   FORMAT(1X,'PFVSEED> Initial induced-dipole velocities drawn from ', &
+          'Maxwell-Boltzmann at TSTA (K) = ',F12.5)
+  ELSE
+     IF (PRNLEV .GE. 2) WRITE(OUTU,21)
+21   FORMAT(1X,'PFVSEED> Initial induced-dipole velocities set to zero ', &
+          '(TSTA <= 0, cold start)')
+  ENDIF
+  !
+  RETURN
+END SUBROUTINE PFVSEED
+
+
+!----------------------------------------------------------------------
 SUBROUTINE PFDYN(UINDO,UINDN,VUIND,PMASSU,DELTA)
   !----------------------------------------------------------------------
   ! This routine carries out MD verlet step for the induced dipole in PIPF
@@ -872,7 +1000,7 @@ SUBROUTINE PFDYN(UINDO,UINDN,VUIND,PMASSU,DELTA)
   INTEGER I,J,K,L,M,NHITR,PFNHMX,IMAX
   real(chm_real) PFNHTL,PFTEMP,PFCDGF,UMASS,KEU,     &
        PFNHABATH(10),PFNHSNBATH(10),NHSDIFBATH(10), &
-       MAXERROR,MAXEOLD,MV2TMPBATH(10),ERROR
+       MAXERROR,MAXEOLD,MV2TMPBATH(10),ERROR,PFNHOMG
   !
   !
   ! SKIP EPOL IF SPECIFIED.
@@ -882,10 +1010,50 @@ SUBROUTINE PFDYN(UINDO,UINDN,VUIND,PMASSU,DELTA)
   !
   IF (.NOT. QPIPF .OR. .NOT. QPFDYN) RETURN
   !
+  ! First dynamics step from a fresh start: assign the initial induced-
+  ! dipole velocities.  UINDO was zeroed at init (dcntrl.F90) while UIND
+  ! now holds the first-order/SCF dipole, so the Verlet finite-difference
+  ! velocity VUIND=(UINDN-UINDO)/(2*DELTA) below would otherwise be a
+  ! spurious ~UIND/DELTA kick (~500x at DELTA=0.001) that injects an
+  ! enormous fictitious dipole kinetic energy and blows up SHAKE on the
+  ! first step.  PFVSEED draws VUIND from a Maxwell-Boltzmann distribution
+  ! at temperature TSTAU (the "tsta" keyword) and back-steps the Verlet
+  ! history UINDO=UIND-VUIND*DELTA so the reconstructed velocity matches
+  ! the draw; for TSTAU<=0 it sets UINDO=UIND (a genuine cold start, the
+  ! "zero dipole temperature" the setup intends).  Guarded by QPFVST so
+  ! this fires only on a fresh start, never on restart (where UINDO
+  ! carries the previous-step dipole from the restart file).
+  IF (QPFVST) THEN
+     CALL PFVSEED(UINDO,VUIND,PMASSU,DELTA)
+     QPFVST = .FALSE.
+  END IF
+  !
   IF (NHFLAG.EQ.1) THEN
 
-     PFNHMX  = 1000
+     ! Self-consistent-Nose-Hoover solve for the extended-Lagrangian
+     ! dipole thermostat.  This is a fixed-point iteration on the bath
+     ! kinetic energy KEUBATH: a larger KEUBATH produces a larger
+     ! thermostat scaling NHSDIFBATH, hence a larger denominator
+     ! (1 + 0.25*ds) below, hence smaller dipole increments and a
+     ! *smaller* recomputed mv**2 -- i.e. the map mv2(KEUBATH) has
+     ! negative feedback.  A plain Picard update KEUBATH <- mv2 on such
+     ! a map oscillates whenever the local slope reaches -1, and here it
+     ! does: instrumenting pipf_test3 (POL2 water, tamd config) showed
+     ! KEUBATH locking into a stable period-2 cycle between ~1.39e7 and
+     ! ~1.64e4 -- bit-identical from iter 1000 to 10000 -- so no
+     ! iteration cap can ever satisfy the tolerance and the run aborts
+     ! with "Maximum Nose-Hoover iterations exceeded".  Whether the plain
+     ! update happens to converge or falls into the 2-cycle depends on
+     ! the exact starting point and so on rounding: it converged on
+     ! macOS/gfortran-15 but not on gfortran-14-Linux or the ada5000
+     ! nodes.  The robust, compiler-independent fix is under-relaxation
+     ! (damped update, factor PFNHOMG below); it leaves the fixed point
+     ! -- and therefore the converged physics -- unchanged and simply
+     ! damps the oscillation.  PFNHOMG=0.5 averages the two reflecting
+     ! branches and collapses this exact 2-cycle in a single step.
+     PFNHMX  = 10000
      PFNHTL = 0.000001
+     PFNHOMG = 0.5D0
      DO K = 1, NPFBATHS
         KEUBATH(K) = 0.0
         DO L = IFSTBPF(K), ILSTBPF(K)
@@ -973,8 +1141,12 @@ SUBROUTINE PFDYN(UINDO,UINDN,VUIND,PMASSU,DELTA)
               GOTO 1039
            ENDIF
 
+           ! Under-relaxed (damped) update -- see the PFNHOMG note above.
+           ! Full Picard (KEUBATH = MV2TMPBATH) oscillates on this
+           ! negative-feedback map; damping breaks the period-2 cycle
+           ! while leaving the fixed point unchanged.
            DO K = 1,NPFBATHS
-              KEUBATH(K) = MV2TMPBATH(K)
+              KEUBATH(K) = KEUBATH(K) + PFNHOMG*(MV2TMPBATH(K)-KEUBATH(K))
            ENDDO
 
         ENDDO

@@ -5,6 +5,19 @@
 ! if tol < 0 or ref=0 an absolute test is performed vs |tol|
 ! sets teststat to pass or fail and increments testfail by 1 if test not passed
 ! echo @tstid  testcase result: @teststat
+!
+! Reference-value capture policy
+! ------------------------------
+! Capture reference values on the CI host the test will run against
+! (currently morrison.chem.lsa.umich.edu, conda-forge gcc/openmm/cuda
+! stack, Linux x86_64).  Values from a local-Mac or other-host run
+! can be deterministic locally yet disagree with CI for any test that
+! exercises a borderline floating-point branch (MC accept/reject,
+! integrator step ordering, etc.) -- fp non-associativity in energy
+! reductions is enough to flip a single accept/reject decision in a
+! short MC run and divergence amplifies from there.  Refresh
+! references by re-running the test on CI and copying the printed
+! @IN1 value back into the .inp; never copy-paste a local-run value.
 
 ! LNilsson, March 2011, September 2014
 

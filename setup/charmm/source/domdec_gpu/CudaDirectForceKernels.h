@@ -23,6 +23,11 @@ void setBlockParamTexRefBound(const bool val);
 
 const int tilesize = 32;
 
+// nthread14: block size for the 1-4 kernels, shared with their
+// __launch_bounds__ (see issue #5).  Kept in its own header so the launchers
+// here and the kernel definitions in CudaDirectForce14_util.h use one value.
+#include "CudaDirectForceParams.h"
+
 
 template <typename AT, typename CT>
 void calcForceKernelChoice(const int nblock_tot_in, const int nthread, const int shmem_size, cudaStream_t stream,

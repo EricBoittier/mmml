@@ -1,0 +1,313 @@
+CHARMM Element doc/containers.info 1.1
+
+File: Containers, Node: Top, Up: (dir), Previous: (doc/cmake.info), Next: (doc/usage.info)
+
+                  Building and Using CHARMM with Containers
+
+This document provides instructions for building and running CHARMM within
+containers, enabling it to run independently of the local environment.
+The instructions are designed to be easily copy-pasted for convenience.
+
+* Menu:
+
+* Introduction::        Why use containers for CHARMM?
+* Building Container::  Step-by-step guide to creating a CHARMM container.
+* Examples::            Copy-pastable examples of container definition files
+* Running Container::   How to execute CHARMM inside the container.
+* Modifying Container:: How to customize an existing container.
+
+
+File: Containers, Node: Introduction, Up: Top, Previous: (doc/charmm.info), Next: Building Container
+
+Containers offer a portable and reproducible way to run applications ,
+isolating them from the host system's specific configurations and
+dependencies. This document focuses on using Apptainer (formerly
+Singularity) for containerization of the program CHARMM.
+
+
+File: Containers, Node: Building Container, Up: Top, Previous: Introduction, Next: Running Container
+
+To build a CHARMM container, you'll need a CHARMM tree copied to local
+directories on your container building machine:
+
+1.  charmm: Contains the CHARMM source code.
+
+2.  the definition file that is provided in this document will create
+    another directory where CHARMM will be compiled into
+    (/data/charmm-build) and user might provide some additional
+    files for special libraries that are not part of the container
+    base system, like CUDA library or special MPI library, etc.
+
+3.  The current working directory is usually also current directory
+    after the singularity/apptainer command is issued. Since we want
+    to have an independent container we must bind this directory to an
+    internal directory in the container's file system. As a working
+    example we use /usr/local/src directory to put the local files. So
+    we bind (-B option) this local direcory in the container to an
+    external directory with all the neccessary files.
+
+For example, the external directories could reside on a separate directory
+with an absolute path like `/data`:
+
+/data/charmm - for charmm sources tree
+/data/charmm-build - this gets created during the container building
+/data/ ... any other files that we want to use in the container
+/data/image.def - the definition file for a container with the building instructions
+
+Setting up Apptainer Environment before building the container
+
+To ensure Apptainer/Singularity operates correctly, set up the following
+environment variables (ideally in your shell profile, e.g., `.bashrc`):
+
+mkdir -p $HOME/tmp
+export TMPDIR=$HOME/tmp
+export APPTAINER_TMPDIR=$HOME/tmp
+export APPTAINER_CACHEDIR=$HOME/tmp
+
+User Namespace Configuration (if required)
+
+In some environments, Apptainer might require user namespace configuration.
+If you encounter permission issues, you might need to add entries to
+/etc/subuid and /etc/subgid. Replace 'milan' with your actual username.
+
+echo milan:100000:65536 > /etc/subuid
+echo milan:100000:65536 > /etc/subgid
+
+
+Before proceeding, ensure the /data/charmm directory exist and contain your CHARMM
+sources
+
+To build the container we use the following commands:
+
+cd /data
+
+apptainer build -B /data:/usr/local/src any-container-name.sif image.def
+
+As mentioned before the -B source:destination option provides binding
+of the extarnal directory tree /data (source) with the internal one:
+/usr/local/src (destination). The directories on a /data filesystem
+are then not part of the container, just the stuff that we put on
+during the compilation/installation procedure of the CHARMM and
+related libraries. This makes container much smaller.
+
+
+
+
+File: Containers, Node: Examples, Up: Top, Previous: Building Container, Next: Modifying Container
+
+The container is defined by a file named image.def. Here are some examples:
+
+EXAMPLE 1.
+
+---------------------------- image.def start ----------------------------------
+Bootstrap: docker
+From: rockylinux/rockylinux:10.0-ubi
+
+%post
+        dnf update -y
+        dnf install -y pip openmpi-devel cmake fftw-devel gcc-c++ emacs
+        pip install pdoc3
+        cd /usr/local/src
+        # in case we want cuda:
+        bash cuda_12.8.0_570.86.10_linux.run --silent --toolkit
+        rm -rf charmm-build ; mkdir charmm-build ; cd charmm-build
+        # in this Rocky Linux the openmpi and/or cuda are not in the path, so add them:
+        export LD_LIBRARY_PATH=/usr/lib64/openmpi/lib:/usr/local/cuda/lib64:$LD_LIBRARY_PATH
+        export PATH=/usr/lib64/openmpi/bin:/usr/local/cuda/bin:$PATH
+        ../charmm/configure -u
+        make -j 32
+        make install
+
+%environment
+        export LD_LIBRARY_PATH=/usr/lib64/openmpi/lib:/usr/local/cuda/lib64:$LD_LIBRARY_PATH
+        export PATH=/usr/lib64/openmpi/bin:/usr/local/cuda/bin:$PATH
+
+---------------------------- image.def end ----------------------------------
+
+
+The above example is using the Rocky Linux 10 UBI image as a base for
+the operating system. There are many similar base systems available
+ar https://hub.docker.com It also compiles charmm with the provided
+cuda library, since Rocky Linux doesn't include one!
+
+While choosing a base system make sure it compiles CHARMM. Some are
+based on musl library, that has problems compiling CHARMM.
+
+EXAMPLE 2.
+
+---------------------------- image.def start ----------------------------------
+Bootstrap: docker
+From: hub.opensciencegrid.org/htc/debian:12
+
+%post
+        # System packages required for CHARMM compilation and execution
+        apt-get update -y
+        apt-get install -y libopenblas64-dev tcsh less libopenmpi-dev
+
+        # CHARMM compilation steps within the container
+        cd /usr/local/src
+        mkdir charmm-build
+        cd charmm-build
+        ../charmm/configure --without-python
+        make -j 32 
+        make install
+        
+# this is not so flexible if one want this: ... cont.sif mpirun -n 4 charmm
+#%runscript
+#        charmm $*
+
+---------------------------- image.def end ----------------------------------
+
+Simple example with debian as a base system. pip has problems in
+debian so we don't install pycharmm here, see Example 3.
+
+
+EXAMPLE 3.
+
+---------------------------- image.def start ----------------------------------
+Bootstrap: docker
+From: hub.opensciencegrid.org/htc/debian:12
+
+%post
+        # System packages required for CHARMM compilation and execution
+        apt-get update -y
+        apt-get install -y libopenblas64-dev tcsh less
+
+        # CHARMM compilation steps within the container
+        cd /usr/local/src
+
+# OpenMPI-5 or put libopenmpi-dev above in the apt install for OpenMPI-4 version        
+
+tar xaf openmpi-5.0.8.tar.bz2
+        cd openmpi-5.0.8
+        ./configure --with-pmix=internal --prefix=/usr
+        make -j 32 
+        make install
+
+# CHARMM compilation - no pip install
+
+        cd /usr/local/src
+        mkdir charmm-build
+        cd charmm-build
+        ../charmm/configure
+        # we need -k for pip problems!!!
+        make -j 32 -i
+        make -j 32 -i
+#doesnt work:        make --ignore-errors install || true
+        cp -av charmm /usr/bin
+        cp -av libchmm.so /usr/lib
+        cp -av pycharmm/pycharmm /usr/lib/python3.11/dist-packages
+        ln -s /usr/bin/less /usr/bin/manpager
+
+# no environment needed - explicit copies into the default environment
+
+%environment
+#        export LC_ALL=C
+#        export LD_LIBRARY_PATH=/usr/lib:$LD_LIBRARY_PATH
+
+# this is not so flexible if one want this: ... cont.sif mpirun -n 4 charmm
+#%runscript
+#        charmm $*
+
+---------------------------- image.def end ----------------------------------
+
+In this example we use debian-12 for a base system. The problem here
+is that pip cannot be used anymore outside virtual environment on some
+newer systems, like debian, ubuntu and many others. This is the reson
+we need two make commands so we can continue compiling while ignoring
+the errors. We also skip the make install command and copy files directly
+into the already existing places so that the default environment picks
+it up!  We also provide the new openmpi-5 library to be compiled, but
+debian provides openmpi-4 library as a package.
+
+
+The last two lines (commented out here) are to run the container as a
+standard executable
+
+
+File: Containers, Node: Running Container, Up: Top, Previous: Examples, Next: Modifying Container
+
+Once the container image (`charmm-deb.sif`) is built, you can run CHARMM
+within it.
+
+Running a Single-Node CHARMM Job:
+
+apptainer run ./charmm-deb.sif charmm -i input-script
+
+Sometimes this can be as simpla as:
+
+./charmm-deb.sif mpirun -n 4 charmm -i input-script
+
+Running a Parallel (MPI) CHARMM Job on a Single Node:
+
+apptainer run ./charmm-deb.sif mpirun -n 4 charmm -i input-script
+
+Running on a Multi-Node Cluster:
+
+mpirun -n 4 apptainer run ./charmm-deb.sif mpirun -n 2 charmm
+
+Important Note on MPI Versions:
+
+This multi-node command will only work if the mpirun version inside the
+container is compatible with (ideally, the same version as) the mpirun
+on the host system. If you encounter issues, you might need to adjust your
+image.def to install the host's MPI version or follow the instructions in
+the "Modifying Container" section to update the container's MPI.
+
+
+File: Containers, Node: Modifying Container, Up: Top, Previous: Running Container, Next: Top
+
+You can modify an existing container image by creating a writable sandbox
+and then rebuilding the image from it.
+
+1.  Create a Writable Sandbox:
+    This command creates a directory (`deb` in this example) that acts as a
+    writable container environment based on your `charmm-deb.sif` image.
+
+    apptainer build -B /data:/usr/local/src --sandbox deb charmm-deb.sif
+
+2.  Enter the Sandbox Environment:
+    This command gives you an interactive shell *inside* the `deb` sandbox.
+    Any changes you make here (e.g., installing new packages, modifying files)
+    will be persistent within this sandbox.
+
+
+    before entering sandbox:
+    cd /data
+    wget https://download.open-mpi.org/release/open-mpi/v5.0/openmpi-5.0.8.tar.bz2
+    tar xavf openmpi-5.0.8.tar.bz2
+
+    enter sandbox and ignore error about working directory
+
+    apptainer shell -B /data:/usr/local/src --writable deb
+    cd /usr/local/src/openmpi-5.0.8
+    ./configure  --with-pmix=internal
+    time make # (4 min)
+    export LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH
+
+    Type exit to leave the container shell. All modifications made within
+    the sandbox will be saved.
+
+   
+
+3.  Build a New Container from the Modified Sandbox:
+    Once you've made your changes in the sandbox, you can create a new
+    (read-only) container image from it:
+
+    apptainer build charmm-deb-add.sif deb
+
+    or if you want to add environment into it then create a new add.def file:
+
+/data/add.def:
+======================
+Bootstrap: localimage
+From: /data/deb
+
+%environment
+  export LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH
+======================
+cd /data
+apptainer build charmm-deb-add.sif add.def
+
+This new `.sif` file (`charmm-deb-add.sif`) now includes all the modifications
+you made in the sandbox plus environment.

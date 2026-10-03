@@ -4,11 +4,9 @@ module minmiz_module
 contains
 
   SUBROUTINE MINMIZ(COMLYN,COMLEN &
-#if KEY_LIBRARY == 1
        , min_opts &
        , abnr_opts &
        , sd_opts &
-#endif
        )
   !-----------------------------------------------------------------------
   !     MINMIZ controls the minimization options.
@@ -20,18 +18,16 @@ contains
   !
   use abnerm,only:abner
 
-#if KEY_LIBRARY == 1
   use api_types, only: min_settings, min_abnr_settings, min_sd_settings
-#endif
 
 #if KEY_CHEQ==1
-  use cheq,only:qcg,cgmodel,qcginv,qcginvf,qpbeq1,   & 
+  use cheq,only:qcg,cgmodel,qcginv,qcginvf,qpbeq1,   &
 #endif
 #if KEY_CHEQ==1
-     minnorm,qcgmine,qnoco,qpolar1,ipolar1,     & 
+     minnorm,qcgmine,qnoco,qpolar1,ipolar1,     &
 #endif
 #if KEY_CHEQ==1
-     checketa,checkqnorm,qpartbin,allocate_cheq   
+     checketa,checkqnorm,qpartbin,allocate_cheq
 #endif
 
   use chm_kinds
@@ -55,19 +51,23 @@ contains
   use powell_mod, only: powell
   use psf, only: natom, ngrp
 #if KEY_TMD==1
-  use tmd,only:inrt   
+  use tmd,only:inrt
 #endif
 #if KEY_DOMDEC==1
-  use domdec_common, only: q_domdec  
+  use domdec_common, only: q_domdec
 #endif
 #if KEY_DHDGB==1
 !AP/MF
   use dhdgb
 #endif
-#if KEY_OPENMM == 1
   use omm_ctrl, only: omm_requested
+  use blade_ctrl_module, only: blade_requested
+#if KEY_OPENMM == 1
   use omm_main, only: omm_minimize
 #endif /* KEY_OPENMM */
+#if KEY_BLADE == 1
+  use blade_main, only: blade_minimize
+#endif /* KEY_BLADE */
 
   use steepd_module, only: &
 #if KEY_REPLICA == 1
@@ -80,14 +80,14 @@ contains
   ! passed variables
   character(len=*) :: comlyn
   integer :: comlen
-#if KEY_LIBRARY == 1
+
+  ! api library settings
   type(min_settings), optional :: min_opts
   type(min_abnr_settings), optional :: abnr_opts
   type(min_sd_settings), optional :: sd_opts
-#endif
-#if KEY_OPENMM == 1
+
   logical :: want_openmm = .false.
-#endif /* KEY_OPENMM */
+  logical :: want_blade = .false.
   
   ! local variables
   character(len=4) MINOPT
@@ -101,31 +101,41 @@ contains
   integer n_omm_minsteps
   real(chm_real) tolgrd
 #endif
+#if KEY_BLADE==1
+  integer n_blade_minsteps
+  integer n_blade_mintype
+  integer n_blade_status
+  logical q_blade_fallback
+  character(len=len(comlyn)) blade_comlyn
+  integer blade_comlen
+  ! real(chm_real) n_blade_tolgrad
+  real(chm_real) n_blade_steplen
+#endif /* KEY_BLADE */
 
 #if KEY_TNPACK==1
   !yw...TNPACK, 28-Jul-95
   LOGICAL QSTART
 
   QLOC1  = .FALSE.
-#endif 
+#endif
 
   MINXYZ = .TRUE.
   LMINUC = .FALSE.
   QIMCEN = LIMCEN
-#if KEY_OPENMM==1
+#if KEY_BLADE==1
+  q_blade_fallback = .false.
+#endif
+  ! omm_requested aborts via WRNDIE if OMM is requested on a non-OpenMM build.
   want_openmm = omm_requested(COMLYN, COMLEN, 'MINI')
+#if KEY_OPENMM==1
   if (want_openmm) then
-#if KEY_LIBRARY == 1
      if (present(min_opts)) then
         n_omm_minsteps   = min_opts%nstep
         TOLGRD = min_opts%tolgrd
      else
-#endif /* KEY_LIBRARY */
         n_omm_minsteps  = GTRMI(COMLYN,COMLEN,'NSTE',0)
         TOLgrd = GTRMF(COMLYN,COMLEN,'TOLG',2.39) ! 1.0 kJ/mol/nm in kcal/mol/A
-#if KEY_LIBRARY == 1
      end if
-#endif /* KEY_LIBRARY */
      if(prnlev > 1) write(outu,'(a,2x,i6,2x,e11.4)') &
           'Minimization requested on OpenMM: nsteps, tolgrd', &
           n_omm_minsteps,tolgrd
@@ -133,11 +143,59 @@ contains
      return
   endif
 #endif /* KEY_OPENMM */
+  ! blade_requested aborts via WRNDIE if BLaDE is requested on a non-BLaDE build.
+  want_blade = blade_requested(COMLYN, COMLEN, 'MINI')
+#if KEY_BLADE==1
+  if (want_blade) then
+     if (present(min_opts)) then
+        n_blade_minsteps   = min_opts%nstep
+        ! n_blade_tolgrad = min_opts%tolgrd
+        n_blade_steplen = min_opts%step
+        if (present(abnr_opts)) then
+           minopt = 'ABNR'
+        elseif (present(sd_opts)) then
+           minopt = 'SD  '
+        else
+           minopt = 'SD  '
+        endif
+     else
+        blade_comlyn = comlyn
+        blade_comlen = comlen
+        n_blade_minsteps  = GTRMI(blade_comlyn,blade_comlen,'NSTE',0)
+        ! n_blade_tolgrad = GTRMF(COMLYN,COMLEN,'TOLG',1.0) ! kcal/mol/A
+        n_blade_steplen = GTRMF(blade_comlyn,blade_comlen,'STEP',0.1)
+        minopt = NEXTA4(COMLYN,COMLEN)
+     endif
+     if (minopt == 'LBFG') then
+        n_blade_mintype=0
+     elseif (minopt == 'SD  ') then
+        n_blade_mintype=1
+     elseif (minopt == 'SDFD') then
+        n_blade_mintype=2
+     elseif (minopt == 'SDMD') then
+        n_blade_mintype=3
+     elseif (minopt == 'ABNR') then
+        call wrndie(-3,'<minmiz>','BLaDE cannot use ABNR minimization as requested. Falling back on steepest descent')
+        n_blade_mintype=1
+     else
+        n_blade_mintype=1
+     endif
+     if(prnlev > 1) write(outu,'(a,2x,i6,2x,i6,2x,e11.4)') &
+          'Minimization requested on BLaDE: nsteps, mintype, step', &
+          n_blade_minsteps,n_blade_mintype,n_blade_steplen
+     call blade_minimize(x,y,z,n_blade_minsteps,n_blade_mintype, &
+          n_blade_steplen,n_blade_status)
+     if (n_blade_status == 0) return
+     call wrndie(1,'<MINMIZ>', &
+          'BLaDE SDMD could not find an acceptable trial step. Falling back on CPU steepest descent')
+     q_blade_fallback = .true.
+  endif
+#endif /* KEY_BLADE */
 #if KEY_CHEQ==1
   QCGMIN=(INDXA(COMLYN,COMLEN,'CHEQ') > 0)
   IF (.not.QCG .and. QCGMIN) CALL WRNDIE(-3,'<MINMIZ>', &
        'Fluctuating charges not set-up, use CHEQ ON command first!')
-  IF (QCG.AND.QCGMIN)  THEN 
+  IF (QCG.AND.QCGMIN)  THEN
      if(.not.allocated(qpartbin)) then
         call wrndie(-1,'<minmiz>','CHEQ not set-up')
      elseif(natim>natom) then
@@ -151,7 +209,7 @@ contains
         CALL WRNDIE(-1,'<MINMIZ>', &
              'CHEQ PARAMETERS HAVE NOT BEEN READ')
      ENDIF
-     CALL CHECKQNORM(QCHEQNORM) 
+     CALL CHECKQNORM(QCHEQNORM)
      IF (.not.QCHEQNORM) THEN
         if(prnlev > 1)write(outu,'(2a)') &
              'CHEQ MINIMIZATION HAS BEEN REQUESTED BUT', &
@@ -168,7 +226,7 @@ contains
 
      !   FOR CHARGE NORMALIZATION
      MINNORM=.TRUE.   ! NORMALIZE w/out using different masses for minimization
-     !  
+     !
      IF (PRNLEV > 0) THEN
         IF (QCGMIN) WRITE(OUTU,'(a)')"CHEQ HAS BEEN READ"
         IF (QPBEQ1) WRITE(OUTU,'(a)')"PBEQ is requested"
@@ -182,19 +240,21 @@ contains
      IPOLAR1=GTRMI(COMLYN,COMLEN,'IPOL',IPOLAR1)
   ENDIF
 #endif
-  
+
   ! pick the minimization algorithm
-#if KEY_LIBRARY == 1
+#if KEY_BLADE==1
+  if (q_blade_fallback) then
+     minopt = 'SD  '
+  else if (present(abnr_opts)) then
+#else
   if (present(abnr_opts)) then
+#endif
      minopt = 'ABNR'
   else if (present(sd_opts)) then
      minopt = 'SD  '
   else
-#endif
      MINOPT = NEXTA4(COMLYN,COMLEN)
-#if KEY_LIBRARY == 1
   end if
-#endif
 
 #if KEY_DOMDEC==1
   if (q_domdec .and. .not. ( minopt == 'ABNR' .or. minopt == 'SD  ' ) ) &
@@ -204,22 +264,20 @@ contains
   if (q_domdec .and. (numnod .gt. 1)) &
        call wrndie(-1, '<MINMIZ>', &
            'Cannot minimize with more than one MPI process after enabling DOMDEC.')
-#endif 
-  
-#if KEY_LIBRARY == 1
+#endif
+
   if (present(min_opts)) then
      inbfrq = min_opts%inbfrq
      ihbfrq = min_opts%ihbfrq
   end if
-#endif /* KEY_LIBRARY */
-  
+
   ! process update commands
   CALL UPDATE(COMLYN,COMLEN,X,Y,Z,WMAIN,.TRUE., &
        .TRUE.,.TRUE.,.TRUE.,.TRUE., &
        0,[zero],[zero],[zero],[zero],[zero],[zero])
   CALL FINCYC(NUPFRQ,0,0,0,0,INBFRQ,IHBFRQ,0,IMGFRQ,0,0,0 &
 #if KEY_TMD==1
-       ,inrt &  
+       ,inrt &
 #endif
        )
   !
@@ -229,7 +287,6 @@ contains
   !-----------------------------------------------------------------------
   ! Parse general minimization options.
   !
-#if KEY_LIBRARY == 1
   if (present(min_opts)) then
      !     Parse the saddle code option (i.e. minimize the gradient**2)
      QSADLE = min_opts%gradient > 0
@@ -246,7 +303,6 @@ contains
      NSAVX  = min_opts%nsavx
      MXYZ   = min_opts%mxyz
   else
-#endif /* KEY_LIBRARY */
      !     Parse the saddle code option (i.e. minimize the gradient**2)
      QSADLE=(INDXA(COMLYN,COMLEN,'GRAD') > 0)
      IF(QSADLE .AND. PRNLEV >= 2) WRITE(OUTU,255)
@@ -263,9 +319,7 @@ contains
      MXYZ   = GTRMI(COMLYN,COMLEN,'MXYZ',1)
 
      iunwri = gtrmi(comlyn, comlen, 'IUNW', -1)  ! biovia addition
-#if KEY_LIBRARY == 1
   end if
-#endif /* KEY_LIBRARY */
 
 255 FORMAT(' CHARMM> Energy will be the mean squared gradient', &
          ' during minimizations.')
@@ -280,25 +334,21 @@ contains
   !     $   'CHEQ only supported for CONJ and SD Minimizers')
   IF ( QSADLE .AND. QCG ) CALL WRNDIE(-3,'<MINMIZ>', &
        'SADLE option not currently supported with CHEQ.')
-#endif 
+#endif
   ! SAPATEL
   !-----------------------------------------------------------------------
 #if KEY_PERT==1
   IF(QPERT) CALL PERTDF
-#endif 
+#endif
   !
   !     Branch on the minimization option.
   !
   IF (MINOPT  ==  'ABNR') THEN
-#if KEY_LIBRARY == 1
      if (present(abnr_opts)) then
         call abner(comlyn, comlen, min_opts, abnr_opts)
      else
-#endif /* KEY_LIBRARY */
         call abner(comlyn, comlen)
-#if KEY_LIBRARY == 1
      end if
-#endif /* KEY_LIBRARY */
   ELSE IF (MINOPT  ==  'TN  ') THEN
      !yw...TNPACK: updated 28-Jul-95 and 12-Aug-95
 #if KEY_TNPACK==1
@@ -306,7 +356,7 @@ contains
      CALL TNDRIV(COMLYN,COMLEN,QSTART)
 #else /**/
      CALL WRNDIE(-3,'<MINMIZ>','TN minmizer NOT compiled.')
-#endif 
+#endif
      !
   ELSE IF (MINOPT  ==  'CGSD' .OR. MINOPT .EQ. 'CONJ') THEN
      CALL CONJUG(COMLYN,COMLEN)
@@ -325,24 +375,20 @@ contains
      !
   ELSE IF (MINOPT  ==  'SD  ') THEN
 #if KEY_RPATH==1 /*rpath*/
-     IF (QPNEB) THEN 
+     IF (QPNEB) THEN
         CALL STEEPDNEB(COMLYN,COMLEN)
         !         write(*,*)'IM IN STEEPDNEB'
      ELSE
 #endif /*    (rpath) */
 
-#if KEY_LIBRARY == 1
         if (present(sd_opts)) then
            CALL STEEPD(COMLYN,COMLEN, min_opts, sd_opts)
         else
-#endif /* KEY_LIBRARY */
            CALL STEEPD(COMLYN,COMLEN)
-#if KEY_LIBRARY == 1
         end if
-#endif /* KEY_LIBRARY */
 
 #if KEY_RPATH==1
-     ENDIF     
+     ENDIF
 #endif
      !
   ELSE
@@ -356,7 +402,7 @@ contains
   !
 #if KEY_PERT==1
   IF(QPERT) CALL PERTAN(.FALSE.)
-#endif 
+#endif
   ! SAPATEL
 #if KEY_CHEQ==1
   QCGINV=.FALSE.
@@ -368,7 +414,7 @@ contains
   QPOLAR1=.FALSE.
   IPOLAR1=-1
   MINNORM=.FALSE.
-#endif 
+#endif
   ! SAPATEL
   !
   RETURN
@@ -379,7 +425,7 @@ SUBROUTINE MINTRJ(NCALLS,NSTEPS,STEP)
   !     Writes trajectory frame of minimization steps
   !
 #if KEY_CHEQ==1
-  use cheq,only:qcg     
+  use cheq,only:qcg
 #endif
 
   use chm_kinds
@@ -399,6 +445,13 @@ SUBROUTINE MINTRJ(NCALLS,NSTEPS,STEP)
   real(chm_real) STEP,T(1)
   !
   INTEGER NAT3
+#if KEY_MIDSINR == 1
+    ! dummy variables and memory allocations
+    logical :: q_midsinr=.false.
+    integer :: L_val=1
+    real(chm_real),pointer :: v_1ij(:,:,:)=>Null(), &
+                              v_2ij(:,:,:)=>Null()
+#endif
   !
   T(1)=ZERO
   IF((NSAVC > 0).AND.(IUNCRD >= 0) &
@@ -406,7 +459,7 @@ SUBROUTINE MINTRJ(NCALLS,NSTEPS,STEP)
      NAT3=3*NATOM
      CALL WRITCV(X,Y,Z, &
 #if KEY_CHEQ==1
-          CG,QCG,                                & 
+          CG,QCG,                                &
 #endif
           NATOM, (/ 0 /), NATOM,NCALLS,NCALLS,NAT3,STEP,NSAVC, &
           NSTEPS,TITLEA,NTITLA,IUNCRD,.FALSE.,.FALSE., (/ 0 /), .FALSE., (/ ZERO /))
@@ -423,6 +476,13 @@ SUBROUTINE MINTRJ(NCALLS,NSTEPS,STEP)
   ! energies and progress information for feeding back to a client
   !
   IF ((NSAVX.GT.0).AND.(IUNWRI.GE.0).AND.(MOD(NCALLS,NSAVX).EQ.0)) THEN
+#if KEY_MIDSINR == 1
+     ! dummy memory allocation
+     if(associated(v_1ij)) deallocate(v_1ij)
+     if(associated(v_2ij)) deallocate(v_2ij)
+     allocate(v_1ij(3,L_val,natom))
+     allocate(v_2ij(3,L_val,natom))
+#endif
      CALL WRIDYN(IUNWRI,NATOM,X,Y,Z,X,Y,Z,X,Y,Z,        &
 #if KEY_CHEQ==1
           (/ ZERO /), (/ ZERO /), (/ ZERO /), .FALSE.,  &
@@ -435,7 +495,10 @@ SUBROUTINE MINTRJ(NCALLS,NSTEPS,STEP)
           .FALSE., (/ ZERO /), (/ ZERO /), (/ ZERO /),  &
 #endif
           NCALLS, 0, 0, NSTEPS,                         &
-          0, 0, ZERO, ZERO, 0, 0                        &         
+          0, 0, ZERO, ZERO, 0, 0                        &
+#if KEY_MIDSINR == 1
+          ,q_midsinr,v_1ij,v_2ij,L_val                  &
+#endif
 #if KEY_BLOCK==1
           ,.FALSE.                                      &
           ,.FALSE., 0, (/ ZERO /), (/ ZERO /)           &
@@ -448,6 +511,10 @@ SUBROUTINE MINTRJ(NCALLS,NSTEPS,STEP)
           ,.FALSE., .FALSE., 0, 0, ZERO, ZERO, ZERO     &
 #endif
           )
+#if KEY_MIDSINR == 1
+     if(associated(v_1ij)) deallocate(v_1ij)
+     if(associated(v_2ij)) deallocate(v_2ij)
+#endif
   ENDIF
 !=====================================================================
 ! BIOVIA CODE END

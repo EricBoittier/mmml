@@ -82,7 +82,7 @@ other model accounting for hydrophobic interactions should be used.
 The CPU time of the serial version of the SCPISM has been improved to be only 
 1.5 times slower than vacuum (default compilation optimization). Since 
 version c34 the models has been parallelized (MPI routines added to
-the scpism.src source code). But from c36 onward the performance has been improved 
+the scpism.F90 source code). But from c36 onward the performance has been improved 
 substantially, and is currently as follows (Milan Hodoscek, 2011))
 
 Benchmark for ATPase (>15000 atoms, 100 steps dynamics) using 32 core AMD box:

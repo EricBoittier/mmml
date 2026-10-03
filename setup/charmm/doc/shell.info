@@ -202,7 +202,7 @@ File: SHELL, Node: Efficiency, Previous: Caveats, Up: Top, Next: Examples
                          Efficiency
 
 The core of the SHELL UPDAte command is a cubing based algorithm 
-(adapted from M. Crowley's images/nbndgcm.src)
+(adapted from M. Crowley's image/nbndgcm.F90)
 which is aware of SOLUte and SOLVent and thus calculates only distances
 between SOLVent and SOLUte atoms. The efficiency of this approach is
 influenced largely by the following parameters:

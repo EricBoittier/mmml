@@ -213,7 +213,7 @@ moieties, and are not affected by the surrounding induced dipoles. As
 such, the polarizability should be treated as a parameter to be
 fitted, rather than a physically measurable quantity. The damping
 function employed in the AMOEBA force field (J Phys Chem B. 2010
-March 4; 114(8): 2549–2564. doi:10.1021/jp910674d ) is used here.
+March 4; 114(8): 2549-2564. doi:10.1021/jp910674d ) is used here.
 
 The maximum number of charge sites per atom is 7, as typically no more
 than 1-3 charges per atom are required.
@@ -256,7 +256,7 @@ residue types with flexible charges)
 NAME: The name of the residue as in the psf file.
 
 NFRAMES: The total number of axis system frames required for the
-residue, see J. Chem. Theory Comput., 2014, 10 (10), pp 4229–4241 for
+residue, see J. Chem. Theory Comput., 2014, 10 (10), pp 4229-4241 for
 a description of the local axis system and how to define them.
 
 Na Nb Nc SAXIS: Atom indices to define the axis system frames and the
@@ -302,7 +302,7 @@ If an atom appears in more than one axis system frame, then in the
 have to be declared multiple times, but the charges will be non zero
 in only one axis system frame. See also the explanation in the first
 paragraph, page 4232 of J. Chem. Theory Comput., 2014, 10 (10), pp
-4229–4241 . See example below.
+4229-4241 . See example below.
 
 
 

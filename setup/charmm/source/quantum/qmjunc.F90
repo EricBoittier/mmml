@@ -91,7 +91,7 @@ SUBROUTINE ITER2(H,W,WJ,WK,ENUCLR,EE,FULSCF,X,Y,Z,XI,YI,ZI,P,PA,PB, &
   use parallel       
 #endif
 #if KEY_PARALLEL==1 && KEY_MPI==1
-  use mpi            
+  use mpi_f08            
 #endif
   implicit none
   !

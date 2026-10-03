@@ -1,4 +1,8 @@
-Molecular Dynamics with Mobile Protons (MOBHY) 
+CHARMM Element doc/mobhy.info 1.1
+
+File: MobHy, Node: Top, Up: (doc/commands.info), Next: Syntax
+
+Molecular Dynamics with Mobile Protons (MOBHY)
 
 Author: Themis Lazaridis, 2016-2023    
 
@@ -17,13 +21,24 @@ The user also provides parameters for the deprotonation energy of each residue.
 This code is work in progress. Please email tlazaridis@ccny.cuny.edu for any 
 issues encountered. 
 
-References: Lazaridis & Hummer, “Classical Molecular Dynamics with Mobile Protons”, 
+References: Lazaridis & Hummer, "Classical Molecular Dynamics with Mobile Protons", 
 		JCIM 57:2833-45 (2017)
 
-	Lazaridis “Molecular origins of asymmetric proton conduction in the influenza 
-		M2 channel”, BJ, 122: 90-98 (2023) 
+	Lazaridis "Molecular origins of asymmetric proton conduction in the influenza 
+		M2 channel", BJ, 122: 90-98 (2023) 
 
-Syntax
+* Menu:
+
+* Syntax::        Syntax of the MOBHY command.
+* Requirements::  Files and settings the module needs.
+* Limitations::   What the current code cannot do.
+* Example::       A worked input for a voltage-driven hopping simulation.
+* Test cases::    Where the distributed test inputs live.
+
+
+File: MobHy, Node: Syntax, Up: Top, Next: Requirements, Previous: Top
+
+                                     Syntax
 
 MOBHY IHOPfr int NTITr n NH3O nh3o NOH noh EBBRf file (segid resid p-status)n 
 	H3OS (resid)nh3o OHS (resid)noh [maft nstep N] VOLT volt WIDTH width (atom selection) 
@@ -81,7 +96,9 @@ After the MOBHY command, the user may proceed with minimization, dynamics, etc.
 The sum of bond breaking/making energy and voltage energy are reported in the ASP column
 (implicit solvent and proton hopping are incompatible, so no reason to create a new energy term).
 
-Requirements 
+File: MobHy, Node: Requirements, Up: Top, Next: Limitations, Previous: Syntax
+
+                                 Requirements
 
 1. Two extra files are required and they are found in /support and /test/data. 
 mobhy.str contains the hydronium topology and various parameters needed. 
@@ -104,7 +121,9 @@ become acceptors upon deprotonation must be declared as such with an "acceptor" 
 so they need to be present.
 
 
-Limitations:
+File: MobHy, Node: Limitations, Up: Top, Next: Example, Previous: Requirements
+
+                                 Limitations
 
 1. The current code does not perform proton hops across periodic boundaries.
 This could be fixed in the future by considering primary-image H bonds.  
@@ -129,7 +148,9 @@ This has not been done yet. As a result, the type of shake command affects signi
 the hopping energy changes. For now, it seems best to only shake H3 to the OH2 of the H3O 
 residue, see example below.
 
-Example
+File: MobHy, Node: Example, Up: Top, Next: Test cases, Previous: Limitations
+
+                                   Example
 
 (read top_all36_prot.rtf, par_all36m_prot.prm, ..., toppar_water_ions.str)
 
@@ -158,7 +179,7 @@ skipe hbond imhb		!must omit the H.Bond energy
 ! and 1 real hydronium (if not specified, it is the first in the psf. If desired, the IRES
 ! of the hydronium(s) can be given by the h3os keyword). Here all 12 titratable residues start deprotonated. 
 ! minimize energy for 40 steps after hop acceptance. Apply a voltage of -2 V in the z direction
-! over a length of 55 Å. The voltage is to be felt only by H3O residues and residues PROA 112 & 185
+! over a length of 55 A. The voltage is to be felt only by H3O residues and residues PROA 112 & 185
 mobhy ihopfr 10 ntit 12 nh3o 1 ebbr mobhy.prm proa 112 U proa 123 U proa 130 U -
   proa 174 U proa 185 U proa 119 U proa 153 U proa 164 U proa 171 U proa 192 U -
   proa 196 U proa 225 U maft nstep 40 volt -2 width 55 sele resn H3O .or. -
@@ -169,7 +190,9 @@ mobhy ihopfr 10 ntit 12 nh3o 1 ebbr mobhy.prm proa 112 U proa 123 U proa 130 U -
 dyna CPT leap ...     
 
 
-Test cases
+File: MobHy, Node: Test cases, Up: Top, Previous: Example
+
+                                  Test cases
 
 c48test: mobhyglu.inp, mobhyhis.inp, mobhym2.inp   
 

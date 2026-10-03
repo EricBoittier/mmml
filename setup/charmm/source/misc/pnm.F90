@@ -560,6 +560,9 @@ module pnm
   use number
   use consta
   use string
+#if KEY_BLOCK==1
+  use block_ltm, only : qhybh
+#endif
 !
 !
 #if KEY_PARALLEL==1
@@ -597,6 +600,14 @@ module pnm
    call wrndie(0,whoami,trim(' PNM MODULE NOT INITIALIZED. NOTHING DONE.'))
    return
   endif
+#if KEY_BLOCK==1
+! A plastic-network model is actually loaded (num_enm>0); the hybrid
+! Hamiltonian (BLOCK HYBH) does not support PNM energies.  This guard used
+! to sit in energy.F90 gated only on QETERM(PNME), which is on by default,
+! so it aborted every HYBH run even with no PNM model present.
+  if (qhybh) call wrndie(-5,whoami, &
+       'HYBH and PNMENE currently incompatible.')
+#endif
 !
   eu=zero
 !

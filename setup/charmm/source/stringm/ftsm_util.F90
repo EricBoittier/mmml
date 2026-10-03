@@ -274,14 +274,14 @@
 #if (KEY_MULTICOM==1)
       use multicom_aux; 
 #endif
-      use mpi
+      use mpi_f08
       use number
       use parallel, only: psnd4, psnd8
       logical :: qroot, qslave, qsend_o
       logical, optional :: qsendo
       real(chm_real), pointer, dimension(:,:) :: rlf, rcf, rrf, rlo, rco, rro
       integer :: me, ierror
-      integer*4 :: stat(MPI_STATUS_SIZE)
+      TYPE(MPI_Status) :: stat
 !
       qroot=MPI_COMM_STRNG.ne.MPI_COMM_NULL
       qslave=MPI_COMM_LOCAL.ne.MPI_COMM_NULL.and.SIZE_LOCAL.gt.1
@@ -529,7 +529,7 @@
 !===========================================================================
       subroutine ftsm_define_rtmd_type()
       use sm_config, only: sizeofreal
-      use mpi
+      use mpi_f08
       use number
 !
       integer*4 :: error, norient_mpi
@@ -1039,7 +1039,7 @@
 #if (KEY_MULTICOM==1)
       use multicom_aux; 
 #endif
-      use mpi
+      use mpi_f08
       use ftsm_compute
       use ftsmv2_compute
 !

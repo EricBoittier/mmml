@@ -106,6 +106,7 @@ SUBROUTINE CRYSTL
      CALL XTLAXS(XTLABC,XUCELL)
      CALL XTLSYM(XTLABC,XUCELL,XTLTYP,XDIM,XTLREF)
      CALL XTLMSR(XUCELL)
+     call xtlaxsacc(qorth,xtlrot,xucell,xtlabc)
      IF(PRNLEV.GE.2) CALL PRNXTLD(OUTU,'    ',XTLTYP,XUCELL, &
           .FALSE.,ZERO,.FALSE.,[ZERO])
      !       setup default value for IMGFRQ if it has not been set
@@ -1828,6 +1829,53 @@ SUBROUTINE XTLAXS(XTLABC,XUCELL)
   RETURN
 END SUBROUTINE XTLAXS
 
+! Box vectors of accelerator orientation
+subroutine get_xtlacc(xucell, xtlacc)
+  use chm_kinds
+  use consta, only : degrad
+  use number
+  use image, only : xtltyp
+  implicit none
+  real(chm_real), intent(in) :: XUCELL(6)
+  real(chm_real), intent(out) :: xtlacc(3,3)
+  real(chm_real) abdiff, acdiff, bcdiff
+
+  xtlacc=0
+  xtlacc(1,1)=xucell(1)
+  xtlacc(2,1)=xucell(2)*cos(DEGRAD*xucell(6))
+  xtlacc(2,2)=xucell(2)*sin(DEGRAD*xucell(6))
+  xtlacc(3,1)=xucell(3)*cos(DEGRAD*xucell(5))
+  xtlacc(3,2)=xucell(3)*(cos(DEGRAD*xucell(4)) &
+       -cos(DEGRAD*xucell(5))*cos(DEGRAD*xucell(6)))/sin(DEGRAD*XUCELL(6))
+  xtlacc(3,3)=sqrt(xucell(3)*xucell(3) &
+       -xtlacc(3,1)*xtlacc(3,1)-xtlacc(3,2)*xtlacc(3,2))
+  ! Check that periodic box vectors obey reduced form:
+  ! xtlacc(1,1:3) = [a_x, 0, 0], xtalcc[2:1:3] = [b_x, b_y, 0]
+  ! xtlacc(3,1:3] = [c_x, c_y, c_z] where
+  ! a_x>0, b_y>0, c_z>0, a_x >= 2|b_x|, a_x >= 2|c_x| and b_y >= 2|c_y|
+  ! Just focus on the non-diagonal elements, and rectify them
+  ! if they drift outside of the limits during openmm dynamics
+  ! commented next 15 lines after rlh and clb discussion 2025-03-27
+  ! abdiff = abs(xtlacc(1,1)-2*abs(xtlacc(2,1)))
+  ! if ((abdiff > rsmall) .and. (abdiff < tenm4)) then
+  !    write(*,*)' Adjusting ab'
+  !    xtlacc(2,1) = sign(half,xtlacc(2,1))*xtlacc(1,1)
+  ! endif
+  ! acdiff = abs(xtlacc(1,1)-2*abs(xtlacc(3,1)))
+  ! if ((acdiff > rsmall) .and. (acdiff < tenm4)) then
+  !    write(*,*)' Adjusting ac'
+  !    xtlacc(3,1) = sign(half,xtlacc(3,1))*xtlacc(1,1)
+  ! endif
+  ! bcdiff = abs(xtlacc(2,2)-2*abs(xtlacc(3,2)))
+  ! if ((bcdiff > rsmall) .and. (bcdiff < tenm4)) then
+  !    write(*,*)' Adjusting bc'
+  !    xtlacc(3,2) = sign(half,xtlacc(3,2))*xtlacc(2,2)
+  ! endif
+  ! ! Need to round to 4 decimal places
+  ! !xtlacc = nint(xtlacc*10000)/10000
+  return
+end subroutine get_xtlacc
+
 subroutine xtlaxsacc(qorth,xtlrot,xucell,xtlabc)
   use chm_kinds
   use consta
@@ -1851,13 +1899,19 @@ subroutine xtlaxsacc(qorth,xtlrot,xucell,xtlabc)
      xtlrot(3,3)=1
   else
      ! Box vectors of accelerator orientation
-     xtlacc=0
-     xtlacc(1,1)=xucell(1)
-     xtlacc(2,1)=xucell(2)*cos(DEGRAD*xucell(6))
-     xtlacc(2,2)=xucell(2)*sin(DEGRAD*xucell(6))
-     xtlacc(3,1)=xucell(3)*cos(DEGRAD*xucell(5))
-     xtlacc(3,2)=xucell(3)*(cos(DEGRAD*xucell(4))-cos(DEGRAD*xucell(5))*cos(DEGRAD*xucell(6)))/sin(DEGRAD*XUCELL(6))
-     xtlacc(3,3)=sqrt(xucell(3)*xucell(3)-xtlacc(3,1)*xtlacc(3,1)-xtlacc(3,2)*xtlacc(3,2))
+     !xtlacc=0
+     !xtlacc(1,1)=xucell(1)
+     !xtlacc(2,1)=xucell(2)*cos(DEGRAD*xucell(6))
+     !xtlacc(2,2)=xucell(2)*sin(DEGRAD*xucell(6))
+     !xtlacc(3,1)=xucell(3)*cos(DEGRAD*xucell(5))
+     !xtlacc(3,2)=xucell(3)*(cos(DEGRAD*xucell(4))-cos(DEGRAD*xucell(5))*cos(DEGRAD*xucell(6)))/sin(DEGRAD*XUCELL(6))
+     !xtlacc(3,3)=sqrt(xucell(3)*xucell(3)-xtlacc(3,1)*xtlacc(3,1)-xtlacc(3,2)*xtlacc(3,2))
+     call get_xtlacc(xucell,xtlacc)
+
+     !write(*,*) 'XTLACC'
+     !!write(*,*) xtlacc(1,1),xtlacc(1,2),xtlacc(1,3)
+     !write(*,*) xtlacc(2,1),xtlacc(2,2),xtlacc(2,3)
+     !write(*,*) xtlacc(3,1),xtlacc(3,2),xtlacc(3,3)
 
      ! Reciprocal box vectors of symmetric orientation
      v=xtlacc(1,1)*xtlacc(2,2)*xtlacc(3,3)
@@ -1874,6 +1928,11 @@ subroutine xtlaxsacc(qorth,xtlrot,xucell,xtlabc)
      ! Rotation matrix
      xtlrot=matmul(transpose(xtlacc),kxtlabc)
   endif
+
+  !write(*,*)'XTLROT'
+  !write(*,*) xtlrot(1,1),xtlrot(1,2),xtlrot(1,3)
+  !write(*,*) xtlrot(2,1),xtlrot(2,2),xtlrot(2,3)
+  !write(*,*) xtlrot(3,1),xtlrot(3,2),xtlrot(3,3)
 
   return
 end subroutine xtlaxsacc

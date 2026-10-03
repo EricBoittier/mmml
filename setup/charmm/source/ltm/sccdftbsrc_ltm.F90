@@ -126,6 +126,18 @@ module sccdftbsrc !Data required in SCCDFTB calculations
 !     eglcao I/O [no longer in blockscc]
       integer writeout
 
+!     Path to sccdftb.dat parameter file (default: 'sccdftb.dat')
+      character(len=256) :: sccdat_file = 'sccdftb.dat'
+
+!     Path to the Slater-Kirkwood dispersion parameters, one line per
+!     element in the same order the parameter file declares them
+!     (default: 'DISPERSION.INP' in the working directory)
+      character(len=256) :: disp_file = 'DISPERSION.INP'
+
+!     Path to the charge-dependent Klopman-Ohno parameters
+!     (default: 'ko_para.inp' in the working directory)
+      character(len=256) :: kopara_file = 'ko_para.inp'
+
       ! Enables Grimme's DFT-D3 two-body dispersion (D3(BJ))
       logical lsccdftd2
 
@@ -183,6 +195,64 @@ module sccdftbsrc !Data required in SCCDFTB calculations
       logical qnbo
       integer elenuc(nndim)
 
+
+contains
+
+  !> Read an optional file name given on the command line as KEY "path".
+  !!
+  !! Double quotes are what preserve case through the parser, so they are
+  !! stripped here rather than being passed to the filesystem.  When the
+  !! keyword is absent DFLT is used, which keeps the historical behaviour of
+  !! reading a fixed name from the working directory.
+  !!
+  !! The parser upcases unquoted command text, so a path built from a
+  !! substitution such as @0 arrives as DATA/... .  CHARMM's own open copes by
+  !! retrying the name in lower case (VOPEN, machdep/machio.F90), and these
+  !! files are opened directly by the SCC-DFTB sources rather than through
+  !! VOPEN -- so do the same thing here, and keep @0 usable in a testcase.
+  !! Like VOPEN, the retry applies only to an unquoted name: quoting is how a
+  !! caller says the case is deliberate.  The lower-case form is kept only if
+  !! it exists, so a name that is simply absent is reported as it was given.
+  SUBROUTINE SCCFILEKEY(COMLYN,COMLEN,KEY,DEST,DFLT)
+    use string, only: GTRMWD, CNVTLC
+    implicit none
+    CHARACTER(len=*), intent(inout) :: COMLYN
+    INTEGER,          intent(inout) :: COMLEN
+    CHARACTER(len=*), intent(in)    :: KEY
+    CHARACTER(len=*), intent(inout) :: DEST
+    CHARACTER(len=*), intent(in)    :: DFLT
+    INTEGER :: NAMLEN, II, IPT
+    LOGICAL :: FOUND, QUOTED
+    CHARACTER(len=LEN(DEST)) :: ASGIVEN
+
+    QUOTED = .FALSE.
+    CALL GTRMWD(COMLYN,COMLEN,KEY,LEN(KEY),DEST,LEN(DEST),NAMLEN)
+    IF (NAMLEN > 0) THEN
+       IPT = 0
+       DO II = 1, NAMLEN
+          IF (DEST(II:II) == '"') THEN
+             QUOTED = .TRUE.
+          ELSE
+             IPT = IPT + 1
+             DEST(IPT:IPT) = DEST(II:II)
+          END IF
+       END DO
+       DEST(IPT+1:) = ' '
+    ELSE
+       DEST = DFLT
+    END IF
+
+    IF (.NOT. QUOTED) THEN
+       INQUIRE(FILE=DEST, EXIST=FOUND)
+       IF (.NOT. FOUND) THEN
+          ASGIVEN = DEST
+          NAMLEN = LEN_TRIM(DEST)
+          CALL CNVTLC(DEST,NAMLEN)
+          INQUIRE(FILE=DEST, EXIST=FOUND)
+          IF (.NOT. FOUND) DEST = ASGIVEN
+       END IF
+    END IF
+  END SUBROUTINE SCCFILEKEY
 
 #endif
 end module sccdftbsrc

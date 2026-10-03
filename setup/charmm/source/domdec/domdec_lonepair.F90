@@ -72,7 +72,7 @@ contains
     use memory
     use hash,only:get_hash, set_hash, and_hash, or_hash, reinit_hash, set_or_hash
     use domdec_common,only:homezone, nx, ny, nz, q_test, homeix, homeiy, homeiz, atoml, natoml
-    use mpi,only:mpi_success, mpi_integer, mpi_status_ignore
+    use mpi_f08,only:mpi_success, mpi_integer, mpi_status_ignore
     use parallel,only:comm_charmm, mynod
     implicit none
     ! Input / Output
@@ -141,7 +141,7 @@ contains
              ! Request host atoms this node does not have
              ! NOTE: lone pairs can share host atoms, therefore we have to check if this host atom
              !       has already been requested
-             bit_mask = b'1'
+             bit_mask = int(b'1')
              do i=2,n+1
                 if (homezone(ind(i)) /= 1 .and. .not.get_hash(hashtable, ind(i), dummy)) then
                    nreqind = nreqind + 1
@@ -257,13 +257,13 @@ contains
           ! Atoms that only node (dir,d) requested are in:
           ! reqind(pos+1:pos+nreq0(dir,d))
           nsend0 = 0
-          bit_mask = b'100'
+          bit_mask = int(b'100')
           do i=1,nreq(dir,d)
              val = 0
              ok = get_hash(hashtable, reqind(pos+i), val)
-             if ((homezone(reqind(pos+i)) == 1) .or. (iand(val,b'10') == b'10')) then
+             if ((homezone(reqind(pos+i)) == 1) .or. (iand(val,int(b'10')) == int(b'10'))) then
                 ! We have this atom or it was received from other nodes
-                if (i <= nreq0(dir,d) .or. .not.ok .or. iand(val,b'100') /= b'100') then
+                if (i <= nreq0(dir,d) .or. .not.ok .or. iand(val,int(b'100')) /= int(b'100')) then
                    ! Node (dir,d) requested the atom, or the atom has not been sent yet
                    ! => add it to the send list
                    nsend(dir,d) = nsend(dir,d) + 1
@@ -287,7 +287,7 @@ contains
              endif
           enddo
           ! Clear hash table 3rd bit
-          bit_mask = b'11'
+          bit_mask = int(b'11')
           do i=1,nsend(dir,d)
              call and_hash(hashtable, send_ind(dir,d)%array(i), bit_mask)
           enddo
@@ -322,7 +322,7 @@ contains
           endif          
        enddo
        ! Mark the atoms that were received from other nodes by setting the 2nd bit
-       bit_mask = b'10'
+       bit_mask = int(b'10')
        do dir=1,numdir
           do i=1,nrecv(dir,d)
              call set_or_hash(hashtable, recv_ind(dir,d)%array(i), bit_mask)
@@ -429,7 +429,7 @@ contains
   ! * Communicate lone pair coordinates
   ! *
   subroutine lonepr_comm_coord(x, y, z)
-    use mpi,only:mpi_real8, mpi_success, mpi_statuses_ignore
+    use mpi_f08,only:mpi_real8, mpi_success, mpi_statuses_ignore
     use parallel,only:comm_charmm
     implicit none
     ! Input / Output
@@ -543,7 +543,7 @@ contains
   ! * Communicate lone pair forces
   ! *
   subroutine lonepr_comm_force(forcex, forcey, forcez)
-    use mpi,only:mpi_real8, mpi_success, mpi_statuses_ignore
+    use mpi_f08,only:mpi_real8, mpi_success, mpi_statuses_ignore
     use parallel,only:comm_charmm
     implicit none
     ! Input / Output

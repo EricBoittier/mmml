@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Common Component Architecture</title>
+<link rel="stylesheet" href="charmmdoc.css">
+</head>
+<body>
+<div class="page-header">
+<h1>Common Component Architecture</h1>
+<div class="nav"><a href="index.html">Index</a><a href="charmm.html">CHARMM Home</a><a href="commands.html">Commands</a></div>
+</div>
+<pre>
+<a id="Top"></a>
+<div class="charmmdoc">
+                     Common Component Architecture
+
+                     by Milan Hodoscek, and others...
+                (milan@helix.nih.gov,milan@cmm.ki.si)
+
+        CCA (Common Component Architecture) specification started by
+the need of interfacing a variety of computational chemistry codes, ie
+GAMESS and CHARMM. For details see J. P. Kenny, et al, J. Comp. Chem.,
+25, 1717-1725, 2004.
+
+
+
+* <a href="#Description">Description</a> | Description of the CCA.
+* <a href="#Using">Using</a> | How to use CCA
+* <a href="#Installation">Installation</a> | How to install CHARMM with CCA.
+* <a href="#Status">Status</a> | Status of the interface code.
+</div>
+<a id="Description"></a>
+<div class="charmmdoc">
+<a href="#Top">Top</a>
+        See J. P. Kenny, et al, J. Comp. Chem., 25, 1717-1725, 2004.
+
+
+=======================================================================
+</div>
+<a id="Using"></a>
+<div class="charmmdoc">
+<a href="#Top">Top</a>
+        Nothing here yet....
+
+==========================================================
+
+</div>
+<a id="Installation"></a>
+<div class="charmmdoc">
+<a href="#Top">Top</a>
+Installation
+------------
+
+        Nothing yet
+
+
+==========================================================
+
+</div>
+<a id="Status"></a>
+<div class="charmmdoc">
+<a href="#Top">Top</a>
+{GAMESS,GAMESS-UK,Q-CHEM}/CHARMM interface status (November 2004)
+
+        The CCA is more general effort then just interfacing some QM
+program with the CHARMM. For example user of CCA would like to combine
+some python code of his own and use CHARMM for setup and analysis of
+the system while performing PME dynamics in parallel with
+NAMD. However the good starting point can be CCA-ing one of the
+current ab inito packages with the CHARMM program.
+
+        Currently GAMESS and GAMESS-UK programs communicate via
+fortran COMMON blocks with CHARMM, while Q-Chem is interfaced using
+external data files. Here are some details:
+
+List of COMMON blocks that are shared in GAMESS and CHARMM:
+-----------------------------------------------------------
+
+I.  GAMESS's COMMON blocks that are currently used in CHARMM (not for
+    DIESEL or GAMESS-UK):
+
+    COMMON /FUNCT/  (energy and forces)
+    COMMON /INFOA/  (atomic numbers, etc)
+    COMMON /COORDN/ (coordinates)
+
+II. CHARMM's COMMON blocks (defined and documented in gamess.fcm) that
+    are in use in GAMESS code:
+
+    COMMON /GAMESL/ (control program flags)
+    COMMON /CHMGMS/ (MM atoms for GAMESS)
+
+
+All the data structures for the 3 interfaces are in fcm/gamess.fcm
+</div>
+</pre>
+</body>
+</html>

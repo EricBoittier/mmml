@@ -13,6 +13,24 @@ endif
 STREam datadir.def
 set 8  data/nanomaterial/
 
+! The nanomaterial test data directory (data/nanomaterial/*.str)
+! is not part of the standard repo distribution -- it was added
+! by the CHARMM-GUI workflow that generated the original test
+! coordinates in Dec 2018 and never committed.  Self-skip when
+! the toppar.str file is missing so the test reports
+! "Test NOT performed" instead of aborting at BOMLEV 0 from
+! <OPNLGU>'s "OPEN not possible" warning.  Surfaced by
+! pipeline-dev #29 on the misc2 and tamd configs.
+bomlev -2
+open unit 98 read form name @8toppar.str
+if ?iostat .ne. 1 then
+   bomlev 0
+   echo "Test NOT performed. data/nanomaterial/ files not available."
+   stop
+endif
+close unit 98
+bomlev 0
+
 ! Read topology and parameter files
 stream @8toppar.str
 

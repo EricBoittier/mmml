@@ -1,7 +1,7 @@
 module cvio
   use chm_kinds
   implicit none
-  LOGICAL, PRIVATE :: QCHECK=.TRUE., QRPICO, QWPICO=.FALSE.
+  LOGICAL, PRIVATE :: QCHECK=.TRUE., QRPICO, QWPICO
   real(chm_real), private :: TSET
 
 contains
@@ -759,7 +759,7 @@ SUBROUTINE WRITCV(X,Y,Z, &
   use multicom_aux                 
 #endif
 #if KEY_MPI==1
-  use mpi                          
+  use mpi_f08                          
 #endif
 #endif
   !
@@ -1601,7 +1601,7 @@ SUBROUTINE TRJSPC(COMLYN,COMLEN, &
   QRPICO=.FALSE.
   QWPICO=.FALSE.
   QRPICO=INDXA(COMLYN,COMLEN,'RPIC') > 0
-  ! QWPICO=INDXA(COMLYN,COMLEN,'WPIC') > 0
+  QWPICO=INDXA(COMLYN,COMLEN,'WPIC') > 0
   RETURN
 END SUBROUTINE TRJSPC
 LOGICAL FUNCTION GET_TRAJ_CHK()

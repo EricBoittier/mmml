@@ -45,8 +45,8 @@ Havel,T.F.(1990)J.Chem.Inf.Comput.Sci.Vol 30,222-227}.  Thus, the structure
 is rotated into its principal axis of intertia (center of mass) both before
 and after its back projection.  When this step is applied the message
                 ROTATION APPLIED TO PRINCIPAL AXES
-will appear.  Dynamc4.src is essentially dynamc.src in 4 dimensions.  Note
-that even though qeuler still exists in dynamc4.src it has not yet been 
+will appear.  dynamc4.F90 is essentially dynamc.F90 in 4 dimensions.  Note
+that even though qeuler still exists in dynamc4.F90 it has not yet been 
 tested.  Also, the usual shake algorithm will only be applied to 
 3-dimensional space.
 

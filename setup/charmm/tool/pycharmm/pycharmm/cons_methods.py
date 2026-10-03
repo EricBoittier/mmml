@@ -16,6 +16,13 @@
 
 """Functions to configure various constraints/restraints covering:
 
+.. deprecated::
+    This module is deprecated. Use :mod:`pycharmm.restraints` instead:
+
+    - ``cons_methods.dihe()`` → ``restraints.angles.dihedral()``
+    - ``cons_methods.ic()`` → ``restraints.internal_coords.all()``
+    - ``cons_methods.droplet()`` → ``restraints.positions.droplet()``
+
 - cons dihe
 
 - cons cldh
@@ -27,14 +34,14 @@
 - cons hmcm
 
 Corresponds to CHARMM command `CONS`
-  
+
 See CHARMM documentation [CONS](<https://academiccharmm.org/documentation/version/c47b1/cons>)
 for more information
 
 Functions
 =========
-- `dihe` -- set up dihedral restraints 
-- `ic` -- set up internal coordinates (IC) restraints 
+- `dihe` -- set up dihedral restraints
+- `ic` -- set up internal coordinates (IC) restraints
 - `droplet` -- set up the quartic droplet potential
 
 Examples
@@ -42,13 +49,21 @@ Examples
 Apply a dihedral potential on four selected atoms
 >>> import pycharmm.cons_methods as cons_methods
 >>> cons_methods.dihe(selection='bynum 7 9 15 17',minimum=-60,force=1.0, width=0)
- 
+
 
 """
-import pycharmm.script
+
+import warnings
+
+from pycharmm import restraints
+
 
 def dihe(selection='', cldh=False, force=0, **kwargs):
     """Set-up/turn-off dihedral angle restraints
+
+    .. deprecated::
+        Use ``restraints.angles.dihedral()`` instead.
+        Note: The ``cldh`` parameter maps to ``clear`` in the new API.
 
     See [CONS DIHE](<https://academiccharmm.org/documentation/version/c47b1/cons#Dihedral>)
     for more information
@@ -66,24 +81,30 @@ def dihe(selection='', cldh=False, force=0, **kwargs):
 
         period : int
 
-        width : real 
+        width : real
 
-        comp : bool  
+        comp : bool
 
         main : bool
     """
+    warnings.warn(
+        "cons_methods.dihe() is deprecated, use restraints.angles.dihedral()",
+        DeprecationWarning,
+        stacklevel=2
+    )
+    return restraints.angles.dihedral(
+        selection=selection,
+        force=force,
+        clear=cldh,
+        **kwargs
+    )
 
-    if not cldh and len(selection)>0:
-        cons_command = 'cons dihe ' + str(selection)
-        cons_dihe = pycharmm.script.CommandScript(cons_command,
-                                                  force=force,
-                                                  **kwargs)
-    else:
-        cons_dihe =  pycharmm.script.CommandScript('cons cldh')
-    cons_dihe.run()
 
 def ic(**kwargs):
     """Impose internal coordinate restraints
+
+    .. deprecated::
+        Use ``restraints.internal_coords.all()`` instead.
 
     See [CONS IC](<https://academiccharmm.org/documentation/version/c47b1/cons#InternalCoord>)
     for more information
@@ -93,7 +114,7 @@ def ic(**kwargs):
     **kwargs: dict
         possible keyword arguments are:
 
-        bond: real  
+        bond: real
 
         angle: real
 
@@ -101,16 +122,24 @@ def ic(**kwargs):
 
         improper : real
 
-        exponent : int 
+        exponent : int
 
         upper : bool
 
     """
-    cons_ic = pycharmm.script.CommandScript('cons ic', **kwargs)
-    cons_ic.run()
+    warnings.warn(
+        "cons_methods.ic() is deprecated, use restraints.internal_coords.all()",
+        DeprecationWarning,
+        stacklevel=2
+    )
+    return restraints.internal_coords.all(**kwargs)
+
 
 def droplet(**kwargs):
     """Impose quartic droplet restraints
+
+    .. deprecated::
+        Use ``restraints.positions.droplet()`` instead.
 
     See [CONS DROPlet](<https://academiccharmm.org/documentation/version/c47b1/cons#QuarticDroplet>)
     for more information
@@ -127,6 +156,9 @@ def droplet(**kwargs):
         nomass : bool
 
     """
-    cons_droplet = pycharmm.script.CommandScript('cons droplet', **kwargs)
-    cons_droplet.run()
-
+    warnings.warn(
+        "cons_methods.droplet() is deprecated, use restraints.positions.droplet()",
+        DeprecationWarning,
+        stacklevel=2
+    )
+    return restraints.positions.droplet(**kwargs)

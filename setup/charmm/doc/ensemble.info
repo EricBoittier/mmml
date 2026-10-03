@@ -231,7 +231,7 @@ NOTE: THE REPLICA EXCHANGE FEATURE IS STILL NOT THOROUGHLY TESTED AND
 SHOULD THEREFORE BE USED WITH CAUTION.
 
 At present, only the main dynamics integrator in charmm (that is, the
-three-step verlet in dynamc.src) is fully supported by this command. Thus
+three-step verlet in dynamc.F90) is fully supported by this command. Thus
 'DYNA NOSE' etc. will not work, but 'DYNA LEAP' will.
 
 An earlier version of this code required a deconvolution of coordinates
@@ -322,14 +322,14 @@ unmanageable number of exchanges. The partial infinite swapping (PINS) algorithm
 adresses this problem using a partitioning strategy whereby temperature
 space is divided into blocks, and local (but full) symmetrisation is used within each
 block. More precisely, the current implementation uses the "dual-chain" approach, where the
-K−temperature set is partitioned into blocks in two different ways,
+K-temperature set is partitioned into blocks in two different ways,
 one for each chain. The two blocks must have a complementary structure without
 a boundary between the blocks defined for the two chains. This is required in order
 to achieve sampling of the overall temperature space for all the replicas. For a set
 of 12 temperatures, a possible partitioning for the two chains (a|b) is (3,6,3|4,4,4),
 where the a boundaries are T3 -- T4 and T9 -- T10 , and for b they are T4 -- T5 and
 T8 -- T9. On the other hand, the partitioning (3,3,6|6,3,3) is not valid, as chain a
-boundaries’ are T3 -- T4 and T6 -- T7 , and for chain b they are T6 -- T7 and T9 -- T10 ,
+boundaries' are T3 -- T4 and T6 -- T7 , and for chain b they are T6 -- T7 and T9 -- T10 ,
 thus sharing the common boundary T6 -- T7.
 
 How to :

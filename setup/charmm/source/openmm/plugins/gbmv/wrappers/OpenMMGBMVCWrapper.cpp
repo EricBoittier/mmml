@@ -74,12 +74,11 @@ void OpenMMGBMV_GBMVForce_getCphmdParameters(const OpenMMGBMV_GBMVForce* target,
 void OpenMMGBMV_GBMVForce_setCphmdParameters(OpenMMGBMV_GBMVForce* target, int index, int titrateResID, double refChargeState1, double refChargeState2, double chargeState1, double chargeState2) {
     reinterpret_cast<OpenMMGBMV::GBMVForce*>(target)->setCphmdParameters(index, titrateResID, refChargeState1, refChargeState2, chargeState1, chargeState2);
 }
-char* OpenMMGBMV_GBMVForce_getLambdaOutputFile(const OpenMMGBMV_GBMVForce* target) {
-    char * result = reinterpret_cast<const OpenMMGBMV::GBMVForce*>(target)->getLambdaOutputFile();
-    return reinterpret_cast<char*>(result);
+const char* OpenMMGBMV_GBMVForce_getLambdaOutputFile(const OpenMMGBMV_GBMVForce* target) {
+    return reinterpret_cast<const OpenMMGBMV::GBMVForce*>(target)->getLambdaOutputFile();
 }
-void OpenMMGBMV_GBMVForce_setLambdaOutputFile(OpenMMGBMV_GBMVForce* target, char* tmp) {
-    reinterpret_cast<OpenMMGBMV::GBMVForce*>(target)->setLambdaOutputFile(reinterpret_cast<char *>(tmp));
+void OpenMMGBMV_GBMVForce_setLambdaOutputFile(OpenMMGBMV_GBMVForce* target, const char* tmp) {
+    reinterpret_cast<OpenMMGBMV::GBMVForce*>(target)->setLambdaOutputFile(tmp);
 }
 double OpenMMGBMV_GBMVForce_getSystemPH(const OpenMMGBMV_GBMVForce* target) {
     double result = reinterpret_cast<const OpenMMGBMV::GBMVForce*>(target)->getSystemPH();

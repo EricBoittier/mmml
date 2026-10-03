@@ -83,6 +83,7 @@ import pycharmm.minimize as minimize
 import pycharmm.settings as settings
 from pycharmm.implicit_solvent import FACTS
 
+import time
 import numpy as np
 import pandas as pd
 from os import listdir, system
@@ -250,14 +251,14 @@ def rand_rot_trans(xyz, max_rot = pi, max_trans = 2):
          new ligand xyz coordinates
     """
     ## Get random rotation angle and translation distance
-    tmp = np.random.rand(2, 3) * 2 - 1
+    tmp = np.random.default_rng().random((2, 3)) * 2 - 1
     rand_trans = tmp[0, :] * max_trans
     rot_vec = tmp[1, :] / np.linalg.norm(tmp[1, :])
     max_rot = max_rot * (random() * 2 - 1)
     matrix = R.from_rotvec(rot_vec * max_rot).as_matrix()
 
     ## Random rotation and translation
-    ligCenter = (np.amin(xyz, axis = 0) + np.amax(xyz, axis = 0)) / 2
+    ligCenter = (np.min(xyz, axis = 0) + np.max(xyz, axis = 0)) / 2
     origin_xyz = xyz - ligCenter
     tmp_xyz = origin_xyz @ matrix.T + ligCenter + rand_trans
     return tmp_xyz
@@ -265,13 +266,16 @@ def rand_rot_trans(xyz, max_rot = pi, max_trans = 2):
 ## FACTS implicit solvent rescoring
 def FACTS_rescore(fixAtomSel = None, steps = 1000, tolgrd = 0.001):
     """Default FACTS docking rescore method
+    This function calculates the FACTS energy of a single state, following
+    number of requested abnr minimization.
 
     Parameters
     ----------
     fixAtomSel : pycharmm.SelectAtoms
-                 fixed atoms that undergoes FACTS implicit solvent minimization
+                 fixed atoms that do not undergo FACTS implicit solvent minimization
     steps : int
-            number of minimization steps
+            number of minimization steps (abnr) - use 0 if all atoms are fixed
+            or no minimization is required.
     tolgrd : float
              minimization tolerance (exit thresold)
 
@@ -280,27 +284,38 @@ def FACTS_rescore(fixAtomSel = None, steps = 1000, tolgrd = 0.001):
     facts_ener : float
                 FACTS implicit solvent energy
     """
-
+    from pycharmm import select_atoms, scalar
     ## Non-bond option
     lingo.charmm_script("faster on")
     pycharmm.UpdateNonBondedScript(
      nbxmod = 5, atom = True, cdiel = True, eps = 1, shift = True,
      vatom = True, vdistance = True, vswitch = True, cutnb = 14.0,
      ctofnb = 12.0, ctonnb = 10.0, e14fac = 1.0, wmin = 1.5).run()
-    lingo.charmm_script("scalar wmain = radius")
+    ## Set hydrogen radii to 1.0
+    #lingo.charmm_script("scalar wmain = radius")
+    hydrogens = np.asarray((select_atoms.SelectAtoms(hydrogens=True)))
+    radius = np.asarray(scalar.get_radius())
+    radius[hydrogens==True] = 1.0
+    coor.set_weights(radius)
+
 
     ## FACTS implicit solvent setup
     FACTS(tcps = 22, teps = 1, gamm = 0.015,
      tavw = True, conc = 0.1, temp = 298).run()
 
     ## Minimiziation
-    if fixAtomSel != None: cons_fix.setup(fixAtomSel)
-    minimize.run_abnr(nstep = steps, tolgrd = tolgrd)
-    if fixAtomSel != None: cons_fix.turn_off()
+    if fixAtomSel is not None:
+        cons_fix.setup(fixAtomSel)
+    if steps > 0:
+        minimize.run_abnr(nstep=steps, tolgrd=tolgrd)
+    if fixAtomSel is not None:
+        cons_fix.turn_off()
 
     ## Get energy
     energy.show()
     facts_ener = energy.get_total()
+    # Clear FACTS data structure for subsequent calls
+    FACTS(clear = True).run()
     return facts_ener
 
 ## Grids for fast ligand initial placement in rigid receptor
@@ -341,13 +356,13 @@ def _prot_grid(protCoor, expand_limit = None):
     float size: size of the grid boxes
     numpy 3d array: protein grid for fast ligand initial placement
     """
-    minCoor = np.amin(protCoor, axis = 0)
-    maxCoor = np.amax(protCoor, axis = 0)
+    minCoor = np.min(protCoor, axis = 0)
+    maxCoor = np.max(protCoor, axis = 0)
     if expand_limit is None:
         size = np.ceil(np.max(np.ceil(maxCoor) - np.floor(minCoor))) + 2
     elif  np.any(expand_limit is not None):
-        minCorner = np.amin([minCoor, np.amin(expand_limit, axis = 0)], axis = 0)
-        maxCorner = np.amax([maxCoor, np.amax(expand_limit, axis = 0)], axis = 0)
+        minCorner = np.min([minCoor, np.min(expand_limit, axis = 0)], axis = 0)
+        maxCorner = np.max([maxCoor, np.max(expand_limit, axis = 0)], axis = 0)
         size = np.ceil(np.max(np.ceil(maxCorner) - np.floor(minCorner)))
         
     atomCoor = np.floor(protCoor + size / 2).astype(int)
@@ -467,7 +482,7 @@ def RCDOCKER_init_place(ligPDB = './ligand.pdb', ligSeg = 'LIGA',
         totalener = energy.get_total() + threshold
         xyz = coor.get_positions().to_numpy()
         if flag_center_ligand :
-            ligCenter = (np.amin(xyz, axis = 0) + np.amax(xyz, axis = 0)) / 2
+            ligCenter = (np.min(xyz, axis = 0) + np.max(xyz, axis = 0)) / 2
             xyz = xyz - ligCenter + gridCenter
             new_xyz = pd.DataFrame(xyz, columns = ['x', 'y', 'z'])
             coor.set_positions(new_xyz)
@@ -597,7 +612,7 @@ def RCDOCKER_fast_init_place(receptorPDB = './protein.pdb', receptorPSF = './pro
     read.psf_card(receptorPSF, append = True)
     read.pdb(receptorPDB, resid = True)
     xyz = coor.get_positions().to_numpy()
-    protCenter = (np.amin(xyz, axis = 0) + np.amax(xyz, axis = 0)) / 2
+    protCenter = (np.min(xyz, axis = 0) + np.max(xyz, axis = 0)) / 2
     xyz = xyz - protCenter
     
     ### before making the protein grid,
@@ -636,7 +651,7 @@ def RCDOCKER_fast_init_place(receptorPDB = './protein.pdb', receptorPSF = './pro
         read.pdb(confDir + conformer, resid = True)
         xyz = coor.get_positions().to_numpy()
         if flag_center_ligand:
-            ligCenter = (np.amin(xyz, axis = 0) + np.amax(xyz, axis = 0)) / 2
+            ligCenter = (np.min(xyz, axis = 0) + np.max(xyz, axis = 0)) / 2
             xyz = xyz - ligCenter + gridCenter
             new_xyz = pd.DataFrame(xyz, columns = ['x', 'y', 'z'])
             coor.set_positions(new_xyz)
@@ -826,7 +841,7 @@ def FCDOCKER_fast_init_place(receptorPDB='./protein.pdb', receptorPSF='./protein
     read.psf_card(receptorPSF, append = True)
     read.pdb(receptorPDB, resid = True)
     xyz = coor.get_positions().to_numpy()
-    protCenter = (np.amin(xyz, axis = 0) + np.max(xyz, axis = 0)) / 2
+    protCenter = (np.min(xyz, axis = 0) + np.max(xyz, axis = 0)) / 2
     xyz = xyz - protCenter
     size, protGrid = _prot_grid(xyz)
 
@@ -970,7 +985,7 @@ def FCDOCKER_mutation(final_result, pair_list, receptorSel = None, flexSel = Non
         minimize.run_sd(nstep = 50, tolenr = 0.01)
         minimize.run_abnr(nstep = 50, tolenr = 0.005)
         tmpener.append(energy.get_total())
-    totalEner = np.amax(np.asarray(tmpener))
+    totalEner = np.max(np.asarray(tmpener))
     mutateEner = totalEner + threshold
 
     ## Loop and save poses in the save dir
@@ -993,7 +1008,7 @@ def FCDOCKER_mutation(final_result, pair_list, receptorSel = None, flexSel = Non
         ## No mutation if random number smaller than the prob cutoff
         if rand <= prob:
             print("Flexible receptor + ligand placement ", str(idxCopy))
-            write.coor_pdb(placementDir + str(idxCopy) + ".pdb", titel = '''Title
+            write.coor_pdb(placementDir + str(idxCopy) + ".pdb", title = '''Title
             * The ligand ID is %d
             * The protein ID is %d
             * The placement ID is %d
@@ -1047,7 +1062,7 @@ def FCDOCKER_mutation(final_result, pair_list, receptorSel = None, flexSel = Non
 
             ## Save mutated pose
             print("Flexible receptor + ligand placement ", str(idxCopy))
-            write.coor_pdb(placementDir + str(idxCopy) + ".pdb", titel = '''Title
+            write.coor_pdb(placementDir + str(idxCopy) + ".pdb", title = '''Title
             * The ligand ID is %d
             * The protein ID is %d
             * The placement ID is %d
@@ -1215,9 +1230,12 @@ def default_ommd_sian(ommd):
 
     Returns
     -------
-    bool
-         True for success
+    float 
+         runtime for OMMD 
     """
+
+    begin_time = time.perf_counter()
+
     ## Stage 1
     ommdSet = {'soft': 1, 'hard': 0, 'emax': 0.6,
                'mine': -0.4, 'maxe': 0.4, 'eps': 3}
@@ -1258,7 +1276,9 @@ def default_ommd_sian(ommd):
     ommd.setVar(ommdSet)
     ommd.simulated_annealing()
 
-    return True
+    end_time = time.perf_counter()
+
+    return end_time - begin_time 
 
 ## Clustering method
 def cluster_mmtsb(radius, name):
@@ -1314,7 +1334,7 @@ def scan_cluster_radius(name):
 
     ## Find the best clustering radius
     cluster_size = np.loadtxt('tmpcluster', dtype = int)
-    radius = radii[cluster_size == np.amax(cluster_size)][0]
+    radius = radii[cluster_size == np.max(cluster_size)][0]
 
     return radius
 
@@ -1330,8 +1350,10 @@ def rcdocker_default_sort(radius, name):
 
     Returns
     -------
-    np.array
-          clustering result
+    pdbID in largest cluster : np.array
+          pdbID
+    cluster info : np.array
+          pdbID and cluster number
     """
     if type(name) != str: name = str(name)
     cluster_mmtsb(radius, name)
@@ -1343,7 +1365,17 @@ def rcdocker_default_sort(radius, name):
     '''
     system(cmd)
 
-    return np.loadtxt('tmp', dtype = str)
+    cmd = '''
+    rm -f tmp_rcdocker_cluster_summary
+    num=`grep @cluster cluster.log | sed 1d | wc -l` 
+    for init in `seq 1 $num`; do
+        final=$[init+1]
+	awk "/cluster t.$init /, /cluster t.$final / {print}" cluster.log | sed /cluster/d | awk '{print $2, "cluster." cluster}' cluster=$init >> tmp_rcdocker_cluster_summary
+	done
+    '''
+    system(cmd)
+
+    return np.loadtxt('tmp', dtype = str), np.loadtxt("tmp_rcdocker_cluster_summary", dtype = str)
 
 def sort_cluster(pdb_files, dock_result, sort_method):
     """Sort clustering results
@@ -1369,7 +1401,7 @@ def sort_cluster(pdb_files, dock_result, sort_method):
             tmpEner.append(dock_result[dock_result['PDB_name'] == poseID][sort_method].values[0])
 
         tmpEner = np.asarray(tmpEner)
-        minPose = pdb_files[tmpEner == np.amin(tmpEner)][0]
+        minPose = pdb_files[tmpEner == np.min(tmpEner)][0]
         tmpResult = dock_result[dock_result['PDB_name'] == minPose]
     else:
         print("Cluster only have one cluster member")
@@ -1457,7 +1489,7 @@ def Rigid_CDOCKER(xcen = 0, ycen = 0, zcen = 0, maxlen = 10, dielec = 3,
                   flag_delete_placement = True, flag_save_all = True,
                   flag_save_cluster= True, flag_save_top = True,
                   flag_suppress_print = True, flag_center_ligand = True,
-                  flag_fast_grid = False, flag_use_hbond = False,
+                  flag_fast_grid = True, flag_use_hbond = False,
                   flag_fast_placement = True, threshold = 2500,
                   sort_energy = 'total_energy', saveDir = './dockresult/'):
 
@@ -1550,7 +1582,12 @@ def Rigid_CDOCKER(xcen = 0, ycen = 0, zcen = 0, maxlen = 10, dielec = 3,
     dockResult : pd.DataFrame
          docking result
     """
+
+    begin_time = time.perf_counter()
+
     ## Generate grids for docking if no grid files generated before
+    genGrid_begin_time = time.perf_counter()
+
     if not flag_grid:
         if hmax > 0: hmax = 0
         if not flag_use_hbond: hmax = 0
@@ -1591,11 +1628,15 @@ def Rigid_CDOCKER(xcen = 0, ycen = 0, zcen = 0, maxlen = 10, dielec = 3,
               elec = True, cdie = True, cutnb = 12, ctofnb = 10, ctonnb = 8,
               emax = 10000, maxe = 10000, mine = -10000, epsilon = dielec).run()
 
+    genGrid_end_time = time.perf_counter()
+
     ## Ligand initial placement
     if flag_suppress_print:
         settings.set_verbosity(1)
         settings.set_warn_level(1)
         settings.set_bomb_level(-1)
+
+    place_begin_time = time.perf_counter()
 
     if flag_fast_placement :
         numConf, numPlace = RCDOCKER_fast_init_place(receptorPDB = receptorPDB, receptorPSF = receptorPSF,
@@ -1612,6 +1653,8 @@ def Rigid_CDOCKER(xcen = 0, ycen = 0, zcen = 0, maxlen = 10, dielec = 3,
                             flag_rdie = flag_rdie, dielec = dielec,
                             xcen = xcen, ycen = ycen, zcen = zcen,
                             numPlace = numPlace, threshold = threshold)
+
+    place_end_time = time.perf_counter()
 
     settings.set_verbosity(5)
     settings.set_warn_level(5)
@@ -1646,6 +1689,8 @@ def Rigid_CDOCKER(xcen = 0, ycen = 0, zcen = 0, maxlen = 10, dielec = 3,
     placementPose = []
     placementID = 1
     conformerID = 1
+    ommd_runtime = 0
+    mini_runtime = 0 
     ligand = pycharmm.SelectAtoms(seg_id = ligSeg)
 
     if remindar > 0:
@@ -1670,7 +1715,8 @@ def Rigid_CDOCKER(xcen = 0, ycen = 0, zcen = 0, maxlen = 10, dielec = 3,
             placementID += 1
             idxCopy += 1
 
-        default_ommd_sian(ommd)
+        tmp_runtime = default_ommd_sian(ommd)
+        ommd_runtime += tmp_runtime
 
         nativeGrid = grid.CDOCKER()
         nativeSet = {'selection': ligand, 'flag_form' : flag_form, 'gridFile':
@@ -1680,12 +1726,12 @@ def Rigid_CDOCKER(xcen = 0, ycen = 0, zcen = 0, maxlen = 10, dielec = 3,
 
         i = 1
         idxCopy = 1
+        tmp_begin_time = time.perf_counter()
         while idxCopy <= remindar:
             ommd.copy_coor(idxCopy = idxCopy)
             print("Minimize OMMD ligand copy " + str(idxCopy))
             minimize.run_sd(nstep = 50)
             minimize.run_abnr(nstep = 1000, tolenr = 1e-3)
-            #allEner = energy.get_energy()
             dockPose = str(conformerID) + "_" + str(i) + ".pdb"
             tmpTotal = lingo.get_energy_value('ENER') #allEner[allEner['name'] == 'energy']['value'].values[0]
             tmpGrvdw = lingo.get_energy_value('GRVD') #allEner[allEner['name'] == 'grvdw']['value'].values[0]
@@ -1713,6 +1759,9 @@ def Rigid_CDOCKER(xcen = 0, ycen = 0, zcen = 0, maxlen = 10, dielec = 3,
                 conformerID += 1
             idxCopy += 1
 
+        tmp_end_time = time.perf_counter() 
+        mini_runtime += tmp_end_time - tmp_begin_time 
+	
         nativeGrid.off()
         nativeGrid.clear()
         nativeSet.clear()
@@ -1747,7 +1796,8 @@ def Rigid_CDOCKER(xcen = 0, ycen = 0, zcen = 0, maxlen = 10, dielec = 3,
                 placementID += 1
                 idxCopy += 1
 
-            default_ommd_sian(ommd)
+            tmp_runtime = default_ommd_sian(ommd)
+            ommd_runtime += tmp_runtime
 
             nativeGrid = grid.CDOCKER()
             nativeSet = {'selection': ligand, 'flag_form' : flag_form, 'gridFile':
@@ -1757,12 +1807,12 @@ def Rigid_CDOCKER(xcen = 0, ycen = 0, zcen = 0, maxlen = 10, dielec = 3,
 
             i = 1
             idxCopy = 1
+            tmp_begin_time = time.perf_counter() 
             while idxCopy <= numCopy:
                 ommd.copy_coor(idxCopy = idxCopy)
                 print("Minimize OMMD ligand copy " + str(idxCopy))
                 minimize.run_sd(nstep = 50)
                 minimize.run_abnr(nstep = 1000, tolenr = 1e-3)
-                #allEner = energy.get_energy()
                 dockPose = str(conformerID) + "_" + str(i) + ".pdb"
                 tmpTotal = lingo.get_energy_value('ENER') #allEner[allEner['name'] == 'energy']['value'].values[0]
                 tmpGrvdw = lingo.get_energy_value('GRVD') #allEner[allEner['name'] == 'grvdw']['value'].values[0]
@@ -1790,6 +1840,9 @@ def Rigid_CDOCKER(xcen = 0, ycen = 0, zcen = 0, maxlen = 10, dielec = 3,
                     conformerID += 1
                 idxCopy += 1
 
+            tmp_end_time = time.perf_counter() 
+            mini_runtime += tmp_end_time - tmp_begin_time 
+
             nativeGrid.off()
             nativeGrid.clear()
             nativeSet.clear()
@@ -1814,24 +1867,45 @@ def Rigid_CDOCKER(xcen = 0, ycen = 0, zcen = 0, maxlen = 10, dielec = 3,
 
     ## Cluster and sort docking pose
     conformerID = 1
+    clusterRadius = []
+    dockresultClusterSize = []
+    dockresultClusterRadius = []
     clusterResult = pd.DataFrame(columns = list(dockResult.columns).append('cluster_size'))
     while conformerID <= numConf:
         conformerName = str(conformerID) + '_*'
         radius = scan_cluster_radius(name = conformerName)
-        tmp = rcdocker_default_sort(radius = radius, name = conformerName)
+        tmp, tmp_rcdocker_cluster_summary = rcdocker_default_sort(radius = radius, name = conformerName)
+        rcdocker_cluster_summary = tmp_rcdocker_cluster_summary if conformerID == 1 else np.concatenate((rcdocker_cluster_summary, tmp_rcdocker_cluster_summary))
 
         clusterResult = pd.concat([clusterResult, sort_cluster(pdb_files = tmp,
-                       dock_result = dockResult, sort_method = "total_energy")],
+                       dock_result = dockResult, sort_method = sort_energy)],
                        ignore_index = True)
 
         conformerID += 1
+        clusterRadius.append(radius)
+        dockresultClusterSize += [np.sum(tmp_rcdocker_cluster_summary[:, 1] == cluster) for cluster in tmp_rcdocker_cluster_summary[:, 1]] 
+        dockresultClusterRadius += [radius] * numPlace
+    clusterResult["cluster_radius"] = clusterRadius
+
+    ## Update Cluster Radius and Cluster ID for all docking results 
+    rcdocker_cluster_id = [] 
+    rcdocker_cluster_size = [] 
+    dockResult["cluster_radius"] = dockresultClusterRadius
+    for pdb in dockResult["PDB_name"].tolist() :
+        idxC = np.where(rcdocker_cluster_summary[:, 0] == pdb)[0][0]
+        rcdocker_cluster_id.append("{}_{}".format(rcdocker_cluster_summary[idxC, 0].split("_")[0], rcdocker_cluster_summary[idxC, 1]))
+        rcdocker_cluster_size.append(dockresultClusterSize[idxC])
+    dockResult["cluster_id"] = rcdocker_cluster_id
+    dockResult["cluster_size"] = rcdocker_cluster_size 
 
     ## Sort dataframe and save grid docking results
     _mkdir_(saveDir)
     dockResult = dockResult.sort_values(by = ["total_energy"], ignore_index = True)
-    dockResult.to_csv(saveDir + 'dockResult.tsv', sep = '	')
+    dockResult = dockResult.round(4)
+    dockResult.to_csv(saveDir + 'dockResult.tsv', sep = "\t")
     clusterResult = clusterResult.sort_values(by = ["total_energy"], ignore_index = True)
-    clusterResult.to_csv(saveDir + 'clusterResult.tsv', sep = '	')
+    clusterResult = clusterResult.round(4)
+    clusterResult.to_csv(saveDir + 'clusterResult.tsv', sep = "\t")
 
     ## Explicit atom minimization
     if not flag_fast_grid:
@@ -1851,11 +1925,13 @@ def Rigid_CDOCKER(xcen = 0, ycen = 0, zcen = 0, maxlen = 10, dielec = 3,
         elec = []
         totalEner = []
         _rm_("cluster_*")
+        explicit_begin_time = time.perf_counter() 
         pdbID = clusterResult['PDB_name'].tolist()
         grid_hbond = clusterResult['grid_hbond'].tolist()
         conformer_id = clusterResult["conformer_id"].tolist()
         placement_id = clusterResult["placement_id"].tolist()
         cluster_size = clusterResult["cluster_size"].tolist()
+        cluster_radius = clusterResult['cluster_radius'].tolist()
         for idx in np.arange(len(pdbID)):
             read.pdb(str(pdbID[idx]), resid = True)
             minimize.run_sd(nstep = 50)
@@ -1872,12 +1948,14 @@ def Rigid_CDOCKER(xcen = 0, ycen = 0, zcen = 0, maxlen = 10, dielec = 3,
                            * The docked pose ID is %s
                            * The conformer ID is %d
                            * The placement ID is %d
+                           * The cluster radius is %3.1f
+                           * The cluster size is %s
                            * The total energy is %8.6f
                            * The vdw energy is %8.6f
                            * The elec energy is %8.6f
                            * The grid_hbond is %8.6f '''
-                           % (pdbID[idx], conformer_id[idx], placement_id[idx],
-                           tmptotal, tmpvdw, tmpelec, grid_hbond[idx]))
+                           % (pdbID[idx], conformer_id[idx], placement_id[idx], cluster_radius[idx], 
+                           cluster_size[idx], tmptotal, tmpvdw, tmpelec, grid_hbond[idx]))
 
         explicitCluster = pd.DataFrame()
         explicitCluster["total_energy"] = totalEner
@@ -1888,6 +1966,7 @@ def Rigid_CDOCKER(xcen = 0, ycen = 0, zcen = 0, maxlen = 10, dielec = 3,
         explicitCluster["placement_id"] = placement_id
         explicitCluster["PDB_name"] = pdbID
         explicitCluster["cluster_size"] = cluster_size
+        explicitCluster["cluster_radius"] = cluster_radius
 
 	## Minimize top10 result
         vdw = []
@@ -1896,8 +1975,11 @@ def Rigid_CDOCKER(xcen = 0, ycen = 0, zcen = 0, maxlen = 10, dielec = 3,
         _rm_("top10_*")
         pdbID = dockResult['PDB_name'].tolist()[0:11]
         grid_hbond = dockResult['grid_hbond'].tolist()[0:11]
+        cluster_id = dockResult['cluster_id'].tolist()[0:11]
         conformer_id = dockResult["conformer_id"].tolist()[0:11]
         placement_id = dockResult["placement_id"].tolist()[0:11]
+        cluster_size = dockResult["cluster_size"].tolist()[0:11]
+        cluster_radius = dockResult['cluster_radius'].tolist()[0:11]
         for idx in np.arange(len(pdbID)):
             read.pdb(str(pdbID[idx]), resid = True)
             minimize.run_sd(nstep = 50)
@@ -1914,12 +1996,15 @@ def Rigid_CDOCKER(xcen = 0, ycen = 0, zcen = 0, maxlen = 10, dielec = 3,
                            * The docked pose ID is %s
                            * The conformer ID is %d
                            * The placement ID is %d
+                           * The cluster ID is %s
+                           * The cluster size is %s
+                           * The cluster radius is %3.2f
                            * The total energy is %8.6f
                            * The vdw energy is %8.6f
                            * The elec energy is %8.6f
                            * The grid_hbond is %8.6f '''
-                           % (pdbID[idx], conformer_id[idx], placement_id[idx],
-                           tmptotal, tmpvdw, tmpelec, grid_hbond[idx]))
+                           % (pdbID[idx], conformer_id[idx], placement_id[idx], cluster_id[idx],
+                           cluster_size[idx], cluster_radius[idx], tmptotal, tmpvdw, tmpelec, grid_hbond[idx]))
 
         explicitTop10 = pd.DataFrame()
         explicitTop10["total_energy"] = totalEner
@@ -1929,15 +2014,22 @@ def Rigid_CDOCKER(xcen = 0, ycen = 0, zcen = 0, maxlen = 10, dielec = 3,
         explicitTop10["conformer_id"] = conformer_id
         explicitTop10["placement_id"] = placement_id
         explicitTop10["PDB_name"] = pdbID
+        explicitTop10["cluster_id"] = cluster_id 
+        explicitTop10["cluster_size"] = cluster_size
+        explicitTop10["cluster_radius"] = cluster_radius
+
+        explicit_end_time = time.perf_counter()
 
     ## Sort dataframe and save explicit atom minimization results
     if not flag_fast_grid:
         explicitTop10 = explicitTop10.sort_values(by = [sort_energy],
                         ignore_index = True)
-        explicitTop10.to_csv(saveDir + 'explicitTop10.tsv', sep = '	')
-        explicitCluster = explicitCluster.sort_values(by = [sort_energy],
+        explicitTop10 = explicitTop10.round(4)
+        explicitTop10.to_csv(saveDir + 'explicitTop10.tsv', sep = "\t")
+        explicitCluster = explicitCluster.sort_values(by = [sort_energy], 
                           ignore_index = True)
-        explicitCluster.to_csv(saveDir + 'explicitCluster.tsv', sep = '	')
+        explicitCluster = explicitCluster.round(4)
+        explicitCluster.to_csv(saveDir + 'explicitCluster.tsv', sep = "\t")
 
     ## Clean and save results
     if flag_save_cluster:
@@ -1984,6 +2076,13 @@ def Rigid_CDOCKER(xcen = 0, ycen = 0, zcen = 0, maxlen = 10, dielec = 3,
                 _cp_(source, target)
                 idx += 1
 
+    ## Compute time cost 
+    end_time = time.perf_counter()
+    runtime = end_time - begin_time 
+    genGrid_runtime = genGrid_end_time - genGrid_begin_time
+    place_runtime = place_end_time - place_begin_time
+    explicit_runtime = 0 if flag_fast_grid else explicit_end_time - explicit_begin_time
+
     if flag_save_all:
         _mkdir_(saveDir + 'allPose/')
         _mv_('[0-9]*', saveDir + 'allPose/')
@@ -1992,6 +2091,24 @@ def Rigid_CDOCKER(xcen = 0, ycen = 0, zcen = 0, maxlen = 10, dielec = 3,
     if flag_delete_conformer: _rm_(confDir)
     if flag_delete_placement: _rm_(placementDir)
     if flag_delete_grid: _rm_(nativeGridFile + ' ' + softGridFile + ' ' + hardGridFile)
+
+    with open("{}/output".format(saveDir), "w") as file :
+        file.write("Rigid CDOCKER total runtime: {} sec. \n".format(round(runtime, 4)))
+        file.write("Rigid CDOCKER grid generation time: {} sec. \n".format(round(genGrid_runtime, 4)))
+        file.write("Rigid CDOCKER placement time: {} sec. \n".format(round(place_runtime, 4)))
+        file.write("Rigid CDOCKER OpenMM simulated annealing: {} sec. \n".format(round(ommd_runtime, 4)))
+        file.write("Rigid CDOCKER grid minimization: {} sec. \n".format(round(mini_runtime, 4)))
+        file.write("Rigid CDOCKER explicit all atom minimization: {} sec. \n".format(round(explicit_runtime, 4)))
+
+        file.write("{} conformer was used for docking. \n".format(numConf))
+        file.write("Each conformer had {} placement. \n".format(numPlace))
+        file.write("Initial placement used fast placement. \n") if flag_fast_placement else file.write("Initial placement used grid. \n")
+        file.write("Poses were minimized in grid. \n") if flag_fast_grid else file.write("Poses were minimized with explicit protein. \n")
+        file.write("Cluster radius, membership and size are saved in dockResult.tsv \n")
+        if flag_save_cluster : 
+            file.write("Each conformer was clustered and cluster repsentative was saved in cluster/. \n")
+            file.write("Cluster repsentative is the lowest {} pose within the largest cluster. \n".format(sort_energy))
+        if flag_save_top : file.write("Top 10 poses were saved in top_ener/ sorted by {}. \n".format(sort_energy))
 
     _rm_('[0-9]* tmp* cluster.log')
     return clusterResult, dockResult
@@ -2017,8 +2134,8 @@ def Flexible_CDOCKER(xcen = 0, ycen = 0, zcen = 0, maxlen = 10, num = 20, copy =
                      placementDir = './placement/',  flag_save_all = False,
                      flag_save_cluster= True, flag_save_placement = False,
                      flag_save_crossover = False, flag_suppress_print = True,
-                     flag_center_ligand = True, flag_fast_grid = False,
-                     flag_fast_placement = False, exhaustiveness = 'high', top_N_result = 10,
+                     flag_center_ligand = True, flag_fast_grid = True,
+                     flag_fast_placement = True, exhaustiveness = 'high', top_N_result = 10,
                      sort_energy = 'total_energy', saveDir = './dockresult/'):
 
     """Flexible CDOCKER standard docking method
@@ -2113,6 +2230,9 @@ def Flexible_CDOCKER(xcen = 0, ycen = 0, zcen = 0, maxlen = 10, num = 20, copy =
     dockResult : pd.DataFrame
           docking result
     """
+
+    begin_time = time.perf_counter()
+
     ## Center ligand if flag_center_ligand = True
     if flag_center_ligand:
         read.sequence_pdb(ligPDB)
@@ -2124,7 +2244,7 @@ def Flexible_CDOCKER(xcen = 0, ycen = 0, zcen = 0, maxlen = 10, num = 20, copy =
 
         xyz = coor.get_positions().to_numpy()
         gridCenter = np.array([xcen, ycen, zcen])
-        ligCenter = (np.amin(xyz, axis = 0) + np.amax(xyz, axis = 0)) / 2
+        ligCenter = (np.min(xyz, axis = 0) + np.max(xyz, axis = 0)) / 2
         xyz = xyz - ligCenter + gridCenter
         new_xyz = pd.DataFrame(xyz, columns = ['x', 'y', 'z'])
         coor.set_positions(new_xyz)
@@ -2132,6 +2252,8 @@ def Flexible_CDOCKER(xcen = 0, ycen = 0, zcen = 0, maxlen = 10, num = 20, copy =
                        * Move ligand to the center of binding pocket''')
 
     ## Generate grids for docking if no grid files generated before
+    genGrid_begin_time = time.perf_counter()
+
     if not flag_grid:
         ## Read in protein and prepare flex side chain selection
         if psf.get_natom() > 0: psf.delete_atoms()
@@ -2172,11 +2294,15 @@ def Flexible_CDOCKER(xcen = 0, ycen = 0, zcen = 0, maxlen = 10, num = 20, copy =
         status = genGrid.generate()
         print("Grid generation for " + nativeGridFile +  " is ", status)
 
+    genGrid_end_time = time.perf_counter()
+
     ## Fast initial placement
     if flag_fast_placement :
+        place_begin_time = time.perf_counter()	
         FCDOCKER_fast_init_place(receptorPDB = receptorPDB, receptorPSF = receptorPSF,
                                  ligPDB = ligPDB, ligSeg = ligSeg, placementDir = placementDir,
                                  exhaustiveness = exhaustiveness, num = num, copy = copy)
+        place_end_time = time.perf_counter()	
 
     ## Prepare protein explicit atoms
     if psf.get_natom() > 0: psf.delete_atoms()
@@ -2259,16 +2385,21 @@ def Flexible_CDOCKER(xcen = 0, ycen = 0, zcen = 0, maxlen = 10, num = 20, copy =
     print("Flexible docking for the first generation")
 
     ## OpenMM docking for initial generation
+    ommd_runtime = []
+    mini_runtime = []
+
     if flag_suppress_print:
         settings.set_verbosity(1)
         settings.set_warn_level(1)
         settings.set_bomb_level(-1)
     if not flag_fast_placement :
+        place_begin_time = time.perf_counter()	
         FCDOCKER_init_place(receptorCard= receptorCard, receptorSel = receptor, flexSel = flexsc,
                             ligSel = ligand, ligPDB = ligPDB, ligSeg = ligSeg,
                             hardGridFile = hardGridFile, nativeGridFile = nativeGridFile,
                             placementDir = placementDir, num = num, copy = copy,
                             threshold = threshold_init, flag_form = flag_form)
+        place_end_time = time.perf_counter()	
 
     idxCopy = 1
     while idxCopy <= num * copy:
@@ -2277,7 +2408,8 @@ def Flexible_CDOCKER(xcen = 0, ycen = 0, zcen = 0, maxlen = 10, num = 20, copy =
         print("Set OMMD ligand copy " + str(idxCopy))
         idxCopy += 1
 
-    default_ommd_sian(ommd)
+    tmp_runtime = default_ommd_sian(ommd)
+    ommd_runtime.append(tmp_runtime)
     _rm_('[0-9]*')
 
     hardSet = {'selection': flexsc, 'flag_form' : flag_form, 'gridFile': hardGridFile}
@@ -2288,6 +2420,8 @@ def Flexible_CDOCKER(xcen = 0, ycen = 0, zcen = 0, maxlen = 10, num = 20, copy =
     idxCopy = 1
     _mkdir_(saveLig + ' ' + saveProt)
     dockEner = []
+    mini_begin_time = time.perf_counter()
+
     while idxCopy <= num * copy:
         ommd.copy_coor(idxCopy = idxCopy)
         print("Grid minimize OMMD ligand copy " + str(idxCopy))
@@ -2309,6 +2443,9 @@ def Flexible_CDOCKER(xcen = 0, ycen = 0, zcen = 0, maxlen = 10, num = 20, copy =
         dockEner.append(totalener)
         idxCopy += 1
 
+    mini_end_time = time.perf_counter()
+    mini_runtime.append(mini_end_time - mini_begin_time)
+
     hardGrid.off()
     hardGrid.clear()
     dock_result = np.zeros((num * copy, 2))
@@ -2328,12 +2465,15 @@ def Flexible_CDOCKER(xcen = 0, ycen = 0, zcen = 0, maxlen = 10, num = 20, copy =
         radius += 0.5
     cluster_result = top_N_cluster(N = top_N_result, total = num * copy)
 
+    next_runtime = []
     while idxGen <= generation:
         print("Flexible docking for generation: " + str(idxGen))
         if flag_suppress_print:
             settings.set_verbosity(1)
             settings.set_warn_level(1)
             settings.set_bomb_level(-1)
+
+        tmp_begin_time = time.perf_counter()
 
 	## Crossover
         final_result, pair_list = FCDOCKER_crossover(cluster_result, dock_result, num = num, copy = copy)
@@ -2358,13 +2498,17 @@ def Flexible_CDOCKER(xcen = 0, ycen = 0, zcen = 0, maxlen = 10, num = 20, copy =
                           placementDir = placementDir, num = num, copy = copy,
                           threshold = threshold_mutate, flag_form = flag_form)
 
+        tmp_end_time = time.perf_counter()
+        next_runtime.append(tmp_end_time - tmp_begin_time) 
+
         idxCopy = 1
         while idxCopy <= num * copy:
             read.pdb(placementDir + str(idxCopy) + '.pdb', resid = True)
             ommd.set_coor(idxCopy = idxCopy)
             print("Set OMMD ligand copy " + str(idxCopy))
             idxCopy += 1
-        default_ommd_sian(ommd)
+        tmp_runtime = default_ommd_sian(ommd)
+        ommd_runtime.append(tmp_runtime)
 
         _rm_('[0-9]* cluster.log cluster_list')
 
@@ -2376,6 +2520,8 @@ def Flexible_CDOCKER(xcen = 0, ycen = 0, zcen = 0, maxlen = 10, num = 20, copy =
         idxCopy = 1
         _mkdir_(saveLig + ' ' + saveProt)
         dockEner = []
+        mini_begin_time = time.perf_counter()
+
         while idxCopy <= num * copy:
             ommd.copy_coor(idxCopy = idxCopy)
             print("Grid minimize OMMD ligand copy " + str(idxCopy))
@@ -2396,6 +2542,9 @@ def Flexible_CDOCKER(xcen = 0, ycen = 0, zcen = 0, maxlen = 10, num = 20, copy =
                            % (idxCopy, totalener))
             dockEner.append(totalener)
             idxCopy += 1
+
+        mini_end_time = time.perf_counter()
+        mini_runtime.append(mini_end_time - mini_begin_time)
 
         hardGrid.off()
         hardGrid.clear()
@@ -2494,6 +2643,8 @@ def Flexible_CDOCKER(xcen = 0, ycen = 0, zcen = 0, maxlen = 10, num = 20, copy =
         settings.set_warn_level(1)
         settings.set_bomb_level(-1)
 
+    explicit_begin_time = time.perf_counter()
+
     for idx in np.arange(len(pdbID)):
         read.pdb(saveLig + str(pdbID[idx]) + ".pdb", resid = True)
         read.pdb(saveProt + str(pdbID[idx]) + ".pdb", resid = True)
@@ -2510,23 +2661,27 @@ def Flexible_CDOCKER(xcen = 0, ycen = 0, zcen = 0, maxlen = 10, num = 20, copy =
                        selection = ligand, title = '''Title
                        * The docked pose ID is %d
                        * The cluster ID is %d
+                       * The cluster radius is %2.1f
                        * The total energy is %8.6f
                        * The vdw energy is %8.6f
                        * The elec energy is %8.6f
                        * The entropy is %8.6f '''
-                       % (pdbID[idx], clusterID[idx], tmptotal,
+                       % (pdbID[idx], clusterID[idx], radius, tmptotal,
                        tmpvdw, tmpelec, entropy[idx]))
 
         write.coor_pdb('tmpprot/' + str(pdbID[idx]) + '.pdb',
                        selection = flexSideChain, title = '''Title
                        * The docked pose ID is %d
                        * The cluster ID is %d
+                       * The cluster radius is %2.1f
                        * The total energy is %8.6f
                        * The vdw energy is %8.6f
                        * The elec energy is %8.6f
                        * The entropy is %8.6f '''
-                       % (pdbID[idx], clusterID[idx], tmptotal,
+                       % (pdbID[idx], clusterID[idx], radius, tmptotal,
                        tmpvdw, tmpelec, entropy[idx]))
+
+    explicit_end_time = time.perf_counter()
 
     settings.set_verbosity(5)
     settings.set_warn_level(5)
@@ -2543,6 +2698,7 @@ def Flexible_CDOCKER(xcen = 0, ycen = 0, zcen = 0, maxlen = 10, num = 20, copy =
         clusterResult["cluster_size"] = cluster_size
         clusterResult["PDB_name"] = pdbID
         clusterResult["cluster_id"] = clusterID
+        clusterResult["cluster_radius"] = radius 
     else:
         explicitResult = pd.DataFrame()
         explicitResult["total_energy"] = totalEner
@@ -2552,6 +2708,7 @@ def Flexible_CDOCKER(xcen = 0, ycen = 0, zcen = 0, maxlen = 10, num = 20, copy =
         explicitResult["entropy"] = entropy
         explicitResult["PDB_name"] = pdbID
         explicitResult["cluster_id"] = cluster_result[:, 1]
+        explicitResult["cluster_radius"] = radius 
 
         vdw = []
         elec = []
@@ -2567,7 +2724,7 @@ def Flexible_CDOCKER(xcen = 0, ycen = 0, zcen = 0, maxlen = 10, num = 20, copy =
 
             ## Get probability and ensemble average
             enthalpy = tmp_result[:, 1]
-            enthalpy = enthalpy - np.amin(enthalpy)
+            enthalpy = enthalpy - np.min(enthalpy)
             prob = - (1 / 0.593) * enthalpy
             prob = np.exp(prob)
             prob = prob / np.sum(prob)
@@ -2589,9 +2746,10 @@ def Flexible_CDOCKER(xcen = 0, ycen = 0, zcen = 0, maxlen = 10, num = 20, copy =
         clusterResult["vdw"] = vdw
         clusterResult["elec"] = elec
         clusterResult["entropy"] = entropy
-        clusterResult["cluster_size"] = cluster_size
         clusterResult["PDB_name"] = pdbID
         clusterResult["cluster_id"] = clusterID
+        clusterResult["cluster_size"] = cluster_size
+        clusterResult["cluster_radius"] = radius 
 
     dockResult = pd.DataFrame()
     dockResult["enthalpy"] = dock_result[:, 0]
@@ -2619,11 +2777,31 @@ def Flexible_CDOCKER(xcen = 0, ycen = 0, zcen = 0, maxlen = 10, num = 20, copy =
     ## Clean and save results
     _mkdir_(saveDir)
     _mv_('cluster.log', saveDir)
-    clusterResult.to_csv(saveDir + 'clusterResult.tsv', sep = '	')
-    dockResult.to_csv(saveDir + 'dockResult.tsv', sep = '	')
+    clusterResult = clusterResult.round(4)
+    clusterResult["PDB_name"] = ["{}.pdb".format(pdb) for pdb in clusterResult["PDB_name"].tolist()]
+    clusterResult.to_csv(saveDir + 'clusterResult.tsv', sep = "\t") 
+    dockResult = dockResult.round(4)
+    dockResult["PDB_name"] = ["{}.pdb".format(pdb) for pdb in dockResult["PDB_name"].tolist()]
+    dockResult.to_csv(saveDir + 'dockResult.tsv', sep = "\t")
+
+    ## Compute time cost 
+    ommd_runtime_summary = ""
+    mini_runtime_summary = ""
+    next_runtime_summary = ""
+
+    end_time = time.perf_counter()
+    runtime = end_time - begin_time 
+    genGrid_runtime = genGrid_end_time - genGrid_begin_time
+    place_runtime = place_end_time - place_begin_time
+    explicit_runtime = explicit_end_time - explicit_begin_time
+    for x_time in ommd_runtime : ommd_runtime_summary += "{}, ".format(round(x_time, 4)) if x_time != ommd_runtime[-1] else "{}".format(round(x_time, 4))
+    for x_time in mini_runtime : mini_runtime_summary += "{}, ".format(round(x_time, 4)) if x_time != mini_runtime[-1] else "{}".format(round(x_time, 4))
+    for x_time in next_runtime : next_runtime_summary += "{}, ".format(round(x_time, 4)) if x_time != next_runtime[-1] else "{}".format(round(x_time, 4))
 
     if not flag_fast_grid:
-        explicitResult = explicitResult.sort_values(by = [sort_energy], ignore_index = True)
+        explicitResult = explicitResult.sort_values(by = ["cluster_id", sort_energy], ignore_index = True)
+        explicitResult = explicitResult.round(4)
+        explicitResult["PDB_name"] = ["{}.pdb".format(pdb) for pdb in explicitResult["PDB_name"].tolist()]
         explicitResult.to_csv(saveDir + 'explicitResult.tsv', sep = '	')
     if flag_save_placement: _mv_(placementDir, saveDir)
     if flag_save_all:
@@ -2638,6 +2816,36 @@ def Flexible_CDOCKER(xcen = 0, ycen = 0, zcen = 0, maxlen = 10, num = 20, copy =
         _mv_(crossoverLig, saveDir + 'crossover/')
         _mv_(crossoverProt, saveDir + 'crossover/')
     if flag_delete_grid: _rm_(nativeGridFile + ' ' + softGridFile + ' ' + hardGridFile)
+
+    with open("{}/output".format(saveDir), "w") as file :
+        file.write("Flexible CDOCKER total runtime: {} sec. \n".format(round(runtime, 4)))
+        file.write("Flexible CDOCKER grid generation time: {} sec. \n".format(round(genGrid_runtime, 4)))
+        file.write("Flexible CDOCKER placement time: {} sec. \n".format(round(place_runtime, 4)))
+        file.write("Flexible CDOCKER OpenMM simulated annealing: {} sec. \n".format(ommd_runtime_summary))
+        file.write("Flexible CDOCKER grid minimization: {} sec. \n".format(mini_runtime_summary))
+        file.write("Flexible CDOCKER generic algorithm: {} sec. \n".format(next_runtime_summary))
+        file.write("Flexible CDOCKER explicit all atom minimization: {} sec. \n".format(round(explicit_runtime, 4)))
+
+        file.write("{} conformer was used for docking. \n".format(num))
+        file.write("Each conformer had {} placement. \n".format(copy))
+        file.write("Initial placement used fast placement. \n") if flag_fast_placement else file.write("Initial placement used grid. \n")
+        file.write("{} round genetic algorithm was applied. \n".format(generation))
+        file.write("Top {} largest cluster were used for genetic algorithm. \n".format(top_N_result))
+        file.write("Clusters with size less than 1% of docking trials were excluded. \n".format(top_N_result))
+        file.write("Top {} largest cluster were recorded for final results. \n".format(top_N_result + 5))
+        if flag_save_cluster : 
+            file.write("Each cluster repsentative was saved in cluster/. \n")
+            file.write("Cluster repsentative is the lowest enthalpy pose within the largest cluster. \n".format(sort_energy))
+        file.write("Poses were minimized in grid. \n") if flag_fast_grid else file.write("Poses were minimized with explicit protein. \n")
+        file.write("Cluster log file (cluster.log) was also saved and has full information of clustering. \n")
+        file.write("Cluster radius, membership was saved in clusterResult.tsv and pdb files. \n")
+        if flag_fast_grid :
+            file.write("Poses were minimized with grid. \n")
+        else :
+            file.write("Poses were minimized in explicit protein. \n") 
+            file.write("Explicit minimization result was saved in explicitResult.tsv. \n") 
+        if flag_save_crossover : file.write("Last genetic algorithm crossover poses were saved in crossover/. \n")
+        if flag_save_placement : file.write("Initial placements were saved in {}. \n".format(placementDir))
 
     _rm_(saveLig + ' ' + saveProt + ' ' + saveLigFinal + ' ' + saveProtFinal + ' ' + crossoverLig + ' ' + crossoverProt)
     _rm_('cluster* [0-9]* tmp* *crd ligand_rotamer.pdb ' + placementDir)

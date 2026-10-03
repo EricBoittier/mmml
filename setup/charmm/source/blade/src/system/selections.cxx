@@ -32,7 +32,7 @@ void Selections::insert(char *line,char *token,Structure *structure)
   // } else if (selectionMap.count(name)==1) {
   //   fatal(__FILE__,__LINE__,"Cannot define selection with name %s, one already exists. Use selection delete [name] to remove it.\n",token);
   } else {
-    fprintf(stdout,"SELECTION> add %s to selections after parsing %s\n",name.c_str(),line);
+    printlog("SELECTION> add %s to selections after parsing %s\n",name.c_str(),line);
     selectionMap[name]=parse_selection_string(line,structure);
   }
 }
@@ -62,6 +62,25 @@ void Selections::count(char *line,char *token,System *system)
   system->variables->data[key]=value;
 }
 
+bool search_match(std::string a,std::string b)
+{
+  int i;
+  bool r=false;
+  if (b=="*") {
+    r=true;
+  } else if (a.length()==b.length() && b.length()>0) {
+    r=true;
+    for (i=0; i<b.length(); i++) {
+      if (!(b.c_str()[i]=='%' || b.c_str()[i]==a.c_str()[i])) {
+        r=false;
+      }
+    }
+  } else {
+    r=false;
+  }
+  return r;
+}
+
 Selection Selections::parse_selection_string(char *line,Structure *structure)
 {
   Selection s1;
@@ -84,6 +103,7 @@ Selection Selections::parse_selection_string(char *line,Structure *structure)
   knownTokens.insert("atomname");
   knownTokens.insert("atomnames");
   knownTokens.insert("atom");
+  knownTokens.insert("atomsearch");
   knownTokens.insert("selection");
   knownTokens.insert("");
 
@@ -176,6 +196,15 @@ Selection Selections::parse_selection_string(char *line,Structure *structure)
                            structure->atomList[i].resIdx==resid &&
                            structure->atomList[i].atomName==atomname);
     }
+  } else if (strcmp(token,"atomsearch")==0) {
+    std::string segid=io_nexts(line);
+    std::string resid=io_nexts(line);
+    std::string atomname=io_nexts(line);
+    for (i=0; i<N; i++) {
+      s1.boolSelection[i]=(search_match(structure->atomList[i].segName,segid) &&
+                           search_match(structure->atomList[i].resIdx,resid) &&
+                           search_match(structure->atomList[i].atomName,atomname));
+    }
   } else if (strcmp(token,"selection")==0) {
     std::string selName=io_nexts(line);
     if (selectionMap.count(selName)==0) {
@@ -196,8 +225,8 @@ void Selections::dump()
   int i,trueCount;
   char tag[]="PRINT SELECTIONS>";
 
-  fprintf(stdout,"%s selectionCount=%d\n",tag,selectionMap.size());
-  fprintf(stdout,"%s\n",tag);
+  printlog("%s selectionCount=%d\n",tag,(int)selectionMap.size());
+  printlog("%s\n",tag);
 
   for (std::map<std::string,Selection>::iterator ii=selectionMap.begin(); ii!=selectionMap.end(); ii++) {
     trueCount=0;
@@ -206,9 +235,9 @@ void Selections::dump()
         trueCount++;
       }
     }
-    fprintf(stdout,"%s selection[%s]={contains %d atoms}\n",tag,ii->first.c_str(),trueCount);
+    printlog("%s selection[%s]={contains %d atoms}\n",tag,ii->first.c_str(),trueCount);
   }
-  fprintf(stdout,"%s\n",tag);
+  printlog("%s\n",tag);
 
 }
 
@@ -241,7 +270,7 @@ void parse_selection(char *line,System *system)
     system->selections->count(line,token,system);
   } else if (strcmp(token,"limit")==0) {
     system->selections->limit=io_nexti(line);
-    fprintf(stdout,"New selection limit set to %d (be careful, selections can take up a lot of memory. Use selection delete [name] when done with a selection.)\n",system->selections->limit);
+    printlog("New selection limit set to %d (be careful, selections can take up a lot of memory. Use selection delete [name] when done with a selection.)\n",system->selections->limit);
   } else if (strcmp(token,"print")==0) {
     system->selections->dump();
   } else {

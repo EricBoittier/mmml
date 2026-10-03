@@ -252,9 +252,9 @@ OTHER COMMANDS:
 The PRINT command still functions for harmonic restraints for information.
 To examine or modify the internal harmonic restrain data, the SCALar
 command (arrays: CONStraints,XREF,YREF, and ZREF) may be used
-(see *Note scalar::(doc/scalar) ).   In addition, one may look at
+(see *Note scalar::(doc/scalar.info) ).   In addition, one may look at
 the contributions to the energy in detail using the ANALysis command,
-see *note anal:(doc/analys).
+see *note anal:(doc/analys.info).
 
 -----------------------------------------------------------------------------
 

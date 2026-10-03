@@ -6,7 +6,8 @@ module qm1_mndod
   contains
 
 #if KEY_MNDO97==1 /*mndo97*/
-  subroutine reppd_qmqm(NI,NJ,R,RI,CORE_mat,W,LIMIJ,LIMKL)
+  subroutine reppd_qmqm(iqm,jqm,NI,NJ,R,RI,CORE_mat,W,LIMIJ,LIMKL, &
+                        PO_i,PO_j,DD_i,DD_j,CORE)
   !
   ! Two-center two-electron repulsion integrals and two-center one-electron
   ! attractions in local coordinates. (General version for MNDO/d and AM1/d).
@@ -60,13 +61,13 @@ module qm1_mndod
   ! that are missing in Table 2 of the TCA paper.  only those nonzero coefficients 
   ! are defined which are needed and whose absolute value is not equal to 1.
   !
-  use qm1_parameters, only : CORE,DD,PO
+  !!use qm1_parameters, only : CORE,DD,PO
 
   implicit none
 
-  integer :: NI,NJ,LIMIJ,LIMKL
+  integer :: iqm,jqm,NI,NJ,LIMIJ,LIMKL
   real(chm_real):: W(LIMKL,LIMIJ),RI(22),CORE_mat(10,2)
-  real(chm_real):: R
+  real(chm_real):: R,PO_i(9),PO_j(9),DD_i(6),DD_j(6),CORE(*)
 
   ! local variables:
   real(chm_real),parameter :: CLM3  = 0.13333333333333D+01,  &
@@ -92,7 +93,7 @@ module qm1_mndod
   integer       :: I,J,K,L,N,IJ,KL,LIJ,IFIRST,ILAST,NC,NE,LE,LIJMAX,LKLMAX,ICMAX
   real(chm_real):: R2,SIG,AA,AB,CORENC,DA,QA,DB,QB,QAS,QBS,DA2,  &
                    ADD,ADDAS,ADDBS,ADDSS,RMDA2,RPDA2,XYXY,ZZZZ,  &
-                   DABP,DABM,DABP2,DABM2,RPAB2,RMAB2,RPDB2,RMDB2
+                   DABP,DABM,DABP2,DABM2,RPAB2,RMAB2,RPDB2,RMDB2,QX
 
 
   ! initialization.
@@ -117,15 +118,15 @@ module qm1_mndod
   R2     = R*R
   I      = 0
   loopLIJ1: do LIJ=1,LIJMAX
-     DA     = DD(LIJ,ni)
-     QA     = PO(LIJ,ni)
+     DA     = DD_i(LIJ)   ! DD(LIJ,ni)
+     QA     = PO_i(LIJ)   ! PO(LIJ,ni)
      if(LIJ == 3) then
-        QAS = PO(7,ni)
+        QAS = PO_i(7)     ! PO(7,ni)
         DA  = DA*SQRT2
      else if(LIJ == 6) then
-        QAS = PO(8,ni)
+        QAS = PO_i(8)     ! PO(8,ni)
      else
-        QAS = PO(1,ni)
+        QAS = PO_i(1)     ! PO(1,ni)
      end if
      DA2    = DA*DA
      RMDA2  = (R-DA)**2
@@ -136,8 +137,8 @@ module qm1_mndod
         if(LKLMAX > 3) then
            ! KL=DS.
            LX(4,LIJ) = I
-           DB     = DD(4,NJ)
-           QB     = PO(4,NJ)
+           DB     = DD_j(4)  ! DD(4,NJ)
+           QB     = PO_j(4)  ! PO(4,NJ)
            ADD    = (QA+QB)**2
            ! L1=0, L2=2, M=0, LABEL=6.
            X(I+1) = (R-DB)**2+ADD
@@ -146,8 +147,8 @@ module qm1_mndod
            I      = I+3
            ! KL=DP.
            LX(5,LIJ) = I
-           DB     = DD(5,NJ)
-           QB     = PO(5,NJ)
+           DB     = DD_j(5)  ! DD(5,NJ)
+           QB     = PO_j(5)  ! PO(5,NJ)
            ADD    = (QA+QB)**2
            ! L1=0, L2=1, M=0, LABEL=3.
            X(I+1) = (R+DB)**2+ADD
@@ -155,9 +156,9 @@ module qm1_mndod
            I      = I+2
            ! KL=DD.
            LX(6,LIJ) = I
-           DB     = DD(6,NJ)
-           QB     = PO(6,NJ)
-           QBS    = PO(8,NJ)
+           DB     = DD_j(6)  ! DD(6,NJ)
+           QB     = PO_j(6)  ! PO(6,NJ)
+           QBS    = PO_j(8)  ! PO(8,NJ)
            ADD    = (QA+QB)**2
            ! L1=0, L2=0, M=0, LABEL=1.
            X(I+1) = R2+(QA+QBS)**2
@@ -174,7 +175,7 @@ module qm1_mndod
         if(LIJ == 5) then
            ! KL=SS.
            LX(1,LIJ) = I
-           QB     = PO(1,NJ)
+           QB     = PO_j(1)  ! PO(1,NJ)
            ADD    = (QA+QB)**2
            ! L1=1, L2=0, M=0, LABEL=2.
            X(I+1) = RPDA2+ADD
@@ -183,8 +184,8 @@ module qm1_mndod
            if(LKLMAX > 1) then
               ! KL=PS.
               LX(2,LIJ) = I
-              DB     = DD(2,NJ)
-              QB     = PO(2,NJ)
+              DB     = DD_j(2)  ! DD(2,NJ)
+              QB     = PO_j(2)  ! PO(2,NJ)
               ADD    = (QA+QB)**2
               DABP   = DA+DB
               DABM   = DA-DB
@@ -199,9 +200,9 @@ module qm1_mndod
               I      = I+6
               ! KL=PP.
               LX(3,LIJ) = I
-              DB     = DD(3,NJ)*SQRT2
-              QB     = PO(3,NJ)
-              QBS    = PO(7,NJ)
+              DB     = DD_j(3)*SQRT2  ! DD(3,NJ)*SQRT2
+              QB     = PO_j(3)        ! PO(3,NJ)
+              QBS    = PO_j(7)        ! PO(7,NJ)
               ADD    = (QA+QB)**2
               ADDBS  = (QA+QBS)**2
               DABP   = DA+DB
@@ -232,8 +233,8 @@ module qm1_mndod
         if(LKLMAX > 3) then
            ! KL=DS.
            LX(4,LIJ) = I
-           DB     = DD(4,NJ)
-           QB     = PO(4,NJ)
+           DB     = DD_j(4)    ! DD(4,NJ)
+           QB     = PO_j(4)    ! PO(4,NJ)
            ADD    = (QA+QB)**2
            DABP   = DA+DB
            DABM   = DA-DB
@@ -257,8 +258,8 @@ module qm1_mndod
            I      = I+10
            ! KL=DP.
            LX(5,LIJ) = I
-           DB     = DD(5,NJ)
-           QB     = PO(5,NJ)
+           DB     = DD_j(5)   ! DD(5,NJ)
+           QB     = PO_j(5)   ! PO(5,NJ)
            ADD    = (QA+QB)**2
            DABP   = DA+DB
            DABM   = DA-DB
@@ -273,9 +274,9 @@ module qm1_mndod
            I      = I+6
            ! KL=DD.
            LX(6,LIJ) = I
-           DB     = DD(6,NJ)
-           QB     = PO(6,NJ)
-           QBS    = PO(8,NJ)
+           DB     = DD_j(6)   ! DD(6,NJ)
+           QB     = PO_j(6)   ! PO(6,NJ)
+           QBS    = PO_j(8)   ! PO(8,NJ)
            ADD    = (QA+QB)**2
            ADDBS  = (QA+QBS)**2
            DABP   = DA+DB
@@ -309,7 +310,7 @@ module qm1_mndod
         if(LIJ == 6) then
            ! KL=SS.
            LX(1,LIJ) = I
-           QB     = PO(1,NJ)
+           QB     = PO_j(1)    ! PO(1,NJ)
            ADD    = (QA+QB)**2
            ADDAS  = (QAS+QB)**2
            ! L1=0, L2=0, M=0, LABEL=1.
@@ -322,8 +323,8 @@ module qm1_mndod
            if(LKLMAX > 1) then
               ! KL=PS.
               LX(2,LIJ) = I
-              DB     = DD(2,NJ)
-              QB     = PO(2,NJ)
+              DB     = DD_j(2)   ! DD(2,NJ)
+              QB     = PO_j(2)   ! PO(2,NJ)
               ADD    = (QA+QB)**2
               ADDAS  = (QAS+QB)**2
               DABP   = DA+DB
@@ -353,9 +354,9 @@ module qm1_mndod
               I      = I+12
               ! KL=PP.
               LX(3,LIJ) = I
-              DB     = DD(3,NJ)*SQRT2
-              QB     = PO(3,NJ)
-              QBS    = PO(7,NJ)
+              DB     = DD_j(3)*SQRT2   ! DD(3,NJ)*SQRT2
+              QB     = PO_j(3)         ! PO(3,NJ)
+              QBS    = PO_j(7)         ! PO(7,NJ)
               ADD    = (QA+QB)**2
               ADDAS  = (QAS+QB)**2
               ADDBS  = (QA+QBS)**2
@@ -407,8 +408,8 @@ module qm1_mndod
         if(LKLMAX > 3) then
            ! KL=DS.
            LX(4,LIJ) = I
-           DB     = DD(4,NJ)
-           QB     = PO(4,NJ)
+           DB     = DD_j(4)     ! DD(4,NJ)
+           QB     = PO_j(4)     ! PO(4,NJ)
            ADD    = (QA+QB)**2
            ADDAS  = (QAS+QB)**2
            RPDB2  = (R+DB)**2
@@ -449,8 +450,8 @@ module qm1_mndod
            I      = I+22
            ! KL=DP.
            LX(5,LIJ) = I
-           DB     = DD(5,NJ)
-           QB     = PO(5,NJ)
+           DB     = DD_j(5)    ! DD(5,NJ)
+           QB     = PO_j(5)    ! PO(5,NJ)
            ADD    = (QA+QB)**2
            ADDAS  = (QAS+QB)**2
            RPDB2  = (R+DB)**2
@@ -480,9 +481,9 @@ module qm1_mndod
            I      = I+12
            ! KL=DD.
            LX(6,LIJ) = I
-           DB     = DD(6,NJ)
-           QB     = PO(6,NJ)
-           QBS    = PO(8,NJ)
+           DB     = DD_j(6)     ! DD(6,NJ)
+           QB     = PO_j(6)     ! PO(6,NJ)
+           QBS    = PO_j(8)     ! PO(8,NJ)
            ADD    = (QA+QB)**2
            ADDAS  = (QAS+QB)**2
            ADDBS  = (QA+QBS)**2
@@ -536,7 +537,7 @@ module qm1_mndod
      else if(LIJ == 4) then
         ! KL=SS.
         LX(1,LIJ) = I
-        QB     = PO(1,NJ)
+        QB     = PO_j(1)       ! PO(1,NJ)
         ADD    = (QA+QB)**2
         ! L1=2, L2=0, M=0, LABEL=7.
         X(I+1) = RMDA2+ADD
@@ -546,8 +547,8 @@ module qm1_mndod
         if(LKLMAX > 1) then
            ! KL=PS.
            LX(2,LIJ) = I
-           DB     = DD(2,NJ)
-           QB     = PO(2,NJ)
+           DB     = DD_j(2)    ! DD(2,NJ)
+           QB     = PO_j(2)    ! PO(2,NJ)
            ADD    = (QA+QB)**2
            DABP   = DA+DB
            DABM   = DA-DB
@@ -571,9 +572,9 @@ module qm1_mndod
            I      = I+10
            ! KL=PP.
            LX(3,LIJ) = I
-           DB     = DD(3,NJ)*SQRT2
-           QB     = PO(3,NJ)
-           QBS    = PO(7,NJ)
+           DB     = DD_j(3)*SQRT2   ! DD(3,NJ)*SQRT2
+           QB     = PO_j(3)         ! PO(3,NJ)
+           QBS    = PO_j(7)         ! PO(7,NJ)
            ADD    = (QA+QB)**2
            ADDBS  = (QA+QBS)**2
            DABP   = DA+DB
@@ -614,8 +615,8 @@ module qm1_mndod
         if(LKLMAX > 3) then
            ! KL=DS.
            LX(4,LIJ) = I
-           DB     = DD(4,NJ)
-           QB     = PO(4,NJ)
+           DB     = DD_j(4)     ! DD(4,NJ)
+           QB     = PO_j(4)     ! PO(4,NJ)
            ADD    = (QA+QB)**2
            DABP   = DA+DB
            DABM   = DA-DB
@@ -649,8 +650,8 @@ module qm1_mndod
            I      = I+19
            ! KL=DP.
            LX(5,LIJ) = I
-           DB     = DD(5,NJ)
-           QB     = PO(5,NJ)
+           DB     = DD_j(5)     ! DD(5,NJ)
+           QB     = PO_j(5)     ! PO(5,NJ)
            ADD    = (QA+QB)**2
            DABP   = DA+DB
            DABM   = DA-DB
@@ -674,9 +675,9 @@ module qm1_mndod
            I      = I+10
            ! KL=DD.
            LX(6,LIJ) = I
-           DB     = DD(6,NJ)
-           QB     = PO(6,NJ)
-           QBS    = PO(8,NJ)
+           DB     = DD_j(6)     ! DD(6,NJ)
+           QB     = PO_j(6)     ! PO(6,NJ)
+           QBS    = PO_j(8)     ! PO(8,NJ)
            ADD    = (QA+QB)**2
            ADDBS  = (QA+QBS)**2
            DABP   = DA+DB
@@ -1434,28 +1435,27 @@ module qm1_mndod
         NE  = ni
         LE  = LIJMAX
         SIG =-one
+
+        COREnc = CORE(jqm) ! CORE(nc)
+        QA     = PO_j(9)   ! PO(9,NC), additive term for core.
+        QX     = PO_j(1)   ! PO(1,nc)
      else
         NC  = ni
         NE  = nj
         LE  = LKLMAX
         SIG = one
-     end if
-     ! check for external point charge:
-     !if(NE == 0) cycle loopN
 
-     !if(NC == 0) then  ! mm atom
-     !   COREnc = one
-     !else
-        COREnc = CORE(nc)
-     !end if
-     ! additive term for core.
-     QA     = PO(9,NC)
+        COREnc = CORE(iqm) ! CORE(nc)
+        QA     = PO_i(9)   ! PO(9,NC), additive term for core.
+        QX     = PO_i(1)   ! PO(1,nc)
+     end if
      !
      ! check for neglect of penetration integrals. if the additive terms for SS (PO(1,nc)) 
      ! and the core (PO(9,nc)) are equal, the core-electron attraction integrals are 
      ! expressed in terms of the two-electron integrals (SS,KL) and (IJ,SS). 
      ! LCW(i) is the standard pair index corressponding to i in CORE_mat(i,n).
-     if(abs(QA-PO(1,nc)) < small) then  ! for atoms iorbs<=4, PO(9,NC)=PO(1,NC)
+     !if(abs(QA-PO(1,nc)) < small) then  ! for atoms iorbs<=4, PO(9,NC)=PO(1,NC)
+     if(abs(QA-QX) < small) then
         if(le == 1) then                 !           see fill_qm_parameters.
            icmax = 1                     ! therefore, for the current n, if it
         else if(le == 3) then            ! belongs here, the other n should be
@@ -1471,32 +1471,61 @@ module qm1_mndod
      else
         ! evaluate relevant distances between point charges.
         !!!if(le > 3) then  ! it it comes here, le should gt 3.
-        ! DS.
-        DB     = DD(4,NE)
-        QB     = PO(4,NE)
-        ADD    = (QA+QB)**2
-        ! L1=0, L2=2, M=0, LABEL=6.
-        X(8)   = (R-DB)**2+ADD
-        X(9)   = R2+DB**2+ADD
-        X(10)  = (R+DB)**2+ADD
-        ! DP.
-        DB     = DD(5,NE)
-        QB     = PO(5,NE)
-        ADD    = (QA+QB)**2
-        ! L1=0, L2=1, M=0, LABEL=3.
-        X(11)  = (R+DB)**2+ADD
-        X(12)  = (R-DB)**2+ADD
-        ! DD.
-        DB     = DD(6,NE)
-        QB     = PO(6,NE)
-        QBS    = PO(8,NE)
-        ADD    = (QA+QB)**2
-        ! L1=0, L2=0, M=0, LABEL=1.
-        X(13)  = R2+(QA+QBS)**2
-        ! L1=0, L2=2, M=0, LABEL=6.
-        X(14)  = (R-DB)**2+ADD
-        X(15)  = R2+DB**2+ADD
-        X(16)  = (R+DB)**2+ADD
+        if(n == 1) then
+           ! DS.
+           DB     = DD_i(4)   ! DD(4,NE)
+           QB     = PO_i(4)   ! PO(4,NE)
+           ADD    = (QA+QB)**2
+           ! L1=0, L2=2, M=0, LABEL=6.
+           X(8)   = (R-DB)**2+ADD
+           X(9)   = R2+DB**2+ADD
+           X(10)  = (R+DB)**2+ADD
+           ! DP.
+           DB     = DD_i(5)   ! DD(5,NE)
+           QB     = PO_i(5)   ! PO(5,NE)
+           ADD    = (QA+QB)**2
+           ! L1=0, L2=1, M=0, LABEL=3.
+           X(11)  = (R+DB)**2+ADD
+           X(12)  = (R-DB)**2+ADD
+           ! DD.
+           DB     = DD_i(6)   ! DD(6,NE)
+           QB     = PO_i(6)   ! PO(6,NE)
+           QBS    = PO_i(8)   ! PO(8,NE)
+           ADD    = (QA+QB)**2
+           ! L1=0, L2=0, M=0, LABEL=1.
+           X(13)  = R2+(QA+QBS)**2
+           ! L1=0, L2=2, M=0, LABEL=6.
+           X(14)  = (R-DB)**2+ADD
+           X(15)  = R2+DB**2+ADD
+           X(16)  = (R+DB)**2+ADD
+        else   ! n==2
+           ! DS.
+           DB     = DD_j(4)   ! DD(4,NE)
+           QB     = PO_j(4)   ! PO(4,NE)
+           ADD    = (QA+QB)**2
+           ! L1=0, L2=2, M=0, LABEL=6.
+           X(8)   = (R-DB)**2+ADD
+           X(9)   = R2+DB**2+ADD
+           X(10)  = (R+DB)**2+ADD
+           ! DP.
+           DB     = DD_j(5)   ! DD(5,NE)
+           QB     = PO_j(5)   ! PO(5,NE)
+           ADD    = (QA+QB)**2
+           ! L1=0, L2=1, M=0, LABEL=3.
+           X(11)  = (R+DB)**2+ADD
+           X(12)  = (R-DB)**2+ADD
+           ! DD.
+           DB     = DD_j(6)   ! DD(6,NE)
+           QB     = PO_j(6)   ! PO(6,NE)
+           QBS    = PO_j(8)   ! PO(8,NE)
+           ADD    = (QA+QB)**2
+           ! L1=0, L2=0, M=0, LABEL=1.
+           X(13)  = R2+(QA+QBS)**2
+           ! L1=0, L2=2, M=0, LABEL=6.
+           X(14)  = (R-DB)**2+ADD
+           X(15)  = R2+DB**2+ADD
+           X(16)  = (R+DB)**2+ADD
+        end if
         ilast  = 16
         !!!end if
         ! calculate inverse distances. the numerator is chosen such that the nuclear charges 
@@ -1529,7 +1558,7 @@ module qm1_mndod
 
 
 
-  subroutine reppd_qmmm(NI,NJ,R,RI,CORE_mat,W,LIMIJ,LIMKL)
+  subroutine reppd_qmmm(NI,NJ,R,RI,CORE_mat,W,LIMIJ,LIMKL,po_qm,po_mm,dd_qm,dd_mm)
   !
   ! for MM atoms: 
   ! NJ=0, 
@@ -1556,13 +1585,13 @@ module qm1_mndod
   !             orbitals.  The charge is 1 atomic unit. Thus, the values of
   !             DD(i,0) and PO(i,0) are defined to be zero.
   ! 
-  use qm1_parameters, only : CORE,DD,PO
+  !use qm1_parameters, only : CORE,DD,PO
       
   implicit none
 
   integer :: NI,NJ,LIMIJ,LIMKL
   real(chm_real):: W(LIMIJ),RI(22),CORE_mat(10,2)
-  real(chm_real):: R
+  real(chm_real):: R,po_qm(9),po_mm(9),dd_qm(6),dd_mm(6)
 
   ! local variables:
   real(chm_real),parameter :: CLM3  = 0.13333333333333D+01,  &
@@ -1600,29 +1629,27 @@ module qm1_mndod
   ! distance between point charges.
   R2  = R*R
   I   = 0
-  QB  = PO(1,NJ)
+  QB  = po_mm(1)  ! PO(1,NJ)
   loopLIJ1: do LIJ=4,LIJMAX  ! 1,LIJMAX
-     DA     = DD(LIJ,ni)
-     QA     = PO(LIJ,ni)
+     DA     = dd_qm(LIJ)  ! DD(LIJ,ni)
+     QA     = po_qm(LIJ)  ! PO(LIJ,ni)
      !
      DA2    = DA*DA
      RMDA2  = (R-DA)**2
      RPDA2  = (R+DA)**2
      ADD    = (QA+QB)**2
 
-     !if(LIJ.eq.6) then
-     !   QAS = PO(8,ni)
+     !if(LIJ == 6) then
+     !   QAS = PO_qm(8)   ! PO(8,ni)
      !else
-     !   QAS = PO(1,ni)
+     !   QAS = PO_QM(1)   ! PO(1,ni)
      !end if
 
      ! for LIJ<=3, nothing belongs here.
      ! (DS,KL), LIJ=4.
-     if(LIJ.eq.4) then
+     if(LIJ == 4) then
         ! KL=SS.
         LX(LIJ)= I
-        !QB     = PO(1,NJ)
-        !ADD    = (QA+QB)**2
         ! L1=2, L2=0, M=0, LABEL=7.
         X(I+1) = RMDA2+ADD
         X(I+2) = R2+DA2+ADD
@@ -1631,11 +1658,9 @@ module qm1_mndod
      ! end of LJI.eq.4
 
      ! (DP,KL), LIJ=5.
-     else if(LIJ.eq.5) then
+     else if(LIJ == 5) then
         ! KL=SS.
         LX(LIJ)= I
-        !QB     = PO(1,NJ)
-        !ADD    = (QA+QB)**2
         ! L1=1, L2=0, M=0, LABEL=2.
         X(I+1) = RPDA2+ADD
         X(I+2) = RMDA2+ADD
@@ -1643,13 +1668,10 @@ module qm1_mndod
      ! end of LIJ.eq.5
 
      ! (DD,KL), LIJ=6.
-     else if(LIJ.eq.6) then
+     else if(LIJ == 6) then
         ! KL=SS.
         LX(LIJ)= I
-        !QB     = PO(1,NJ)
-        !ADD    = (QA+QB)**2
-        !ADDAS  = (QAS+QB)**2
-        ADDAS  = (PO(8,ni)+QB)**2
+        ADDAS  = (PO_qm(8) + QB)**2    ! (PO(8,ni)+QB)**2
         ! L1=0, L2=0, M=0, LABEL=1.
         X(I+1) = R2+ADDAS
         ! L1=2, L2=0, M=0, LABEL=7.
@@ -1673,7 +1695,7 @@ module qm1_mndod
   ! define the remaining symmetry-related integrals W(KL,IJ).
   loopLIJ2: do LIJ=4,LIJMAX
      ! (DS,KL), LIJ=4.
-     if (LIJ.eq.4) then
+     if (LIJ == 4) then
         ! KL=SS.
         I      = LX(LIJ)
         XM(7) = (X(I+1)-X(I+2)*TWO+X(I+3))*PT25
@@ -1681,7 +1703,7 @@ module qm1_mndod
      ! end of LIJ.eq.4
 
      ! (DP,KL), LIJ=5.
-     else if (LIJ.eq.5) then 
+     else if (LIJ == 5) then 
         ! KL=SS.
         I      = LX(LIJ)
         XM(2) =-(X(I+1)-X(I+2))*PT5
@@ -1691,7 +1713,7 @@ module qm1_mndod
      ! end of LIJ.eq.5
 
      ! (DD,KL), LIJ=6.
-     else if (LIJ.eq.6) then
+     else if (LIJ == 6) then
         ! KL=SS.
         I      = LX(LIJ)
         XM(1) =  X(I+1)
@@ -1708,7 +1730,7 @@ module qm1_mndod
   ! include two-electron integrals involving only s and p orbitals.
   ! Currently, local integrals RI(22) from subroutine REPP.
   W( 1) = RI(1)
-  if(LIJMAX.gt.1) then
+  if(LIJMAX > 1) then
      W( 2) = RI( 2)
      W( 3) = RI( 3)
      W( 6) = RI( 4)
@@ -1735,27 +1757,28 @@ module qm1_mndod
   ! since nj=0 (mm atom), n=2 will exit right away. so, no need of the do-loop.
   ! only do n=1 case
   ifirst = 8  
-  N   = 1      ! for do-loop.
-  !NC  = nj     ! = 0
-  NE  = ni     !
-  LE  = LIJMAX ! = 6
+  N   = 1             ! for do-loop.
+  !NC  = nj           ! = 0
+  NE  = ni            !
+  LE  = LIJMAX        ! = 6
   SIG =-one
-  COREnc = one ! as NC==0
-  QA     = PO(9,nj)   ! additive term for core.
+  COREnc = one        ! as NC==0
+  QA     = PO_mm(9)   ! PO(9,nj)   ! additive term for core.
   !
   ! check for neglect of penetration integrals. if the additive terms for SS (PO(1,nc)) 
   ! and the core (PO(9,nc)) are equal, the core-electron attraction integrals are 
   ! expressed in terms of the two-electron integrals (SS,KL) and (IJ,SS). 
   ! LCW(i) is the standard pair index corressponding to i in CORE_mat(i,n).
-  if(abs(QA-PO(1,nj)).lt.small) then  ! for atoms iorbs<=4, PO(9,NC)=PO(1,NC)
-     !if(le.eq.1) then                 !           see fill_qm_parameters.
+  !if(abs(QA-PO(1,nj)).lt.small) then  ! for atoms iorbs<=4, PO(9,NC)=PO(1,NC)
+  if(abs(QA-PO_mm(1)) < small) then
+     !if(le == 1) then                 !           see fill_qm_parameters.
      !   icmax = 1                     ! therefore, for the current n, if it
-     !else if(le.eq.3) then            ! belongs here, the other n should be
+     !else if(le == 3) then            ! belongs here, the other n should be
      !   icmax = 4                     ! the norbs=9 (LE=6).
      !else
      icmax = 10
      !end if
-     !if(n.eq.1) then
+     !if(n == 1) then
      CORE_mat(1:icmax,1) = -COREnc*W(LCW(1:icmax))
      !else
      !   CORE_mat(1:icmax,2) = -COREnc*W(LCW(1:icmax))
@@ -1767,30 +1790,30 @@ module qm1_mndod
      ! evaluate relevant distances between point charges.
      !!!if(le.gt.3) then  ! it it comes here, le should gt 3.
      ! DS.
-     DB     = DD(4,NE)
-     QB     = PO(4,NE)
+     DB     = DD_qm(4)  ! DD(4,NE)
+     QB     = PO_qm(4)  ! PO(4,NE)
      ADD    = (QA+QB)**2
      ! L1=0, L2=2, M=0, LABEL=6.
      X(8)   = (R-DB)**2+ADD
-     X(9)   = R2+DB**2+ADD
+     X(9)   = R2+DB**2 +ADD
      X(10)  = (R+DB)**2+ADD
      ! DP.
-     DB     = DD(5,NE)
-     QB     = PO(5,NE)
+     DB     = DD_qm(5)  ! DD(5,NE)
+     QB     = PO_qm(5)  ! PO(5,NE)
      ADD    = (QA+QB)**2
      ! L1=0, L2=1, M=0, LABEL=3.
      X(11)  = (R+DB)**2+ADD
      X(12)  = (R-DB)**2+ADD
      ! DD.
-     DB     = DD(6,NE)
-     QB     = PO(6,NE)
-     QBS    = PO(8,NE)
+     DB     = DD_qm(6)  ! DD(6,NE)
+     QB     = PO_qm(6)  ! PO(6,NE)
+     QBS    = PO_qm(8)  ! PO(8,NE)
      ADD    = (QA+QB)**2
      ! L1=0, L2=0, M=0, LABEL=1.
      X(13)  = R2+(QA+QBS)**2
      ! L1=0, L2=2, M=0, LABEL=6.
      X(14)  = (R-DB)**2+ADD
-     X(15)  = R2+DB**2+ADD
+     X(15)  = R2+DB**2 +ADD
      X(16)  = (R+DB)**2+ADD
      ilast  = 16
      !!!!end if

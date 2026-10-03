@@ -35,8 +35,8 @@ extern void OpenMMGBSW_GBSWForce_setParticleParameters(OpenMMGBSW_GBSWForce* tar
 extern int OpenMMGBSW_GBSWForce_addCphmdParameters(OpenMMGBSW_GBSWForce* target, int titrateResID, double refChargeState1, double refChargeState2, double chargeState1, double chargeState2);
 extern void OpenMMGBSW_GBSWForce_getCphmdParameters(const OpenMMGBSW_GBSWForce* target, int index, int* titrateResID, double* refChargeState1, double* refChargeState2, double* chargeState1, double* chargeState2);
 extern void OpenMMGBSW_GBSWForce_setCphmdParameters(OpenMMGBSW_GBSWForce* target, int index, int titrateResID, double refChargeState1, double refChargeState2, double chargeState1, double chargeState2);
-extern char* OpenMMGBSW_GBSWForce_getLambdaOutputFile(const OpenMMGBSW_GBSWForce* target);
-extern void OpenMMGBSW_GBSWForce_setLambdaOutputFile(OpenMMGBSW_GBSWForce* target, char* tmp);
+extern const char* OpenMMGBSW_GBSWForce_getLambdaOutputFile(const OpenMMGBSW_GBSWForce* target);
+extern void OpenMMGBSW_GBSWForce_setLambdaOutputFile(OpenMMGBSW_GBSWForce* target, const char* tmp);
 extern double OpenMMGBSW_GBSWForce_getSystemPH(const OpenMMGBSW_GBSWForce* target);
 extern void OpenMMGBSW_GBSWForce_setSystemPH(OpenMMGBSW_GBSWForce* target, double tmp);
 extern double OpenMMGBSW_GBSWForce_getThetaTemp(const OpenMMGBSW_GBSWForce* target);

@@ -103,6 +103,7 @@ module pert
   integer,allocatable,dimension(:)        :: PRICCS      !(NCSPHI)
   integer,allocatable,dimension(:)        :: PRCCSD      !(NCSPHI)
   integer,allocatable,dimension(:)        :: PRTYPEH     !(NUMHSETS)
+  integer,allocatable,dimension(:)        :: PRPARHSET   !(NUMHSETS) relative-restraint partner index
   integer,allocatable,dimension(:)        :: PRIHSET     !(NATOM)
   !data structures for pca restraints (numpcap,natom)
   real(chm_real),allocatable,dimension(:,:) :: prpcax, prpcay,prpcaz 
@@ -150,7 +151,7 @@ module pert
   !  PMXGEO  -  Auxillary variable for FREHP
   INTEGER PMXGEO, PNTGEO
   integer,allocatable,dimension(:) :: &
-       pIGEO,  pJGEO, plsgeo,pngeo,piugeo
+       pIGEO,  pJGEO, pBLGEO, plsgeo,pngeo,piugeo
   real(chm_real),allocatable,dimension(:) ::  &
        pXRGEO,  pYRGEO, pZRGEO, pTRGEO, &
        pXDGEO,  pYDGEO, pZDGEO,  &

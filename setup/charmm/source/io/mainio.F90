@@ -79,14 +79,21 @@ SUBROUTINE MAINIO(MODE)
   !
   !
   !     local variables.
-  CHARACTER(len=1) CHAIN
+  CHARACTER(len=8) CHAIN
   CHARACTER(len=4)  WRD,WINIT
   character(len=8)  wrd8,SEGIDX 
   CHARACTER(len=12) FORM
-  integer, parameter :: FNMAX = 128
-  CHARACTER(len=FNMAX) :: FNAME, CMPD*20
+  ! FNAME is sized from the command line it is parsed out of: a file name in
+  ! COMLYN can never be longer than COMLYN itself, and parsing only consumes
+  ! COMLYN, so the length on entry is always an over-estimate. This is an
+  ! automatic (stack) length -- nothing to allocate or deallocate -- and it
+  ! replaces a fixed 128-character buffer that silently truncated longer paths,
+  ! after which the open failed with only a level-0 warning. GTRMWD and VOPEN
+  ! both take the name as CHARACTER(len=*), so nothing downstream re-truncates.
+  CHARACTER(len=max(COMLEN,1)) :: FNAME
+  CHARACTER(len=20) :: CMPD
   LOGICAL LAPPE,LCOMP,ERROR,QPRINT,LCARD,QERROR,QIMOPN,QUSED
-  LOGICAL LATOM,LHETATM,LSEQRES
+  LOGICAL LATOM,LHETATM,LSEQRES,LMMCIF_LABEL
   INTEGER :: I,ICARD,IXX,ICYCLE=0,IPSF
   INTEGER   J,LEN,NINPUT,NCHAIN
   INTEGER   NSGIML,NRSIML,NDUMMY
@@ -103,6 +110,7 @@ SUBROUTINE MAINIO(MODE)
   QIMOPN = .FALSE.
   NSKIP = 0
   NALI =0
+  LMMCIF_LABEL = .FALSE.
 
   io_mode: select case(mode)
   case('READ') io_mode
@@ -115,7 +123,7 @@ SUBROUTINE MAINIO(MODE)
      ENDIF
      !       READ COMMAND, BEFORE DISPATCHING, GET UNIT AND/OR NAME
      IUNIT=GTRMI(COMLYN,COMLEN,'UNIT',-1)
-     CALL GTRMWD(COMLYN,COMLEN,'NAME',4,FNAME,FNMAX,FLEN)
+     CALL GTRMWD(COMLYN,COMLEN,'NAME',4,FNAME,COMLEN,FLEN)
 
      ! Lennart start
      QIMOPN=(FLEN > 0)
@@ -212,6 +220,23 @@ SUBROUTINE MAINIO(MODE)
 
 #endif /* (d1)*/
         ELSE
+#ifdef KEY_RESIZE
+           ! Defensive: ensure X,Y,Z,WMAIN are sized to NATOM on every
+           ! rank before CREAD's PSND8(X,NATOM) etc. broadcasts inside
+           ! coorio/cread (source/io/coorio.F90:1974).  Under RESIZE
+           ! these arrays are initially allocated at i0=1 in
+           ! allocate_coord_ltm and grown by the PSF-read / GENERATE
+           ! pipeline.  In current code paths every "read coor card"
+           ! is preceded by such a resize, so this call is a no-op;
+           ! but PSNDC/PSND8 do not size their receive buffers, so any
+           ! future refactor that lets a "read coor card" reach cread
+           ! without prior resize would heap-overflow X on non-master
+           ! ranks.  Making the precondition explicit here -- matching
+           ! the resize_psf in psfres.F90 SEQRDR (commit 21477b0b9) --
+           ! costs nothing and forecloses that class of regression.
+           ! Regression test: test/c51test/cread_broadcast_resize.inp.
+           call resize_coord('mainio.F90','MAINIO',natom, .true.)
+#endif
            CALL COORIO(-1,IUNIT,COMLYN,COMLEN,TITLEB,NTITLB, &
                 ICNTRL,NATOM,X,Y,Z,WMAIN,ATYPE, &
                 RESID,RES,NRES,IBASE,SEGID,NICTOT,NSEG,.FALSE.)
@@ -498,6 +523,45 @@ SUBROUTINE MAINIO(MODE)
               IF(CHAIN /= ' ' .AND. SEGIDX /= ' ') &
                  CALL WRNDIE(-1,'MAINIO','Specify at most one of CHAIN and SEGI')
            ENDIF
+        ELSE IF (WRD8(1:5) == 'MMCIF' .OR. WRD8(1:4) == 'PDBX') THEN
+           NINPUT=6
+           CHAIN=GTRMA(COMLYN,COMLEN,'CHAI')
+           LATOM=(INDXA(COMLYN,COMLEN,'NOAT') == 0)
+           LHETATM=(INDXA(COMLYN,COMLEN,'HETA') > 0)
+           LSEQRES=(INDXA(COMLYN,COMLEN,'SEQR') > 0)
+           LMMCIF_LABEL=(INDXA(COMLYN,COMLEN,'LABE') > 0)
+           IF(INDXA(COMLYN,COMLEN,'AUTH') > 0) LMMCIF_LABEL=.FALSE.
+           IFIRST=GTRMI(COMLYN,COMLEN,'FIRS',1)
+           SEGIDX=GTRMA(COMLYN,COMLEN,'SEGI')
+           NCHAIN=GTRMI(COMLYN,COMLEN,'NCHA',0)
+           IF(CHAIN(1:1) /= ' ' .AND. SEGIDX(1:1) /= ' ') &
+              CALL WRNDIE(-1,'MAINIO','Specify at most one of CHAIN and SEGI')
+           IF( NCHAIN > 0 .AND. (CHAIN(1:1) /= ' ' .OR. SEGIDX(1:1) /= ' ')) &
+              CALL WRNDIE(-1,'MAINIO','Specify at most one of NCHAIN, CHAIN and SEGI')
+           SKP=GTRMA(COMLYN,COMLEN,'SKIP')
+           NSKIP=0
+           DO WHILE (SKP/=' ')
+             IF(NSKIP == MAXSKIP) &
+                CALL WRNDIE(-3,'<MAINIO>','SKIP table overflow')
+             NSKIP=NSKIP+1
+             SKIP(NSKIP)=SKP
+             SKP=GTRMA(COMLYN,COMLEN,'SKIP')
+           ENDDO
+           IF(NSKIP>0 .AND. PRNLEV>2) WRITE(OUTU,'(A,I5)') 'Number of skipped resnames:',NSKIP
+
+           ALI=GTRMA(COMLYN,COMLEN,'ALIA')
+           NALI=0
+           DO WHILE (ALI/=' ')
+             IF(NALI == MAXALI) &
+                CALL WRNDIE(-3,'<MAINIO>','ALIAS table overflow')
+              NALI=NALI+1
+              ALIAS(1,NALI)=ALI
+              ALIAS(2,NALI)=NEXTA8(COMLYN,COMLEN)
+              IF(ALIAS(2,NALI)==' ') &
+                 CALL WRNDIE(-2,'<MAINIO>','ALIAS need two residue names')
+               ALI=GTRMA(COMLYN,COMLEN,'ALIA')
+            ENDDO
+            IF(NALI>0 .AND. PRNLEV>2) WRITE(OUTU,'(A,I5)') 'Number of alias pairs:',NALI
         ELSE IF (WRD8(1:4) == 'PDB') THEN
            NINPUT=4
            CHAIN=GTRMA(COMLYN,COMLEN,'CHAI')
@@ -569,12 +633,12 @@ SUBROUTINE MAINIO(MODE)
            ! No global variable in arguments
            CALL SEQRDR(COMLYN,COMLEN,IUNIT,TITLEB,NTITLB,MAXTIT, &
                 NINPUT,ISTART,CHAIN,SEGIDX,NCHAIN,NSKIP,SKIP,NALI,ALIAS, &
-                LATOM,LHETATM,LSEQRES,IFIRST)
+                LATOM,LHETATM,LSEQRES,IFIRST,LMMCIF_LABEL)
 #else
            ! Global variables included as arguments (original)
            CALL SEQRDR(COMLYN,COMLEN,MXCMSZ,IUNIT,TITLEB,NTITLB,MAXTIT, &
                 RES,NRES,RESID,NINPUT,ISTART,CHAIN,SEGIDX,NCHAIN,NSKIP,SKIP,NALI,ALIAS, &
-                LATOM,LHETATM,LSEQRES,IFIRST)
+                LATOM,LHETATM,LSEQRES,IFIRST,LMMCIF_LABEL)
 #endif
            IF (reallow) THEN     
               IF(IOLEV > 0 .AND. NINPUT == 1) REWIND IUNIT
@@ -601,13 +665,7 @@ SUBROUTINE MAINIO(MODE)
         !=======================================================================
         !         Begin Procedure READ Bond TABLEs
         !
-#if KEY_IF==1 || KEY_PARALLEL==1
-        
-#endif
         !        CALL WRNDIE(-1,'<MAINIO>','bond energy table code is not ready for parallel.')
-#if KEY_ENDIF==1
-        
-#endif
 #if KEY_NOMISC==0
         IF (IUNIT == -1)  GOTO 9000
         IF(PRNLEV >= 2) WRITE (OUTU, '(A,I3,A)') &
@@ -628,7 +686,7 @@ SUBROUTINE MAINIO(MODE)
         !         Begin Procedure READ-NAMD binary coordinate file 
         !         extract the name of the file
         FLEN = 0
-        CALL GTRMWD(COMLYN,COMLEN,'FILE',4,FNAME,FNMAX,FLEN)
+        CALL GTRMWD(COMLYN,COMLEN,'FILE',4,FNAME,COMLEN,FLEN)
         IF (FLEN  <=  0) THEN
            CALL WRNDIE(-5,'<MAINIO>','Specify file name')
         ENDIF
@@ -734,7 +792,7 @@ SUBROUTINE MAINIO(MODE)
         !         Begin Procedure WRITE-NAMD binary coordinate file 
         !         extract the name of the file
         flen = 0
-        call gtrmwd(comlyn,comlen,'FILE',4,fname,FNMAX,flen)
+        call gtrmwd(comlyn,comlen,'FILE',4,fname,comlen,flen)
         if (flen  <=  0) then
            call wrndie(-5,'<mainio>','specify file name')
         endif
@@ -764,7 +822,7 @@ SUBROUTINE MAINIO(MODE)
         !=======================================================================
 
         iunit=gtrmi(comlyn,comlen,'UNIT',-1)
-        call gtrmwd(comlyn,comlen,'NAME',4,fname,FNMAX,flen)
+        call gtrmwd(comlyn,comlen,'NAME',4,fname,comlen,flen)
         qimopn=(flen > 0)
         if(qimopn .and. iolev > 0) then
            !           A filename was specified. Now open it properly.
@@ -1022,7 +1080,7 @@ contains
                PRCCSC,PRCCSB, &
                PRCCSD,PRCCSW, &
                NATOMP,QCNSRP,NUMHSETP, &
-               PRIHSET,PRTYPEH, &
+               PRIHSET,PRTYPEH,PRPARHSET, &
                PRKCNST,PRKCEXP, &
                LCIC,CCBIC,CCTIC,CCPIC,CCIIC, &
                QQCNST,LQMASS,KQCNST,KQEXPN)
@@ -1030,7 +1088,7 @@ contains
 #endif /* (pert_prcns)*/
           CALL PRCNST(IUNIT, &
                NCSPHI,ICS,JCS,KCS,LCS,CCSC,CCSB,CCSD,CCSW, &
-               NATOM,QCNSTR,NUMHSETS,IHSET,TYPHSET,KCNSTR, &
+               NATOM,QCNSTR,NUMHSETS,IHSET,TYPHSET,PARHSET,KCNSTR, &
                KCEXPN,LCIC,CCBIC,CCTIC,CCPIC,CCIIC, &
                QQCNST,LQMASS,KQCNST,KQEXPN)
 #if KEY_PERT==1 /*pert_prcns2*/

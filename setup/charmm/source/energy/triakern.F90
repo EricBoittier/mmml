@@ -159,7 +159,7 @@ module triakern
       use stream, only: outu, prnlev
 #if KEY_PARALLEL==1
       use parallel, only: comm_charmm, mynod
-      use mpi, only: mpi_integer, mpi_real8, mpi_logical, mpi_character
+      use mpi_f08, only: mpi_integer, mpi_real8, mpi_logical, mpi_byte
 #endif
  
       implicit none
@@ -654,7 +654,7 @@ module triakern
 #if KEY_PARALLEL==1
       call mpi_barrier(comm_charmm, ierror)
       ! Broadcast data to other nodes
-      call mpi_bcast(kernc, 4, mpi_character, 0, comm_charmm, ierror)
+      call mpi_bcast(kernc, 4*nkern, mpi_byte, 0, comm_charmm, ierror)
       call mpi_bcast(kernt, nkern, mpi_integer, 0, comm_charmm, ierror)
       call mpi_bcast(kernm, nkern, mpi_integer, 0, comm_charmm, ierror)
       call mpi_bcast(ikern, nkern, mpi_integer, 0, comm_charmm, ierror)
@@ -664,7 +664,7 @@ module triakern
       call mpi_bcast(kpcnv, nkern, mpi_real8, 0, comm_charmm, ierror)
       call mpi_bcast(ickt, nckt, mpi_integer, 0, comm_charmm, ierror)
       call mpi_bcast(ickb, nckb, mpi_integer, 0, comm_charmm, ierror)
-      call mpi_bcast(kernk, 100, mpi_character, 0, comm_charmm, ierror)
+      call mpi_bcast(kernk, 100*nkern, mpi_byte, 0, comm_charmm, ierror)
       call mpi_bcast(nmodl, 1, mpi_integer, 0, comm_charmm, ierror)
       call mpi_bcast(nckb, 1, mpi_integer, 0, comm_charmm, ierror)
       call mpi_bcast(nckt, 1, mpi_integer, 0, comm_charmm, ierror)

@@ -10,7 +10,7 @@ module domdec_d2r_comm
 !#if KEY_CMPI==0 /*not_cmpi*/
   use chm_kinds
   use dimens_fcm
-  use mpi,only:MPI_STATUS_SIZE
+  use mpi_f08
   implicit none
   private
 
@@ -28,7 +28,7 @@ contains
   ! *
   subroutine send_stop_recip()
     use pack_mod,only:pack_double_byte, pack_int_byte
-    use mpi
+    use mpi_f08
     use parallel,only:mpi_real8_size
     use reawri,only:qcnstp
     use number,only:minone
@@ -72,7 +72,7 @@ contains
   ! * Waits and receives forces, energies, and virial from recip nodes
   ! *
   subroutine wait_results_from_recip()
-    use mpi,only:mpi_success, mpi_status_ignore
+    use mpi_f08,only:mpi_success, mpi_status_ignore
     use domdec_common,only:natoml
     use new_timer,only:timer_start, timer_stop, T_fcomm2wait  
     use domdec_dr_common,only:reqbuffer, mynod_split
@@ -104,7 +104,7 @@ contains
   ! * Returns .true. if results have arrived, .false. otherwise
   ! *
   logical function probe_results_from_recip()
-    use mpi,only:mpi_success, mpi_status_ignore
+    use mpi_f08,only:mpi_success, mpi_status_ignore
     use domdec_common,only:natoml
     use domdec_dr_common,only:reqbuffer
     implicit none
@@ -129,7 +129,7 @@ contains
   ! * Unpacks results from recip nodes
   ! *
   subroutine unpack_results_from_recip(forcex, forcey, forcez, auxdata, nauxdata)
-    use mpi,only:mpi_success, mpi_real8
+    use mpi_f08,only:mpi_success, mpi_real8
     use domdec_common,only:natoml, atoml
     use pack_mod,only:unpack_force, unpack_double_byte
     use domdec_dr_common,only:commbuffer, commbuffersize, comm_direct
@@ -168,7 +168,7 @@ contains
   ! *
   subroutine send_coord_to_recip(x, y, z, q_send_atoml)
     use pack_mod,only:pack_double_byte, pack_int_byte, pack_xyz_atom_byte
-    use mpi,only:mpi_byte, mpi_integer, mpi_success, MPI_STATUSES_IGNORE
+    use mpi_f08,only:mpi_byte, mpi_integer, mpi_success, MPI_STATUSES_IGNORE
     use domdec_common,only:natoml, atoml
     use parallel,only:mpi_real8_size
     use reawri,only:qcnstp
@@ -286,7 +286,6 @@ contains
 
     subroutine alloc_realloc(natoml, ncomm, nauxdata)
       use memory
-      use mpi,only:mpi_status_size
       use parallel,only:mpi_integer_size, mpi_real8_size
       use domdec_dr_common,only:alloc_realloc_commbuffer
       implicit none
@@ -328,14 +327,12 @@ contains
       ! reqbuffer
       if (allocated(reqbuffer)) then
          if (size(reqbuffer) < max(nrecip,4)) then
-            call chmdealloc('domdec_d2r_comm.src','send_coord_to_recip','reqbuffer',&
-                 size(reqbuffer),intg=reqbuffer)
+            deallocate(reqbuffer)
          endif
       endif
-      
+
       if (.not.allocated(reqbuffer)) then
-         call chmalloc('domdec_d2r_comm.src','send_coord_to_recip','reqbuffer',&
-              max(nrecip,4),intg=reqbuffer)
+         allocate(reqbuffer(max(nrecip,4)))
       endif
 
       return

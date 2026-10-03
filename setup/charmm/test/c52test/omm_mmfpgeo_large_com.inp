@@ -1,0 +1,115 @@
+*  CHARMM c52 testcase omm_mmfpgeo_large_com.inp
+*  An MMFP GEO centre-of-mass restraint over a selection bigger than the
+*  limit CHARMM/OpenMM used to impose on one.
+*
+
+! setup_mmfpgeo_restraints used to refuse a COM group with more than nmaxcm
+! atoms -- 10 originally, raised to 100 -- and the refusal was a WRNDIE at
+! level -1, which terminates at the default BOMLEV.  So a restraint on the
+! centre of mass of anything larger than a small fragment stopped the run.
+! Nothing needed the limit: the group reaches OpenMM through arrays created at
+! the group's own size, so there was no fixed buffer behind it.
+!
+! The molecule below is deliberately larger than the old limit, so this file
+! fails on any build that still has it.
+!
+! The GEO energy is compared between CHARMM's own evaluation and OpenMM's
+! rather than against a recorded number: the two are computing the same
+! restraint on the same coordinates, so they have to agree, and that stays
+! true on any platform and in any precision.
+
+if ?openmm .ne. 1 then
+   echo "omm_mmfpgeo_large_com TESTCASE RESULT: SKIP"
+   stop
+endif
+
+if ?numnode .ne. 1 then
+   echo "omm_mmfpgeo_large_com TESTCASE RESULT: SKIP"
+   stop
+endif
+
+stream datadir.def
+
+read rtf card name @0toph19.rtf
+read parameter card name @0param19.prm
+
+! 30 alanines, comfortably past the old 100-atom ceiling.
+read sequence ala 30
+generate main setup warn
+
+ic parameter
+ic seed 1 N 1 CA 1 C
+ic build
+
+! Put the molecule somewhere with a centre of mass away from the origin, so
+! that a restraint to the origin is not trivially zero and a broken one is
+! distinguishable from a working one.
+coor orient
+coor translate xdir 1.0 ydir 1.0 zdir 1.0 dist 4.0
+
+set natom = ?natom
+echo Atoms in the restrained selection: @natom
+
+! The point of the file: unless the selection is bigger than the old limit,
+! this testcase proves nothing.
+set c1 = FAIL
+if @natom gt 100 then set c1 = PASS
+echo OMM_MMFPGEO_LARGE_COM_SELECTION_IS_LARGE TESTCASE RESULT: @c1
+
+! ---------------------------------------------------------------------
+! The restraint: one COM group holding every atom
+! ---------------------------------------------------------------------
+MMFP
+GEO SPHERE RCM -
+    xref 0.0 yref 0.0 zref 0.0 -
+    force 10.0 droff 0.0 -
+    select all end
+END
+
+! ---------------------------------------------------------------------
+! Check 2: OpenMM sets the restraint up at all
+! ---------------------------------------------------------------------
+! This is where the old limit stopped the run outright, so reaching the line
+! after it is itself the regression check.
+!
+! OpenMM goes FIRST on purpose.  ETERM(GEO) is not zeroed between energy
+! calls, so if CHARMM's energy ran first and OpenMM never registered a GEO
+! force, ?GEO would still be holding CHARMM's number and the comparison below
+! would agree with itself.  Taking the OpenMM value while nothing has yet
+! written the term means an unregistered force reads zero and is caught.
+!
+! Nonbond options CHARMM/OpenMM accepts -- the same ones c40test/omm_mmfpgeo.inp
+! uses.  Without them setup_switching refuses the run before MMFP is reached.
+
+omm on
+
+energy wmin 0.0 cutnb 999 ctofnb 999 ctonnb 999 switch vswitch
+set geoomm = ?GEO
+
+omm clear
+
+echo OMM_MMFPGEO_LARGE_COM_SETUP_SURVIVES TESTCASE RESULT: PASS
+
+set c2 = FAIL
+if @geoomm gt 0.0 then set c2 = PASS
+echo OMM_MMFPGEO_LARGE_COM_OPENMM_NONZERO TESTCASE RESULT: @c2
+
+! ---------------------------------------------------------------------
+! Check 3: CHARMM's own evaluation agrees
+! ---------------------------------------------------------------------
+! No reference value -- the two engines evaluate the same restraint on the
+! same coordinates, so they have to agree, and that holds on any platform and
+! in any precision.  test.str reads a positive tolerance as RELATIVE
+! (|val-ref| > tol*|ref|), so 0.001 is a tenth of a percent; computing an
+! absolute tolerance here and passing it would have asked for 10%.
+
+energy wmin 0.0 cutnb 999 ctofnb 999 ctonnb 999 switch vswitch
+set geochm = ?GEO
+
+set c3 = FAIL
+if @geochm gt 0.0 then set c3 = PASS
+echo OMM_MMFPGEO_LARGE_COM_CHARMM_NONZERO TESTCASE RESULT: @c3
+
+@testcheck @geoomm @geochm 0.001 OMM_MMFPGEO_LARGE_COM_MATCHES_CHARMM
+
+stop

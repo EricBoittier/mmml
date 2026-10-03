@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Kernel + Neural Network (KerNN) Module*</title>
+<link rel="stylesheet" href="charmmdoc.css">
+</head>
+<body>
+<div class="page-header">
+<h1>Kernel + Neural Network (KerNN) Module*</h1>
+<div class="nav"><a href="index.html">Index</a><a href="charmm.html">CHARMM Home</a><a href="commands.html">Commands</a></div>
+</div>
+<pre>
+<a id="Top"></a>
+<div class="charmmdoc">
+		Kernel + Neural Network (KerNN) Module*
+
+by
+Silvan Kaeser (silvan.kaeser@unibas.ch)
+Markus Meuwly (m.meuwly@unibas.ch)
+
+The KerNN module is geared towards efficient and high-quality intramolecular
+interactions for polyatomic molecules in CHARMM [1]. This is achieved by
+replacing the CHARMM bonded contributions with predictions (energies and forces) 
+from a small neural network (NN). The module is intended to be used for gas-phase
+spectroscopic studies and reactive dynamics or as a driver of the intramolecular
+contributions in condensed-phase simulations. 
+
+CAUTIONARY NOTE: Currently the module is only intended to be used to model
+formaldehyde, H2CO, in gas-phase. The weights and biases for the NN are
+provided in the example folder and the NN was trained based on
+CCSD(T)-F12B/aug-cc-pVTZ-F12 reference data calculated using Molpro. The
+reference data was available from previous work [2]. Extensions to other
+molecules and generalizations will follow. 
+
+
+KerNN is invoked using the KRNN keyword.
+
+
+
+References:
+
+[1] Will follow ...
+[2] Silvan Kaeser, Debasish Koner, Anders S. Christensen, O. Anatole von
+    Lilienfeld, and Markus Meuwly, J. Phys. Chem. A 2020, 124, 42, 8853-8865
+
+
+
+* <a href="#Syntax">Syntax</a> | Syntax of the KerNN module.
+* <a href="#Description">Description</a> | A brief description of the module commands and how it works.
+* <a href="#Example">Example</a> | Calculation of harmonic frequencies and comparison to ab initio reference.
+* <a href="#Changes">Changes</a> | Source files added and modified by the module.
+
+
+</div>
+<a id="Syntax"></a>
+<div class="charmmdoc">
+<a href="#Top">Top</a>
+                                   Syntax
+
+
+KRNN {	ACTIvate }
+KRNN { 	CLEAr }
+
+	Description of the KerNN module.
+
+ACTI - 	Will activate the module, substituting the CHARMM interactions with
+        the NN predictions.
+
+CLEA - 	Removes all the interactions introduced by KerNN / the ACTI command.
+
+
+
+
+</div>
+<a id="Description"></a>
+<div class="charmmdoc">
+<a href="#Top">Top</a>
+                                 Description
+
+KRNN ACTI:
+The command 'KRNN ACTI' activates the KerNN potential contributions. 
+
+
+KRNN CLEA:
+The command 'KRNN CLEA' deactivates the KerNN potential contributions. 
+However, the default CHARMM energy is not restored until the next setup of the
+bond and angle arrays. 
+
+
+Compatibility:
+No compatibility issues of the KerNN module with other modules in CHARMM
+were observed. However, this remains to be tested thoroughly.
+
+
+</div>
+<a id="Example"></a>
+<div class="charmmdoc">
+<a href="#Top">Top</a>
+                                   Example
+
+kernn_h2co.inp
+
+KerNN is used to run a structure minimization of H2CO and is followed by a
+calculation of the harmonic frequencies. The harmonic frequencies determined
+at the ab initio CCSD(T)-F12B/aug-cc-pVTZ-F12 level of theory are (in cm**-1)
+
+1   1186.5
+2   1268.2
+3   1532.7
+4   1776.4
+5   2933.8
+6   3005.8
+
+
+Activation command for H2CO. Note that the folder with the appropriate NN weights
+and biases (wandb) is required in the location of the execution. Currently it's
+placed in the c50test/ and data/ folders. Note that the example input file tries
+to copy the wandb/ folder to the location of the execution.
+
+"""
+KRNN acti 
+
+MINIMIZE SD NSTEP 200 ! Perform an energy minimization
+
+vibran 
+redu fix finit
+END
+"""
+
+
+
+</div>
+<a id="Changes"></a>
+<div class="charmmdoc">
+<a href="#Top">Top</a>
+                           Changes and additions
+
+source/energy/kernn.F90:
+- New script that contains the KerNN codes
+
+source/energy/energy.F90:
+- line 393
+- line 2064
+
+source/charmm/miscom.F90:
+- line 274
+- line 967
+
+test/data/wandb/
+- new folder containing the weights and biases for the h2co PES
+
+test/c50test/kernn_h2co.inp
+- test example for the kernn module
+
+</div>
+</pre>
+</body>
+</html>

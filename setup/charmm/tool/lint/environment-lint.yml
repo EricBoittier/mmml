@@ -1,0 +1,35 @@
+# Dedicated conda environment for tool/lint/charmm-lint.
+#
+# Kept separate from the CHARMM runtime/test env so the linters can be
+# upgraded independently and so a lint run never perturbs a build/test env.
+#
+#   conda env create -f tool/lint/environment-lint.yml   # first time
+#   conda env update -f tool/lint/environment-lint.yml    # refresh
+#   conda activate charmm-lint
+#
+# Provides the compilers charmm-lint drives (gfortran, clang/clang++), the
+# C/C++ static-analysis extras (clang-tidy/clang-format via clang-tools,
+# cppcheck), ruff for the Python checks, and cmake+ninja so a local
+# no-cuda/no-omp build can be configured to produce compile_commands.json
+# and build.ninja.
+#
+# NOTE ON CUDA: conda-forge ships no macOS CUDA packages, and macOS has no
+# CUDA toolkit, so .cu files cannot be checked here -- run charmm-lint on a
+# cuda=ON build on gollum for CUDA coverage (see tool/lint/README.md). On a
+# Linux lint host you may add `cuda-nvcc` / `cuda-cudart-dev` here to let
+# clang parse .cu locally.
+name: charmm-lint
+channels:
+  - conda-forge
+dependencies:
+  - gfortran
+  - clang
+  - clangxx
+  - clang-tools      # clang-tidy, clang-check, clang-apply-replacements
+  - clang-format
+  - cppcheck
+  - ruff
+  - pyflakes       # fallback if ruff is unavailable
+  - cmake
+  - ninja
+  - python >=3.8

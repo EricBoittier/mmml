@@ -742,6 +742,9 @@ SUBROUTINE ENERIN
 #if KEY_SSNMR==1
   CETERM(ECS)   = 'ECS' ! N chemical shift energy term
 #endif
+#if KEY_MODELLER==1
+  CETERM(EMD)   = 'EMD'
+#endif
 #if KEY_RMD==1
   CETERM(CROS) = 'CROS'    ! Surface crossing energy correction
 #endif
@@ -782,6 +785,25 @@ SUBROUTINE ENERIN
       CETERM(LJREC) = 'LJRE' ! The reciprocal space term for LJ-PME
       CETERM(LJEXC) = 'LJEX' ! The excluded term for LJ-PME
 #endif
+#if KEY_OMMTORCH == 1
+      CETERM(NNPO) = 'NNPO' ! Neural-network potential through OpenMM-Torch
+#endif
+#if KEY_MLMM==1
+      CETERM(MLPS) = 'MLPS' ! Machine-learning potential ! eemlp
+#endif
+#if KEY_OPENMM == 1
+      ! Per-bucket terms for user-added OpenMM custom forces.  Names are
+      ! assigned lazily by omm_ecomp::bucket_group_for when a bucket is
+      ! first used, so the SKIPE listing and other CETERM-driven outputs
+      ! do not advertise CFIN/CFNB/CFEX/CFMB/CFCV in runs that have no
+      ! custom forces.
+#endif
+#if KEY_BLOCK==1
+      CETERM(LDBV) = 'LDBV' ! Lambda dynamics fixed and variable biases
+      CETERM(THBV) = 'THBV' ! Lambda dynamics bias on theta variables
+      CETERM(CATS) = 'CATS' ! constrained atom scaling in lambda dynamics
+#endif
+
 
   !
   ! Initialize the pressure/virial terms.
@@ -949,13 +971,14 @@ SUBROUTINE GETE0(OPTION,COMLYN,COMLEN)
   use inbnd,only:cutnb
 #endif
   use heurist,only:updeci
+  use omm_ctrl, only: omm_requested
+  use blade_ctrl_module, only: blade_requested
 #if KEY_OPENMM==1
-  use omm_ctrl, only: omm_system_changed, omm_requested
+  use omm_ctrl, only: omm_system_changed
   use omm_main, only: omm_energy
 #endif /* KEY_OPENMM */
 
 #if KEY_BLADE == 1
-  use blade_ctrl_module, only: blade_requested
   use blade_main, only: blade_energy
 #endif /* KEY_BLADE */
 
@@ -998,15 +1021,12 @@ SUBROUTINE GETE0(OPTION,COMLYN,COMLEN)
   endif
 #endif
 
-  want_openmm = .false.
-#if KEY_OPENMM==1
+  ! omm_requested / blade_requested live in modules that compile
+  ! unconditionally; on builds where the backend isn't compiled in
+  ! they detect the keyword and abort via WRNDIE rather than silently
+  ! falling through to the CPU code path.
   want_openmm = omm_requested(COMLYN, COMLEN, 'GETE0')
-#endif /* KEY_OPENMM */
-
-  want_blade = .false.
-#if KEY_BLADE == 1
   want_blade = blade_requested(COMLYN, COMLEN, 'GETE0')
-#endif /* KEY_BLADE */
 
 #if KEY_CHEQ==1
   QCGX=(INDXA(COMLYN, COMLEN, 'CHEQ') .GT.0)
@@ -1072,7 +1092,7 @@ SUBROUTINE GETE0(OPTION,COMLYN,COMLEN)
 
   ! Do updates if necessary.
   ! print *,"========== GETE0 calling update",qcomp,option
-  if (.not. want_blade) then ! Skip all this if using BLaDE
+  !if (.not. want_blade) then ! Skip all this if using BLaDE
   call timer_start(T_list)
   QUPALL=(OPTION .EQ. 'ENER')
   IF (QCOMP) THEN
@@ -1101,7 +1121,7 @@ SUBROUTINE GETE0(OPTION,COMLYN,COMLEN)
   endif
 #endif
   call timer_stop(T_list)
-  endif ! (.not. want_blade)
+  !endif ! (.not. want_blade)
 
   IF (OPTION .EQ. 'ENER') THEN
      QPRINT = .TRUE.

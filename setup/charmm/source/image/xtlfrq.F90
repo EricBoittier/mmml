@@ -671,23 +671,24 @@ SUBROUTINE XNBLST( &
   implicit none
   !
   INTEGER  I, IATOM, ITRAN, NBGUES
-  LOGICAL  QFREE
 #if KEY_IMCUBES==1
-  logical lbycbim              
+  logical lbycbim
 #endif
   !
-  !     Deallocate space for last lists.
+  !     Deallocate any lists left over from a previous call.  Free each array
+  !     on its own allocated() status rather than on a combined guard: a stale
+  !     XNNNB==0 (or a partially-allocated set) must not skip the deallocation,
+  !     or the chmalloc below aborts with "Array already allocated" -- e.g. a
+  !     Crystal Phonon run that re-enters XNBLST across several k-points.
   !
-  QFREE = (XNNNB  .GT. 0)      .AND. &
-       (allocated(xinblo)) .AND. (allocated(XJNB)) .AND. &
-       (allocated(XMATPT)) .AND. (allocated(XMATTR))
-  !
-  IF (QFREE) THEN
-     call chmdealloc('xtlfrq.src','XNBLST','XINBLO',XATIM,intg=XINBLO)
-     call chmdealloc('xtlfrq.src','XNBLST','XJNB',XNNNB,intg=XJNB)
-     call chmdealloc('xtlfrq.src','XNBLST','XMATPT',NTRANS,intg=XMATPT)
-     call chmdealloc('xtlfrq.src','XNBLST','XMATTR',XATIM,intg=XMATTR)
-  ENDIF
+  if (allocated(XINBLO)) &
+       call chmdealloc('xtlfrq.src','XNBLST','XINBLO',XATIM,intg=XINBLO)
+  if (allocated(XJNB)) &
+       call chmdealloc('xtlfrq.src','XNBLST','XJNB',XNNNB,intg=XJNB)
+  if (allocated(XMATPT)) &
+       call chmdealloc('xtlfrq.src','XNBLST','XMATPT',NTRANS,intg=XMATPT)
+  if (allocated(XMATTR)) &
+       call chmdealloc('xtlfrq.src','XNBLST','XMATTR',XATIM,intg=XMATTR)
   !
   !     Allocate space for expanded lists.
   !

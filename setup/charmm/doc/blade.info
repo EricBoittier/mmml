@@ -14,22 +14,41 @@ domdec may be a better platform.
 
 * Syntax::              Syntax of the blade commands
 * Function::            What the syntax means
+* Variable-e14fac::     Using different e14fac variables in a system
 * Limitations::         Some warnings...
 
-File: BLOCK, Node: Syntax, Up: Top, Next: Function
+File: BLOCK, Node: Syntax, Up: Top, Next: Variable-e14fac
 
                 Syntax of BLaDE commands
 
-BLaDE [ON | OFF | FILE filename]
+BLaDE [ON | OFF | FILE filename | VERB level]
 
 ENERgy [energy_opts] BLADE [ABIC]
+MINImize [minimize_opts] BLADE [LBFG | SD | SDFD | SDMD]
 DYNAmics [dynamics_opts] BLADE [blade_cpt_opts] [ABIC]
 
 blade_cpt_opts::=  [PRMC [IPRS int] [PREF real] [PRDV real]]
                     [FINALT real]
 
 
-File: BLaDE, Node: Function, Up: Top, Previous: Syntax, Next: Limitations
+File: BLaDE, Node: Variable-e14fac, Up: Top, Previous: Syntax, Next: Function
+
+In order to enable the use of e14fac values that differ within your system,
+e.g., if you wanted to run gaff ligands or LigParGen ligands with c36
+proteins this functionality utilizes an NATOM array set-up in scalar with
+   scalar e14f set <value> <selection>
+that is then propgated to BLaDE's MD engine for energy or dynamics calls.
+
+If a fixed constant e14fac value is to be used, BLaDE now uses the same NATOM
+array of e14ff values, but all values are the same.
+
+We note that this option is presently only accessible in the CHARMM/BLaDE API
+and the CHARMM/OpenMM API.
+
+VARIABLE E14FAC VALUES ARE NOT SUPPORTED ON OTHER CHARMM ENERGY ROUTINES
+
+
+File: BLaDE, Node: Function, Up: Top, Previous: Variable-e14fac, Next: Limitations
 
 BLaDE requires a GPU to run, and does not use MPI parallelism. To
 parallelize the system over multiple GPUs, use a separate OpenMP thread for
@@ -44,30 +63,60 @@ read in a blade script to perform additional BLaDE commands after
 initializing the system with charmm but before running dynamics, use BLADE
 FILE [filename].
 
-2) Add the BLADE keyword to an energy or dynamics calculation to perform
-that calculation with BLaDE. BLaDE does not recognize DYNAMICS CPT
-keywords. To run a constant pressure simulation, specify the BLaDE option
-PRMC (PRessure Monte Carlo). The options for the Monte Carlo barostat are
-IPRS, the frequency to attempt volume changes (default 50 steps), PREF, the
-reference pressure in atmospheres (default 1), and PRDV, the standard
-deviation of the Gaussian distribution from which volume changes are drawn
-in Angstroms cubed (default 100 A^3). The temperature of the Langevin
-thermostat is set with FINALT. The ABIC option stands for "assume BLaDE is
-current", and will prevent the BLaDE system from reinitializing. Only
-spatial and alchemical coordinates and velocities will be updated. If
-anything else has changed since the last time BLaDE was called, ABIC will
-give incorrect results. Not reinitializing BLaDE can result in significant
-performance improvements.
+To control the verbosity of BLaDE debug messages (system
+initialization, memory allocation, PME grid parameters, etc.), use BLADE
+VERB [level] where level=0 suppresses debug messages (default) and level=1
+enables detailed debug messages including energy outputs during volume
+moves and minimization steps. All BLaDE verbose output is now redirected to
+CHARMM's output stream instead of stdout, ensuring proper integration with
+CHARMM's output management.
+
+2) Add the BLADE keyword to an energy, minimization, or dynamics
+calculation to perform that calculation with BLaDE. BLaDE does not
+recognize DYNAMICS CPT keywords. To run a constant pressure simulation,
+specify the BLaDE option PRMC (PRessure Monte Carlo). The options for the
+Monte Carlo barostat are IPRS, the frequency to attempt volume changes
+(default 50 steps), PREF, the reference pressure in atmospheres (default
+1), and PRDV, the standard deviation of the Gaussian distribution from
+which volume changes are drawn in Angstroms cubed (default 100 A^3). The
+temperature of the Langevin thermostat is set with FINALT. The ABIC option
+stands for "assume BLaDE is current", and will prevent the BLaDE system
+from reinitializing. Only spatial and alchemical coordinates and velocities
+will be updated. If anything else has changed since the last time BLaDE was
+called, ABIC will give incorrect results. Not reinitializing BLaDE can
+result in significant performance improvements. BLaDE can also perform
+rudimentary minimization with or without shake. Only the minimization
+algorithm, the initial step length (STEP), and the number of steps are read
+from standard minimization options. Supported algorithms include steepest
+descent (SD), a BLaDE specific steepest descent finite difference
+algorithm with annealing (SDFD), guarded steepest descent (SDMD), and
+l-BFGS (LBFG). SDMD accepts only finite, non-increasing trial energies. It
+restores the last accepted coordinates and retries with a smaller step when
+a trial is invalid or uphill. If all retries fail, CHARMM continues with
+CPU steepest descent. The SDFD algorithm
+chooses the search based on steepest descent, but performs a second energy
+calculation to determine the position of the minimum along that direction
+using a finite difference approximation. The step length is linearly
+annealed from the full distance to the minimum at the start of minimization
+to 0 percent of the distance to the minimum at the end of the simulation.
+This damps out resonant oscillations that prevent steepest descent from
+removing large forces on particles.
 
 
 File: BLaDE, Node: Limitations, Up: Top, Previous: Function, Next: Top
 
 BLaDE is designed to be simple and fast, so many features are unavailable.
 
-BLaDE requires PME electrostatics and VFSWITCH van der Waals interactions.
+BLaDE requires PME or VSWITCH electrostatics and VFSWITCH or VSHIFT van der
+Waals interactions.
 
-Restraints are not implemented, and the only constraints supported are
-hydrogen bond length constraints.
+A few restraints are implemented, including absolute position restraints,
+and NOE distance restraints. Only restraints involving a single atom or
+pair of atoms are supported. The only constraints supported are hydrogen
+bond length constraints.
+
+BLaDE supports arbitrary nonorthogonal boxes as well as some types of
+virtual sites or lone pairs.
 
 Only a Langevin thermostat (or constant energy) and Monte Carlo barostat
 (or constant volume) are supported. If other integrators are requested with

@@ -62,7 +62,11 @@ void CudaCalcMSESForceKernel::initialize(const System& system, const MSESForce& 
     params->upload(paramVector);
     map<string, string> replacements;
     replacements["APPLY_PERIODIC"] = (force.usesPeriodicBoundaryConditions() ? "1" : "0");
+#if OMM_VER < 82
     replacements["PARAMS"] = cu.getBondedUtilities().addArgument(params->getDevicePointer(), "float4");
+#else
+    replacements["PARAMS"] = cu.getBondedUtilities().addArgument(*params, "float4");
+#endif /* OMM_VER */
     cu.getBondedUtilities().addInteraction(atoms, cu.replaceStrings(CudaMSESKernelSources::msesForce, replacements), force.getForceGroup());
     cu.addForce(new CudaMSESForceInfo(force));
 }
@@ -80,9 +84,9 @@ void CudaCalcMSESForceKernel::copyParametersToContext(ContextImpl& context, cons
         throw OpenMMException("updateParametersInContext: The number of MSES Distance-based pair interaction has changed");
     if (numDistPair == 0)
         return;
-    
+
     // Record the per-bond parameters.
-    
+
     vector<float4> paramVector(numDistPair);
     for (int i = 0; i < numDistPair; i++) {
         int atom1, atom2, atom3, atom4;
@@ -91,8 +95,8 @@ void CudaCalcMSESForceKernel::copyParametersToContext(ContextImpl& context, cons
         paramVector[i] = make_float4((float)c1, (float)c2, (float)c3, (float)c4);
     }
     params->upload(paramVector);
-    
+
     // Mark that the current reordering may be invalid.
-    
+
     cu.invalidateMolecules();
 }

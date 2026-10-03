@@ -23,15 +23,14 @@ contains
   subroutine setup_restraints(system, periodic)
     type(OpenMM_System), intent(inout) :: system
     logical, intent(in) :: periodic
-    
+
     ! Setup any harmonic restraints applied
     call mask_eterms()
-
     call setup_harm_restraints(system, periodic)
     call setup_pcharm_restraints(system, periodic)
-    call setup_resd_restraints(system)
+    call setup_resd_restraints(system, periodic)
     call setup_cons_dihe(system)
-    call setup_mmfpgeo_restraints(system)
+    call setup_mmfpgeo_restraints(system, periodic)
   end subroutine setup_restraints
 
    !> Updates this Force's global parameters if in use.
@@ -40,17 +39,17 @@ contains
       real*8, intent(in) :: box(3)
       integer :: i
 
-      if (using_box_params) then
-         do i = 1, 3
-            call OpenMM_Context_setParameter(context, &
-                  box_param(i), abs(box(i)))
-         enddo
-      endif
+     if (using_box_params) then
+        do i = 1, 3
+           call OpenMM_Context_setParameter(context, &
+                 box_param(i), abs(box(i)))
+        enddo
+     endif
    end subroutine update_restraint_box
 
    subroutine mask_eterms()
       use energym
- 
+
       zero_consharm = .not. QETERM(CHARM)
       zero_resd = .not. QETERM(RESD)
       zero_consdihe = .not. QETERM(CDIHE)
@@ -75,14 +74,14 @@ contains
       if (.not. QCNSTR) return
       restraint_ok = (TYPHSET == 0) .and. (KCEXPN > 0)
       if (any(restraint_ok)) then
-         group = omm_incr_eterms('charm')    
+         group = omm_incr_eterms('charm')
          do iset = 1, NUMHSETS
             hscale = [XHSCALE(iset), YHSCALE(iset), ZHSCALE(iset)]
             if (restraint_ok(iset) .and. all(hscale == ONE)) then
                ! Make sure there are atoms of this type with non-zero force constants
                atom_restrained = (IHSET == iset) .and. (KCNSTR /= ZERO)
                if (any(atom_restrained)) then
-                  if (PRNLEV > 2) then 
+                  if (PRNLEV > 2) then
                      write (OUTU, '(x,2a,i4)') &
                        procname, ": Setting up atom restraints for set ", iset
                      write (OUTU, '(x,2a,i4)') &
@@ -130,18 +129,14 @@ contains
       integer :: i, ijunk, natom
 
       if (periodic) then
-         write (formula, '(3(a,i0),3a)') &
-               'k * (px^', nexp, &
-                  ' + py^', nexp, &
-                  ' + pz^', nexp, '); ', &
-               'px=min(dx, bx-dx); py=min(dy, by-dy); pz=min(dz, bz-dz); ', &
-               'dx=abs(x-x0); dy=abs(y-y0); dz=abs(z-z0)'
+         write (formula, '(a,i0)') &
+              'k * periodicdistance(x,y,z,x0,y0,z0)^', nexp
       else
          write (formula, '(3(a,i0),2a)') &
-               'k * (dx^', nexp, &
-                  ' + dy^', nexp, &
-                  ' + dz^', nexp, '); ', &
-               'dx=abs(x-x0); dy=abs(y-y0); dz=abs(z-z0)'
+              'k * (dx^', nexp, &
+              ' + dy^', nexp, &
+              ' + dz^', nexp, '); ', &
+              'dx=abs(x-x0); dy=abs(y-y0); dz=abs(z-z0)'
       endif
 
       call OpenMM_CustomExternalForce_create(consharm, formula)
@@ -152,18 +147,6 @@ contains
                consharm, pname(i))
       enddo
 
-      if (periodic) then
-         ! assumes rectangular box aligned with coordinate axes
-         call OpenMM_System_getDefaultPeriodicBoxVectors(system, &
-               box_a, box_b, box_c)
-         box = [box_a(1), box_b(2), box_c(3)]
-         ! each Force must add its own references to global Context parameters
-         do i = 1, 3
-            ijunk = OpenMM_CustomExternalForce_addGlobalParameter( &
-                  consharm, box_param(i), abs(box(i)))
-         enddo
-         using_box_params = .true.
-      endif
 
       ijunk = OpenMM_System_addForce(system, transfer(consharm, OpenMM_Force(0)))
 
@@ -186,8 +169,8 @@ contains
       call OpenMM_DoubleArray_destroy(params)
 
     end subroutine add_harm_restraint_force
-    
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!    
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     subroutine setup_pcharm_restraints(system, periodic)
       use cnst_fcm
       use psf, only: NATOM
@@ -205,14 +188,14 @@ contains
       if (.not. QCNSTR) return
       restraint_ok = (TYPHSET == 3) .and. (KCEXPN > 0)
       if (any(restraint_ok)) then
-         group = omm_incr_eterms('pcharm')    
+         group = omm_incr_eterms('pcharm')
          do iset = 1, NUMHSETS
             hscale = [XHSCALE(iset), YHSCALE(iset), ZHSCALE(iset)]
             if (restraint_ok(iset) .and. all(hscale == ONE)) then
                ! Make sure there are atoms of this type with non-zero force constants
                atom_restrained = (IHSET == iset) .and. (KCNSTR /= ZERO)
                if (any(atom_restrained)) then
-                  if (PRNLEV > 2) then 
+                  if (PRNLEV > 2) then
                      write (OUTU, '(x,2a,i4)') &
                           procname, ": Setting up principal component harmonic restraints for set ", iset
                      write (OUTU, '(x,2a,i4)') &
@@ -269,19 +252,27 @@ contains
       integer :: i, ijunk, natom
 
       if (periodic) then
-         write (formula, '(3(a,i0),3a)') &
+         !write (formula, '(3(a,i0),3a)') &
+         !      'k * (pmx^', nexp, &
+         !         ' + pmy^', nexp, &
+         !         ' + pmz^', nexp, '); ', &
+         !      'pmx=abs(px*pcx); pmy=abs(py*pcy); pmz=abs(pz*pcz); ', &
+         !      'px=min(dx, bx-dx); py=min(dy, by-dy); pz=min(dz, bz-dz); ', &
+         !      'dx=(x-x0); dy=(y-y0); dz=(z-z0)'
+         write (formula, '(3(a,i0),4a)') &
                'k * (pmx^', nexp, &
                   ' + pmy^', nexp, &
                   ' + pmz^', nexp, '); ', &
-               'pmx=abs(px*pcx); pmy=abs(py*pcy); pmz=abs(pz*pcz); ', &
-               'px=min(dx, bx-dx); py=min(dy, by-dy); pz=min(dz, bz-dz); ', &
-               'dx=(x-x0); dy=(y-y0); dz=(z-z0)'
+               'pmx=px*pcx; pmy=py*pcy; pmz=pz*pcz; ', &
+               'px=periodicdistance(x,0,0,x0,0,0); ', &
+               'py=periodicdistance(0,y,0,0,y0,0); ', &
+               'pz=periodicdistance(0,0,z,0,0,z0)'
       else
          write (formula, '(3(a,i0),2a)') &
                'k * (dx^', nexp, &
                   ' + dy^', nexp, &
                   ' + dz^', nexp, '); ', &
-               'dx=abs((x-x0)*pcx); dy=abs((y-y0)*pcy); dz=abs((z-z0)*pcz)'
+               'dx=(x-x0)*pcx; dy=(y-y0)*pcy; dz=(z-z0)*pcz'
       endif
 
       call OpenMM_CustomExternalForce_create(pcaharm, formula)
@@ -291,19 +282,6 @@ contains
          ijunk = OpenMM_CustomExternalForce_addPerParticleParameter( &
                pcaharm, pname(i))
       enddo
-
-      if (periodic) then
-         ! assumes rectangular box aligned with coordinate axes
-         call OpenMM_System_getDefaultPeriodicBoxVectors(system, &
-               box_a, box_b, box_c)
-         box = [box_a(1), box_b(2), box_c(3)]
-         ! each Force must add its own references to global Context parameters
-         do i = 1, 3
-            ijunk = OpenMM_CustomExternalForce_addGlobalParameter( &
-                  pcaharm, box_param(i), abs(box(i)))
-         enddo
-         using_box_params = .true.
-      endif
 
       ijunk = OpenMM_System_addForce(system, transfer(pcaharm, OpenMM_Force(0)))
 
@@ -318,7 +296,7 @@ contains
          if (atom_restrained(i)) then
             pval(1) = kcnstr(i) * k_conversion
             pval(2:4) = [refx(i), refy(i), refz(i)] / OpenMM_AngstromsPerNm
-            pval(5:7) = [pcax(i), pcay(i), pcaz(i)] 
+            pval(5:7) = [pcax(i), pcay(i), pcaz(i)]
             call omm_param_set(params, pval)
             ijunk = OpenMM_CustomExternalForce_addParticle( &
                   pcaharm, i-1, params)
@@ -328,13 +306,14 @@ contains
 
     end subroutine add_pcharm_restraint_force
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    
+
    ! This routine sets up CHARMM restrained distance restraints for
    ! use through the OpenMM interface.
-   subroutine setup_mmfpgeo_restraints(system)
+   subroutine setup_mmfpgeo_restraints(system, periodic)
      use mmfp, only : ntgeo, qgeo
      use omm_ecomp, only : omm_incr_eterms
      type(OpenMM_System), intent(inout) :: system
+     logical, intent(in) :: periodic
      integer :: i, nunique
      integer :: mmfpgeo_type(ntgeo)
      integer*4 :: group
@@ -342,8 +321,8 @@ contains
      logical :: is_new_formula
 
      if (zero_mmfpgeo .or. .not. qgeo) return
-     if (ntgeo > 0) group = omm_incr_eterms('geo')    
-     
+     if (ntgeo > 0) group = omm_incr_eterms('geo')
+
 
      ! Find the number of unique restraints
      nunique = 0
@@ -356,49 +335,56 @@ contains
         end if
      end do
 
-     call alloc_mmfpgeo_restraints(system, group, nunique, mmfpgeo_type)
+     call alloc_mmfpgeo_restraints(system, group, periodic, nunique, mmfpgeo_type)
 
    end subroutine setup_mmfpgeo_restraints
 
-   subroutine alloc_mmfpgeo_restraints(system, group, nunique, mmfpgeo_type)    
+   subroutine alloc_mmfpgeo_restraints(system, group, periodic, nunique, mmfpgeo_type)
      use mmfp, only : ntgeo, ngeo, igeo, jgeo, qprnt
      type(OpenMM_System), intent(inout) :: system
      integer*4, intent(in) :: group
-     type(OpenMM_CustomCompoundBondForce) :: OMM_mmfpRestraintForce(1:nunique)
+     logical, intent(in) :: periodic
+     !type(OpenMM_CustomCompoundBondForce) :: OMM_mmfpRestraintForce(1:nunique)
+     type(OpenMM_CustomCentroidBondForce) :: OMM_mmfpRestraintForce(1:nunique)
      integer, intent(in) :: nunique, mmfpgeo_type(ntgeo)
      character(len=2048) :: restraint_formula
 
-     integer :: n, ndx 
+     integer :: n, ndx
 
      logical :: is_new_formula
-      
+
      loop_alloc_restr: do n=1, ntgeo
         is_new_formula = newformula_mmfpgeo(n, mmfpgeo_type)
 
-       if (is_new_formula) then
-          if (igeo(n) == 0 ) cycle loop_alloc_restr
+        if (is_new_formula) then
+           if (igeo(n) == 0 ) cycle loop_alloc_restr
 
-          call getmmfp_formula(n, restraint_formula, mmfpgeo_type(n))
+           call getmmfp_formula(n, restraint_formula, mmfpgeo_type(n), periodic)
 
-          call add_mmfpgeo_restraint(system, group, &
-               OMM_mmfpRestraintForce(mmfpgeo_type(n)), &
-               restraint_formula, &
-               nunique, n, &
-               mmfpgeo_type(n))
-       endif
-       if (igeo(n) >= 1 ) then
+           call add_mmfpgeo_restraint(system, group, &
+                OMM_mmfpRestraintForce(mmfpgeo_type(n)), &
+                restraint_formula, periodic, &
+                nunique, n, &
+                mmfpgeo_type(n))
+        endif
+        ! Call routine for non-distace based mmfp calls
+        if (igeo(n) >= 1 ) then
            call add_mmfpgeo_addbond(system, &
                 OMM_mmfpRestraintForce(mmfpgeo_type(n)), &
                 ngeo(n+1)-ngeo(n), &
                 nunique, n)
-      elseif ( igeo(n) == -1 .or. igeo(n) == -2 .or. igeo(n) == -3 ) then
+        ! Call routine for distance based mmfp restraints
+        elseif ( igeo(n) == -1 .or. igeo(n) == -2 .or. igeo(n) == -3 ) then
            call add_mmfpgeo_addbond(system, &
                 OMM_mmfpRestraintForce(mmfpgeo_type(n)), &
                 ngeo(n+2)-ngeo(n), &
                 nunique, n)
 
-      endif
-
+        endif
+        if ( periodic ) then
+           call OpenMM_CustomCentroidBondForce_setUsesPeriodicBoundaryCondition( &
+                OMM_mmfpRestraintForce(mmfpgeo_type(n)), 1 )
+        endif
      enddo loop_alloc_restr
      if(QPRNT) then
           do ndx = 1, ntgeo
@@ -420,9 +406,10 @@ contains
      setglobalname = trimblanks64(globalname)
    end function setglobalname
 
-   subroutine getmmfp_formula(n, formula, itype)
+   subroutine getmmfp_formula(n, formula, itype, periodic)
      use mmfp, only : ngeo, igeo, jgeo, lstgeo
      integer, intent(in) :: n, itype
+     logical, intent(in) :: periodic
      integer :: ipt, ioffset
      character(len=2048), intent(inout) :: formula
      character(len=1), parameter :: mu(10) = ['a','b','c','d','e','f','g','h','i','j']
@@ -458,30 +445,34 @@ contains
      ycm2 = ''
      zcm2 = ''
      formula = ''
-     
-     if ( igeo(n) >= 1 ) then
-        do ipt = 1, ngeo(n+1)-ngeo(n)
-           if (ipt == 1) then
-              write(xcm,'(a,i2,a,i2)') 'm',ipt,'*x',ipt
-              write(ycm,'(a,i2,a,i2)') 'm',ipt,'*y',ipt
-              write(zcm,'(a,i2,a,i2)') 'm',ipt,'*z',ipt
-           else
-              write(xcm,'(a,i2,a,i2)') '+ m',ipt,'*x',ipt
-              write(ycm,'(a,i2,a,i2)') '+ m',ipt,'*y',ipt
-              write(zcm,'(a,i2,a,i2)') '+ m',ipt,'*z',ipt
-           endif
-           bx = trim(bx) // trim(xcm)
-           by = trim(by) // trim(ycm)
-           bz = trim(bz) // trim(zcm)
-           xcm = ''
-           ycm = ''
-           zcm = ''
-        enddo
 
-        bx = 'delx = ' // trim(bx) // '- ' // trim(xref)
-        by = 'dely = ' // trim(by) // '- ' // trim(yref)
-        bz = 'delz = ' // trim(bz) // '- ' // trim(zref)
-    endif
+     if(periodic) then
+        if (abs(igeo(n)) == 3 .and. jgeo(n) == 3) then
+           ! Symmetric plane: the projection built below keeps its sign, so
+           ! the deltas feeding it have to keep theirs.  See signed_axis_diff.
+           bx = signed_axis_diff('x', &
+                'pointdistance(x1, 0, 0, ' // trim(xref) // ', 0, 0 )', 'x1', xref)
+           by = signed_axis_diff('y', &
+                'pointdistance( 0, y1, 0, 0, ' // trim(yref) // ', 0 )', 'y1', yref)
+           bz = signed_axis_diff('z', &
+                'pointdistance( 0, 0, z1,0, 0, ' // trim(zref) // ')', 'z1', zref)
+        else
+           bx = 'delx = pointdistance(x1, 0, 0, ' // trim(xref) // ', 0, 0 )'
+           by = 'dely = pointdistance( 0, y1, 0, 0, ' // trim(yref) // ', 0 )'
+           bz = 'delz = pointdistance( 0, 0, z1,0, 0, ' // trim(zref) // ')'
+        endif
+        !bx = 'delx = diff(x1,' // trim(xref) // ')'
+        !by = 'dely = diff(y1,' // trim(yref) // ')'
+        !bz = 'delz = diff( z1,' // trim(zref) // ')'
+        !!bx = 'delx = ( x1 - ' // trim(xref) // ' )'
+        !!by = 'dely = ( y1 - ' // trim(yref) // ' )'
+        !!bz = 'delz = ( z1 - ' // trim(zref) // ' )'
+    else
+        bx = 'delx = ( x1 - ' // trim(xref) // ' )'
+        by = 'dely = ( y1 - ' // trim(yref) // ' )'
+        bz = 'delz = ( z1 - ' // trim(zref) // ' )'
+     endif
+
 
     if ( igeo(n) < 0 ) then
        do ipt = 1, ngeo(n+1)-ngeo(n)
@@ -526,9 +517,31 @@ contains
           ycm2 = ''
           zcm2 = ''
        enddo
-       bx = 'delx = ' // trim(bx) // '- ' // trim(bx2) // ')'
-       by = 'dely = ' // trim(by) // '- ' // trim(by2) // ')'
-       bz = 'delz = ' // trim(bz) // '- ' // trim(bz2) // ')'
+       if(periodic) then
+          if (abs(igeo(n)) == 3 .and. jgeo(n) == 3) then
+             ! Symmetric plane, centre-of-mass form: same reason as above.
+             bx = signed_axis_diff('x', 'pointdistance(x1, 0, 0, x2, 0, 0 )', 'x1', 'x2')
+             by = signed_axis_diff('y', 'pointdistance(0, y1, 0, 0, y2, 0 )', 'y1', 'y2')
+             bz = signed_axis_diff('z', 'pointdistance(0, 0, z1, 0, 0, z2 )', 'z1', 'z2')
+          else
+             bx = 'delx = pointdistance(x1, 0, 0, x2, 0, 0 )'
+             by = 'dely = pointdistance(0, y1, 0, 0, y2, 0 )'
+             bz = 'delz = pointdistance(0, 0, z1, 0, 0, z2 )'
+          endif
+          !bx = 'delx = diff(x1, x2)'
+          !by = 'dely = diff(y1, y2)'
+          !bz = 'delz = diff(z1, z2)'
+          !!bx = 'delx = ( x1 - x2 )'
+          !!by = 'dely = ( y1 - y2 )'
+          !!bz = 'delz = ( z1 - z2 )'
+       else
+          bx = 'delx = ( x1 - x2 )'
+          by = 'dely = ( y1 - y2 )'
+          bz = 'delz = ( z1 - z2 )'
+       endif
+       !bx = 'delx = ' // trim(bx) // '- ' // trim(bx2) // ')'
+       !by = 'dely = ' // trim(by) // '- ' // trim(by2) // ')'
+       !bz = 'delz = ' // trim(bz) // '- ' // trim(bz2) // ')'
 
 
    endif
@@ -561,9 +574,9 @@ contains
    formula = 'dlta=r-' // trim(droff) // ';' // trim(formula)
    if(jgeo(n) == 1) then
       formula = 'step(dlta)*0.5*' // trim(frc) // '*dlta*dlta;' // trim(formula)
-   elseif(jgeo(n) == 2) then 
+   elseif(jgeo(n) == 2) then
       formula = '(1-step(dlta))*0.5*' // trim(frc) // '*dlta*dlta;' // trim(formula)
-   elseif(jgeo(n) == 3) then 
+   elseif(jgeo(n) == 3) then
       formula = '0.5*' // trim(frc) // '*dlta*dlta;' // trim(formula)
    else
       call wrndie(-1,'<getmmfp_formula>', &
@@ -573,21 +586,57 @@ contains
       formula = trimblanks(formula)
    end subroutine getmmfp_formula
 
+   !> Signed minimum-image difference along one axis, as an OpenMM expression.
+   !!
+   !! pointdistance() returns a magnitude.  The sphere and cylinder formulas
+   !! square their deltas, so the lost sign costs them nothing, and the
+   !! inside/outside plane forms take abs() of the projection anyway.  The
+   !! symmetric plane form does not: it keeps the sign of the projection onto
+   !! the plane normal, exactly as CHARMM does -- mmfp.F90 takes ABS(R) only
+   !! when JGEO /= 3.  Handed an unsigned delta it folds the two sides of the
+   !! plane together and scores an atom at -d as if it sat at +d.  That is
+   !! invisible while droff is zero, because the energy is then even in r,
+   !! and wrong as soon as droff is not.
+   !!
+   !! The magnitude still comes from pointdistance(), so which image OpenMM
+   !! picks is unchanged and the sphere/cylinder formulas are untouched; only
+   !! the sign is put back.  The minimum image is the raw difference unless a
+   !! shorter one lies across the boundary, in which case it points the other
+   !! way -- which is what comparing the two magnitudes detects.  The
+   !! tolerance keeps that comparison clear of single-precision noise; it can
+   !! only bite within 1e-4 nm of the half box, where the two images coincide
+   !! and the symmetric potential is discontinuous regardless.
+   function signed_axis_diff(axis, pdist, coord, ref) result(expr)
+     character(len=1), intent(in) :: axis
+     character(len=*), intent(in) :: pdist, coord, ref
+     character(len=1024) :: expr
+     character(len=*), parameter :: imgtol = '1.0e-4'
+
+     expr = 'del' // axis // ' = sg' // axis // '*dm' // axis // ';' // &
+          'sg' // axis // ' = (2*step(rw' // axis // ')-1)*' // &
+          '(1-2*step(abs(rw' // axis // ')-dm' // axis // '-' // imgtol // '));' // &
+          'dm' // axis // ' = ' // trim(pdist) // ';' // &
+          'rw' // axis // ' = ' // trim(coord) // ' - ' // trim(ref)
+   end function signed_axis_diff
+
    subroutine add_mmfpgeo_restraint(system, group, OMM_mmfpRestraintForce, &
-        formula, nunique, n, resd_type)
+        formula, periodic, nunique, n, resd_type)
      use mmfp, only : ngeo, igeo, jgeo, lstgeo, xrgeo, yrgeo, zrgeo, &
           xdgeo, ydgeo, zdgeo, drgeo, fcgeo
      type(OpenMM_System), intent(inout) :: system
-     type(OpenMM_CustomCompoundBondForce), intent(inout) :: OMM_mmfpRestraintForce
+     type(OpenMM_CustomCentroidBondForce), intent(inout) :: OMM_mmfpRestraintForce
      integer, intent(in) :: n, nunique, resd_type
      character(len=2048), intent(in) :: formula
      integer*4, intent(in) :: group
-     character(len=1024) :: forceCnst 
-     integer :: i, iparam, nparticles
+     logical, intent(in) :: periodic
+     character(len=1024) :: forceCnst
+     integer :: i, iparam, nparticles, ngroups
      character(len=1), parameter :: mu(10) = ['a','b','c','d','e','f','g','h','i','j']
+     real*8 :: box_a(3), box_b(3), box_c(3)
      real*8 :: norm, xdir, ydir, zdir
-     real*8, parameter :: small = 1.0e-6
-     character(len=64) :: axdir, aydir, azdir, axref, ayref, azref, adroff, afrc, pass 
+     real*8, parameter :: small = 1.0e-7
+     character(len=64) :: axdir, aydir, azdir, axref, ayref, azref, adroff, afrc, pass
+     ! setglobalname adds _ and resd_type to name
      pass = 'xdir'
      axdir = setglobalname(pass,resd_type)
      pass = 'ydir'
@@ -605,14 +654,11 @@ contains
      pass = 'frc'
      afrc = setglobalname(pass,resd_type)
 
-     nparticles = (ngeo(n+1)-ngeo(n))
-     if (igeo(n) < 0 ) nparticles = nparticles + ngeo(n+2) - ngeo(n+1)
-
      ! Normalize xdir, ydir, zdir
      xdir = xdgeo(n)
      ydir = ydgeo(n)
      zdir = zdgeo(n)
-     norm = xdgeo(n) * xdgeo(n) + ydgeo(n) * ydgeo(n) + zdgeo(n) * zdgeo(n) 
+     norm = xdgeo(n) * xdgeo(n) + ydgeo(n) * ydgeo(n) + zdgeo(n) * zdgeo(n)
      if(norm > 0) then
         norm = sqrt(norm)
         xdir = xdgeo(n) / norm
@@ -620,47 +666,35 @@ contains
         zdir = zdgeo(n) / norm
      endif
 
-     call OpenMM_CustomCompoundBondForce_create(OMM_mmfpRestraintForce, &
-          nparticles,trim(formula))
-      call OpenMM_Force_setForceGroup(   &
+     ngroups = 1
+     if (igeo(n) < 0) ngroups = 2
+     call OpenMM_CustomCentroidBondForce_create(OMM_mmfpRestraintForce, &
+         ngroups ,trim(formula))
+     call OpenMM_Force_setForceGroup(   &
            transfer(OMM_mmfpRestraintForce, OpenMM_Force(0)),group)
-     iparam = OpenMM_CustomCompoundBondForce_addGlobalParameter( &
+     iparam = OpenMM_CustomCentroidBondForce_addGlobalParameter( &
           OMM_mmfpRestraintForce,afrc, &
           fcgeo(n)*OpenMM_KJPerKcal*OpenMM_AngstromsPerNm*OpenMM_AngstromsPerNm)
-     iparam = OpenMM_CustomCompoundBondForce_addGlobalParameter( &
+     iparam = OpenMM_CustomCentroidBondForce_addGlobalParameter( &
           OMM_mmfpRestraintForce,trim(adroff),drgeo(n)/OpenMM_AngstromsPerNm)
-     iparam = OpenMM_CustomCompoundBondForce_addGlobalParameter( &
+     iparam = OpenMM_CustomCentroidBondForce_addGlobalParameter( &
           OMM_mmfpRestraintForce,trim(axref), xrgeo(n)/OpenMM_AngstromsPerNm)
-     iparam = OpenMM_CustomCompoundBondForce_addGlobalParameter( &
+     iparam = OpenMM_CustomCentroidBondForce_addGlobalParameter( &
           OMM_mmfpRestraintForce,trim(ayref), yrgeo(n)/OpenMM_AngstromsPerNm)
-     iparam = OpenMM_CustomCompoundBondForce_addGlobalParameter( &
+     iparam = OpenMM_CustomCentroidBondForce_addGlobalParameter( &
           OMM_mmfpRestraintForce,trim(azref), zrgeo(n)/OpenMM_AngstromsPerNm)
-     iparam = OpenMM_CustomCompoundBondForce_addGlobalParameter( &
+     iparam = OpenMM_CustomCentroidBondForce_addGlobalParameter( &
           OMM_mmfpRestraintForce,trim(axdir), xdir)
-     iparam = OpenMM_CustomCompoundBondForce_addGlobalParameter( &
+     iparam = OpenMM_CustomCentroidBondForce_addGlobalParameter( &
           OMM_mmfpRestraintForce,trim(aydir), ydir)
-     iparam = OpenMM_CustomCompoundBondForce_addGlobalParameter( &
+     iparam = OpenMM_CustomCentroidBondForce_addGlobalParameter( &
           OMM_mmfpRestraintForce,trim(azdir), zdir)
-     iparam = OpenMM_CustomCompoundBondForce_addGlobalParameter( &
+     iparam = OpenMM_CustomCentroidBondForce_addGlobalParameter( &
           OMM_mmfpRestraintForce,'small', small/OpenMM_AngstromsPerNm)
+     iparam = OpenMM_CustomCentroidBondForce_addPerBondParameter( &
+          OMM_mmfpRestraintForce,'fudge')
 
-     do i=1, ngeo(n+1)-ngeo(n)
-        pass = ''
-        write(pass,'(a,i2)') 'm',i
-        pass = trimblanks64(pass)
-        iparam = OpenMM_CustomCompoundBondForce_addPerBondParameter( &
-          OMM_mmfpRestraintForce,trim(pass))
-     enddo
-     
-     if ( igeo(n) < 0 ) then
-         do i=1, ngeo(n+2)-ngeo(n+1)
-            pass = ''
-            write(pass,'(a,i2)') 'm',i + ngeo(n+1)-ngeo(n)
-            pass = trimblanks64(pass)
-            iparam = OpenMM_CustomCompoundBondForce_addPerBondParameter( &
-              OMM_mmfpRestraintForce,trim(pass))
-         enddo
-     endif
+
      iparam = OpenMM_System_addForce(system, &
           transfer(OMM_mmfpRestraintForce, OpenMM_Force(0)))
 
@@ -671,16 +705,21 @@ contains
      use mmfp, only : ngeo, lstgeo, igeo
      use psf, only : amass
      type(OpenMM_System), intent(inout) :: system
-     type(OpenMM_CustomCompoundBondForce), intent(inout) :: OMM_mmfpRestraintForce
-     type(OpenMM_DoubleArray) :: params
-     type(OpenMM_IntArray) :: particles 
+     type(OpenMM_CustomCentroidBondForce), intent(inout) :: OMM_mmfpRestraintForce
+     type(OpenMM_DoubleArray) :: params, bond_params
+     type(OpenMM_IntArray) :: particles, groups
      real*8 :: mcm, value, mcm2
      integer, intent(in) :: n, nunique, nparticles
-     integer :: i, iparam
+     integer :: i, iparam, ngroups, igroup, npart_1, npart_2
 
-     call OpenMM_DoubleArray_create(params, nparticles)
-     call OpenMM_IntArray_create(particles, nparticles)
-
+     if (igeo(n) > 0) then
+        ngroups = 1
+        npart_1 = nparticles
+     else if(igeo(n) < 0) then
+        ngroups = 2
+        npart_1 = ngeo(n+1) - ngeo(n)
+        npart_2 = ngeo(n+2) - ngeo(n+1)
+     endif
      mcm = zero
      do i = ngeo(n), ngeo(n+1)-1
         mcm = mcm + amass(lstgeo(i))
@@ -692,6 +731,10 @@ contains
         enddo
      endif
 
+     call OpenMM_IntArray_create(groups, ngroups)
+
+     call OpenMM_DoubleArray_create(params, npart_1)
+     call OpenMM_IntArray_create(particles, npart_1)
      iparam = 1
      do i = ngeo(n), ngeo(n+1)-1
         value = amass(lstgeo(i))/mcm
@@ -699,50 +742,97 @@ contains
         call OpenMM_IntArray_set(particles,iparam,lstgeo(i)-1)
         iparam = iparam + 1
      enddo
+     iparam = OpenMM_CustomCentroidBondForce_addGroup(OMM_mmfpRestraintForce, &
+          particles, params)
+     call OpenMM_DoubleArray_destroy(params)
+     call OpenMM_IntArray_destroy(particles)
+     igroup = 1
+     call OpenMM_IntArray_set(groups,igroup,iparam)
+
      if (igeo(n) < 0) then
+        call OpenMM_DoubleArray_create(params, npart_2)
+        call OpenMM_IntArray_create(particles, npart_2)
+
+        iparam = 1
         do i = ngeo(n+1), ngeo(n+2)-1
             value = amass(lstgeo(i))/mcm2
             call OpenMM_DoubleArray_set(params,iparam,value)
             call OpenMM_IntArray_set(particles,iparam,lstgeo(i)-1)
             iparam = iparam + 1
+         enddo
+
+        iparam = OpenMM_CustomCentroidBondForce_addGroup(OMM_mmfpRestraintForce, &
+             particles, params)
+        call OpenMM_DoubleArray_destroy(params)
+        call OpenMM_IntArray_destroy(particles)
+        igroup = igroup + 1
+        call OpenMM_IntArray_set(groups,igroup,iparam)
+     endif
+
+     iparam = 1
+     if (ngroups >=2) then
+        call OpenMM_DoubleArray_create(bond_params, ngroups-1)
+        do i = 1, ngroups-1
+           call OpenMM_DoubleArray_set(bond_params,iparam,zero)
+           iparam=iparam+1
+        enddo
+     else
+        call OpenMM_DoubleArray_create(bond_params, ngroups)
+        do i = 1, ngroups
+           call OpenMM_DoubleArray_set(bond_params,iparam,zero)
+           iparam=iparam+1
         enddo
      endif
 
-     iparam = OpenMM_CustomCompoundBondForce_addBond(OMM_mmfpRestraintForce, particles, params)
-     call OpenMM_DoubleArray_destroy(params)
-     call OpenMM_IntArray_destroy(particles)
+     iparam = OpenMM_CustomCentroidBondForce_addBond(OMM_mmfpRestraintForce, &
+          groups, bond_params)
+
+     call OpenMM_DoubleArray_destroy(bond_params)
+     call OpenMM_IntArray_destroy(groups)
    end subroutine add_mmfpgeo_addbond
 
    subroutine print_mmfpgeo_restraints(system, restraint, n)
 
      use mmfp, only : igeo
      type(OpenMM_System), intent(in) :: system
-     type(OpenMM_CustomCompoundBondForce), intent(in) :: restraint
+     type(OpenMM_CustomCentroidBondForce), intent(in) :: restraint
      integer, intent(in) :: n
      type(OpenMM_DoubleArray) :: params
      type(OpenMM_IntArray) :: particles
-     integer :: nbonds, nparticles, nbondparams, nglobalparams
-     integer :: iparam, ibond, i
+     integer :: nbonds, ngroups, nparticles, nbondparams, nglobalparams
+     integer :: iparam, ibond, igroup, i
      character(len=2048) :: restr_function
      character*16 :: globalname, bondparamname
      character*32 :: fmat
      real*8 :: pvalue
      integer, allocatable :: iparticles(:)
-    
-    
+
+
      if ( igeo(n) .eq. 0 ) return
 
-     nbonds = OpenMM_CustomCompoundBondForce_getNumBonds(restraint)
-     nparticles = OpenMM_CustomCompoundBondForce_getNumParticlesPerBond(restraint)
-     allocate (iparticles(nparticles))
-     nbondparams = OpenMM_CustomCompoundBondForce_getNumPerBondParameters(restraint)
-     nglobalparams = OpenMM_CustomCompoundBondForce_getNumGlobalParameters(restraint)
-     call OpenMM_DoubleArray_create(params, nbondparams)
-     call OpenMM_IntArray_create(particles, nparticles)
+     call OpenMM_DoubleArray_create(params,0) ! nbondparams)
+     call OpenMM_IntArray_create(particles,0)
 
-     call OpenMM_CustomCompoundBondForce_getEnergyFunction(restraint,restr_function)
+     call OpenMM_CustomCentroidBondForce_getEnergyFunction(restraint,restr_function)
      write(outu,'(1x,a,/,9x,a)')' CHARMM> MMFP GEO Restraint Function:', &
      trim(restr_function)
+     nbonds = OpenMM_CustomCentroidBondForce_getNumBonds(restraint)
+     write(outu,'(a,i4)') ' CHARMM> Number of bonds =',nbonds
+     ngroups = OpenMM_CustomCentroidBondForce_getNumGroups(restraint)
+     write(outu,'(a,i4)') ' CHARMM> Number of groups per bond =',ngroups
+     do igroup = 0, ngroups-1
+        call OpenMM_CustomCentroidBondForce_getGroupParameters(restraint, igroup, &
+             particles, params)
+        ! i0 rather than a fixed width: the atom count is now unbounded, and an
+        ! i4 printed **** for any group past 9999.  The explicit 1x matters --
+        ! 'consists of' has no trailing blank, so the old i4 was supplying the
+        ! separator through its field width and i0 alone runs the two together.
+        write(outu,'(a,i4,1x,a,1x,i0,1x,a)') ' CHARMM> Group,',igroup+1,'consists of',&
+             OpenMM_IntArray_getSize(particles),'atoms'
+     enddo
+     nbondparams = OpenMM_CustomCentroidBondForce_getNumPerBondParameters(restraint)
+     write(outu,'(a,g10.4)') ' CHARMM> Number of per bond parameters =',nbondparams
+     nglobalparams = OpenMM_CustomCentroidBondForce_getNumGlobalParameters(restraint)
      do iparam = 0, nglobalparams - 1
         if(iparam == 0) then
            pvalue = one / OpenMM_KJPerKcal/OpenMM_AngstromsPerNm/OpenMM_AngstromsPerNm
@@ -751,39 +841,16 @@ contains
         else
            pvalue = OpenMM_AngstromsPerNm
         endif
-        call OpenMM_CustomCompoundBondForce_getGlobalParameterName(restraint,iparam,globalname)
+        call OpenMM_CustomCentroidBondForce_getGlobalParameterName(restraint,iparam,globalname)
         write(outu,'(a,a,a,g10.4)') ' CHARMM> ',trim(globalname),' = ', &
-             OpenMM_CustomCompoundBondForce_getGlobalParameterDefaultValue(restraint,iparam) &
+             OpenMM_CustomCentroidBondForce_getGlobalParameterDefaultValue(restraint,iparam) &
              *pvalue
      enddo
-     write(fmat,'(a,i3,a)')'(a,i3,a,',nparticles,'i3,a)'
-     do ibond = 0, nbonds-1
-        call OpenMM_CustomCompoundBondForce_getBondParameters(restraint, ibond, particles, params)
-        do i = 1, nparticles
-           Call OpenMM_IntArray_get(particles,i,iparticles(i))
-           iparticles(i) = iparticles(i) + 1
-        enddo
-        
-        if (igeo(n) .gt. 0 ) then
-            write(outu,fmat)' CHARMM> Interaction between atom &
-                 indices for bond ', &
-                 ibond,':[',iparticles,']'
-        endif
-
-        do iparam = 1, nbondparams
-           call OpenMM_CustomCompoundBondForce_getPerBondParameterName(restraint, iparam-1, &
-                bondparamname)
-           call OpenMM_DoubleArray_get(params,iparam, pvalue)
-          write(outu,'(a,a,a,f9.2)') ' CHARMM> ',trim(bondparamname),'=',pvalue
-        enddo
-     enddo
-
-     deallocate(iparticles)
      call OpenMM_DoubleArray_destroy(params)
      call OpenMM_IntArray_destroy(particles)
 
    end subroutine print_mmfpgeo_restraints
-   
+
    ! June 2022
    ! AC expanding permitted igeo values from {1,2,3} to U {-1, -2, -3}
    ! to allow GEO DIST
@@ -792,16 +859,20 @@ contains
           xrgeo, yrgeo, zrgeo, xdgeo, ydgeo, zdgeo, drgeo, fcgeo
      integer :: n
      integer :: i, natcm, rtype(1:ntgeo)
-     integer, parameter :: nmaxcm = 100 !changed from 10
      logical :: newformula
-     character(len=1024) :: wrnmsg 
+     character(len=1024) :: wrnmsg
      newformula = .true.
 
-     if ( ( ngeo(n+1)-ngeo(n) > nmaxcm ) .or. &
-          ( igeo(n) < -3 .or. igeo(n) > 3 ) ) then
+     ! There used to be an upper bound on the number of atoms in a centre-of-
+     ! mass group here (nmaxcm, 10 and later 100), and exceeding it aborted the
+     ! run.  Nothing needed it: the group is handed to OpenMM through arrays
+     ! created at the group's own size in alloc_mmfpgeo_restraints, so the only
+     ! limit is memory.  It stopped real work -- a COM restraint over a whole
+     ! protein is an ordinary thing to ask for -- so it is gone.
+     if ( igeo(n) < -3 .or. igeo(n) > 3 ) then
           write(wrnmsg, '(1X,A,I2)') &
-          'Number of atoms in restraint too large/geometric shape not supported for n = ',n 
-          call wrndie(-1, '<setup_mmfpgeo_restraints>', wrnmsg)
+          'Geometric shape not supported for n = ',n
+          call wrndie(-1, '<newformula_mmfpgeo>', wrnmsg)
      endif
      natcm = ( ngeo(n+1)-ngeo(n) )
      do i = 1, n-1
@@ -827,19 +898,20 @@ contains
 
   ! This routine sets up CHARMM restrained distance restraints for
    ! use through the OpenMM interface.
-   subroutine setup_resd_restraints(system)
+   subroutine setup_resd_restraints(system, periodic)
      use resdist_ltm, only : rednum
      use omm_ecomp, only : omm_incr_eterms
      type(OpenMM_System), intent(inout) :: system
+     logical, intent(in) :: periodic
      integer :: i, nunique
      integer :: resd_type(rednum)
      integer*4 :: group
 
      logical :: is_new_formula
 
-     if(zero_resd) return
-     if(rednum>0) group = omm_incr_eterms('resd')    
-     
+     if(zero_resd .or. rednum <=0) return
+     group = omm_incr_eterms('resd')
+
      ! Find the number of unique restraints
      nunique = 0
      resd_type(1:rednum) = 1
@@ -850,13 +922,14 @@ contains
            resd_type(i) = nunique
         endif
      enddo
-     
-     call alloc_resd_restraints(system, group, nunique, resd_type)
+
+     call alloc_resd_restraints(system, group, nunique, resd_type, periodic)
    end subroutine setup_resd_restraints
 
-   subroutine alloc_resd_restraints(system, group, nunique, resd_type)    
+   subroutine alloc_resd_restraints(system, group, nunique, resd_type, periodic)
      use resdist_ltm, only : rednum, redipt, redeval, redival
      type(OpenMM_System), intent(inout) :: system
+     logical, intent(in) :: periodic
      integer*4, intent(in) :: group
      type(OpenMM_CustomCompoundBondForce) :: OMM_ResdRestraintForce(1:nunique)
      integer, intent(in) :: nunique, resd_type(:)
@@ -865,18 +938,32 @@ contains
      integer :: n
 
      logical :: is_new_formula
-      
+
      do n=1, rednum
         is_new_formula = newformula(n, resd_type)
         if (is_new_formula) then
            call getccbf_formula(n, restraint_formula)
            call add_resd_restraint(system, group, OMM_ResdRestraintForce(resd_type(n)), &
                 restraint_formula, nunique, n, resd_type(n))
+           ! Flag the force as periodic where it is made, the way
+           ! alloc_mmfpgeo_restraints does.  This used to sit after the loop,
+           ! reading resd_type(n) with n left at rednum+1 by the loop that had
+           ! just ended -- one past the end of resd_type.  The garbage it read
+           ! then indexed OMM_ResdRestraintForce, so a periodic system called
+           ! a method on a force object that was never created and the run
+           ! died with no message; a non-periodic system skipped the branch
+           ! entirely, which is why only the periodic case ever showed it.
+           ! Doing it here also fixes what the old placement got wrong even
+           ! when it happened to survive: it flagged one force, not each.
+           if ( periodic ) then
+              call OpenMM_CustomCompoundBondForce_setUsesPeriodicBoundaryCondition( &
+                   OMM_ResdRestraintForce(resd_type(n)), 1 )
+           endif
         endif
         call add_resd_addbond(system, OMM_ResdRestraintForce(resd_type(n)), &
              redipt(n+1)-redipt(n), 2*(redipt(n+1)-redipt(n)), nunique, n, resd_type(n))
      enddo
-     if(prnlev >=7) then
+     if(prnlev >=5) then
         do n = 1, rednum
            is_new_formula = newformula(n, resd_type)
            if (is_new_formula) call print_resd_restraints(system, &
@@ -893,7 +980,7 @@ contains
      integer, intent(in) :: n, nunique, resd_type
      character(len=1024), intent(in) :: formula
      integer*4, intent(in) :: group
-     character(len=1024) :: forceCnst 
+     character(len=1024) :: forceCnst
      integer :: i, iparam, nparticles
      nparticles = 2 * (redipt(n+1)-redipt(n))
      call OpenMM_CustomCompoundBondForce_create(OMM_ResdRestraintForce, &
@@ -1025,7 +1112,7 @@ contains
      call OpenMM_DoubleArray_destroy(params)
 
      call OpenMM_IntArray_destroy(particles)
-           
+
    end subroutine print_resd_restraints
 
    subroutine getccbf_formula(n, formula)
@@ -1074,7 +1161,7 @@ contains
      endif
      formula = trimblanks(formula)
    end subroutine getccbf_formula
-   
+
     logical function newformula(n, rtype)
     use resdist_ltm, only : rednum, redrval, redipt, redival, redmval, redeval, redkval
      integer :: n
@@ -1139,7 +1226,7 @@ contains
      integer*4 :: group
 
      if(zero_consdihe) return
-     if(ncsphi>0) group = omm_incr_eterms('cdihe')    
+     if(ncsphi>0) group = omm_incr_eterms('cdihe')
      firstimpr = .true.
      firstdihe = .true.
 
@@ -1182,7 +1269,7 @@ contains
         if(ccsd(i) /= 0) then
            unique(i) = 1
            is_new_proper = newproper(i,unique)
-           if (is_new_proper) then 
+           if (is_new_proper) then
               nunique = nunique + 1
               unique(i) = nunique
            endif
@@ -1213,7 +1300,7 @@ contains
          endif
       enddo
     end function newproper
- 
+
 
    integer function calc_uniqueImproper(unique)
       use cnst_fcm, only : ncsphi, ccsb, ccsc,ccsd, ccsw, &
@@ -1229,7 +1316,7 @@ contains
         if(ccsd(i) == 0) then
            unique(i) = 1
            is_new_improper = newimproper(i,unique)
-           if (is_new_improper) then 
+           if (is_new_improper) then
               nunique = nunique + 1
               unique(i) = nunique
            endif
@@ -1260,7 +1347,7 @@ contains
          endif
       enddo
     end function newimproper
- 
+
    subroutine set_improper_restraint(system, group, first, cons_improper, cb, cc, cw, iat, jat, kat, lat)
       type(OpenMM_System), intent(inout) :: system
       type(OpenMM_CustomTorsionForce), intent(inout) :: cons_improper
@@ -1309,15 +1396,15 @@ contains
       integer, intent(in) :: cd, iat, jat, kat, lat
       logical, intent(in) :: first
       real(chm_real), intent(in) :: cb, cc
-      
+
       type(OpenMM_DoubleArray) :: params
       character(len=1024) :: formula
       integer :: ijunk
       real*8 :: period, theta0
-      
+
       period = cd
       theta0 = cb
-      
+
       if(first) then     ! Setup functional form
          formula = 'diff=theta-theta0; pi=3.141592653589793'
          formula = 'wrap=2*pi*(step(-diff-pi)-step(diff-pi)); ' // formula

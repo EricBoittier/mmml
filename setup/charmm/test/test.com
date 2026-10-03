@@ -18,7 +18,7 @@
 #
 # Inquiries to chmgr@tammy.harvard.edu
 #-----------------------------------------------------------------------
-#
+#           
 # Arguments
 # chm_host = $argv[1], the host machine type
 # outdir   = $argv[2], the test output directory name [output ]
@@ -62,8 +62,8 @@ if ( $#argv == 0 ) then
   echo " "
   echo "        testcases can be one of the following set"
   echo "               nn       for cnntest"
-  echo "                        {nn=20,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49}"
-  echo "               all      for mmff and all 20-49 tests"
+  echo "                        {nn=20,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52}"
+  echo "               all      for mmff and all 20-52 tests"
   echo "               mmff     for cmmfftest"
   echo "               nbond    for cnbondtest"
   echo " "
@@ -72,7 +72,7 @@ if ( $#argv == 0 ) then
   echo "               benchmark_dir     = bench"
   echo "               testcases         = all"
   exit
-#
+#     
 endif
 set run_mpi = 0
 set run_omp = 0
@@ -200,7 +200,7 @@ if ( $run_mpi == 1 || $ensemble == 1 ) then
         # Can we separate output by process rank? (OpenMPI >= 1.3)
         rm xyzzy* >& /dev/null
         mpirun --output-filename xyzzy true >& /dev/null
-        if ($status == 0 && (-e xyzzy.0 || -e xyzzy.1.0)) then
+        if ($status == 0 && (-e xyzzy.0 || -e xyzzy.1.0)) then 
            set mpi_out_sep = 1
            rm xyzzy*
         endif
@@ -237,7 +237,7 @@ if ( $cmpr != 0 ) then
   echo "test output $outdir against $bendir" >> $outdir.rpt
 endif
 #
-if ( $testing == all ) set testing = 'mmff 20 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49'
+if ( $testing == all ) set testing = 'mmff 20 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50 51 52'
 #
 limit cputime 5m
 limit filesize 1024m
@@ -253,7 +253,7 @@ foreach suite ( $testing )
        set testlist = `/bin/cat $chmtest/c${suite}test/.t3e_list`
      endif
   endif
-
+        
   foreach testcase ( $testlist )
     set no_cmpr=0
     set name = $testcase:r
@@ -290,7 +290,7 @@ foreach suite ( $testing )
       grep "ABNORMAL TERMINATION" $outname >& /dev/null
       if ( ! $status) echo "***** ABNORMAL TERMINATION *****" >> $outdir.rpt
       grep -i "Test NOT performed" $outname |grep -v "!" >& /dev/null
-      if ( ! $status) set no_cmpr=1
+      if ( ! $status) set no_cmpr=1      
       if ( $no_cmpr == 0) then
         if ( -e $bendir/$name.out ) then
           sed -f seddir $bendir/$name.out >! BenchMark1
@@ -315,7 +315,7 @@ endif
 echo " " >> $outdir.rpt
 date     >> $outdir.rpt
 # summary report
-echo Summary of charmm testresults.  `date`
+echo Summary of charmm testresults.  `date` 
 echo chmost $chmhost using $chmexec
 echo outputs in directory $outdir
 echo =============================================================
@@ -330,4 +330,4 @@ grep -l "ABNORMAL TERMINATION" $outdir/*.out
 echo =============================================================
 echo Number of testcases that have not been run:
 egrep -il "TESTCASE RESULT: SKIP|test not performed" $outdir/*.out | wc -l
-echo =============================================================
+echo ============================================================= 

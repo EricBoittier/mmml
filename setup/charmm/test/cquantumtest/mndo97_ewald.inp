@@ -92,9 +92,9 @@ energy
 
 print coord sele segid WAT .and. resid 7 end
 
-open unit 66 name @0mndo_wat.inp form read
-mndo unit 66 sele segid WAT .and. resid 7 end -
-             sele none end remo NEWD -1 KMAX 5
+mndo sele segid WAT .and. resid 7 end -
+     sele none end remo am1 charge 1 -
+     switched
 
 energy
 

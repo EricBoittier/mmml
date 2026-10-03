@@ -2516,7 +2516,7 @@ contains
           tmpexcl(1:num_excl,j) = nblist%tile(2:2+num_excl-1, startj+j)
        enddo
 
-       call sort(n, exch5, order5, tmp1, tmp2, 0, 0, 0, 0, 0, 2)
+       call sort(n, exch5, order5, tmp1, tmp2, (/0/), (/0/), (/0/), (/0/), (/0/), 2)
 
        ! tmp1(1:n) = sorted indj
        ! tmp2(1:n) = new indices
@@ -2717,7 +2717,7 @@ contains
     use nblist_types,only:nblist_tilex_t
     implicit none
     ! Input
-    type(nblist_tilex_t), intent(in) :: nblist(:)
+    type(nblist_tilex_t), intent(in) :: nblist(0:)
     ! Variables
     integer i, nt
 

@@ -1,0 +1,113 @@
+* Test mmCIF/PDBx sequence and coordinate I/O
+*
+stream datadir.def
+
+read rtf  card name @0top_all36_prot.rtf
+read para card name @0par_all36_prot.prm flex
+stream              @0toppar_water_ions.str
+
+set status pass
+set nfail 0
+
+! Build a PSF from HETATM rows, then read coordinates from the same mmCIF.
+read sequence mmcif name data/readmmcif.cif segi WAT1 noat heta
+if ?SQNRES .ne. 2 then
+  incr nfail by 1
+  set status fail
+endif
+
+generate WAT1 noangle nodihe setup
+rename atom O sele atom WAT1 * OH2 end
+
+read coor mmcif name data/readmmcif.cif resi sele segi WAT1 end
+define unk sele segi WAT1 .and. .not. initialized end
+if ?nsel .ne. 0 then
+  incr nfail by 1
+  set status fail
+  print coor sele unk end
+endif
+
+coor copy comp
+write coor mmcif name scratch/readmmcif_roundtrip.cif sele segi WAT1 end
+* mmCIF coordinate round trip
+*
+coor init sele segi WAT1 end
+read coor mmcif name scratch/readmmcif_roundtrip.cif resi sele segi WAT1 end
+define unk sele segi WAT1 .and. .not. initialized end
+if ?nsel .ne. 0 then
+  incr nfail by 1
+  set status fail
+  print coor sele unk end
+endif
+coor rms comp sele segi WAT1 end
+if ?rms .gt. 1.0e-8 then
+  incr nfail by 1
+  set status fail
+endif
+
+write coor pdbx name scratch/readmmcif_roundtrip_pdbx.cif sele segi WAT1 end
+* PDBx alias coordinate round trip
+*
+coor init sele segi WAT1 end
+read coor mmcif name scratch/readmmcif_roundtrip_pdbx.cif resi sele segi WAT1 end
+define unk sele segi WAT1 .and. .not. initialized end
+if ?nsel .ne. 0 then
+  incr nfail by 1
+  set status fail
+  print coor sele unk end
+endif
+
+! Missing coordinate values must not silently initialize atoms at the origin.
+coor init sele atom WAT1 1 O end
+bomlev -2
+read coor mmcif name data/readmmcif_missing.cif resi -
+  sele atom WAT1 1 O end
+bomlev 0
+define unk sele atom WAT1 1 O .and. .not. initialized end
+if ?nsel .ne. 1 then
+  incr nfail by 1
+  set status fail
+endif
+
+! Missing coordinates do not remove otherwise valid sequence rows.
+delete atom sele all end
+read sequence mmcif name data/readmmcif_missing.cif segi WAT1 noat heta
+if ?SQNRES .ne. 1 then
+  incr nfail by 1
+  set status fail
+endif
+
+! SEQRES-like sequence reading should use the polymer sequence scheme.
+delete atom sele all end
+read sequence mmcif name data/readmmcif.cif segi PROA seqres skip SER
+if ?SQNRES .ne. 2 then
+  incr nfail by 1
+  set status fail
+endif
+generate PROA setup
+define inserted sele segi PROA .and. resid 11A end
+if ?nsel .eq. 0 then
+  incr nfail by 1
+  set status fail
+endif
+
+! Label sequence IDs must not inherit author/PDB insertion codes.
+delete atom sele all end
+read sequence mmcif name data/readmmcif.cif segi LABA seqres label skip SER
+generate LABA setup
+define labelid sele segi LABA .and. resid 2 end
+set nlabel = ?nsel
+define badlabel sele segi LABA .and. resid 2A end
+if @nlabel .eq. 0 then
+  incr nfail by 1
+  set status fail
+endif
+if ?nsel .ne. 0 then
+  incr nfail by 1
+  set status fail
+endif
+
+echo readmmcif testcase result: @status
+if @status .ne. pass then
+  echo result: readmmcif test @nfail subtests @status
+endif

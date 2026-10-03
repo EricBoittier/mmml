@@ -1,0 +1,317 @@
+CHARMM Element doc/mlmm.info 1.1
+
+File: MLMM, Node: Top, Up: (doc/commands.info), Next: Description
+
+    MLMM module for Python/PyTorch Machine Learning Potentials (MLP) 
+    Model Inference for ML/MM Simulations in CHARMM c51a2 or later
+                    (updated on 2026 July 20) 
+
+* Contact:
+A. Raafik Arattu Thodika (atrafikvnr@gmail.com)
+Kwangho Nam (kwangho.nam@uta.edu)
+
+* Menu:
+
+* Description::     Description of the MLMM module
+* Syntax::          Syntax of the MLMM commands
+* Options::         Purpose of each of the options in the MLMM command
+* Model-Tag::       Description on available types of models
+* Custom-Model::    Description on configuring MLMM for custom forces
+* Limitations::     Some warnings and scaling of ML-ML interactions
+* Installation::    How to install CHARMM with MLMM module 
+
+
+File: MLMM, Node: Description, Up: Top, Next: Syntax
+
+The MLMM module enables the application of forces from a variety of machine learning 
+potentials (MLPs) and neural network potentials (NNPs) to a selected subset of atoms 
+within CHARMM. For Python-based models, including TorchANI, MACE, and UMA, this 
+functionality is implemented through socket-based communication between CHARMM and 
+Python, providing flexibility to integrate different MLP/NNP models.
+
+In addition to the built-in model interfaces, the MLMM module provides a general socket 
+communication interface that allows users to perform model inference on selected atoms 
+using custom Python scripts. This interface facilitates the integration of user-developed 
+machine learning models with minimal modifications.
+
+For improved inference performance, native support is available for TorchScript-compatible 
+models through the LibTorch C++ API, eliminating the need for Python during model execution. 
+Currently, this native interface supports the ANI family of models trained with TorchANI v2.0.
+
+For TorchANI-based models, the LibTorch C++ API is also integrated with the BLaDE GPU 
+molecular dynamics engine, enabling GPU-resident ML/MM simulations in which both molecular 
+dynamics and machine learning inference are executed entirely on the GPU, thereby minimizing 
+communication overhead and improving simulation performance.
+
+
+
+File: MLMM, Node: Syntax, Up: Top, Previous: Description, Next: Options
+
+The module is called using the MLMM command in CHARMM.
+
+* Model inference capability available within CHARMM
+MLMM MLSL (atom selection) -
+     PYTHon|LIBTorch -
+     TANI|UMA1|MACE -
+     MODL "model-tag" [CHARge int] [MULTiplicity int]
+     [GPUId int] -
+     [SCALe real]
+
+
+* Model inference via custom Python script for custom model forces
+MLMM MLSL (atom selection) -
+     PYTHon -
+     RUNF "path-to/python_script.py" - 
+     SPEC "path-to/spec_ctrl_file.txt" -
+     [GPUId int] -
+     [SCALe real]
+
+
+
+File: MLMM, Node: Options, Up: Top, Previous: Syntax, Next: Model-Tag
+
+MLSL (atom selection):
+    Specifies the atom selection for which the ML forces will be applied. 
+    The selection should follow valid CHARMM atom-selection syntax.
+    Example: `MLSL SELECT SEGID HETA END` applies the ML forces to all atoms 
+    in the segment with `SEGID HETA`.
+
+PYTHon|LIBTorch:
+    This flag decide the interface backend.
+    PYTHon enables model inference through socket-based communication between CHARMM 
+    and a Python process. This backend currently supports the TANI, UMA1, and MACE 
+    model families.
+    LIBTorch performs inference directly within CHARMM using the LibTorch C++ API, 
+    eliminating the Python dependency and reducing communication overhead. At present, 
+    only the TANI model family is supported through this backend.
+
+TANI|UMA1|MACE
+    This flag sets the model family. Currently CHARMM supports TANI, 
+    UMA1, and MACE. 
+    TANI:: The TANI family consists of dense neural network architectures based on 
+    TorchANI v2.0 model checkpoints. These models are generally intended for neutral 
+    molecules composed of H, C, N, and O atoms, depending on the training dataset.
+    UMA1:: UMA employs a Mixture-of-Experts (MoE) architecture that supports multiple 
+    application domains, including materials and organic molecules. The current 
+    implementation supports the small and medium model variants. UMA provides broad 
+    elemental coverage. For organic molecules, the omol task (trained on the OMol25 dataset) 
+    supports both neutral and charged molecular systems.
+    MACE:: The MACE family includes several model architectures. The current implementation 
+    supports mace-off and mace-omol foundational models. These architectures are primarily 
+    designed for molecular systems and are available in multiple sizes, typically including 
+    small, medium, and large variants.
+
+MODL "model-tag" [CHARge int] [MULTiplicity int]
+    Specifies the desired model using the "model-tag" identifier. The supported model tags are 
+    described in the following section.
+    The optional CHARge and MULTiplicity keywords specify the total molecular charge and 
+    spin multiplicity of the selected atoms. These options are required only for model families 
+    that explicitly support charged or open-shell systems, including UMA1 and mace-omol. They are 
+    ignored for TANI and the remaining currently supported MACE architectures.
+
+GPUId int
+    Specifies the GPU device used for model inference. The provided integer is mapped to the 
+    CUDA_VISIBLE_DEVICES environment variable, allowing the desired GPU to be selected for 
+    machine learning inference.
+
+SCALe real
+    Scales the machine learning potential energy and the corresponding gradients by the specified 
+    factor. The scaling is applied as:
+        E_MLP  = scale * E_MLP 
+        DX_MLP = scale * DX_MLP 
+        DY_MLP = scale * DY_MLP 
+        DZ_MLP = scale * DZ_MLP
+
+
+
+File: MLMM, Node: Model-Tag, Up: Top, Previous: Options, Next: Custom-Model
+
+    Description: Selecting an MLP Model Using the MODL "model-tag" Option
+
+[1] Model-tag usage with the MLMM LIBTorch interface
+The MLMM LibTorch backend always requires a TorchScript checkpoint file for model inference.
+In this CHARMM update, the MLMM LibTorch interface supports only the TANI family of models 
+provided by TorchANI 2.0. Therefore, for the LibTorch backend, the model tag is simply the 
+path to the TorchScript .pt checkpoint file.
+
+Example: MODL "path-to/tani_script.pt"
+
+[2] Model-tag usage with the MLMM PYTHon interface
+The MLMM PYTHon interface supports multiple model families and model-loading methods. 
+The model family, model version, task, and loading method are identified from the syntax 
+of the model tag.
+
+[2.1] TANI Models: 
+A TANI model may be loaded directly from the model repository when an internet connection 
+is available. Alternatively, a locally stored TorchScript .pt checkpoint generated using 
+TorchANI 2.0 may be used.
+
+(directly from repository) Example: MODL "repo:<name>"
+    MODL "repo:ANI1x"
+    MODL "repo:ANI1ccx"
+    MODL "repo:ANI2x"
+
+(available locally) Example: "local:<name>:<path>"
+    MODL "local:torchani:/path-to/tani_torchscript.pt"
+
+[2.2] UMA1 Models:
+A UMA model may be loaded directly from the Hugging Face repository when an internet 
+connection is available. Alternatively, the corresponding UMA model file may be downloaded 
+and used locally. Access to UMA models requires authorization through the FAIRChem-Meta 
+page on Hugging Face. Users must request access before they can download the model files 
+or load the models directly from the repository. After access has been granted, users may 
+either: (1) Download the required model file for local use; or (2) Generate a Hugging 
+Face access token with read permission and use it to load the model directly from the 
+repository.
+
+The generated HF_TOKEN may be defined in the CHARMM input script as follows:
+    envi HF_TOKEN "your_token_string"
+
+(directly from repository) Example: MODL "repo:<name>:<task>:"
+    MODL "repo:uma-s-1p2:omol" CHAR int MULT int
+    MODL "repo:uma-s-1p1:omol" CHAR int MULT int
+    ! 'uma-m-1p1' is relatively big. It is recommended to downlaod the model
+    ! from "huggingface.co/facebook/UMA/tree/main"  and
+    !  use the local option with "local:uma-m-1p1:omol:/path-to/uma-m-1p1.pt" 
+    MODL "repo:uma-m-1p1:omol" CHAR int MULT int
+
+(available locally) Example: "local:<name>:<task>:<path>"
+    MODL "local:uma-m-1p1:omol:/path-to/uma-m-1p1.pt" CHAR int MULT int
+
+
+[2.3] MACE Models:
+A MACE model may be loaded directly from the model repository when an internet connection 
+is available. Alternatively, a locally stored MACE model file may be used.
+The MACE family contains several model architectures and model variants. In the current 
+MLMM PYTHon interface, support is provided for model variants whose training datasets 
+include organic molecular systems.
+
+(directly from repository) Example: MODL "repo:<name>:<size/task>"
+    MODL "repo:MACE-OFF23:small" 
+    MODL "repo:MACE-OFF23:medium" 
+    MODL "repo:MACE-OFF23:large" 
+    MODL "repo:MACE-OFF24:medium" 
+    MODL "repo:mace_omol_0:extra_large" CHAR int MULT int
+
+(available locally) Example: "repo:<name>:<task/size>:<path>"
+    MODL "local:MACE-OFF23:large:/path/to/MACE-OFF23_large.model"
+    MODL "local:mace_omol_0:extra_large:/path/to/omol.model"
+    MODL "local:mace-polar-1:polar-1-m:/path/to/polar.model"
+    ...
+
+    
+
+File: MLMM, Node: Custom-Model, Up: Top, Previous: Model-Tag, Next: Installation
+
+    Description: An option to write Custom Python Script for Model Inference
+
+MLMM  MLSL (atom selection) PYTHon RUNF "path-to/python_script.py" -  
+     [SPEC "path-to/spec_ctrl_file.txt"] [SCALe real]
+
+When the MLMM PYTHon interface is invoked without specifying a model-family option 
+(TANI, UMA1, or MACE), the RUNFile option may be used to provide a custom Python 
+script for model inference or for adding user-defined force contributions.
+This functionality is particularly useful for developing, testing, and integrating 
+custom MLP models.
+
+A template RUNFile, based on UMA model inference, is provided in the following directory:
+charmm/tools/mlmm/runfile/
+
+An optional SPEC file may also be supplied together with the RUNFile to define 
+model-specific parameters or metadata required by the custom Python script.
+
+An example UMA SPEC file compatible with the template RUNFile is also provided in:
+charmm/tools/mlmm/runfile/
+
+
+
+File: MLMM, Node: Limitations, Up: Top, Previous: Custom-Model, Next: Installation
+
+                            Limitations and Warnings
+
+[1] Manual scaling of ML-ML interactions**
+Currently, there is no automatic scaling of ML-ML force-field interactions when MLP-driven 
+forces are applied through the general CHARMM route. The `BLOCK` and `SHAKE` modules in 
+CHARMM can be used to manually scale ML-ML interactions to zero, or to another desired value.
+
+Manual scaling is not necessary when ML/MM simulation is performed on the BLaDE GPU MD engine 
+with the `LIBTorch interface and TANI family, because ML-ML interactions are automatically 
+scaled to zero in that case.
+
+Example of scaling ML-ML interactions to zero while applying ML forces to 
+atoms in segment `HETA`:
+
+    ! Define the ML atoms (segment HETA)
+    DEFINE MLATOMS SELECT SEGID HETA END
+
+    ! Scale ML-ML force-field interactions to zero
+    BLOCK 2
+    CALL 2 SELECT MLATOMS END
+    COEFF 2 2 0.0
+    END
+
+    ! Avoid SHAKE constraints for the ML atoms
+    SHAKE BONH SELECT .NOT. MLATOMS END PARAM FAST
+
+    ! Run the MLMM command for TorchANI model inference
+    MLMM  MLSL SELECT MLATOMS END -
+          LIBTorch TANI -
+          MODL "./ani_model.pt" GPUI 0
+
+[2] ML-MM interactions for gas-phase models**
+For these gas-phase models (TANI|UMA1|MACE), the MLP itself does not include explicit 
+ML-MM electrostatic interactions. As a result, these routes can show unphysical behavior 
+for charged systems if the missing interactions are important for the selected region.
+
+[3] Periodic boundary conditions**
+Many MLP/NNP models are not aware of periodic boundary conditions (PBC). The current 
+MLMM implementation does not stream PBC information to the model. The ML region can be
+kept near origin. Center-of-mass restraints can be used with `HMCM` to mitigate 
+PBC-related issues for the selected atoms.
+
+[4] Currently this module is not supported with DOMDEC
+
+[5] Timing Information is not implemented**
+Current version does not print the MLP time at the CHARMM final summary.
+
+
+File: MLMM, Node: Installation, Up: Top, Previous: Limitations, Next: Top
+
+To use the MLMM module, you need a compatible CHARMM version with the MLMM module included 
+(`c51a2` or later). 
+
+[1] Optional: The LIBTorch interface will require LibTorch-C++ API downloaded from 
+pytorch.org (refer pytorch.org to obtain appropriate LibTorch). 
+Then set this environment variable:
+
+export Torch_DIR=/path-to/libtorch/share/cmake/Torch
+
+[2.1] CHARMM with MLMM module (PYTHon interface)
+cd charmm
+mkdir build_dir
+cd build_dir
+../configure -p ../install_dir --without-colfft --without-openmm --with-mlmm
+make -j2 Install
+
+[2.2] CHARMM with MLMM module (PYTHon and LIBTorch (CPU) interface)
+../configure -p ../install_dir --without-colfft --without-openmm \
+                --without-cuda --with-mlmm --with-torch
+
+[2.3] CHARMM with MLMM module (PYTHon and LIBTorch (GPU) interface)
+! Set CUDA NVCC compilers available on PATH
+../configure -p ../install_dir --without-colfft --without-openmm  \
+                --with-cuda --with-mlmm --with-torch
+
+[2.4] CHARMM/BLaDE with MLMM module (PYTHon and LIBTorch (GPU) interface)
+! Set CUDA NVCC compilers available on PATH
+../configure -p ../install_dir --without-colfft --without-openmm  \
+                --with-cuda --with-mlmm --with-torch --with-blade
+
+[3] The PYTHon interface can require these dependecies specific to model family.
+Each model family will require certain python package available in working environment:
+(you may install them with pip in a conda environment and 
+launch CHARMM from the conda environment)
+
+TANI: python (>=3.9 and <=3.13), numpy, torch, torchani
+UMA1: python (>=3.9 and <=3.13), numpy, torch, ase, fairchem-core, hf
+MACE: python (>=3.9 and <=3.13), numpy, torch, ase, mace-torch

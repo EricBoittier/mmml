@@ -79,10 +79,8 @@ SUBROUTINE NBNDQM(X,Y,Z)
   endif
   !
   !     for coordinates swaping, for images.
-  if(allocated(imattq) .and. size(imattq) .ne. natom ) then
-     call chmdealloc('qmnbnd.src','NBNDQM','imattq',size(imattq),intg=imattq)
-  end if
-  if(.not.allocated(imattq)) call chmalloc('qmnbnd.src','NBNDQM','imattq',natom,intg=imattq)
+  if(allocated(imattq)) call chmdealloc('qmnbnd.src','NBNDQM','imattq',size(imattq),intg=imattq)
+  call chmalloc('qmnbnd.src','NBNDQM','imattq',natom,intg=imattq)
   IMATTQ(1:natom) = 0
   !
 #if KEY_PBOUND==1
@@ -131,21 +129,12 @@ SUBROUTINE NBNDQM(X,Y,Z)
   !              Thus, the cutoff distance should be less than half of the
   !              box length.
   !    *******
-  if(allocated(qgrpmm) .and. size(qgrpmm) .ne. ngrp) then
-     call chmdealloc('qmnbnd.src','NBNDQM','qgrpmm',size(qgrpmm),log=qgrpmm)
-     call chmdealloc('qmnbnd.src','NBNDQM','qgrpqm',size(qgrpqm),log=qgrpqm)
-  end if
-  if(.not.allocated(qgrpmm)) call chmalloc('qmnbnd.src','NBNDQM','qgrpmm',ngrp,log=qgrpmm)  ! flag for mm group
-  if(.not.allocated(qgrpqm)) call chmalloc('qmnbnd.src','NBNDQM','qgrpqm',ngrp,log=qgrpqm)  ! flag for qm group
+  if(allocated(qgrpmm)) call chmdealloc('qmnbnd.src','NBNDQM','qgrpmm',size(qgrpmm),log=qgrpmm)
+  if(allocated(qgrpqm)) call chmdealloc('qmnbnd.src','NBNDQM','qgrpqm',size(qgrpqm),log=qgrpqm)
+  call chmalloc('qmnbnd.src','NBNDQM','qgrpmm',ngrp,log=qgrpmm)  ! flag for mm group
+  call chmalloc('qmnbnd.src','NBNDQM','qgrpqm',ngrp,log=qgrpqm)  ! flag for qm group
   
   IF(LGROUP) THEN
-     !if(allocated(qgrpmm) .and. size(qgrpmm) .ne. ngrp) then
-     !   call chmdealloc('qmnbnd.src','NBNDQM','qgrpmm',size(qgrpmm),log=qgrpmm)
-     !   call chmdealloc('qmnbnd.src','NBNDQM','qgrpqm',size(qgrpqm),log=qgrpqm)
-     !end if
-     !if(.not.allocated(qgrpmm)) call chmalloc('qmnbnd.src','NBNDQM','qgrpmm',ngrp,log=qgrpmm)  ! flag for mm group
-     !if(.not.allocated(qgrpqm)) call chmalloc('qmnbnd.src','NBNDQM','qgrpqm',ngrp,log=qgrpqm)  ! flag for qm group
-
      ! on return, qgrpmm=.true. for all mm and mixed qm/mm groups, while all qm groups are .false.
      Call Grpmm (ngrp,natom,igpbs,numqm,num_qm_grp  &
 #if KEY_QUANTUM==1
@@ -241,6 +230,11 @@ SUBROUTINE NBNDQM(X,Y,Z)
   !     Update the QM/MM van der Waals group list
   Call gupqmv(x,y,z)
   !
+  !
+  !--------------------------------------
+  if(allocated(qgrpmm)) call chmdealloc('qmnbnd.src','NBNDQM','qgrpmm',size(qgrpmm),log=qgrpmm)
+  if(allocated(qgrpqm)) call chmdealloc('qmnbnd.src','NBNDQM','qgrpqm',size(qgrpqm),log=qgrpqm)
+
   return
 end SUBROUTINE NBNDQM
 
@@ -557,24 +551,22 @@ SUBROUTINE GUPQME(X,Y,Z)
   !========================================================================
   !     Initialise the group lists.
   !========================================================================
-  nullify(iqmgpe)
-  nullify(jqmgpe)
-  nullify(iqmgex)
-  nullify(jqmgex)
+  !!nullify(iqmgpe)
+  !!nullify(jqmgpe)
+  !!nullify(iqmgex)
+  !!nullify(jqmgex)
+  if(allocated(iqmgpe)) call chmdealloc('qmnbnd.src','GUPQME','iqmgpe',size(iqmgpe),intg=iqmgpe)
+  if(allocated(jqmgpe)) call chmdealloc('qmnbnd.src','GUPQME','jqmgpe',size(jqmgpe),intg=jqmgpe)
+  if(allocated(iqmgex)) call chmdealloc('qmnbnd.src','GUPQME','iqmgex',size(iqmgex),intg=iqmgex)
+  if(allocated(jqmgex)) call chmdealloc('qmnbnd.src','GUPQME','jqmgex',size(jqmgex),intg=jqmgex)
   !========================================================================
   !     Allocate scratch space.
   !========================================================================
-  call chmalloc('qmnbnd.src','GUPQME','iqmgpe',ngrp,intgp=iqmgpe)
-  call chmalloc('qmnbnd.src','GUPQME','iqmgex',ngrp,intgp=iqmgex)
+  call chmalloc('qmnbnd.src','GUPQME','iqmgpe',ngrp,intg=iqmgpe)
+  call chmalloc('qmnbnd.src','GUPQME','iqmgex',ngrp,intg=iqmgex)
 
-  if(allocated(qgrpmm) .and. size(qgrpmm) .ne. ngrp) then
-     call chmdealloc('qmnbnd.src','GUPQME','qgrpmm',size(qgrpmm),log=qgrpmm)
-  end if
-  if(allocated(xyzg) .and. size(xyzg).ne.(3*ngrp)) then
-     call chmdealloc('qmnbnd.src','GUPQME','xyzg',3,size(xyzg,2),crl=xyzg)
-  end if
-  if(.not.allocated(qgrpmm)) call chmalloc('qmnbnd.src','GUPQME','qgrpmm',ngrp,log=qgrpmm)
-  if(.not.allocated(xyzg))   call chmalloc('qmnbnd.src','GUPQME','xyzg',3,ngrp,crl=xyzg)
+  if(allocated(xyzg)) call chmdealloc('qmnbnd.src','GUPQME','xyzg',3,size(xyzg,2),crl=xyzg)
+  call chmalloc('qmnbnd.src','GUPQME','xyzg',3,ngrp,crl=xyzg)
 
   !-------
   !jG 103000 changed to include only qm/mm pairs in qm/mm non-bonded list.
@@ -603,7 +595,7 @@ SUBROUTINE GUPQME(X,Y,Z)
   !jG 103000 allcate space for qm/mm non-bonded list
 #if KEY_MNDO97==1
   call alnbsp_el(ngrp,qgrpqm,maxnnb,imxnb)
-  num_qm_group = num_qm_grp ! number of qm groups (see call Grpmm).
+  map_grp_c%num_qm_group = num_qm_grp ! number of qm groups (see call Grpmm).
 #else
   call alnbsp(ngrp,qgrpmm,maxnnb,imxnb)
 #endif
@@ -637,8 +629,8 @@ SUBROUTINE GUPQME(X,Y,Z)
   If (qdone) then
      nqmgpe = nnbx
      nqmgex = nnbex
-     call chmalloc('qmnbnd.src','GUPQME','jqmgpe',nnbx,intgp=jqmgpe)
-     call chmalloc('qmnbnd.src','GUPQME','jqmgex',nnbex,intgp=jqmgex)
+     call chmalloc('qmnbnd.src','GUPQME','jqmgpe',nnbx,intg=jqmgpe)
+     call chmalloc('qmnbnd.src','GUPQME','jqmgex',nnbex,intg=jqmgex)
      jqmgpe(1:nnbx ) = jnbx(1:nnbx)
      jqmgex(1:nnbex) = jnbex(1:nnbex)
      IF(PRNLEV.GE.2) THEN
@@ -650,37 +642,37 @@ SUBROUTINE GUPQME(X,Y,Z)
         Write (outu,'(a,i6,a)') ' GUPQME> ',nnbex,' QM/MM group exclusions generated.'
      END IF
 #if KEY_MNDO97==1
-     if(qImage .and. q_cut_by_group .or. qmswtch_qmmm) then
-       num_mm_group = nqmgpe ! + num_qm_group ! additional buffer..
-       num_mmatm_in_list = num_mm_atm ! + 100 ! total number of mm and qm atoms in the list and extra atoms (buffer).
-       if(associated(map_allatm_to_group)) deallocate(map_allatm_to_group)
-       if(associated(map_mmatom_to_group)) deallocate(map_mmatom_to_group)
-       if(associated(map_qmatom_to_group)) deallocate(map_qmatom_to_group)
-       if(associated(map_mmgrp_to_group))  deallocate(map_mmgrp_to_group)
+     if(qImage .and. qmswtch_qmmm) then
+       map_grp_c%num_mm_group      = nqmgpe     ! + map_grp_c%num_qm_group ! additional buffer..
+       map_grp_c%num_mmatm_in_list = num_mm_atm ! + 100 ! total number of mm and qm atoms in the list and extra atoms (buffer).
+       if(allocated(map_grp_c%map_allatm_to_group)) deallocate(map_grp_c%map_allatm_to_group)
+       if(allocated(map_grp_c%map_mmatom_to_group)) deallocate(map_grp_c%map_mmatom_to_group)
+       if(allocated(map_grp_c%map_qmatom_to_group)) deallocate(map_grp_c%map_qmatom_to_group)
+       if(allocated(map_grp_c%map_mmgrp_to_group))  deallocate(map_grp_c%map_mmgrp_to_group)
 
        ! this array maps each atom to its corresponding group; so, the inverse of igpbs.
-       ! map_mmatom_to_group: map mm atom to its group in ngrp.
-       ! map_qmatom_to_group: map qm atom to its group in NQMGRP(1).
-       ! map_allatm_to_group: map each atom to its group in ngrp.
-       if(.not.associated(map_allatm_to_group)) then
-          allocate(map_allatm_to_group(natom))
-          map_allatm_to_group(1:natom) = -1
+       ! map_grp_c%map_mmatom_to_group: map mm atom to its group in ngrp.
+       ! map_grp_c%map_qmatom_to_group: map qm atom to its group in NQMGRP(1).
+       ! map_grp_c%map_allatm_to_group: map each atom to its group in ngrp.
+       if(.not.allocated(map_grp_c%map_allatm_to_group)) then
+          allocate(map_grp_c%map_allatm_to_group(natom))
+          map_grp_c%map_allatm_to_group(1:natom) = -1
           do i=1,ngrp
              is=igpbs(i)+1
              iq=igpbs(i+1)
-             map_allatm_to_group(is:iq) = i  ! i-th group.
+             map_grp_c%map_allatm_to_group(is:iq) = i  ! i-th group.
           end do
           ! check errors.
           do i=1,natom
-             if(map_allatm_to_group(i) < 0 ) then
+             if(map_grp_c%map_allatm_to_group(i) < 0 ) then
                 if(prnlev >= 2) write(outu,'(a,i7,a)') 'Missing group definition for,',i,'-th atom.'
                 call wrndie(-5,'<GUPQME>','Missing group info for map_allatm_to_group.')
              end if
           end do
        end if
-       if(.not.associated(map_mmatom_to_group)) allocate(map_mmatom_to_group(num_mmatm_in_list))
-       if(.not.associated(map_qmatom_to_group)) allocate(map_qmatom_to_group(numqm))
-       if(.not.associated(map_mmgrp_to_group))  allocate(map_mmgrp_to_group(num_mm_group))
+       if(.not.allocated(map_grp_c%map_mmatom_to_group)) allocate(map_grp_c%map_mmatom_to_group(map_grp_c%num_mmatm_in_list))
+       if(.not.allocated(map_grp_c%map_qmatom_to_group)) allocate(map_grp_c%map_qmatom_to_group(numqm))
+       if(.not.allocated(map_grp_c%map_mmgrp_to_group))  allocate(map_grp_c%map_mmgrp_to_group(map_grp_c%num_mm_group))
      end if
 #endif
   Else
@@ -742,7 +734,7 @@ SUBROUTINE GUQME2 (NGRP,NATOM,IGPBS,IATMEX,JATMEX,NB,INB,JNB, &
   use qmlinkm  
 #endif
 #if KEY_MNDO97==1
-  use mndgho   
+  use mndgho, only : QLINK
 #endif
 #if KEY_SQUANTM==1
   use squantm, only: QLINK     
@@ -1055,7 +1047,7 @@ SUBROUTINE GUQME3 (NGRP,NATOM,IGPBS,IATMEX,JATMEX,NB,INB, &
   use qmlinkm   
 #endif
 #if KEY_MNDO97==1
-  use mndgho    
+  use mndgho, only : QLINK
 #endif
 #if KEY_SQUANTM==1
   use squantm, only: QLINK     
@@ -1298,6 +1290,11 @@ SUBROUTINE GUQME3 (NGRP,NATOM,IGPBS,IATMEX,JATMEX,NB,INB, &
                                 If (qatom.eq.ib(ibond) .and. matom.eq.jb(ibond) .or. &
                                      qatom.eq.jb(ibond) .and. matom.eq.ib(ibond)) then
                                    If (nbex .ge. maxnnb) then
+#if KEY_PARALLEL==1
+                                      if(associated(rij2_local))    deallocate(rij2_local)
+                                      if(associated(imtrans_local)) deallocate(imtrans_local)
+                                      if(associated(iqmmm_pair))    deallocate(iqmmm_pair)
+#endif
                                       Call Wrndie (-5,'<GUQME2>','Exclusion list error.')
                                       return
                                    Else
@@ -1313,6 +1310,11 @@ SUBROUTINE GUQME3 (NGRP,NATOM,IGPBS,IATMEX,JATMEX,NB,INB, &
                                 IF((QATOM.EQ.IT(IANGL) .AND. MATOM.EQ.KT(IANGL)) .OR. &
                                      (QATOM.EQ.KT(IANGL) .AND. MATOM.EQ.IT(IANGL)))THEN
                                    IF(NBEX.GE.MAXNNB) THEN
+#if KEY_PARALLEL==1
+                                      if(associated(rij2_local))    deallocate(rij2_local)
+                                      if(associated(imtrans_local)) deallocate(imtrans_local)
+                                      if(associated(iqmmm_pair))    deallocate(iqmmm_pair)
+#endif
                                       CALL WRNDIE (-5,'<GUQME2>','Exclusion list error.')
                                       return
                                    ELSE
@@ -1352,6 +1354,11 @@ SUBROUTINE GUQME3 (NGRP,NATOM,IGPBS,IATMEX,JATMEX,NB,INB, &
 #endif /*   (quantm_specific)*/
 
                     If (nb .ge. maxnnb) then
+#if KEY_PARALLEL==1
+                       if(associated(rij2_local))    deallocate(rij2_local)
+                       if(associated(imtrans_local)) deallocate(imtrans_local)
+                       if(associated(iqmmm_pair))    deallocate(iqmmm_pair)
+#endif
                        Call Wrndie (-5,'<GUQME2>','QM/MM group list error.')
                        return
 #if KEY_QUANTUM==1
@@ -1380,9 +1387,9 @@ SUBROUTINE GUQME3 (NGRP,NATOM,IGPBS,IATMEX,JATMEX,NB,INB, &
 
 #if KEY_PARALLEL==1
   ! memory.
-  deallocate(rij2_local)
-  deallocate(imtrans_local)
-  deallocate(iqmmm_pair)
+  if(associated(rij2_local))    deallocate(rij2_local)
+  if(associated(imtrans_local)) deallocate(imtrans_local)
+  if(associated(iqmmm_pair))    deallocate(iqmmm_pair)
 #endif
   !
   Return
@@ -1433,7 +1440,7 @@ SUBROUTINE GUQME3_MNDO(NGRP,NATOM,IGPBS,IATMEX,JATMEX,NB,INB, &
   use dimens_fcm
   use sizes
 
-  use mndgho
+  use mndgho, only : QLINK
 #if KEY_PBOUND==1
   use pbound    
 #endif
@@ -1470,9 +1477,10 @@ SUBROUTINE GUQME3_MNDO(NGRP,NATOM,IGPBS,IATMEX,JATMEX,NB,INB, &
 
   integer, save :: mgrp_start,mgrp_end,cell_start,cell_end
 #if KEY_PARALLEL==1
-  integer,       pointer,save :: imtrans_local(:)=>Null()
-  integer,       pointer,save :: iqmmm_pair(:)=>Null()
-  integer,save  :: JPARPT_local(0:MAXNODE),KPARPT_local(0:MAXNODE),LPARPT_local(0:MAXNODE)
+  integer,allocatable :: imtrans_local(:)
+  integer,allocatable :: iqmmm_pair(:)
+  integer,save  :: KPARPT_local(0:MAXNODE),LPARPT_local(0:MAXNODE)
+  integer       :: JPARPT_local(0:MAXNODE)
 
   integer :: j,k,jj,kk,ij,ii_qm,jj_qm,kk_qm,ii_qm_old,jj_qm_old,kk_qm_old
   real(chm_real)      :: box_x,box_y,box_z,r_cutnb,xh_size(3),xyzim_ref(3)
@@ -1506,8 +1514,8 @@ SUBROUTINE GUQME3_MNDO(NGRP,NATOM,IGPBS,IATMEX,JATMEX,NB,INB, &
 
 #if KEY_PARALLEL==1
   ! memory.
-  if(associated(imtrans_local)) deallocate(imtrans_local)
-  if(associated(iqmmm_pair))    deallocate(iqmmm_pair)
+  if(allocated(imtrans_local)) deallocate(imtrans_local)
+  if(allocated(iqmmm_pair))    deallocate(iqmmm_pair)
   !
   allocate(imtrans_local(ngrp))
   allocate(iqmmm_pair(ngrp))
@@ -1556,16 +1564,15 @@ SUBROUTINE GUQME3_MNDO(NGRP,NATOM,IGPBS,IATMEX,JATMEX,NB,INB, &
      n_y = ceiling(y_size/cutnb)
      n_z = ceiling(z_size/cutnb)
 
-     ! memories
-     if(associated(i_grp_box)) then
-        deallocate(i_grp_box)
-        deallocate(i_map_box)
-        deallocate(x_cen)
-        deallocate(y_cen)
-        deallocate(z_cen)
-     end if
+     ! memory allocation
+     if(associated(i_grp_box))  deallocate(i_grp_box)
+     if(associated(x_cen))      deallocate(x_cen)
+     if(associated(y_cen))      deallocate(y_cen)
+     if(associated(z_cen))      deallocate(z_cen)
+     if(allocated(i_map_box))   deallocate(i_map_box)
+
      if(.not.associated(i_grp_box)) allocate(i_grp_box(n_x,n_y,n_z))
-     if(.not.associated(i_map_box)) allocate(i_map_box(3,ngrp))
+     if(.not.allocated(i_map_box))  allocate(i_map_box(3,ngrp))
      if(.not.associated(x_cen))     allocate(x_cen(n_x))
      if(.not.associated(y_cen))     allocate(y_cen(n_y))
      if(.not.associated(z_cen))     allocate(z_cen(n_z))
@@ -1778,6 +1785,10 @@ SUBROUTINE GUQME3_MNDO(NGRP,NATOM,IGPBS,IATMEX,JATMEX,NB,INB, &
               if (imtrans>0) IMATTQ(mstart:mstop)=imtrans_local(mgrp)
 
               if (nb >= maxnnb) then
+#if KEY_PARALLEL==1
+                 if(allocated(imtrans_local)) deallocate(imtrans_local)
+                 if(allocated(iqmmm_pair))    deallocate(iqmmm_pair)
+#endif
                  Call Wrndie (-5,'<GUQME3_MNDO>','QM/MM group list error.')
                  return
               else
@@ -1868,8 +1879,8 @@ SUBROUTINE GUQME3_MNDO(NGRP,NATOM,IGPBS,IATMEX,JATMEX,NB,INB, &
 
 #if KEY_PARALLEL==1
   ! memory.
-  if(associated(imtrans_local)) deallocate(imtrans_local)
-  if(associated(iqmmm_pair))    deallocate(iqmmm_pair)
+  if(allocated(imtrans_local)) deallocate(imtrans_local)
+  if(allocated(iqmmm_pair))    deallocate(iqmmm_pair)
 #endif
   !
   Return
@@ -1966,26 +1977,23 @@ SUBROUTINE GUPQMV(X,Y,Z)
   !========================================================================
   !     Initialise the group lists.
   !========================================================================
-  nullify(iqmgpv)
-  nullify(jqmgpv)
+  !!nullify(iqmgpv)
+  !!nullify(jqmgpv)
+  if(allocated(iqmgpv)) call chmdealloc('qmnbnd.src','GUPQMV','iqmgpv',size(iqmgpv),intg=iqmgpv)
+  if(allocated(jqmgpv)) call chmdealloc('qmnbnd.src','GUPQMV','jqmgpv',size(jqmgpv),intg=jqmgpv)
   !========================================================================
   !     Allocate scratch space.
   !========================================================================
-  call chmalloc('qmnbnd.src','GUPQMV','iqmgpv',ngrp,intgp=iqmgpv)
+  call chmalloc('qmnbnd.src','GUPQMV','iqmgpv',ngrp,intg=iqmgpv)
+
+  if(allocated(xyzg)) call chmdealloc('qmnbnd.src','GUPQMV','xyzg',3,size(xyzg,2),crl=xyzg)
+  call chmalloc('qmnbnd.src','GUPQMV','xyzg',3,ngrp,crl=xyzg)
+
   !--------
   !jG 103000
   !jG   mxnbgp = (ngrp * (ngrp + 1)) / 2
   !jG   call chmalloc('qmnbnd.src','GUPQMV','jnbgx',mxnbgp,intg=jnbgx)
   !--------
-  if(allocated(qgrpmm) .and. size(qgrpmm) .ne. ngrp) then
-     call chmdealloc('qmnbnd.src','GUPQMV','qgrpmm',size(qgrpmm),log=qgrpmm)
-  end if
-  if(allocated(xyzg) .and. size(xyzg).ne.(3*ngrp)) then
-     call chmdealloc('qmnbnd.src','GUPQMV','xyzg',3,size(xyzg,2),crl=xyzg)
-  end if
-  if(.not.allocated(qgrpmm)) call chmalloc('qmnbnd.src','GUPQMV','qgrpmm',ngrp,log=qgrpmm)
-  if(.not.allocated(xyzg))   call chmalloc('qmnbnd.src','GUPQMV','xyzg',3,ngrp,crl=xyzg)
-
   !========================================================================
   !     Calculate the group centres of geometry.
   !========================================================================
@@ -2025,7 +2033,7 @@ SUBROUTINE GUPQMV(X,Y,Z)
   !
   If (qdone) then
      nqmgpv = nnbg
-     call chmalloc('qmnbnd.src','GUPQMV','jqmgpv',nnbg,intgp=jqmgpv)
+     call chmalloc('qmnbnd.src','GUPQMV','jqmgpv',nnbg,intg=jqmgpv)
      jqmgpv(1:nnbg) = jnbgx(1:nnbg)
 #if KEY_PARALLEL==1
      if(.not.q_done_print) then
@@ -2050,8 +2058,8 @@ SUBROUTINE GUPQMV(X,Y,Z)
   !========================================================================
   !     Free working stack_ space.
   !========================================================================
-  call chmdealloc('qmnbnd.src','GUPQMV','xyzg',3,size(xyzg,2),crl=xyzg)
   call chmdealloc('qmnbnd.src','GUPQMV','jnbgx',size(jnbgx),intg=jnbgx)
+  call chmdealloc('qmnbnd.src','GUPQMV','xyzg',3,size(xyzg,2),crl=xyzg)
   !
   IF(PRNLEV.GT.7) THEN
      WRITE(OUTU,24) ' The QM/MM van der Waal group list'
@@ -2302,9 +2310,6 @@ SUBROUTINE GUQMV2_MNDO (NGRP,QGRPMM,IGRPEX,JGRPEX,XYZ_G, &
 #if KEY_PARALLEL==1
   use parallel
 #endif
-!#if KEY_MNDOOPENMP==1  /*OpenMP specific*/
-!  use omp_lib
-!#endif                 /*OpenMP specific*/
   ! note GUQME3_MNDO: i_map_box is filled in.
   use nbndqm_mod,only : Maxqmg,i_map_box
 
@@ -2325,14 +2330,6 @@ SUBROUTINE GUQMV2_MNDO (NGRP,QGRPMM,IGRPEX,JGRPEX,XYZ_G, &
   logical :: qexc14, q_do_this_group, q_no_skip, q_grpmm_i
 #if KEY_PARALLEL==1
   integer :: icnt_par,mmynod,nnumnod,ii_ig,jj_ig,kk_ig,ii_jg,jj_jg,kk_jg
-#if KEY_MNDOOPENMP==1
-  integer,pointer :: jnbg_aux(:)=>Null()
-  integer         :: id,nnbg_aux,nnbg_max_1,nnbg_max_2,nnbg_tot
-  real(chm_real)  :: delta_xyz_aux(3),xyz_cen_aux(3),xyz_local_aux(3)
-  integer,save    :: nnbg_max=0
-  logical,save    :: q_opmm_init=.false.  ! if not initialized.
-  logical         :: qdone_aux
-#endif
   !
   mmynod = mynod
   nnumnod= numnod
@@ -2362,241 +2359,8 @@ SUBROUTINE GUQMV2_MNDO (NGRP,QGRPMM,IGRPEX,JGRPEX,XYZ_G, &
 
   call alnbsp(ngrp,qgrpmm,nqmgrp,iqmgrp)
   !
-#if KEY_PARALLEL==1
-#if KEY_MNDOOPENMP==1  /*OpenMP specific*/
-  if(.not.q_opmm_init) then
-     ! if not initialized.
-     nnbg_max    = 0
-     nnbg_max_1  = 0
-     nnbg_max_2  = 0
-!$omp parallel private(id,igrp,q_grpmm_i,icnt_par,jgrp) NUM_THREADS(2)
-     id = OMP_get_thread_num()
-     if(id.eq.0) then
-        ! Only loop over groups in primary cells.
-        do igrp = 1,ngrp/2
-           q_grpmm_i= qgrpmm(igrp)  ! local copy of qgrpmm(igrp)
-           loopjg3: do jgrp = igrp+mmynod,ngrp,nnumnod
-              ! only loop over qm-mm grp pairs.
-              if ((q_grpmm_i .and. .not. qgrpmm(jgrp)) .or. (.not. q_grpmm_i .and. qgrpmm(jgrp))) then
-                 nnbg_max_1 = igrp
-              end if
-           end do loopjg3
-        end do
-     else
-        do igrp = ngrp/2+1,ngrp
-           q_grpmm_i= qgrpmm(igrp)  ! local copy of qgrpmm(igrp)
-           loopjg4: do jgrp = igrp+mmynod,ngrp,nnumnod
-              ! only loop over qm-mm grp pairs.
-              if ((q_grpmm_i .and. .not. qgrpmm(jgrp)) .or. (.not. q_grpmm_i .and. qgrpmm(jgrp))) then
-                 nnbg_max_2 = igrp
-              end if
-           end do loopjg4
-        end do
-     end if
-!$omp barrier
-!$omp single
-     nnbg_max = MAX(nnbg_max_1,nnbg_max_2)
-!$omp end single
-!$omp end parallel
-     q_opmm_init=.true.
-  end if
-
-  nnbg_aux    = 0
-  if(associated(jnbg_aux)) deallocate(jnbg_aux)
-  allocate(jnbg_aux(mxnbgp))
-  qdone       =.true.
-  qdone_aux   = qdone
-#endif                 /*OpenMP specific*/
-#endif
-
   nnbg  = 0
 #if KEY_PARALLEL==1    /*Parallel specific*/
-#if KEY_MNDOOPENMP==1  /*OpenMP specific*/
-!$omp parallel NUM_THREADS(2)  &
-!$omp & private(id,igrp,ifirst,ilast,q_grpmm_i,jgrp,qexc14,iex) &
-!$omp & private(ii,ij,rij2,ii_ig,jj_ig,kk_ig,ii_jg,jj_jg,kk_jg) 
-  id = OMP_get_thread_num()
-  if(id.eq.0) then
-     ! first thread
-     do igrp = 1,nnbg_max/2
-        xyz_cen(1)=xyz_g(1,igrp)
-        xyz_cen(2)=xyz_g(2,igrp)
-        xyz_cen(3)=xyz_g(3,igrp)
-        !
-        if (igrp .eq. 1) then
-           ifirst = 1
-        else
-           ifirst = igrpex(igrp - 1) + 1
-        end if
-        ilast  = igrpex(igrp)
-
-        q_grpmm_i= qgrpmm(igrp)  ! local copy of qgrpmm(igrp)
-        ii_ig    = i_map_box(1,igrp)  ! location of box for igrp
-        jj_ig    = i_map_box(2,igrp)  ! i_map_box are setup in GUQME3_MNDO routine.
-        kk_ig    = i_map_box(3,igrp)
-        ! the following parallelization should be careful, if using QMPI. (check with DMT.)
-
-        !
-        ! Loop over all the groups.
-        loopjg: do jgrp = igrp+mmynod,ngrp,nnumnod
-           ! only loop over qm-mm grp pairs.
-           if ((q_grpmm_i .and. .not. qgrpmm(jgrp)) .or. (.not. q_grpmm_i .and. qgrpmm(jgrp))) then
-              ii_jg  = i_map_box(1,jgrp)  ! location of box for jgrp
-              jj_jg  = i_map_box(2,jgrp)
-              kk_jg  = i_map_box(3,jgrp)
-              ! do the check of this pair, if the two groups are within neighboring boxes.
-              if(abs(ii_jg-ii_ig)<=1 .and. abs(jj_jg-jj_ig)<=1 .and. abs(kk_jg-kk_ig)<=1) then
-                 ! this igrp and jgrp are neighboring or self-box.
-                 qexc14 = .false.
-                 do iex = ifirst,ilast
-                    if (jgrpex(iex) .eq. jgrp) then
-                       qexc14 = .true.
-                       exit
-                    endif
-                 end do
-                 !
-                 delta_xyz(1) = xyz_g(1,jgrp) - xyz_cen(1)
-                 delta_xyz(2) = xyz_g(2,jgrp) - xyz_cen(2)
-                 delta_xyz(3) = xyz_g(3,jgrp) - xyz_cen(3)
-                 ! JG 6/1/01
-                 ! ADD SIMPLE PERIODIC BOUNDARY CONDITIONS FOR QM/MM INTERACTION
-#if KEY_PBOUND==1 /*pbound*/
-                 IF(qBoun) THEN
-                    IF(qCUBoun.or.qTOBoun) THEN
-                          delta_xyz(1:3)=box_inv(1:3)*delta_xyz(1:3)
-                       do ij=1,3
-                          if(delta_xyz(ij).gt. half) delta_xyz(ij)=delta_xyz(ij)-one
-                          if(delta_xyz(ij).lt.-half) delta_xyz(ij)=delta_xyz(ij)+one
-                       end do
-                       delta_xyz(1:3)=box_reg(1:3)*delta_xyz(1:3)
-                    ENDIF
-                 ENDIF
-#endif /*  (pbound)*/
-                 rij2  = delta_xyz(1)*delta_xyz(1)+delta_xyz(2)*delta_xyz(2)+delta_xyz(3)*delta_xyz(3)
-                 if ((.NOT.QMCUTF) .OR. (rij2 .lt. cutnb2)) then
-                    if (nnbg .gt. mxnbgp) then
-                       qdone = .false.
-                    else
-                       nnbg = nnbg + 1
-                       if (qexc14) then
-                          jnbg(nnbg) = - jgrp
-                       else
-                          jnbg(nnbg) =   jgrp
-                       endif
-                    endif
-                 endif
-              end if
-           endif                 ! qgrpmm(igrp) .and. .not. qgrpmm(jgrp) .or. ...
-        end do  loopjg           ! jgrp = igrp,ngrp
-
-        inbg(igrp) = nnbg
-     end do                      ! igrp = 1,ngrp
-  else
-     !second thread
-     do igrp = nnbg_max/2+1,nnbg_max
-        xyz_cen_aux(1)=xyz_g(1,igrp)
-        xyz_cen_aux(2)=xyz_g(2,igrp)
-        xyz_cen_aux(3)=xyz_g(3,igrp)
-        !
-        if (igrp .eq. 1) then
-           ifirst = 1
-        else
-           ifirst = igrpex(igrp - 1) + 1
-        end if
-        ilast  = igrpex(igrp)
-
-        q_grpmm_i= qgrpmm(igrp)  ! local copy of qgrpmm(igrp)
-        ii_ig    = i_map_box(1,igrp)  ! location of box for igrp
-        jj_ig    = i_map_box(2,igrp)  ! i_map_box are setup in GUQME3_MNDO routine.
-        kk_ig    = i_map_box(3,igrp)
-        ! the following parallelization should be careful, if using QMPI. (check with DMT.)
-
-        !
-        ! Loop over all the groups.
-        loopjg2: do jgrp = igrp+mmynod,ngrp,nnumnod
-           ! only loop over qm-mm grp pairs.
-           if ((q_grpmm_i .and. .not. qgrpmm(jgrp)) .or. (.not. q_grpmm_i .and. qgrpmm(jgrp))) then
-              ii_jg  = i_map_box(1,jgrp)  ! location of box for jgrp
-              jj_jg  = i_map_box(2,jgrp)
-              kk_jg  = i_map_box(3,jgrp)
-              ! do the check of this pair, if the two groups are within neighboring boxes.
-              if(abs(ii_jg-ii_ig)<=1 .and. abs(jj_jg-jj_ig)<=1 .and. abs(kk_jg-kk_ig)<=1) then
-                 ! this igrp and jgrp are neighboring or self-box.
-                 qexc14 = .false.
-                 do iex = ifirst,ilast
-                    if (jgrpex(iex) .eq. jgrp) then
-                       qexc14 = .true.
-                       exit
-                    endif
-                 end do
-                 !
-                 delta_xyz_aux(1) = xyz_g(1,jgrp) - xyz_cen_aux(1)
-                 delta_xyz_aux(2) = xyz_g(2,jgrp) - xyz_cen_aux(2)
-                 delta_xyz_aux(3) = xyz_g(3,jgrp) - xyz_cen_aux(3)
-                 ! JG 6/1/01
-                 ! ADD SIMPLE PERIODIC BOUNDARY CONDITIONS FOR QM/MM INTERACTION
-#if KEY_PBOUND==1 /*pbound*/
-                 IF(qBoun) THEN
-                    IF(qCUBoun.or.qTOBoun) THEN
-                       delta_xyz_aux(1:3)=box_inv(1:3)*delta_xyz(1:3)
-                       do ij=1,3
-                          if(delta_xyz_aux(ij).gt. half) delta_xyz_aux(ij)=delta_xyz_aux(ij)-one
-                          if(delta_xyz_aux(ij).lt.-half) delta_xyz_aux(ij)=delta_xyz_aux(ij)+one
-                       end do
-                       delta_xyz_aux(1:3)=box_reg(1:3)*delta_xyz_aux(1:3)
-                    ENDIF
-                 ENDIF
-#endif /*  (pbound)*/
-                 rij2  = delta_xyz_aux(1)*delta_xyz_aux(1)+delta_xyz_aux(2)*delta_xyz_aux(2) &
-                        +delta_xyz_aux(3)*delta_xyz_aux(3)
-
-                 if ((.NOT.QMCUTF) .OR. (rij2 .lt. cutnb2)) then
-                    if (nnbg_aux .gt. mxnbgp) then
-                       qdone_aux = .false.
-                    else
-                       nnbg_aux = nnbg_aux + 1
-                       if (qexc14) then
-                          jnbg_aux(nnbg_aux) = - jgrp
-                       else
-                          jnbg_aux(nnbg_aux) =   jgrp
-                       endif
-                    endif
-                 endif
-              end if
-           endif                 ! qgrpmm(igrp) .and. .not. qgrpmm(jgrp) .or. ...
-        end do  loopjg2           ! jgrp = igrp,ngrp
-
-        inbg(igrp) = nnbg_aux
-     end do                      ! igrp = 1,ngrp
-  endif
-!$omp barrier
-!$omp single
-  nnbg_tot = nnbg + nnbg_aux
-!$omp end single
-!$omp do
-  do ii= nnbg_max+1,ngrp
-     inbg(ii) = nnbg_tot
-  enddo
-!$omp end do
-!$omp end parallel
-  do ii =1,nnbg_aux
-     ij = ii + nnbg
-     jnbg(ij) = jnbg_aux(ii)
-  enddo
-  
-  do ii= nnbg_max/2+1,nnbg_max
-     inbg(ii) = inbg(ii) + nnbg
-  enddo
-  nnbg = nnbg_tot
-
-  if(qdone .and. qdone_aux) then
-     continue
-  else
-     qdone=.false.
-     return          ! error 
-  end if
-
-#else                  /*OpenMP specific*/
   ! Only loop over groups in primary cells.
   loopig: do igrp = 1,ngrp
      xyz_cen(1)=xyz_g(1,igrp)
@@ -2673,7 +2437,6 @@ SUBROUTINE GUQMV2_MNDO (NGRP,QGRPMM,IGRPEX,JGRPEX,XYZ_G, &
 
      inbg(igrp) = nnbg
   end do  loopig                    ! igrp = 1,ngrp
-#endif                 /*OpenMP specific*/
 #else                  /*Parallel specific*/
   ! non-parallel case.
   loopig: do igrp = 1,ngrp
@@ -2742,11 +2505,6 @@ SUBROUTINE GUQMV2_MNDO (NGRP,QGRPMM,IGRPEX,JGRPEX,XYZ_G, &
   end do  loopig                    ! igrp = 1,ngrp
 #endif    /*Parallel specific*/
   qdone = .true.
-
-#if KEY_MNDOOPENMP==1  /*OpenMP specific*/
-  ! memory.
-  if(associated(jnbg_aux)) deallocate(jnbg_aux)
-#endif                 /*OpenMP specific*/
   !
   Return
 END SUBROUTINE GUQMV2_MNDO
@@ -2792,7 +2550,7 @@ SUBROUTINE GRPMM (NGRP, NATOM, IGPBS, NUMQM, num_qm_grp, QATLAB, QGRPMM)
   use qmlinkm        
 #endif
 #if KEY_MNDO97==1
-  use mndgho         
+  use mndgho, only : QLINK
 #endif
 #if KEY_SQUANTM==1
   use squantm, only : QLINK  
@@ -2887,7 +2645,7 @@ SUBROUTINE GRPMM_EL (NGRP, NATOM, IGPBS, NUMQM, num_qm_grp, QATLAB, QGRPMM, QGRP
   use qmlinkm        
 #endif
 #if KEY_MNDO97==1
-  use mndgho         
+  use mndgho, only : QLINK
 #endif
 #if KEY_SQUANTM==1
   use squantm, only : QLINK  

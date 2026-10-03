@@ -3,219 +3,15 @@ module mndgho_module
   use number
   implicit none
 
-  !
-  TYPE, public :: qm_gho_info
-  ! Store GHO related information 
-  logical            :: q_gho=.FALSE.  ! Logical flag to use GHO atoms
-  logical            :: uhfgho=.FALSE. ! Logical flag to use UHF/GHO
-  integer            :: mqm16=16
-  integer            :: numat=0        ! number of qm atoms
-  integer            :: nqmlnk=0       ! number of GHO atoms
-  integer            :: norbsgho=0     ! number of AOS, same as qm2_struct%norbs
-  integer            :: norbhb,naos,lin_naos,lin_norbhb  ! used in scf iteraction step.
-  integer            :: norbao,nactatm,lin_norbao        ! used in FTOFHB
-  integer, POINTER   :: IQLINK(:)   => NULL() ! Pointer for GHO atom
-  integer, POINTER   :: JQLINK(:,:) => NULL() ! Pointer for MM atoms connected to
-                                              ! GHO atom (3,nqmlnk)
-  integer, POINTER   :: KQLINK(:)   => NULL() ! Pointer for QM atom  connected to
-                                              ! GHO atom;  Sizes are (nqmlnk)
-  real(chm_real),POINTER   :: QMATMQ(:)=> NULL() ! Size  is  (nqmlnk) 
-  real(chm_real),POINTER   :: BT(:)    => NULL() ! Size  is  (nqmlnk*mqm16)    C' = BT C
-  real(chm_real),POINTER   :: BTM(:)   => NULL() ! Size  is  (nqmlnk*mqm16)    C  = BTM C'
-  real(chm_real),POINTER   :: DBTMMM(:,:,:) => NULL() ! Size  is  (3,3,nqmlnk*mqm16)
-  real(chm_real),POINTER   :: PHO(:)   => NULL() ! density matrix for GHO, size is
-                                                 ! (norbs*(norbs+1)/2)
-  real(chm_real),POINTER   :: PBHO(:)  => NULL() ! density matrix for GHO, size is
-                                                 ! (norbs*(norbs+1)/2)
-  real(chm_real),POINTER   :: FAOA(:)  => NULL() ! density matrix for GHO, size is
-                                                 ! (norbs*(norbs+1)/2)
-  real(chm_real),POINTER   :: FAOB(:)  => NULL() ! density matrix for GHO, 
-                                                 ! Size is same as density matrix, 
-                                                 ! which is (norbs*(norbs+1)/2)
-  ! Local varibles only at qm2_scf and etc.
-  real(chm_real), POINTER :: CAHB(:) =>NULL() ! Size is norbs*norbs
-  real(chm_real), POINTER :: CBHB(:) =>NULL() !         norbs*norbs
-  real(chm_real), POINTER :: DAHB(:) =>NULL() !         norbs*(norbs*+1)/2
-  real(chm_real), POINTER :: DBHB(:) =>NULL() !         norbs*(norbs*+1)/2
-  real(chm_real), POINTER :: FAHB(:) =>NULL() !         norbs*(norbs*+1)/2
-  real(chm_real), POINTER :: FBHB(:) =>NULL() !         norbs*(norbs*+1)/2
-  real(chm_real), POINTER :: PAHB(:) =>NULL() !         norbs*(norbs*+1)/2
-  real(chm_real), POINTER :: PBHB(:) =>NULL() !         norbs*(norbs*+1)/2
-  real(chm_real), POINTER :: PAOLD(:)=>NULL() !         norbs*(norbs*+1)/2
-  real(chm_real), POINTER :: PBOLD(:)=>NULL() !         norbs*(norbs*+1)/2
-  real(chm_real), POINTER :: FAHBwrk(:,:) =>NULL() !    norbs,norbs
-  real(chm_real), POINTER :: FBHBwrk(:,:) =>NULL() !    norbs,norbs
-     
-  END TYPE qm_gho_info
-
-  ! assign
-  TYPE(qm_gho_info), save :: qm_gho_info_r
-
-
   contains
 
 #if KEY_MNDO97==1 /*mndo97*/
-  subroutine allocate_deallocate_gho(qm_scf_main_l,qm_gho_info_l, &
-                                     qdiis,uhf,qallocate)
-  !
-  ! allocate/deallocate gho/scf related arrays.
-  ! if qallocate == .true. , allocate memory
-  !                  false., deallocate memory
-  use qm1_info,only : qm_scf_main,Aass
-
-  implicit none
-  TYPE(qm_scf_main) :: qm_scf_main_l
-  TYPE(qm_gho_info) :: qm_gho_info_l
-  logical :: qdiis,uhf,qallocate
-
-  integer :: dim_norbs,dim_norbs2,dim_linear_norbs
-  integer :: ier=0
-
-  ! first, define array sizes (determined in determine_qm_scf_arrray_size)
-  dim_norbs       = qm_scf_main_l%dim_norbs
-  dim_norbs2      = qm_scf_main_l%dim_norbs2
-  dim_linear_norbs= qm_scf_main_l%dim_linear_norbs
-
-  ! deallocate if arrays are associated.
-  ! for alpha orbitals.
-  if(associated(qm_gho_info_l%PHO))   deallocate(qm_gho_info_l%PHO,stat=ier)
-     if(ier.ne.0) call Aass(0,'allocate_deallocate_gho','PHO')
-  if(associated(qm_gho_info_l%FAOA))  deallocate(qm_gho_info_l%FAOA,stat=ier)
-     if(ier.ne.0) call Aass(0,'allocate_deallocate_gho','FAOA')
-  if(associated(qm_gho_info_l%CAHB))  deallocate(qm_gho_info_l%CAHB,stat=ier)
-     if(ier.ne.0) call Aass(0,'allocate_deallocate_gho','CAHB')
-  if(associated(qm_gho_info_l%DAHB))  deallocate(qm_gho_info_l%DAHB,stat=ier)
-     if(ier.ne.0) call Aass(0,'allocate_deallocate_gho','DAHB')
-  if(associated(qm_gho_info_l%FAHB))  deallocate(qm_gho_info_l%FAHB,stat=ier)
-     if(ier.ne.0) call Aass(0,'allocate_deallocate_gho','FAHB')
-  if(associated(qm_gho_info_l%FAHBwrk))  deallocate(qm_gho_info_l%FAHBwrk,stat=ier)
-     if(ier.ne.0) call Aass(0,'allocate_deallocate_gho','FAHBwrk')
-  if(associated(qm_gho_info_l%PAHB))  deallocate(qm_gho_info_l%PAHB,stat=ier)
-     if(ier.ne.0) call Aass(0,'allocate_deallocate_gho','PAHB')
-  if(associated(qm_gho_info_l%PAOLD)) deallocate(qm_gho_info_l%PAOLD,stat=ier)
-     if(ier.ne.0) call Aass(0,'allocate_deallocate_gho','PAOLD')
-
-  ! for beta orbitals.
-  if(associated(qm_gho_info_l%PBHO))  deallocate(qm_gho_info_l%PBHO,stat=ier)
-     if(ier.ne.0) call Aass(0,'allocate_deallocate_gho','PBHO')
-  if(associated(qm_gho_info_l%FAOB))  deallocate(qm_gho_info_l%FAOB,stat=ier)
-     if(ier.ne.0) call Aass(0,'allocate_deallocate_gho','FAOB')
-  if(associated(qm_gho_info_l%CBHB))  deallocate(qm_gho_info_l%CBHB,stat=ier)
-     if(ier.ne.0) call Aass(0,'allocate_deallocate_gho','CBHB')
-  if(associated(qm_gho_info_l%DBHB))  deallocate(qm_gho_info_l%DBHB,stat=ier)
-     if(ier.ne.0) call Aass(0,'allocate_deallocate_gho','DBHB')
-  if(associated(qm_gho_info_l%FBHB))  deallocate(qm_gho_info_l%FBHB,stat=ier)
-     if(ier.ne.0) call Aass(0,'allocate_deallocate_gho','FBHB')
-  if(associated(qm_gho_info_l%FBHBwrk))  deallocate(qm_gho_info_l%FBHBwrk,stat=ier)
-     if(ier.ne.0) call Aass(0,'allocate_deallocate_gho','FBHBwrk')
-  if(associated(qm_gho_info_l%PBHB))  deallocate(qm_gho_info_l%PBHB,stat=ier)
-     if(ier.ne.0) call Aass(0,'allocate_deallocate_gho','PBHB')
-  if(associated(qm_gho_info_l%PBOLD)) deallocate(qm_gho_info_l%PBOLD,stat=ier)
-     if(ier.ne.0) call Aass(0,'allocate_deallocate_gho','PBOLD')
-
-  ! now, allocate memory, only if qallocate==.true.
-  if(qallocate) then
-     ! for alpha orbitals.
-     allocate(qm_gho_info_l%PHO(dim_linear_norbs),stat=ier)
-        if(ier.ne.0) call Aass(1,'allocate_deallocate_gho','PHO')
-     allocate(qm_gho_info_l%FAOA(dim_linear_norbs),stat=ier)
-        if(ier.ne.0) call Aass(1,'allocate_deallocate_gho','FAOA')
-     allocate(qm_gho_info_l%CAHB(dim_norbs2),stat=ier)
-        if(ier.ne.0) call Aass(1,'allocate_deallocate_gho','CAHB')
-     allocate(qm_gho_info_l%DAHB(dim_linear_norbs),stat=ier)
-        if(ier.ne.0) call Aass(1,'allocate_deallocate_gho','DAHB')
-     allocate(qm_gho_info_l%FAHB(dim_linear_norbs),stat=ier)
-        if(ier.ne.0) call Aass(1,'allocate_deallocate_gho','FAHB')
-     allocate(qm_gho_info_l%FAHBwrk(dim_norbs,dim_norbs),stat=ier)
-        if(ier.ne.0) call Aass(1,'allocate_deallocate_gho','FAHBwrk')
-     allocate(qm_gho_info_l%PAHB(dim_linear_norbs),stat=ier)
-        if(ier.ne.0) call Aass(1,'allocate_deallocate_gho','PAHB')
-     allocate(qm_gho_info_l%PAOLD(dim_linear_norbs),stat=ier)
-        if(ier.ne.0) call Aass(1,'allocate_deallocate_gho','PAOLD')
-      ! for beta orbitals.
-     if(uhf) then
-        allocate(qm_gho_info_l%PBHO(dim_linear_norbs),stat=ier)
-           if(ier.ne.0) call Aass(1,'allocate_deallocate_gho','PBHO')
-        allocate(qm_gho_info_l%FAOB(dim_linear_norbs),stat=ier)
-           if(ier.ne.0) call Aass(1,'allocate_deallocate_gho','FAOB')
-        allocate(qm_gho_info_l%CBHB(dim_norbs2),stat=ier)
-           if(ier.ne.0) call Aass(1,'allocate_deallocate_gho','CBHB')
-        allocate(qm_gho_info_l%DBHB(dim_linear_norbs),stat=ier)
-           if(ier.ne.0) call Aass(1,'allocate_deallocate_gho','DBHB')
-        allocate(qm_gho_info_l%FBHB(dim_linear_norbs),stat=ier)
-           if(ier.ne.0) call Aass(1,'allocate_deallocate_gho','FBHB')
-        allocate(qm_gho_info_l%FBHBwrk(dim_norbs,dim_norbs),stat=ier)
-        if(ier.ne.0) call Aass(1,'allocate_deallocate_gho','FBHBwrk')
-        allocate(qm_gho_info_l%PBHB(dim_linear_norbs),stat=ier)
-           if(ier.ne.0) call Aass(1,'allocate_deallocate_gho','PBHB')
-        allocate(qm_gho_info_l%PBOLD(dim_linear_norbs),stat=ier)
-           if(ier.ne.0) call Aass(1,'allocate_deallocate_gho','PBOLD')
-     end if
-  end if
-  return
-  end subroutine allocate_deallocate_gho
-
-
-  subroutine allocate_deallocate_gho_info(qm_gho_info_l,qallocate)
-  !
-  ! allocate/deallocate gho related arrays.
-  ! if qallocate == .true. , allocate memory
-  !                  false., deallocate memory
-  use qm1_info,only : Aass
-
-  implicit none
-  TYPE(qm_gho_info) :: qm_gho_info_l
-  logical :: qdiis,uhf,qallocate
-
-  integer :: ngho,ngho2
-  integer :: ier=0
-
-  ! define array sizes
-  ngho  = qm_gho_info_l%nqmlnk
-  ngho2 = qm_gho_info_l%nqmlnk * qm_gho_info_l%mqm16
-
-  ! deallocate if arrays are associated.
-  if(associated(qm_gho_info_l%IQLINK)) deallocate(qm_gho_info_l%IQLINK,stat=ier)
-     if(ier.ne.0) call Aass(0,'allocate_deallocate_gho_info','IQLINK')
-  if(associated(qm_gho_info_l%JQLINK)) deallocate(qm_gho_info_l%JQLINK,stat=ier)
-     if(ier.ne.0) call Aass(0,'allocate_deallocate_gho_info','JQLINK')
-  if(associated(qm_gho_info_l%KQLINK)) deallocate(qm_gho_info_l%KQLINK,stat=ier)
-     if(ier.ne.0) call Aass(0,'allocate_deallocate_gho_info','KQLINK')
-  if(associated(qm_gho_info_l%QMATMQ)) deallocate(qm_gho_info_l%QMATMQ,stat=ier)
-     if(ier.ne.0) call Aass(0,'allocate_deallocate_gho_info','QMATMQ')
-  if(associated(qm_gho_info_l%BT))     deallocate(qm_gho_info_l%BT,stat=ier)
-     if(ier.ne.0) call Aass(0,'allocate_deallocate_gho_info','BT')
-  if(associated(qm_gho_info_l%BTM))    deallocate(qm_gho_info_l%BTM,stat=ier)
-     if(ier.ne.0) call Aass(0,'allocate_deallocate_gho_info','BTM')
-  if(associated(qm_gho_info_l%DBTMMM)) deallocate(qm_gho_info_l%DBTMMM,stat=ier)
-     if(ier.ne.0) call Aass(0,'allocate_deallocate_gho_info','DBTMMM')
-
-  ! now, allocate memory, only if qallocate==.true.
-  if(qallocate) then
-     allocate(qm_gho_info_l%IQLINK(ngho),stat=ier)
-        if(ier.ne.0) call Aass(1,'allocate_deallocate_gho_info','IQLINK')
-     allocate(qm_gho_info_l%JQLINK(3,ngho),stat=ier)
-        if(ier.ne.0) call Aass(1,'allocate_deallocate_gho_info','JQLINK')
-     allocate(qm_gho_info_l%KQLINK(ngho),stat=ier)
-        if(ier.ne.0) call Aass(1,'allocate_deallocate_gho_info','KQLINK')
-     allocate(qm_gho_info_l%QMATMQ(ngho),stat=ier)
-        if(ier.ne.0) call Aass(1,'allocate_deallocate_gho_info','QMATMQ')
-     allocate(qm_gho_info_l%BT(ngho2),stat=ier)
-        if(ier.ne.0) call Aass(1,'allocate_deallocate_gho_info','BT')
-     allocate(qm_gho_info_l%BTM(ngho2),stat=ier)
-        if(ier.ne.0) call Aass(1,'allocate_deallocate_gho_info','BTM')
-     allocate(qm_gho_info_l%DBTMMM(3,3,ngho2),stat=ier)
-        if(ier.ne.0) call Aass(1,'allocate_deallocate_gho_info','DBTMMM')
-  end if
-  return
-  end subroutine allocate_deallocate_gho_info
-
-
   SUBROUTINE GHOHYB(natom,ISL,LSL,NBOND,IB,JB,cggho,X,Y,Z,CG,qfail,qgho)
   !
   ! prepare for GHO setup, initial setup
   !
   use stream
+  use qm1_info, only : qm_gho_info_c,allocate_deallocate_gho_info
 
   implicit none
 
@@ -231,75 +27,75 @@ module mndgho_module
   integer :: i,j,ii,jj,ibnd,itst,ngho,ngho2
 
   !
-  ! put qm_gho_info_r%numat to common block to used by GHO routine later
-  qm_gho_info_r%nqmlnk = 0
-  qm_gho_info_r%numat  = 0
+  ! put qm_gho_info_c%numat to common block to used by GHO routine later
+  qm_gho_info_c%nqmlnk = 0
+  qm_gho_info_c%numat  = 0
 
   ! loop over Natom to check
   do i=1,natom
-     if((ISL(i).eq.1) .and. (LSL(i).ne.1)) then           ! for pure QM atom
-        qm_gho_info_r%numat  = qm_gho_info_r%numat + 1
-     else if((ISL(i).eq.1) .and. (LSL(i).eq.1)) then      ! for GHO atom 
-        qm_gho_info_r%nqmlnk = qm_gho_info_r%nqmlnk + 1
-        qm_gho_info_r%numat  = qm_gho_info_r%numat + 1
+     if((ISL(i) == 1) .and. (LSL(i) /= 1)) then           ! for pure QM atom
+        qm_gho_info_c%numat  = qm_gho_info_c%numat + 1
+     else if((ISL(i) == 1) .and. (LSL(i) == 1)) then      ! for GHO atom 
+        qm_gho_info_c%nqmlnk = qm_gho_info_c%nqmlnk + 1
+        qm_gho_info_c%numat  = qm_gho_info_c%numat + 1
      end if
   end do
 
-  if(qm_gho_info_r%nqmlnk.gt.0) then
+  if(qm_gho_info_c%nqmlnk > 0) then
      ! allocate some relevant arrays.
-     call allocate_deallocate_gho_info(qm_gho_info_r,.true.)
+     call allocate_deallocate_gho_info(qm_gho_info_c,.true.)
 
-     ! loop over again and fill qm_gho_info_r%IQLINK array
+     ! loop over again and fill qm_gho_info_c%IQLINK array
      ii=0
      do i = 1, natom
-        if( (ISL(i).eq.1) .and. (LSL(i).eq.1) ) then
+        if( (ISL(i) == 1) .and. (LSL(i) == 1) ) then
            ii=ii+1
-           qm_gho_info_r%IQLINK(ii) = i 
+           qm_gho_info_c%IQLINK(ii) = i 
         end if
      end do
 
      ! check the connectivity of GHO boundary atoms to MM and QM fragment
-     do i=1,qm_gho_info_r%nqmlnk
+     do i=1,qm_gho_info_c%nqmlnk
         ibnd = 0
         itst = 0
         do j = 1,NBOND
            ii=IB(J)
            jj=JB(J)
-           if(II .eq. qm_gho_info_r%IQLINK(i)) then              ! II is gho atom
-              if(ISL(jj) .gt. 0) then                       ! jj is qm atom
+           if(II == qm_gho_info_c%IQLINK(i)) then        ! II is gho atom
+              if(ISL(jj) > 0) then                       ! jj is qm atom
                  itst = itst + 1
-                 if(itst.gt.1) then
-                    if(prnlev.ge.2) write(6,*) 'GHOHYB> Too many QM atoms connected to the GHO boundary atom'
+                 if(itst > 1) then
+                    if(prnlev>=2) write(6,*) 'GHOHYB> Too many QM atoms connected to the GHO boundary atom'
                     qfail=.false.
                     return
                  end if
-                 qm_gho_info_r%KQLINK(i) = jj
-              else                                          ! jj is mm atom
+                 qm_gho_info_c%KQLINK(i) = jj
+              else                                       ! jj is mm atom
                  ibnd = ibnd + 1
-                 if(ibnd.gt.3) then
-                    if(prnlev.ge.2) write(6,*) 'GHOHYB> Too many MM bonds connecting the GHO boundary atom'
+                 if(ibnd > 3) then
+                    if(prnlev>=2) write(6,*) 'GHOHYB> Too many MM bonds connecting the GHO boundary atom'
                     qfail=.false.
                     return
                  end if
-                 qm_gho_info_r%JQLINK(ibnd,i) = jj
+                 qm_gho_info_c%JQLINK(ibnd,i) = jj
               end if
-           else if(JJ .eq. qm_gho_info_r%IQLINK(i)) then         ! JJ is gho atom
-              if(ISL(ii) .gt. 0) then                       ! ii is qm atom
+           else if(JJ == qm_gho_info_c%IQLINK(i)) then   ! JJ is gho atom
+              if(ISL(ii) > 0) then                       ! ii is qm atom
                  itst = itst + 1
-                 if(itst.gt.1) then
-                    if(prnlev.ge.2) write(6,*) 'GHOHYB> Too many QM atoms connected to the GHO boundary atom'
+                 if(itst > 1) then
+                    if(prnlev>=2) write(6,*) 'GHOHYB> Too many QM atoms connected to the GHO boundary atom'
                     qfail=.false.
                     return
                  end if
-                 qm_gho_info_r%KQLINK(i) = ii
-              else                                          ! ii is mm atom
+                 qm_gho_info_c%KQLINK(i) = ii
+              else                                       ! ii is mm atom
                  ibnd = ibnd + 1
-                 if(ibnd.gt.3) then
-                    if(prnlev.ge.2) write(6,*) 'GHOHYB> Too many MM bonds connecting the GHO boundary atom'
+                 if(ibnd > 3) then
+                    if(prnlev>=2) write(6,*) 'GHOHYB> Too many MM bonds connecting the GHO boundary atom'
                     qfail=.false.
                     return
                  end if
-                 qm_gho_info_r%JQLINK(ibnd,i) = ii
+                 qm_gho_info_c%JQLINK(ibnd,i) = ii
               end if
            end if
         end do
@@ -308,21 +104,21 @@ module mndgho_module
      ! determine core potentials, record QM-link atom charges for
      ! auxiliary density, and then zero MM charge on QM-link atom
      cggho = zero
-     do i=1,qm_gho_info_r%nqmlnk
-        qm_gho_info_r%QMATMQ(i)     = cg(qm_gho_info_r%IQLINK(i))
-        cg(qm_gho_info_r%IQLINK(i)) = zero
-        cggho                       = cggho+qm_gho_info_r%QMATMQ(i)
+     do i=1,qm_gho_info_c%nqmlnk
+        qm_gho_info_c%QMATMQ(i)     = cg(qm_gho_info_c%IQLINK(i))
+        cg(qm_gho_info_c%IQLINK(i)) = zero
+        cggho                       = cggho+qm_gho_info_c%QMATMQ(i)
      end do
 
      ! Define hybrid orbital transformation matrix
-     call HBDEF(X,Y,Z,qm_gho_info_r%BT,qm_gho_info_r%BTM,qm_gho_info_r%DBTMMM, &
-                qm_gho_info_r%nqmlnk,qm_gho_info_r%mqm16,                      &
-                qm_gho_info_r%IQLINK,qm_gho_info_r%JQLINK,qm_gho_info_r%KQLINK,&
+     call HBDEF(X,Y,Z,qm_gho_info_c%BT,qm_gho_info_c%BTM,qm_gho_info_c%DBTMMM, &
+                qm_gho_info_c%nqmlnk,qm_gho_info_c%mqm16,                      &
+                qm_gho_info_c%IQLINK,qm_gho_info_c%JQLINK,qm_gho_info_c%KQLINK,&
                 qfail)
 
   else
      ! no atoms selected...
-     if(prnlev.ge.2) write(6,*) 'GHOHYB> No GHO atoms selected, GHO will not be used.'
+     if(prnlev>=2) write(6,*) 'GHOHYB> No GHO atoms selected, GHO will not be used.'
      qgho =.false.
   end if
 
@@ -339,15 +135,15 @@ module mndgho_module
   implicit none
 
   ! Passed in
-  real(chm_real), intent(in)   :: X(*),Y(*),Z(*)
-  real(chm_real), intent(out)  :: BT(*),BTM(*),DBTMMM(3,3,*)
-  integer,intent(in)     :: IATVB(*),JATVB(3,*),KATVB(*)
-  integer,intent(in)     :: NATVB,mqm16
-  logical,intent(inout)  :: QFail
+  real(chm_real), intent(in) :: X(*),Y(*),Z(*)
+  real(chm_real), intent(out):: BT(*),BTM(*),DBTMMM(3,3,*)
+  integer,intent(in)         :: IATVB(*),JATVB(3,*),KATVB(*)
+  integer,intent(in)         :: NATVB,mqm16
+  logical,intent(inout)      :: QFail
 
   !   Local variables
-  integer                :: i,ii,jq,j1,j2,j3,ni
-  real(chm_real)         :: A(3),B(3),C(3),AB(3),AC(3),P(3),T(3),xyz_mm(3)
+  integer                    :: i,ii,jq,j1,j2,j3,ni
+  real(chm_real)             :: A(3),B(3),C(3),AB(3),AC(3),P(3),T(3),xyz_mm(3)
 
   ni = 0
   do i = 1,NATVB 
@@ -380,8 +176,8 @@ module mndgho_module
      p(1:3) = zero
      call HBDRIV(a,b,c,t,p,BT(ni+1:ni+mqm16),BTM(ni+1:ni+mqm16),DBTMMM(1:3,1:3,ni+1:ni+mqm16))
 
-     if(p(1).ne.zero) then
-        if(prnlev.ge.2) write(6,*) 'HBDEF> HYBRID ORBITAL ILLDEFINED.'
+     if(p(1) /= zero) then
+        if(prnlev>=2) write(6,*) 'HBDEF> HYBRID ORBITAL ILLDEFINED.'
         qfail=.FALSE.
         return
      end if
@@ -458,15 +254,15 @@ module mndgho_module
      d0 = (aa(1)*x(1)+aa(2)*x(2)+aa(3)*x(3))/rx
      dd  = abs(d0)
      pfac = one
-     if(d0 .GT. zero) pfac = -one
+     if(d0 > zero) pfac = -one
 
      ! tetrahedarl hybrid orbitals:
      cs = sqrt(dd / (one+dd) )
      cs2 = sqrt( (one - cs**2) * r_three )
 
      do i = 1,4
-        teth(1,i) = cs2
-        teth(2:4,i)=zero
+        teth(1,i)  = cs2
+        teth(2:4,i)= zero
      end do
 
      teth(1,1) =  cs
@@ -517,14 +313,14 @@ module mndgho_module
            dxa(j,i) = -aa(i)*(ab(j)+ca(j))*rtemp(1)
            dxb(j,i) = -bb(i)*(bc(j)+ab(j))*rtemp(2)
            dxc(j,i) = -cc(i)*(ca(j)+bc(j))*rtemp(3)
-           if(j.ne.i) then
+           if(j /= i) then
               dxa(j,i) = dxa(j,i)+af(j,i)*( cc(ir(j,i))-bb(ir(j,i)) )*rtemp(1)
               dxb(j,i) = dxb(j,i)+af(j,i)*( aa(ir(j,i))-cc(ir(j,i)) )*rtemp(2)
               dxc(j,i) = dxc(j,i)+af(j,i)*( bb(ir(j,i))-aa(ir(j,i)) )*rtemp(3)
            end if
         end do
      end do
-     if(pfac.eq.one) then
+     if(pfac == one) then
         dxa=-dxa
         dxb=-dxb
         dxc=-dxc
@@ -811,133 +607,6 @@ module mndgho_module
   END SUBROUTINE FTOFHB
 
 
-  SUBROUTINE FTOFHB_cpmd(F,FHB,BT,numat,nqmlnk,norbs, &
-                         norbao,lin_norbao,nactatm,nfirst,nlast, &
-                         indx)
-  !
-  ! Tansform a full Fock matrix in AO basis into active HO basis
-  !
-  ! On input
-  !    F       : Fock matrix in AO, lower triangle
-  !    BT      : Transformation matrix for each GHO boundary atom,
-  !              (4x4,Nqmlnk)
-  !    numat   : Number of QM atoms
-  !    nqmlnk  : Number of GHO boundary atoms
-  !    norbs   : Number of AOs
-  !    nfirst  : location of the start of ith orbital
-  !    nlast   : location of the last of ith orbital
-  !
-  ! On output
-  !    FHB     : Fock matrix in HO, include only active orbitals
-  !
-  use chm_kinds
-#if KEY_PARALLEL==1
-  use parallel
-#endif
-
-  implicit none
-
-  ! Passed in
-  integer, intent(in)    :: numat,nqmlnk,norbs,norbao,lin_norbao,nactatm
-  integer, intent(in)    :: nfirst(*),nlast(*),indx(*)
-  real(chm_real),intent(in)    :: F(*),Bt(16,*)
-  real(chm_real),intent(inout) :: Fhb(*)
-
-  ! Local variables
-  integer                :: i,j,k,ii,jj,ij,ia,ib,ja,jb,I1
-  integer                :: L,IAMONE,INDF
-  real(chm_real)         :: FTMP(10),FTMP2(10)
-#if KEY_PARALLEL==1
-  integer, save :: nnumnod
-  logical, save :: q_first=.true.
-  logical, pointer, save :: q_do_this(:)=>Null()
-
-  if(q_first) then
-     nnumnod = numnod
-     if(associated(q_do_this))      deallocate(q_do_this)
-     if(.not.associated(q_do_this)) allocate(q_do_this(nqmlnk))
-
-     q_do_this(1:nqmlnk) = .false.
-     do i=mynod+1,nqmlnk,nnumnod
-        q_do_this(i) =.true.
-     end do
-     q_first =.false.
-  end if
-#endif
-
-  ! Core part not affected
-  FHB(1:lin_norbao) = F(1:lin_norbao)
-
-  ! Loop over GHO boundary atoms for orbitals to be transformed
-  do i=1,nqmlnk
-     i1     = indx(norbao+i)
-     ii     = nactatm+i
-     ia     = nfirst(ii)
-     ib     = nlast(ii)
-     IAMONE = ia-1
-     ij     = i1
-#if KEY_PARALLEL==1
-     if(.not.q_do_this(i)) then
-        FHB(ij+1:ij+norbao) = zero
-        ij = ij + norbao
-        do j=1,i-1
-           ij      = ij +1
-           FHB(ij) = zero
-        end do
-        FHB(ij+1) = zero
-     else
-#endif
-        do j=1,norbao                           ! F(mu,l), AO-HO block
-           ij = ij + 1                          ! Only one active HO
-                                                ! per QM-boundary atom
-           FHB(ij) = zero
-           do k=ia,ib
-              FHB(ij) = FHB(ij)+BT(k-ia+1,i)*F(j+indx(k))
-           end do
-        end do
-
-        do j=1,i-1                         ! F(l,l'), HO-other HO block
-           ja      = nfirst(nactatm+j)
-           ij      = ij +1
-           FHB(ij) = zero
-           do L=1,4
-              ftmp(L)=zero
-              indf   =ja-1+indx(ia+L-1)
-              do k=1,4
-                 ftmp(L) = ftmp(L)+BT(k,j)*F(indf+K)
-              end do
-
-              FHB(ij) = FHB(ij) + BT(L,i)*ftmp(L)
-           end do
-        end do
-
-        L = 0                              ! F(l,l), HO-HO corner block
-        do j=ia,ib
-           ja = indx(j)
-           do k = ia, j
-              L = L+1
-              ftmp(L)  = F(k+ja)
-              ftmp2(L) = zero
-           end do
-        end do
-
-        FHB(ij+1) = VBFTN(ftmp,ftmp2,BT(1:16,I),4)
-#if KEY_PARALLEL==1
-     end if
-#endif
-  end do
-#if KEY_PARALLEL==1
-  if(nnumnod > 1) then
-     ii = indx(norbao+1)+1
-     jj = ij+1
-     call gcomb(FHB(ii:jj),jj-ii+1)
-  end if
-#endif
-
-  return
-  END SUBROUTINE FTOFHB_cpmd
-
-
   real(chm_real) FUNCTION vbftn(F1,F1vb,X,ndim)
   !
   ! on return, F1vb(1) is returned as vbftn
@@ -1217,161 +886,6 @@ module mndgho_module
   END SUBROUTINE GHO_expansion
 
 
-  SUBROUTINE GHO_expansion_cpmd(norbhb,naos,linao,nqmlnk,lin_norbhb,dim_norbs, &
-                                dim_linear_norbs,mqm16,PA,PB,                  &
-                                PAHB,PBHB,PAOLD,PBOLD,                         &
-                                QMATMQ,BT,BTM,indx,UHF)
-  !
-  use chm_kinds
-  use number, only : zero,one,two,three
-  use qm1_constant, only : PT5
-#if KEY_PARALLEL==1
-  use parallel
-#endif
-
-  implicit none
-  !
-  integer :: norbhb,naos,linao,nqmlnk,lin_norbhb,dim_norbs,dim_linear_norbs,mqm16
-  integer :: indx(*)
-  real(chm_real):: PA(dim_linear_norbs),PB(dim_linear_norbs),         &
-                   PAHB(dim_linear_norbs),PBHB(dim_linear_norbs),     &
-                   PAOLD(dim_linear_norbs),PBOLD(dim_linear_norbs),   &
-                   QMATMQ(nqmlnk),BT(nqmlnk*mqm16),BTM(nqmlnk*mqm16)
-  logical :: UHF
-  !
-  ! local variables
-  integer :: i,j,ii,jj,ij,K,L,I1,J1,KK1,KK2,KK3
-  integer :: IQATM,IORB1B
-  real(chm_real):: XBT1
-  real(chm_real),parameter :: r_three=one/three
-
-#if KEY_PARALLEL==1
-  logical, save :: q_first=.true.
-  logical, pointer, save :: q_do_this(:)=>Null()
-
-  if(q_first) then
-     if(associated(q_do_this))      deallocate(q_do_this)
-     if(.not.associated(q_do_this)) allocate(q_do_this(NQMLNK))
-
-     q_do_this(1:NQMLNK) = .false.
-     do i=mynod+1,NQMLNK,numnod
-        q_do_this(i) =.true.
-     end do
-     q_first =.false.
-  end if
-#endif
-
-  ! if UHF, GHO_expansion should be used.
-
-  ! This is a copy of subroutine GHO_expansion for cpmd run. So, refer that routine for details.
-  PAOLD(1:lin_norbhb)=PAHB(1:lin_norbhb)  ! as PBHB is the same as PAHB.
-
-  ! GHO expansion I: RHF total or UHF alpha density 
-  ! Relocate the positions of active hybrid orbitals if
-  ! there are more than one QM-boundary atom.
-  loopii: do i = NORBHB,NAOS+2,-1
-     iqatm = i-NAOS
-#if KEY_PARALLEL==1
-     if(.not.q_do_this(iqatm)) cycle loopii
-#endif
-     ii = indx(i)   ! i*(i-1)/2
-     iorb1b = NAOS+4*(IQATM-1)
-     jj = indx(iorb1b)+iorb1b ! IORB1B*(IORB1B+1)/2
-     do j = 1,NAOS
-        ii = ii+1
-        jj = jj+1
-        PAHB(jj) = PAHB(ii)
-        PAHB(ii) = zero
-     end do
-     ! HB-HB blocks
-     do j = 1,iqatm
-        ii = ii+1
-        jj = jj+1
-        PAHB(jj) = PAHB(ii)
-        PAHB(ii) = zero
-        if(j.ne.iqatm) then
-           PAHB(jj+1:jj+3) = zero
-           jj = jj+3
-        end if
-     end do
-     ! The rest three auxiliary orbitals
-     do j = 2,4
-        PAHB(jj+1:jj+IORB1B+j)=zero  ! CALL VZERO(PAHB(jj+1),IORB1B+j)
-        jj       = jj+IORB1B+j
-        PAHB(jj) =(one-QMATMQ(iqatm)*r_three)*PT5   ! /three & /two
-     end do
-  end do loopii
-
-  ! Auxiliary density for the first QM-boundary atom
-#if KEY_PARALLEL==1
-  if(q_do_this(1)) then
-#endif
-     do i = NAOS+2,NAOS+4    ! NFIRST(IQLINK(1))+1,NLAST(IQLINK(1))
-        jj             = indx(i)  ! i*(i-1)/2
-        PAHB(jj+1:jj+i)= zero                   ! CALL VZERO(PAHB(jj+1),i)
-        PAHB(jj+i)     =(one-QMATMQ(1)*r_three)*PT5
-     end do
-#if KEY_PARALLEL==1
-  end if
-#endif
-  !
-  ! AO blocks...Not affected by orbital transformation
-  PA(1:LINAO) = PAHB(1:LINAO)
-#if KEY_PARALLEL==1
-  PA(LINAO+1:dim_linear_norbs) = zero
-#endif
-
-  ij = LINAO
-  ! Loop over QM-boundary atoms
-  loopkk: do k = 1,NQMLNK
-#if KEY_PARALLEL==1
-     if(.not.q_do_this(k)) then
-        do i=1,4
-           ij = ij+NAOS + 4*(k-1) + i
-        end do
-     else
-#endif
-        j1     = 16*(k-1)
-        i1     = NAOS+4*(k-1)
-        iorb1b = indx(i1)+i1   ! i1*(i1+1)/2
-        ! FOR EACH BOUNDARY ATOM, THERE ARE FOUR AOs.
-        ! BOUNDARY ATOMS MUST BE NON-HYDROGEN ATOMS...
-        do i = 1,4
-           ! SINCE ONLY ONE HYBRID-ORBITAL DENSITY ON THE BOUNDARY ATOM IS NON-ZERO
-           ! SUM OVER ORBITALS IS NOT NEEDED
-           XBT1            = BT(j1+i)                   ! BTM(J1+4*(I-1)+1)
-           PA(ij+1:ij+NAOS)= PAHB(iorb1b+1:iorb1b+NAOS)*XBT1
-           ij = ij+NAOS
-           !   BOUNDARY ATOM-OTHER BOUNDARY ATOM BLOCKS
-           do l = 1,k-1
-              kk1 = 16*(l-1)
-              kk3 = IORB1B+NAOS+4*(l-1)+1
-              PA(ij+1:ij+4)=PAHB(kk3)*XBT1*BT(kk1+1:kk1+4)  ! BTM(KK1+4*(J-1)+1)
-              ij  = ij+4
-           end do
-           !   BOUNDARY ATOM SELF BLOCK
-           kk1 = 4*(i-1)+j1
-           do j = 1,i
-              ij     = ij+1
-              kk2    = 4*(j-1)+j1
-              PA(ij) = zero
-              do L = 1,4
-                 kk3    = indx(i1+L)+i1+L  ! (i1+L)*(i1+L+1)/2
-                 PA(ij) = PA(ij)+PAHB(kk3)*BTM(kk1+L)*BTM(kk2+L)
-              end do
-           end do
-        end do
-#if KEY_PARALLEL==1
-     end if
-#endif
-  end do loopkk
-#if KEY_PARALLEL==1
-  if(numnod>1) call gcomb(PA(LINAO+1:dim_linear_norbs),dim_linear_norbs-LINAO)
-#endif
-  return
-  END SUBROUTINE GHO_expansion_cpmd
-
-
   SUBROUTINE CTRASF(norbs,nqmlnk,mqm16,norbhb,naos,BT,CHB,C)
   !
   implicit none
@@ -1495,7 +1009,7 @@ module mndgho_module
   ! loop over GHO boundary atoms
   do i=1,nqmlnk   ! mmynod+1,nqmlnk,nnumnod     ! 1,nqmlnk as if not parallel, mmynod=0,nnumnod=1
 #if KEY_PARALLEL==1
-     if(mmynod .ne. mod(i-1,nnumnod)) then
+     if(mmynod /= mod(i-1,nnumnod)) then
         ! index counter
         do j=1,4
            ! AO-HB blocks
@@ -1625,7 +1139,7 @@ module mndgho_module
            ! HB-HB blocks
            do k=1,j
               ij   = ij + 1
-              if(k.eq.j) then
+              if(k == j) then
                  xfac = one
               else
                  xfac = two
@@ -1731,7 +1245,7 @@ module mndgho_module
 !  !
 !  ! copy charge on gho atoms to cginb array.
 !  !
-!  use qmmm_module, only : qm2_ghos,qm2_ghos_r
+!  use qm1_info, only : qm_gho_info_r
 !
 !  implicit none
 !
@@ -1745,36 +1259,36 @@ module mndgho_module
 !
 !  ! for dual quantum region
 !  if(Qdual_check(1)) then
-!     Do i=1,qm2_ghos_r%nqmlnk
-!        ii = qm2_ghos_r%IQLINK(i)
+!     do i=1,qm_gho_info_r(1)%nqmlnk
+!        ii = qm_gho_info_r(1)%IQLINK(i)
 !        do j=1,numat_1
 !           jj=iabs(qminb1_dual(j))
-!           if(ii.eq.jj) cginb(j) = qm2_ghos_r%QMATMQ(i)
+!           if(ii.eq.jj) cginb(j) = qm_gho_info_r(1)%QMATMQ(i)
 !        end do
-!     End do
+!     end do
 !  else 
-!     Do i=1,qm2_ghos%nqmlnk
-!        ii = qm2_ghos%IQLINK(i)
+!     do i=1,qm_gho_info_r(2)%nqmlnk
+!        ii = qm_gho_info_r(2)%IQLINK(i)
 !        do j=1,numat_1
 !           jj=iabs(qminb1_dual(j))
-!           if(ii.eq.jj) cginb(j) = qm2_ghos%QMATMQ(i)
+!           if(ii.eq.jj) cginb(j) = qm_gho_info_r(2)%QMATMQ(i)
 !        end do
-!     End do
+!     end do
 !  end if
 !
 !  return
 !  END SUBROUTINE Get_Charge_GHO
 !
-!  SUBROUTINE Get_CG_GHO(CG,Qdual_check)
+!  SUBROUTINE Get_CG_GHO(cg,Qdual_check)
 !  !
-!  ! copy charge on gho atoms to CG array.
+!  ! copy charge on gho atoms to cg array.
 !  !
-!  use qmmm_module, only : qm2_ghos,qm2_ghos_r,qm2_ghos_p
+!  use qm1_info, only : qm_gho_info_r
 !
 !  implicit none
 !
 !  ! Passed in
-!  real(chm_real),intent(inout) :: CG(*)
+!  real(chm_real),intent(inout) :: cg(*)
 !  logical, intent(in)    :: Qdual_check(2)
 !
 !  ! Local variables
@@ -1783,21 +1297,21 @@ module mndgho_module
 !  ! for dual quantum region
 !  if(Qdual_check(1)) then
 !     if(Qdual_check(2)) then             ! get 1st gho charge for 
-!        Do i=1,qm2_ghos_r%nqmlnk         ! 2nd qm
-!           ii     = qm2_ghos_r%IQLINK(i)
-!           CG(ii) = qm2_ghos_r%QMATMQ(i)
-!        End do
+!        do i=1,qm_gho_info_r(1)%nqmlnk         ! 2nd qm
+!           ii     = qm_gho_info_r(1)%IQLINK(i)
+!           cg(ii) = qm_gho_info_r(1)%QMATMQ(i)
+!        end do
 !     else
-!        Do i=1,qm2_ghos_p%nqmlnk         ! get 2nd gho charge for
-!           ii     = qm2_ghos_p%IQLINK(i) ! 1st qm
-!           CG(ii) = qm2_ghos_p%QMATMQ(i)
-!        End do
+!        do i=1,qm_gho_info_r(2)%nqmlnk         ! get 2nd gho charge for
+!           ii     = qm_gho_info_r(2)%IQLINK(i) ! 1st qm
+!           cg(ii) = qm_gho_info_r(2)%QMATMQ(i)
+!        end do
 !     end if
 !  else
-!     Do i=1,qm2_ghos%nqmlnk
-!        ii     = qm2_ghos%IQLINK(i)
-!        CG(ii) = qm2_ghos%QMATMQ(i)
-!     End do
+!     do i=1,qm_gho_info_r(1)%nqmlnk
+!        ii     = qm_gho_info_r(1)%IQLINK(i)
+!        cg(ii) = qm_gho_info_r(1)%QMATMQ(i)
+!     end do
 !  end if
 !
 !  return

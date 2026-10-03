@@ -55,11 +55,13 @@ class Domdec {
 // For converting between local and global indices
   int globalCount;
   int *localToGlobal_d;
-  int *globalToLocal_d;
+  int *globalToLane_d; // needed for excl section
+  int *globalToBlock_d; // needed for excl section
   real3 *localPosition_d;
   real3_f *localForce_d;
   struct NbondPotential *localNbonds_d;
 // For sorting atoms into blocks
+  int2 domainDiv;
   struct DomdecBlockSort *blockSort_d;
   struct DomdecBlockToken *blockToken_d;
   int *blockBounds_d;
@@ -72,6 +74,8 @@ class Domdec {
   struct DomdecBlockPartners *blockPartners_d;
 // For exclusions
   struct ExclPotential *localExcls_d;
+  int *firstExcl_d; // firstExcl_d[(index in localExcls_d)]=(first discovered index in localExcls_d of block-block exclusion)
+  int *mapExcl_d; // mapExcl_d[(discovered indices in localExcls_d)]=(sorted indices in sortedExcls_d)
   struct DomdecBlockSort *exclSort_d;
   struct ExclPotential *sortedExcls_d;
 #ifdef USE_TEXTURE
@@ -79,7 +83,9 @@ class Domdec {
 #endif
   int sortedExclCount;
   int *blockExcls_d;
-  int *blockExclCount_d;
+// For overflow detection and dynamic reallocation
+  int *overflowFlag_d;
+  int maxPartnersPerBlockLimit;
 
   Domdec();
   ~Domdec();
@@ -97,6 +103,7 @@ class Domdec {
   void unpack_forces(System *system);
   // From domdec/cull.cu
   void cull_blocks(System *system);
+  void reallocate_partner_arrays(System *system, int newMaxPartners);
   // From domdec/assign_excl.cu
   void setup_exclusions(System *system);
   // From domdec/recull.cu

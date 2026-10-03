@@ -57,23 +57,23 @@
 ! called from dynamics
       use stream
       use multicom_aux;
-      use mpi
+      use mpi_f08
  character(len=132)::info(21)=(/'','','','','','','','','','','','','','','','','','','','',''/);! output buffer
 #if (KEY_PARALLEL==1)
 #if (KEY_SINGLE==1)
- integer :: mpifloat=MPI_REAL 
+ TYPE(MPI_Datatype) :: mpifloat=MPI_REAL 
 #endif
 #if (KEY_SINGLE==0)
- integer :: mpifloat=MPI_REAL8 
+ TYPE(MPI_Datatype) :: mpifloat=MPI_REAL8 
 #endif
 #if (KEY_INTEGER8==0)
- integer :: mpiint=MPI_INTEGER 
+ TYPE(MPI_Datatype) :: mpiint=MPI_INTEGER 
 #endif
 #if (KEY_INTEGER8==1)
- integer :: mpiint=MPI_INTEGER8 
+ TYPE(MPI_Datatype) :: mpiint=MPI_INTEGER8 
 #endif
- integer :: mpichar=MPI_CHARACTER
- integer :: mpibool=MPI_LOGICAL
+ TYPE(MPI_Datatype) :: mpichar=MPI_CHARACTER
+ TYPE(MPI_Datatype) :: mpibool=MPI_LOGICAL
 #endif
 !
       real(chm_real) :: x(:), y(:), z(:), &
@@ -238,7 +238,7 @@
       use stream
       use multicom_aux;
       use consta
-      use mpi
+      use mpi_f08
 !
       real(chm_real) :: x(:), y(:), z(:), mass(:), & ! mass(size(x,1)) ,
      & fx(:), fy(:), fz(:)
@@ -553,7 +553,7 @@
       use multicom_aux;
       use consta
       use number
-      use mpi
+      use mpi_f08
 !
       real(chm_real) :: x(:), y(:), z(:), mass(:) ! mass(size(x,1))
       logical :: update_average ! whether the current dataset should be included with the cv running average
@@ -801,7 +801,7 @@
       use consta
 ! __DEP_FILES ! in the case of CHARMM, should use a 'clean' way to open files (future?)
       use string
-      use mpi
+      use mpi_f08
       use clcg_mod, only: random; use reawri, only: iseed
       use reawri
       use param_store, only: set_param
@@ -811,25 +811,26 @@
 !
 #if (KEY_PARALLEL==1)
 #if (KEY_SINGLE==1)
- integer :: mpifloat=MPI_REAL 
+ TYPE(MPI_Datatype) :: mpifloat=MPI_REAL 
 #endif
 #if (KEY_SINGLE==0)
- integer :: mpifloat=MPI_REAL8 
+ TYPE(MPI_Datatype) :: mpifloat=MPI_REAL8 
 #endif
 #if (KEY_INTEGER8==0)
- integer :: mpiint=MPI_INTEGER 
+ TYPE(MPI_Datatype) :: mpiint=MPI_INTEGER 
 #endif
 #if (KEY_INTEGER8==1)
- integer :: mpiint=MPI_INTEGER8 
+ TYPE(MPI_Datatype) :: mpiint=MPI_INTEGER8 
 #endif
- integer :: mpichar=MPI_CHARACTER
- integer :: mpibool=MPI_LOGICAL
+ TYPE(MPI_Datatype) :: mpichar=MPI_CHARACTER
+ TYPE(MPI_Datatype) :: mpibool=MPI_LOGICAL
 #endif
 !
       real(chm_real) :: x(:), y(:), z(:), mass(:) ! mass(size(x,1))
       integer :: itime
 !
-      integer :: i, j, ibeg, iend, ierror, stat(MPI_STATUS_SIZE)
+      integer :: i, j, ibeg, iend, ierror
+      TYPE(MPI_Status) :: stat
       logical :: calctheta, deriv, qgrp
 !
       integer :: which ! replica with which the exchange was attempted
@@ -998,6 +999,13 @@
 !#endif
         nfiles=2
 ! can add others here
+! NOTE: blank the name buffers before INQUIRE. If a unit is not currently
+! connected (e.g. the trajectory unit has already been closed at the final
+! integration step), the Fortran standard leaves INQUIRE(...NAME=) undefined, so
+! these locals would otherwise hold garbage that gets shipped to the exchange
+! partner and later fed to OPEN(), crashing that rank and deadlocking the rest.
+        fnames = ''
+        new_fnames = ''
         if (iunwri.gt.0) &
 ! CHARMM VINQUIRE gives problems, did not bother to debug, since that code is obsolete anyway
      & INQUIRE(UNIT=iunwri, OPENED=openun(1), NAME=fnames(1))
@@ -1019,23 +1027,34 @@
 ! write(600+ME_STRNG,*) iunwri, new_fnames(1),
 ! & iuncrd, new_fnames(2)
 ! close(600+ME_STRNG)
+! NOTE: only re-open a unit under the partner`s file name if the partner
+! actually sent a non-blank name (i.e. its corresponding unit was open). A blank
+! name means the partner`s unit was closed for this exchange (typically the final
+! step of the run); swapping the file identity is then meaningless, so leave our
+! own unit as-is rather than OPEN('') and abort.
 ! assuming that the restart file is formatted (might change this later)
 
-        if (iunwri.gt.0.and.openun(1)) then
+        if (iunwri.gt.0.and.openun(1).and.len_trim(new_fnames(1)).gt.0) then
          close(iunwri)
          i=len(new_fnames(1))
          call trima(new_fnames(1), i)
          open(UNIT=iunwri, FILE=new_fnames(1)(1:i), FORM='FORMATTED', &
      & STATUS='OLD', ACCESS='SEQUENTIAL')
+        elseif (iunwri.gt.0.and.openun(1).and.prnlev.ge.3) then
+         write(outu,'(2A)') whoami, &
+     & ' PARTNER RESTART UNIT WAS CLOSED; SKIPPING RESTART FILE SWAP.'
         endif
 ! assuming that dcd file is unformatted
-        if (iuncrd.gt.0.and.openun(2)) then
+        if (iuncrd.gt.0.and.openun(2).and.len_trim(new_fnames(2)).gt.0) then
          close(iuncrd)
          i=len(new_fnames(2))
          call trima(new_fnames(2), i)
          open(UNIT=iuncrd, FILE=new_fnames(2)(1:i), FORM='UNFORMATTED', &
 ! & STATUS='OLD', ACCESS='APPEND')
      & STATUS='OLD', POSITION='APPEND')
+        elseif (iuncrd.gt.0.and.openun(2).and.prnlev.ge.3) then
+         write(outu,'(2A)') whoami, &
+     & ' PARTNER TRAJECTORY UNIT WAS CLOSED; SKIPPING TRAJECTORY FILE SWAP.'
         endif
 
 
@@ -1380,7 +1399,7 @@
 !cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
       function smcv_test_parallel(x,y,z,mass)
       use multicom_aux;
-      use mpi
+      use mpi_f08
       use stream
 !
       real(chm_real) :: x(:), y(:), z(:), mass(:) ! mass(size(x,1))
@@ -1508,25 +1527,25 @@
       use lu ! for computing FE
       use stream
       use multicom_aux;
-      use mpi
+      use mpi_f08
       use clcg_mod, only: random; use reawri, only: iseed
       use parallel, only: psnd4, psnd8
 !
 #if (KEY_PARALLEL==1)
 #if (KEY_SINGLE==1)
- integer :: mpifloat=MPI_REAL 
+ TYPE(MPI_Datatype) :: mpifloat=MPI_REAL 
 #endif
 #if (KEY_SINGLE==0)
- integer :: mpifloat=MPI_REAL8 
+ TYPE(MPI_Datatype) :: mpifloat=MPI_REAL8 
 #endif
 #if (KEY_INTEGER8==0)
- integer :: mpiint=MPI_INTEGER 
+ TYPE(MPI_Datatype) :: mpiint=MPI_INTEGER 
 #endif
 #if (KEY_INTEGER8==1)
- integer :: mpiint=MPI_INTEGER8 
+ TYPE(MPI_Datatype) :: mpiint=MPI_INTEGER8 
 #endif
- integer :: mpichar=MPI_CHARACTER
- integer :: mpibool=MPI_LOGICAL
+ TYPE(MPI_Datatype) :: mpichar=MPI_CHARACTER
+ TYPE(MPI_Datatype) :: mpibool=MPI_LOGICAL
 #endif
 !
       real(chm_real) :: x(:), y(:), z(:)
@@ -1537,13 +1556,13 @@
       integer :: i, j, k, l, m, which, me
       integer*4 :: ierror, m_
       integer*4 :: length(nstring-1)
-      integer*4 :: request(nstring-1)
+      TYPE(MPI_Request) :: request(nstring-1)
       logical :: smcv_voronoi_compute ! returns false if theta_i(x) does not correspond to z_i
       logical :: calcz, deriv, addforce
       real(chm_real) :: rtemp(cv%num_cv) ! for storing current CV values (theta(x))
 !
       integer, pointer :: vtemp(:), vtemp2(:) ! for gathering Voronoi stats; this is an upper bound
-      integer*4 :: stat(MPI_STATUS_SIZE)
+      TYPE(MPI_Status) :: stat
       logical :: voronoi_update
       logical :: success, qgrp, qstring, ready(nstring-1), ok
       real(chm_real) :: P_accept_cross
@@ -1811,7 +1830,7 @@
 ! currently not parallelized; I assume that it will be called infrequently (e.g. 1 in 20 or more iter.)
       use stream
       use multicom_aux;
-      use mpi
+      use mpi_f08
 ! real(chm_real) :: dx(:), dy(:), dz(:), xcomp(:), ycomp(:), zcomp(:)
       real(chm_real) :: x(:), y(:), z(:), xcomp(:), ycomp(:), zcomp(:)
       real(chm_real) :: mass(:) ! mass(size(x,1))
@@ -1938,7 +1957,7 @@
       subroutine smcv_list()
       use stream
       use multicom_aux;
-      use mpi
+      use mpi_f08
  character(len=132)::info(21)=(/'','','','','','','','','','','','','','','','','','','','',''/);! output buffer
 ! local
       integer :: i
@@ -1984,23 +2003,23 @@
 !cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
       subroutine smcv_compute_M(x,y,z,mass,inverse) ! compute matrix M from current coordinates
       use stream
-      use mpi
+      use mpi_f08
       use multicom_aux;
 #if (KEY_PARALLEL==1)
 #if (KEY_SINGLE==1)
- integer :: mpifloat=MPI_REAL 
+ TYPE(MPI_Datatype) :: mpifloat=MPI_REAL 
 #endif
 #if (KEY_SINGLE==0)
- integer :: mpifloat=MPI_REAL8 
+ TYPE(MPI_Datatype) :: mpifloat=MPI_REAL8 
 #endif
 #if (KEY_INTEGER8==0)
- integer :: mpiint=MPI_INTEGER 
+ TYPE(MPI_Datatype) :: mpiint=MPI_INTEGER 
 #endif
 #if (KEY_INTEGER8==1)
- integer :: mpiint=MPI_INTEGER8 
+ TYPE(MPI_Datatype) :: mpiint=MPI_INTEGER8 
 #endif
- integer :: mpichar=MPI_CHARACTER
- integer :: mpibool=MPI_LOGICAL
+ TYPE(MPI_Datatype) :: mpichar=MPI_CHARACTER
+ TYPE(MPI_Datatype) :: mpibool=MPI_LOGICAL
 #endif
 !
       real(chm_real) :: x(:), y(:), z(:), mass(:) ! mass(size(x,1))
@@ -2053,23 +2072,23 @@
 ! utility routine to synchronize frame and quaternion components
       use cv_frames
       use cv_quaternion
-      use mpi
+      use mpi_f08
       use multicom_aux;
 #if (KEY_PARALLEL==1)
 #if (KEY_SINGLE==1)
- integer :: mpifloat=MPI_REAL 
+ TYPE(MPI_Datatype) :: mpifloat=MPI_REAL 
 #endif
 #if (KEY_SINGLE==0)
- integer :: mpifloat=MPI_REAL8 
+ TYPE(MPI_Datatype) :: mpifloat=MPI_REAL8 
 #endif
 #if (KEY_INTEGER8==0)
- integer :: mpiint=MPI_INTEGER 
+ TYPE(MPI_Datatype) :: mpiint=MPI_INTEGER 
 #endif
 #if (KEY_INTEGER8==1)
- integer :: mpiint=MPI_INTEGER8 
+ TYPE(MPI_Datatype) :: mpiint=MPI_INTEGER8 
 #endif
- integer :: mpichar=MPI_CHARACTER
- integer :: mpibool=MPI_LOGICAL
+ TYPE(MPI_Datatype) :: mpichar=MPI_CHARACTER
+ TYPE(MPI_Datatype) :: mpibool=MPI_LOGICAL
 #endif
 !
       real(chm_real) :: x(:), y(:), z(:), mass(:) ! mass(size(x,1))

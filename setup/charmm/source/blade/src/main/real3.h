@@ -7,7 +7,10 @@
 
 
 
+// Removal of this atomicAdd gives 6% performance improvement
+
 #if defined(__CUDA_ARCH__) && __CUDA_ARCH__ < 600
+#warning "Unless your GPUs are really old, you should compile with a higher cuda architecture for optimal performance"
 // From http://stackoverflow.com/questions/16077464/atomicadd-for-real-on-gpu
 // And https://stackoverflow.com/questions/37566987/cuda-atomicadd-for-doubles-definition-error
 __device__ static inline
@@ -26,11 +29,26 @@ double atomicAdd(double* address, double val)
 }
 #endif
 
+
 __device__ static inline
 double atomicAdd(double* address, float val)
 {
   return atomicAdd(address,(double)val);
 }
+
+
+
+// Transcendental functions seem to overload automatically in cuda
+// __device__ static inline
+// float sqrtT(float a) {return sqrtf(a);}
+// __device__ static inline
+// double sqrtT(double a) {return sqrt(a);}
+// The preceding functions provide no benefit when used, while the following hurt performance
+// __device__ static inline
+// float sqrtTbad(float a) {return sqrt((double)a);}
+// __device__ static inline
+// double sqrtTbad(double a) {return sqrt(a);}
+
 
 
 
@@ -434,4 +452,57 @@ void real_sum_reduce(real input,real_type *global)
     atomicAdd(global,(real_type)local);
   }
 }
+
+template <typename real_type>
+__device__ static inline
+void real_max_reduce(real input,real *shared,real_type *global)
+{
+  real local=input;
+  real nlocal;
+  nlocal=__shfl_down_sync(0xFFFFFFFF,local,1);
+  local=(nlocal>local)?nlocal:local;
+  nlocal=__shfl_down_sync(0xFFFFFFFF,local,2);
+  local=(nlocal>local)?nlocal:local;
+  nlocal=__shfl_down_sync(0xFFFFFFFF,local,4);
+  local=(nlocal>local)?nlocal:local;
+  nlocal=__shfl_down_sync(0xFFFFFFFF,local,8);
+  local=(nlocal>local)?nlocal:local;
+  nlocal=__shfl_down_sync(0xFFFFFFFF,local,16);
+  local=(nlocal>local)?nlocal:local;
+  __syncthreads();
+  if ((0x1F & threadIdx.x)==0) {
+    shared[threadIdx.x>>5]=local;
+  }
+  __syncthreads();
+  local=0;
+  if (threadIdx.x < (blockDim.x>>5)) {
+    local=shared[threadIdx.x];
+  }
+  if (threadIdx.x < 32) {
+    if (blockDim.x>=64) {
+      nlocal=__shfl_down_sync(0xFFFFFFFF,local,1);
+      local=(nlocal>local)?nlocal:local;
+    }
+    if (blockDim.x>=128) {
+      nlocal=__shfl_down_sync(0xFFFFFFFF,local,2);
+      local=(nlocal>local)?nlocal:local;
+    }
+    if (blockDim.x>=256) {
+      nlocal=__shfl_down_sync(0xFFFFFFFF,local,4);
+      local=(nlocal>local)?nlocal:local;
+    }
+    if (blockDim.x>=512) {
+      nlocal=__shfl_down_sync(0xFFFFFFFF,local,8);
+      local=(nlocal>local)?nlocal:local;
+    }
+    if (blockDim.x>=1024) {
+      nlocal=__shfl_down_sync(0xFFFFFFFF,local,16);
+      local=(nlocal>local)?nlocal:local;
+    }
+  }
+  if (threadIdx.x==0) {
+    atomicAdd(global,(real_type)local);
+  }
+}
+
 #endif

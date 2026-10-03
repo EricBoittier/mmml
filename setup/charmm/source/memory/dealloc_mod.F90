@@ -26,6 +26,11 @@ MODULE deallocation
      module procedure dealloc_2d
      module procedure dealloc_3d
      module procedure dealloc_4d
+
+#if KEY_MODELLER==1
+     module procedure dealloc_5d
+#endif
+
   END INTERFACE
 
 CONTAINS
@@ -42,7 +47,7 @@ CONTAINS
     !                                               --RJP Nov 2008
     !
 #if KEY_PARALLEL==1
-    use mpi  
+    use mpi_f08  
 #endif
     implicit none
     !
@@ -289,7 +294,7 @@ CONTAINS
     !      Handles explicit 2D deallocations   --RJP Nov 2008 
     !
 #if KEY_PARALLEL==1
-    use mpi  
+    use mpi_f08  
 #endif
     implicit none
     !      
@@ -810,6 +815,175 @@ CONTAINS
   !______________________________________________________________________
   !______________________________________________________________________
   !
+
+#if KEY_MODELLER==1
+  SUBROUTINE dealloc_5d(filename,procname,arrayname,siz1,siz2, &
+       siz3,siz4,siz5,crl,cr4,cr8,rlg,intg,iby,ci2,ci4,ci8,ch1,ch2,ch4,ch6,ch8, &
+       ch16,log,cmpx,qdie,ierr)
+    !
+    !      Handles explicit 4D deallocations   --mfc jul 2009
+    !
+    implicit none
+    !
+    character(len=*),intent(in) :: filename,procname,arrayname
+    integer,intent(in) :: siz1,siz2,siz3,siz4,siz5
+    integer,optional,intent(out) :: ierr
+    logical,optional,intent(in) :: qdie
+    ! passed arrays, all optional arguments
+    real(kind=chm_real),allocatable,optional,dimension(:,:,:,:,:) :: crl
+    real(kind=chm_real4),allocatable,optional,dimension(:,:,:,:,:) :: cr4
+    real(kind=chm_real8),allocatable,optional,dimension(:,:,:,:,:) :: cr8
+    real,allocatable,optional,dimension(:,:,:,:,:) :: rlg
+    integer,allocatable,optional,dimension(:,:,:,:,:) :: intg
+    integer(kind=int_byte),allocatable,optional, &
+         dimension(:,:,:,:,:) :: iby
+    integer(kind=chm_int2),allocatable,optional, &
+         dimension(:,:,:,:,:) :: ci2
+    integer(kind=chm_int4),allocatable,optional, &
+         dimension(:,:,:,:,:) :: ci4
+    integer(kind=chm_int8),allocatable,optional, &
+         dimension(:,:,:,:,:) :: ci8
+    character(len=1),allocatable,optional,dimension(:,:,:,:,:) :: ch1
+    character(len=2),allocatable,optional,dimension(:,:,:,:,:) :: ch2
+    character(len=4),allocatable,optional,dimension(:,:,:,:,:) :: ch4
+    character(len=6),allocatable,optional,dimension(:,:,:,:,:) :: ch6
+    character(len=8),allocatable,optional,dimension(:,:,:,:,:) :: ch8
+    character(len=16),allocatable,optional,dimension(:,:,:,:,:) :: ch16
+    logical,allocatable,optional,dimension(:,:,:,:,:) :: log
+    complex(kind=chm_cmpx),allocatable,optional,dimension(:,:,:,:,:) :: cmpx
+    !
+    ! local variables
+    logical :: locqdie
+    integer :: hit, locierr,dsize,isize
+    !***********************************************************************
+    ! end of variable declarations
+    !***********************************************************************
+    dsize = 0
+    !
+    ! determine whether to die on errors
+    locqdie = .true.
+    if(present(qdie)) locqdie = qdie
+    isize = siz1*siz2*siz3*siz4*siz5
+    !----------------------------------------------------------------------
+    ! check to see which array type is present in arguments
+    ! chm_real
+    if(present(crl)) then
+       if (allocated(crl)) dsize = size(crl)
+       deallocate(crl,stat=locierr)
+       call proc_dealloc_outpt(filename,procname,arrayname,dsize, &
+            'crl',5,locierr,locqdie,kind(crl),siz1,siz2,siz3,siz4,siz5)
+       ! general integer
+    else if(present(intg)) then
+       if (allocated(intg)) dsize = size(intg)
+       deallocate(intg,stat=locierr)
+       call proc_dealloc_outpt(filename,procname,arrayname,dsize, &
+            'intg',3,locierr,locqdie,kind(intg),siz1,siz2,siz3,siz4,siz5)
+       ! general real
+    else if(present(rlg)) then
+       if (allocated(rlg)) dsize = size(rlg)
+       deallocate(rlg,stat=locierr)
+       call proc_dealloc_outpt(filename,procname,arrayname,dsize, &
+            'rlg',3,locierr,locqdie,kind(rlg),siz1,siz2,siz3,siz4,siz5)
+       ! character(len=6)
+    else if(present(ch6)) then
+       if (allocated(ch6)) dsize = size(ch6)
+       deallocate(ch6,stat=locierr)
+       call proc_dealloc_outpt(filename,procname,arrayname,dsize, &
+            'ch6',3,locierr,locqdie,kind(ch6),siz1,siz2,siz3,siz4,siz5)
+       ! character(len=8)
+    else if(present(ch8)) then
+       if (allocated(ch8)) dsize = size(ch8)
+       deallocate(ch8,stat=locierr)
+       call proc_dealloc_outpt(filename,procname,arrayname,dsize, &
+            'ch8',3,locierr,locqdie,kind(ch8),siz1,siz2,siz3,siz4,siz5)
+       !! chm_real4
+    else if(present(cr4)) then
+       if (allocated(cr4)) dsize = size(cr4)
+       deallocate(cr4,stat=locierr)
+       call proc_dealloc_outpt(filename,procname,arrayname,dsize, &
+            'cr4',3,locierr,locqdie,kind(cr4),siz1,siz2,siz3,siz4,siz5)
+       ! chm_int8
+    else if(present(ci8)) then
+       if (allocated(ci8)) dsize = size(ci8)
+       deallocate(ci8,stat=locierr)
+       call proc_dealloc_outpt(filename,procname,arrayname,dsize, &
+            'ci8',3,locierr,locqdie,kind(ci8),siz1,siz2,siz3,siz4,siz5)
+       ! logical
+    else if(present(log)) then
+       if (allocated(log)) dsize = size(log)
+       deallocate(log,stat=locierr)
+       call proc_dealloc_outpt(filename,procname,arrayname,dsize, &
+            'log',3,locierr,locqdie,kind(log),siz1,siz2,siz3,siz4,siz5)
+       ! chm_cmpx
+    else if(present(cmpx)) then
+       if (allocated(cmpx)) dsize = size(cmpx)
+       deallocate(cmpx,stat=locierr)
+       call proc_dealloc_outpt(filename,procname,arrayname,dsize, &
+            'cmpx',3,locierr,locqdie,kind(cmpx),siz1,siz2,siz3,siz4,siz5)
+       !less common types
+       ! chm_real8
+    else if(present(cr8)) then
+       if (allocated(cr8)) dsize = size(cr8)
+       deallocate(cr8,stat=locierr)
+       call proc_dealloc_outpt(filename,procname,arrayname,dsize, &
+            'cr8',3,locierr,locqdie,kind(cr8),siz1,siz2,siz3,siz4,siz5)
+       ! chm_int4
+    else if(present(ci4)) then
+       if (allocated(ci4)) dsize = size(ci4)
+       deallocate(ci4,stat=locierr)
+       call proc_dealloc_outpt(filename,procname,arrayname,dsize, &
+            'ci4',3,locierr,locqdie,kind(ci4),siz1,siz2,siz3,siz4,siz5)
+       ! int_byte
+    else if(present(iby)) then
+       if (allocated(iby)) dsize = size(iby)
+       deallocate(iby,stat=locierr)
+       call proc_dealloc_outpt(filename,procname,arrayname,dsize, &
+            'iby',3,locierr,locqdie,kind(iby),siz1,siz2,siz3,siz4,siz5)
+       ! chm_int2
+    else if(present(ci2)) then
+       if (allocated(ci2)) dsize = size(ci2)
+       deallocate(ci2,stat=locierr)
+       call proc_dealloc_outpt(filename,procname,arrayname,dsize, &
+            'ci2',3,locierr,locqdie,kind(ci2),siz1,siz2,siz3,siz4,siz5)
+       ! character(len=1)
+    else if(present(ch1)) then
+       if (allocated(ch1)) dsize = size(ch1)
+       deallocate(ch1,stat=locierr)
+       call proc_dealloc_outpt(filename,procname,arrayname,dsize, &
+            'ch1',3,locierr,locqdie,kind(ch1),siz1,siz2,siz3,siz4,siz5)
+       ! character(len=2)
+    else if(present(ch2)) then
+       if (allocated(ch2)) dsize = size(ch2)
+       deallocate(ch2,stat=locierr)
+       call proc_dealloc_outpt(filename,procname,arrayname,dsize, &
+            'ch2',3,locierr,locqdie,kind(ch2),siz1,siz2,siz3,siz4,siz5)
+       ! character(len=4)
+    else if(present(ch4)) then
+       if (allocated(ch4)) dsize = size(ch4)
+       deallocate(ch4,stat=locierr)
+       call proc_dealloc_outpt(filename,procname,arrayname,dsize, &
+            'ch4',3,locierr,locqdie,kind(ch4),siz1,siz2,siz3,siz4,siz5)
+       ! character(len=16)
+    else if(present(ch16)) then
+       if (allocated(ch16)) dsize = size(ch16)
+       deallocate(ch16,stat=locierr)
+       call proc_dealloc_outpt(filename,procname,arrayname,dsize, &
+            'ch16',3,locierr,locqdie,kind(ch16),siz1,siz2,siz3,siz4,siz5)
+    else
+       ! write warning if no array match
+       write(6,*) 'd5d No array matched list of availablev types.',filename,procname,arrayname
+       !        if(qdie) then call wrndie...
+    endif
+    ! save error status
+    if(present(ierr)) then
+       ierr = locierr
+    endif
+  end SUBROUTINE dealloc_5d
+#endif
+
+  !______________________________________________________________________
+  !______________________________________________________________________
+  !
   SUBROUTINE dealloc_vchar(filename,procname,arrayname,siz1, &
        cha,chlen,qdie,ierr)
     !
@@ -848,7 +1022,11 @@ CONTAINS
   !______________________________________________________________________
   !
   SUBROUTINE proc_dealloc_outpt(filename,procname,arrayname, &
+#if KEY_MODELLER==1
+       dsize,arrtype,arrank,ierrp,qdiep,arkind,isiz1,isiz2,isiz3,isiz4,isiz5)
+#else
        dsize,arrtype,arrank,ierrp,qdiep,arkind,isiz1,isiz2,isiz3,isiz4)
+#endif
     !
     !     This routine processes data associated with the memory
     !     deallocation for an array
@@ -861,8 +1039,14 @@ CONTAINS
     logical,intent(in) :: qdiep 
     integer,intent(in) :: dsize  !determined size
     integer,intent(in) :: isiz1  !intended size
+#if KEY_MODELLER==1
+    integer,optional,intent(in) :: isiz2,isiz3,isiz4,isiz5  !intended size
+    integer :: isz2,isz3,isz4,isz5
+#else
     integer,optional,intent(in) :: isiz2,isiz3,isiz4  !intended size
     integer :: isz2,isz3,isz4
+#endif
+
     !
     !     local
     logical :: qdie
@@ -873,21 +1057,41 @@ CONTAINS
     isz2 = 1
     isz3 = 1
     isz4 = 1
+
+#if KEY_MODELLER==1
+    isz5 = 1
+#endif
+
     if(present(isiz2))isz2 = isiz2
     if(present(isiz3))isz3 = isiz3
     if(present(isiz4))isz4 = isiz4
+#if KEY_MODELLER==1
+    if(present(isiz5))isz5 = isiz5
+#endif
     qdie = qdiep
     if(qnodealldie) qdie=.false.  !if set globally, don't die
     if (ierrp.gt.0) then
        call deallocerr(filename,procname,arrayname,qdie)
        if (qaccumdeallocdb) call accum_deallfail(filename,procname, &
+#if KEY_MODELLER==1
+            arrayname,dsize,arrtype,arrank,arkind,isiz1,isz2,isz3,isz4,isz5)
+#else
             arrayname,dsize,arrtype,arrank,arkind,isiz1,isz2,isz3,isz4)
+#endif
     else 
        if (qaccumdeallocdb) call accum_deallocdb(filename,procname, &
+#if KEY_MODELLER==1
+            arrayname,dsize,arrtype,arrank,arkind,isiz1,isz2,isz3,isz4,isz5) 
+#else
             arrayname,dsize,arrtype,arrank,arkind,isiz1,isz2,isz3,isz4) 
+#endif
     endif
     if(qprndeallocf) call prndealloc_fly(filename,procname,arrayname, &
+#if KEY_MODELLER==1
+         dsize,arrtype,arrank,arkind,ierrp,isiz1,isz2,isz3,isz4,isz5)
+#else
          dsize,arrtype,arrank,arkind,ierrp,isiz1,isz2,isz3,isz4)
+#endif
     !
 999 CONTINUE
   end SUBROUTINE proc_dealloc_outpt
@@ -913,7 +1117,11 @@ CONTAINS
   !______________________________________________________________________
   !
   SUBROUTINE accum_deallocdb(filename,procname,arrayname, &
+#if KEY_MODELLER==1
+       dsize,arrtype,arrank,arkind,isiz1,isiz2,isiz3,isiz4,isiz5)
+#else
        dsize,arrtype,arrank,arkind,isiz1,isiz2,isiz3,isiz4)
+#endif
     !
     !     Adds information for a successfully deallocated array to
     !     the database.  Initially, allocates memory for the db.
@@ -924,7 +1132,11 @@ CONTAINS
     character(len=*),intent(in) :: arrtype
     integer,intent(in) :: arrank,arkind
     integer,intent(in) :: dsize,isiz1
+#if KEY_MODELLER==1
+    integer,optional,intent(in) :: isiz2,isiz3,isiz4,isiz5
+#else
     integer,optional,intent(in) :: isiz2,isiz3,isiz4
+#endif
     ! local variables
     integer :: ii,locsize
     !
@@ -953,6 +1165,9 @@ CONTAINS
     if(present(isiz2)) locsize=locsize*isiz2
     if(present(isiz3)) locsize=locsize*isiz3
     if(present(isiz4)) locsize=locsize*isiz4
+#if KEY_MODELLER==1
+    if(present(isiz5)) locsize=locsize*isiz5
+#endif
     !
     if(ndeallocentr.lt.dealldbarsz) then
        ndeallocentr = ndeallocentr + 1
@@ -974,7 +1189,11 @@ CONTAINS
   !______________________________________________________________________
   !
   SUBROUTINE accum_deallfail(filename,procname,arrayname, &
+#if KEY_MODELLER==1
+       dsize,arrtype,arrank,arkind,isiz1,isiz2,isiz3,isiz4,isiz5)
+#else
        dsize,arrtype,arrank,arkind,isiz1,isiz2,isiz3,isiz4)
+#endif
     !
     !     Adds information for a failed deallocaton attempt to
     !     the database.  Initially, allocates memory for the db.
@@ -985,7 +1204,11 @@ CONTAINS
     character(len=*),intent(in) :: arrtype
     integer,intent(in) :: arrank,arkind
     integer,intent(in) :: dsize,isiz1
+#if KEY_MODELLER==1
+    integer,optional,intent(in) :: isiz2,isiz3,isiz4,isiz5
+#else
     integer,optional,intent(in) :: isiz2,isiz3,isiz4
+#endif
     ! local variables
     integer :: ii,locsize
     !
@@ -1014,6 +1237,9 @@ CONTAINS
     if(present(isiz2)) locsize=locsize*isiz2
     if(present(isiz3)) locsize=locsize*isiz3
     if(present(isiz4)) locsize=locsize*isiz4
+#if KEY_MODELLER==1
+    if(present(isiz5)) locsize=locsize*isiz5
+#endif
     !
     if(nfdeallocentr.lt.fdealldbarsz) then
        nfdeallocentr = nfdeallocentr + 1
@@ -1133,7 +1359,11 @@ CONTAINS
   !______________________________________________________________________
   !
   SUBROUTINE prndealloc_fly(filename,procname,arrayname, &
+#if KEY_MODELLER==1
+       dsize,arrtype,arrank,arkind,ierrp,siz1,siz2,siz3,siz4,siz5)
+#else
        dsize,arrtype,arrank,arkind,ierrp,siz1,siz2,siz3,siz4)
+#endif
     !
     !     Prints information about a deallocation (successful or failed)
     !     immediately after it has occurred--i.e. "on the fly"
@@ -1143,7 +1373,11 @@ CONTAINS
     character(len=*),intent(in) :: filename,procname,arrayname
     character(len=*),intent(in) :: arrtype
     integer,intent(in) :: arrank,dsize,siz1,ierrp,arkind
+#if KEY_MODELLER==1
+    integer,optional,intent(in) :: siz2,siz3,siz4,siz5
+#else
     integer,optional,intent(in) :: siz2,siz3,siz4
+#endif
     ! local variables
     integer :: locsize
     !***************************************************************
@@ -1152,6 +1386,9 @@ CONTAINS
     if(present(siz2)) locsize=locsize*siz2
     if(present(siz3)) locsize=locsize*siz3
     if(present(siz4)) locsize=locsize*siz4
+#if KEY_MODELLER==1
+    if(present(siz5)) locsize=locsize*siz5
+#endif
     if(ierrp.eq.0) then
        write(6,'(A)') 'Successfully Deallocated Array' 
        write(6,'(9X,A8,1X,A6,5X,A7,1X,A8,2X,A6,3X,A4,1X,A12)') &

@@ -42,6 +42,10 @@ void Variables::setup_parse_variables()
   helpVariables["reset"]="?variables reset> This deletes the data stored in varaibles.\n";
   parseVariables["set"]=&Variables::set;
   helpVariables["set"]="?variables set token value> This saves the value value into token, so value can later be accessed with the {token} syntax using curly brackets. Values are stored as strings, but can be treated as numbers using the calculate command.\n";
+  parseVariables["setupper"]=&Variables::setupper;
+  helpVariables["setupper"]="?variables setupper token value> Casts value to uppercase, and then saves the result into token\n";
+  parseVariables["setlower"]=&Variables::setlower;
+  helpVariables["setlower"]="?variables setlower token value> Casts value to lowercase, and then saves the result into token\n";
   parseVariables["calculate"]=&Variables::calculate;
   helpVariables["calculate"]="?variables calculate token int|real expression> Calculate the result of expression, cast it into a int or real formatted string, and store that string in token. The systax parsing for expressions is not very advanced. Consequently, operators are always first, which means there is no need to define and order of operations. sin(x+y) is expressed as \"sin + {x} {y}\", while sin(x)+y is \"+ sin {x} {y}\". Currently supported operators are in flux, but should soon include + - * / sin cos sqrt log exp floor\n";
   parseVariables["print"]=&Variables::dump;
@@ -93,6 +97,36 @@ void Variables::set(char *line,char *token,System *system)
   data[key]=value;
 }
 
+void Variables::setupper(char *line,char *token,System *system)
+{
+  std::string key,value;
+
+  key=io_nexts(line);
+
+  value=io_uppers(io_nexts(line));
+  while (io_peeks(line)!="") {
+    value.append(" ");
+    value.append(io_uppers(io_nexts(line)));
+  }
+
+  data[key]=value;
+}
+
+void Variables::setlower(char *line,char *token,System *system)
+{
+  std::string key,value;
+
+  key=io_nexts(line);
+
+  value=io_lowers(io_nexts(line));
+  while (io_peeks(line)!="") {
+    value.append(" ");
+    value.append(io_lowers(io_nexts(line)));
+  }
+
+  data[key]=value;
+}
+
 void Variables::calculate(char *line,char *token,System *system)
 {
   char value[MAXLENGTHSTRING];
@@ -112,7 +146,7 @@ void Variables::calculate(char *line,char *token,System *system)
 void Variables::dump(char *line,char *token,System *system)
 {
   for (std::map<std::string,std::string>::iterator ii=data.begin(); ii!=data.end(); ii++) {
-    fprintf(stdout,"variables print> %s = %s\n",ii->first.c_str(),ii->second.c_str());
+    printlog("variables print> %s = %s\n",ii->first.c_str(),ii->second.c_str());
   }
 }
 
@@ -121,13 +155,13 @@ void Variables::help(char *line,char *token,System *system)
   char name[MAXLENGTHSTRING];
   io_nexta(line,name);
   if (name=="") {
-    fprintf(stdout,"?variables> Available directives are:\n");
+    printlog("?variables> Available directives are:\n");
     for (std::map<std::string,std::string>::iterator ii=helpVariables.begin(); ii!=helpVariables.end(); ii++) {
-      fprintf(stdout," %s",ii->first.c_str());
+      printlog(" %s",ii->first.c_str());
     }
-    fprintf(stdout,"\n");
+    printlog("\n");
   } else if (helpVariables.count(name)==1) {
-    fprintf(stdout,helpVariables[name].c_str());
+    printlog(helpVariables[name].c_str());
   } else {
     error(line,name,system);
   }
@@ -157,7 +191,7 @@ void Variables::substitute(char *line)
       }
     }
     if ((openBrace==-1) != (closeBrace==-1)) {
-      fprintf(stdout,"DEBUG: openBrace %d closeBrace %d\n",openBrace,closeBrace);
+      printlog("DEBUG: openBrace %d closeBrace %d\n",openBrace,closeBrace);
       fatal(__FILE__,__LINE__,"Mismatched curly braces in string \"%s\"\n",line);
     }
 
@@ -169,7 +203,7 @@ void Variables::substitute(char *line)
 
       // get value
       if (data.count(token)==0) {
-        fprintf(stdout,"DEBUG: openBrace %d closeBrace %d\n",openBrace,closeBrace);
+        printlog("DEBUG: openBrace %d closeBrace %d\n",openBrace,closeBrace);
         fatal(__FILE__,__LINE__,"Unrecognized variable token name {%s} in line \"%s\"\n",token.c_str(),line);
       }
       value=data[token];
@@ -188,5 +222,5 @@ void Variables::substitute(char *line)
       anySubstitutions=true;
     }
   }
-  if (anySubstitutions) fprintf(stdout,"SUBSTITUTE> %s",line);
+  if (anySubstitutions) printlog("SUBSTITUTE> %s",line);
 }

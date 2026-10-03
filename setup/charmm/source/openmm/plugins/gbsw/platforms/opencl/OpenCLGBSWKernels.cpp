@@ -122,8 +122,8 @@ void OpenCLCalcGBSWForceKernel::initialize(const System& system, const GBSWForce
     bool usePeriodic = (force.getNonbondedMethod() != GBSWForce::NoCutoff && force.getNonbondedMethod() != GBSWForce::CutoffNonPeriodic);
     string source = OpenCLGBSWKernelSources::gbsw2;
     nb.addInteraction(useCutoff, usePeriodic, false, force.getCutoffDistance(), vector<vector<int> >(), source, force.getForceGroup());
-    nb.addParameter(OpenCLNonbondedUtilities::ParameterInfo("gbswParams", "float", 2, sizeof(cl_float2), params->getDeviceBuffer()));;
-    nb.addParameter(OpenCLNonbondedUtilities::ParameterInfo("bornForce", "real", 1, elementSize, bornForce->getDeviceBuffer()));;
+    nb.addParameter(ComputeParameterInfo(*params, "gbswParams", "float", 2));
+    nb.addParameter(ComputeParameterInfo(*bornForce, "bornForce", "real", 1));
     cl.addForce(new OpenCLGBSWForceInfo(nb.getNumForceBuffers(), force));
 }
 

@@ -5379,7 +5379,8 @@ SUBROUTINE SWAP(C,N,MDIM,NOCC,IFILL)
   use sizes
   implicit none
   INTEGER N,MDIM,NOCC,IFILL
-  real(chm_real) C(MDIM,MDIM), PSI(MAXORB), STDPSI(MAXORB)
+  real(chm_real) C(MDIM,MDIM)
+  real(chm_real), save :: PSI(MAXORB), STDPSI(MAXORB)
   !
   INTEGER I,JFILL
   real(chm_real)  X,SUMMAX,SUM

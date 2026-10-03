@@ -17,12 +17,13 @@
 #include "system/potential.h"
 #include "system/state.h"
 #include "domdec/domdec.h"
+#include "main/gpu_check.h"
 
-#include "main/defines.h"  // for gpuCheck
+
 
 // Class constructors
 System::System() {
-  fprintf(stdout,"Creating a copy of system\n");
+  printlog("Creating a copy of system\n");
   verbose=0;
   variables=new Variables;
   parameters=NULL;
@@ -41,7 +42,7 @@ System::System() {
 }
 
 System::~System() {
-  fprintf(stdout,"Destroying a copy of system\n");
+  printlog("Destroying a copy of system\n");
   if (variables) delete(variables);
   if (parameters) delete(parameters);
   if (structure) delete(structure);
@@ -207,13 +208,13 @@ void System::help(char *line,char *token,System *system)
 {
   std::string name=io_nexts(line);
   if (name=="") {
-    fprintf(stdout,"?> This program uses a script to allow you to set up and run alchemical molecular simulations. Each line of the script starts with a directive, followed by other subdirectives. Comments after ! characters are ignored. At any point in the script, you may put help after a directive or subdirective to get documentation on how to use it. Top level directives are listed at the end of this help section. Directives can be divided into directives that set up and manipulate the system, and directives that alter the control flow and allow you to script the set up.\n\nSystem manipulation directives:\nThe general work flow is to set up the potential energy function parameters with calls to parameters, then set up the atoms, bond connectivity, and other potential terms with calls to structure, then set up the msld alchemical treatment with calls to msld, then set up the initial conditions or starting structure with calls to state. After all of that you are ready to call run to calculate energy, minimize the structure, or run dynamics.\n\nScripting control directives:\nStream allows you to start execution of another script from this point in the current script. Set allows you to set internal variables which can be accessed in subsequent commands by enclosing the variable name in {}. (Variable names can also contain variables via nested {{}}). Functions (function/endfunction) can be defined for later use and called (call), if (if/elseif/else/endif) and while (while/endwhile) loops are also available. Some of these features may not yet be implemented, see the listing below for what's available.\n\nSeveral available directives are:\n");
+    printlog("?> This program uses a script to allow you to set up and run alchemical molecular simulations. Each line of the script starts with a directive, followed by other subdirectives. Comments after ! characters are ignored. At any point in the script, you may put help after a directive or subdirective to get documentation on how to use it. Top level directives are listed at the end of this help section. Directives can be divided into directives that set up and manipulate the system, and directives that alter the control flow and allow you to script the set up.\n\nSystem manipulation directives:\nThe general work flow is to set up the potential energy function parameters with calls to parameters, then set up the atoms, bond connectivity, and other potential terms with calls to structure, then set up the msld alchemical treatment with calls to msld, then set up the initial conditions or starting structure with calls to state. After all of that you are ready to call run to calculate energy, minimize the structure, or run dynamics.\n\nScripting control directives:\nStream allows you to start execution of another script from this point in the current script. Set allows you to set internal variables which can be accessed in subsequent commands by enclosing the variable name in {}. (Variable names can also contain variables via nested {{}}). Functions (function/endfunction) can be defined for later use and called (call), if (if/elseif/else/endif) and while (while/endwhile) loops are also available. Some of these features may not yet be implemented, see the listing below for what's available.\n\nSeveral available directives are:\n");
     for (std::map<std::string,std::string>::iterator ii=helpSystem.begin(); ii!=helpSystem.end(); ii++) {
-      fprintf(stdout," %s",ii->first.c_str());
+      printlog(" %s",ii->first.c_str());
     }
-    fprintf(stdout,"\n");
+    printlog("\n");
   } else if (helpSystem.count(token)==1) {
-    fprintf(stdout,helpSystem[name].c_str());
+    printlog(helpSystem[name].c_str());
   } else {
     error(line,token,system);
   }
@@ -224,53 +225,62 @@ void System::error(char *line,char *token,System *system)
   fatal(__FILE__,__LINE__,"Unrecognized token: %s\n",token);
 }
 
-System * init_system(int ngpus, int * gpus)
+System* init_system(int ngpus,int *gpus)
 {
-  System * system;
+  System *system;
   int id;
-  int idCount = omp_get_max_threads(); // omp_get_num_threads();
-  void ** message; // OMP
+  int idCount=omp_get_max_threads(); // omp_get_num_threads();
+  void **message; // OMP
 
-  int available;
-  int notAvailable = cudaGetDeviceCount(&available);
+  // available must be initialized: cudaGetDeviceCount does NOT write it on
+  // the error path, so on failure it would otherwise report stack garbage.
+  int available=0;
+  cudaError_t notAvailable=cudaGetDeviceCount(&available);
+  // Any non-success code means we have no usable GPU. The old test
+  // (notAvailable==1) only caught cudaErrorInvalidValue and silently fell
+  // through on everything else (e.g. cudaErrorUnknown 999 when the node's
+  // nvidia_uvm module is not loaded), printing the garbage count above.
+  if (notAvailable!=cudaSuccess) {
+    fatal(__FILE__,__LINE__,
+      "cudaGetDeviceCount failed: %s (error %d); no usable GPU on this node\n",
+      cudaGetErrorString(notAvailable),(int)notAvailable);
+  }
+  if (available<omp_get_max_threads()) {
+    fatal(__FILE__, __LINE__,
+      "BLaDE uses one GPU per OpenMP thread, but this run has %d OpenMP "
+      "thread(s) and only %d usable GPU(s).\n"
+      "Set OMP_NUM_THREADS to at most the number of GPUs (e.g. "
+      "OMP_NUM_THREADS=1 for a single GPU) or request more GPUs.\n",
+       omp_get_max_threads(),available);
+  }
 
-  if (notAvailable==1)
-      fatal(__FILE__, __LINE__, "No GPUs available\n");
+  system=new System[idCount];
 
-  if (available < omp_get_max_threads())
-      fatal(__FILE__, __LINE__,
-            "Running with %d omp threads but only %d GPUs\n",
-            omp_get_max_threads(), available);
-
-  system = new System[idCount];
-  message = (void**) calloc(idCount, sizeof(void*));
-  for (id=0; id < idCount; id++) {
-    system[id].id = id;
-    if (ngpus < idCount) {
-        system[id].gpu = id;
+  message=(void**)calloc(idCount,sizeof(void*));
+  for (id=0; id<idCount; id++) {
+    system[id].id=id;
+    if (ngpus<idCount) {
+      system[id].gpu=id;
     } else {
-        system[id].gpu = gpus[id];
+      system[id].gpu=gpus[id];
     }
-    system[id].mothership_gpu = system[0].gpu;
-    system[id].idCount = idCount;
-    system[id].message = message;
-    gpuCheck( cudaSetDevice(system[id].gpu) );
-    if (id != 0) {
+    system[id].mothership_gpu=system[0].gpu;
+    system[id].idCount=idCount;
+    system[id].message=message;
+    gpuCheck(cudaSetDevice(system[id].gpu));
+    if (id!=0) {
       int accessible;
-      gpuCheck( cudaDeviceCanAccessPeer(&accessible,
-					system[id].gpu,
-					system[id].mothership_gpu) );
-      fprintf(stdout, "Device %d %s access device %d directly\n",
-	      system[id].gpu,
-              (accessible? "can" : "cannot"),
-	      system[id].mothership_gpu);
+      gpuCheck(cudaDeviceCanAccessPeer(&accessible,
+        system[id].gpu,system[id].mothership_gpu));
+      printlog("Device %d %s access device %d directly\n",
+        system[id].gpu,(accessible? "can" : "cannot"),system[id].mothership_gpu);
       if (accessible) {
-	// host 0, required 0
-        gpuCheck( cudaDeviceEnablePeerAccess(system[id].mothership_gpu, 0) );
+        gpuCheck(cudaDeviceEnablePeerAccess(system[id].mothership_gpu,0)); // host, required 0
       }
     }
-    system[id].rngGPU = new RngGPU;
+    system[id].rngGPU=new RngGPU;
   }
+
   return system;
 }
 
@@ -282,25 +292,23 @@ void dest_system(System *system)
   free(system->message);
   for (id=0; id<idCount; id++) {
     cudaSetDevice(system[id].gpu);
-    if (id != 0) {
+    if (id!=0) {
       int accessible;
-      cudaDeviceCanAccessPeer(&accessible,
-			      system[id].gpu,
-			      system[id].mothership_gpu);
+      cudaDeviceCanAccessPeer(&accessible, system[id].gpu, system[id].mothership_gpu);
       if (accessible) {
-        cudaDeviceDisablePeerAccess(system[id].mothership_gpu); // host 0, have to disable on free, otherwise an error is thrown on reallocation
+        cudaDeviceDisablePeerAccess(system[id].mothership_gpu); // host, have to disable on free, otherwise an error is thrown on reallocation
       }
     }
     delete(system[id].rngGPU);
-    system[id].rngGPU = NULL;
+    system[id].rngGPU=NULL;
   }
 
   delete[] system;
 }
 
-System* blade_init_system(int ngpus, int * gpus)
+System* blade_init_system(int ngpus,int *gpus)
 {
-    return init_system(ngpus, gpus);
+  return init_system(ngpus,gpus);
 }
 
 void blade_dest_system(System *system)
@@ -308,9 +316,23 @@ void blade_dest_system(System *system)
   dest_system(system);
 }
 
-void blade_set_device(System * system)
+void blade_set_device(System *system)
 {
-  gpuCheck( cudaSetDevice(system[omp_get_thread_num()].gpu) );
+  system+=omp_get_thread_num();
+  gpuCheck(cudaSetDevice(system->gpu));
+}
+
+void blade_set_seed(System *system,int seed,int rank)
+{
+  system+=omp_get_thread_num();
+  // Pack the CHARMM seed and global rank; use a separate GPU-stream salt.
+  unsigned long long streamSeed=
+    ((unsigned long long)(unsigned int)seed<<32)|(unsigned int)rank;
+  streamSeed^=0x9e3779b97f4a7c15ULL*(unsigned int)system->id;
+  unsigned long cpuSeed=(unsigned long)
+    ((unsigned int)streamSeed^(unsigned int)(streamSeed>>32));
+  system->rngCPU->seed(cpuSeed);
+  system->rngGPU->seed(streamSeed);
 }
 
 void blade_set_verbose(System *system,int v)

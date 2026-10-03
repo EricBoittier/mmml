@@ -149,7 +149,7 @@ contains
     use parallel
     use psf
 #if KEY_MPI==1
-    use mpi
+    use mpi_f08
 #if KEY_PARALLEL==1
 #else
     integer COMM_CHARMM 
@@ -514,7 +514,7 @@ contains
     use vector
     use parallel
 #if KEY_MPI==1
-    use mpi
+    use mpi_f08
 #if KEY_PARALLEL==1
 #else
     integer COMM_CHARMM 

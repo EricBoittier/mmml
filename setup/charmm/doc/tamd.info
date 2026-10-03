@@ -70,7 +70,7 @@ nonbond-spec::=   *Note Nbonds:(doc/nbonds.info).
 
 frequency-spec::= [NSTEP int] [IHBFrq int] [INBFrq int] [NPRInt int]
 tolerence-spec::= [TOLENR real] [TOLGRD real] [TOLITR int] [TOLSTP real]
-                  *Note Minmiz:(doc/minmiz.info).
+                  *Note Minimiz:(doc/minimiz.info).
 
 dynamics-parameters::= *Note dynamc:(doc/dynamc.info).
 Berendsen-thermostat::= [QREF real] [TREF real]

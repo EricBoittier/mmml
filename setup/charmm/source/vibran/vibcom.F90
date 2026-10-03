@@ -52,8 +52,8 @@ contains
             1, ZERO, ZERO, .TRUE.)
     ENDIF
 
-    CALL RAISE(.FALSE.,.FALSE.,NAT3,NATOM,.FALSE.,0,DD1,DDM, &
-         0,0,0,0,0,0,0,.FALSE.,.TRUE.)
+    CALL RAISE(.FALSE.,.FALSE.,NAT3,NATOM,.FALSE.,DDM,DD1,DDM, &
+         DDV,X,Y,Z,DX,DY,DZ,.FALSE.,.TRUE.)
 
     DO I=ISTRT,ISTOP
        CALL RALEG2(DDV(1,I),DDSCR,NATOM,DD1)
@@ -215,7 +215,7 @@ contains
        ! write out complete matrix
        call chmalloc('vibio.src','WRTSCD','DDS',NAT3*6,crl=DDS)
        CALL RAISE(LRAISE,LRAISE,NAT3,NATOM,QMASWT,AMASS, &
-            DD1,DDM,DDS,X,Y,Z,0,0,0,.FALSE.,QMASWT)
+            DD1,DDM,DDS,X,Y,Z,DX,DY,DZ,.FALSE.,QMASWT)
 
        IF(LFINIT) THEN
           CALL GENSD(IUNSCD,PRLEV,NAT3,X,Y,Z,XNEW,YNEW,ZNEW,DD1, &

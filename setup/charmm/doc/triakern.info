@@ -1,9 +1,13 @@
+CHARMM Element doc/triakern.info 1.1
+
+File: TriaKern, Node: Top, Up: (doc/commands.info), Next: Syntax
+
 		Triatomic Kernel Module*
 
 by
 Marco Pezzella
 Debasish Koner
-Kai Töpfer
+Kai Topfer
 Markus Meuwly
 
 TRIAKERN provides additional potential forms for three atomic systems, beside 
@@ -16,19 +20,25 @@ TRIAKERN is invoked using the TKRN keyword.
 
 References:
 [1] Oliver T. Unke and Markus Meuwly, J. Chem. Inf. Model., 2017, 57, 8,
-	1923–1931.
+	1923-1931.
 [2] Seyedeh Maryam Salehi, Debasish Koner and Markus Meuwly, J. Phys. Chem. B, 
 	2019, 123, 15, 3282-3290.
 [3] Debasish Koner, Juan Carlos San Vicente Veliz, Ad van der Avoird, and 
 	Markus Meuwly, Phys. Chem. Chem. Phys., 2019, 21, 24976-24983
 
-Syntax ::  Syntax of the TRIAKERN module.
-Description :: A brief description of the module commands and how it works.
-How to build the grid :: Brief description of how to build a grid.
-Example  :: Energy conservation for the He--H2 complex from Reference [3]
+* Menu:
+
+* Syntax::               Syntax of the TRIAKERN module.
+* Description::          A brief description of the module commands and how it works.
+* How to build a grid::  Brief description of how to build a grid.
+* Example::              Energy conservation for the He--H2 complex from Reference [3].
+* Changes::              Source files added and modified by the module.
 
 
-!---------------------------------- Syntax -----------------------------------!
+File: TriaKern, Node: Syntax, Up: Top, Next: Description, Previous: Top
+
+                                    Syntax
+
 
 
 TKRN {	ACTIvate [ {csvfile} STR ] [ {k1} INT ] [ {k2} INT ] [ {k3} INT ] 
@@ -51,7 +61,10 @@ unit-conversion 	-	Provide options to convert between Kernel potential
 3x atom selection 	- 	Selection of atom(s) 1, 2 and 3, respectively.
 
 
-!-------------------------------- Description --------------------------------!
+File: TriaKern, Node: Description, Up: Top, Next: How to build a grid, Previous: Syntax
+
+                                 Description
+
 
 TRKN ACTI:
 The command 'TRKN ACTI' must be followed by a string label of the external 
@@ -199,7 +212,10 @@ No compatibility issues with of the TRIAKERN module wit other modules in CHARMM
 are observed. However, it does not support other potential manipulation modules
 such as the BLOCK module.
 
-!---------------------------- How to build a grid ----------------------------!
+File: TriaKern, Node: How to build a grid, Up: Top, Next: Example, Previous: Description
+
+                             How to build a grid
+
 
 1 - For a representative number of points of the potential energy surface, 
 perform a set of ab initio calculations along the three dimensions of your
@@ -234,7 +250,10 @@ energy contribution with such a large absolute number that it lead to artifacts
 in displaying the energies in the output.
 
 
-!---------------------------------- Example ----------------------------------!
+File: TriaKern, Node: Example, Up: Top, Next: Changes, Previous: How to build a grid
+
+                                   Example
+
 
 test/c47test/triakern_heh2.inp
 
@@ -314,7 +333,10 @@ TKRN acti scnlig 16 0 0 jzrd -
   sele resname LIG .and. type S end
 """
 
-!---------------------------------- CHANGES ----------------------------------!
+File: TriaKern, Node: Changes, Up: Top, Previous: Example
+
+                            Changes and additions
+
 
 source/energy/triakern.F90:
 - Complete overhaul of the triakern module, but still backwards compatible.

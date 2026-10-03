@@ -1561,11 +1561,11 @@ is efficient enough and it also keeps the order of verbose output the
 same as in scalar calculations, which for the more efficient PLNB code
 will never be the case. When having a large number of h-bonds to study
 (eg lipids) then maybe you want to increase MAXDA=50 parameter in
-hbanal.src
+hbanal.F90
 
 
 Periodic boundary conditions are taken into account using the hardwired
-minimum image code (see *note bound:(doc/image.info)) if keyword PBC is
+minimum image code (see *note bound:(doc/images.info)) if keyword PBC is
 given. Supported geometries are:
 
 Geometry              Keyword   Required information    Auxiliary information

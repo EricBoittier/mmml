@@ -61,7 +61,9 @@ documentation.
 * Usage::               Usage and functional support of CHARMM/OpenMM
 * Multi-GPU::           Using multiple GPUs and platforms
 * Block-OpenMM::        Running Block calculations on the GPU
+* Variable-e14fac::     Using different e14fac variables in a system
 * GBSAOBC2-OpenMM::     Running GBSA OBC2 Generalized Born Model OpenMM
+* Own-System-Context::  Supplying the OpenMM System and Context yourself
 * Examples::            Examples of CHARMM/OpenMM usage
 
 
@@ -493,7 +495,24 @@ van der Waals is removed. Thus for the electrostatics using lambda of the form:
 Elec_reactant = (1-lambda/0.8)*Step(0.8-lambda)*Elec_reactant and Elec_product = lambda/0.8*Step(lambda-0.2).
 
 
-File: OpenMM, Node: GBSAOBC2-OpenMM, Up: Top, Next: Top, Previous: Block-OpenMM
+File: OpenMM, Node: Variable-e14fac, Up: Top, Next: GBSAOBC2-OpenMM, Previous: Block-OpenMM
+
+In order to enable the use of e14fac values that differ within your system,
+e.g., if you wanted to run gaff ligands or LigParGen ligands with c36
+proteins this functionality utilizes an NATOM array set-up in scalar with
+   scalar e14f set <value> <selection>
+that is then propgated to OpenMM's MD engine for energy or dynamics calls.
+
+If a fixed constant e14fac value is to be used, OpenMM now uses the same NATOM
+array of e14ff values, but all values are the same.
+
+We note that this option is presently only accessible in the CHARMM/BLaDE API
+and the CHARMM/OpenMM API.
+
+VARIABLE E14FAC VALUES ARE NOT SUPPORTED ON OTHER CHARMM ENERGY ROUTINES
+
+
+File: OpenMM, Node: GBSAOBC2-OpenMM, Up: Top, Next: Own-System-Context, Previous: Block-OpenMM
 
 USING GBSA OBC2 IN CHARMM/OPENMM
 ================================
@@ -517,7 +536,165 @@ See *note usage:(doc/openmm.info)
 Test case: test/c39test/omm_gbsaobc_streamn-test.inp
 
 
-File: OpenMM, Node: Examples, Up: Top, Next: Top, Previous: GBSAOBC2-OpenMM
+File: OpenMM, Node: Own-System-Context, Up: Top, Next: Examples, Previous: GBSAOBC2-OpenMM
+
+SUPPLYING THE OPENMM SYSTEM AND CONTEXT YOURSELF
+================================================
+
+Normally CHARMM builds the OpenMM System and Context itself and you never see
+them. That needs no setup and is what you want almost always. This section is
+for the cases it cannot cover, all of which are reached from pyCHARMM.
+
+There are three:
+
+1. Platform properties. The OMM command and omm.set_platform choose a platform
+   by name, but properties such as CUDA precision, a device index, or
+   deterministic forces are arguments to the OpenMM Context constructor. To set
+   them, the Context has to be yours.
+
+2. An integrator CHARMM does not build. CHARMM makes five kinds from the
+   DYNAmics options. A Nose-Hoover chain, a custom integrator, or a scheme
+   CHARMM does not select has to be built by you and handed over inside a
+   Context.
+
+3. A force whose energy is computed by your own Python function. OpenMM only
+   supports that in a Context created from Python, so this is the prerequisite.
+   This is the case a machine-learned potential falls into. It needs OpenMM
+   8.5 or newer, where openmm.PythonForce first appears; see A PYTHON
+   FUNCTION AS A FORCE below.
+
+A PYTHON FUNCTION AS A FORCE
+----------------------------
+
+You write a plain function. It is given the positions and returns the energy
+and the forces. CHARMM calls it whenever it needs an energy, and the number
+lands in the CHARMM energy table like any other term.
+
+    def compute(state):
+        pos = state.getPositions(asNumpy=True)
+        return my_model_energy(pos), my_model_forces(pos)
+
+    system = openmm.System()
+    omm.use_external_system(system)
+    energy.show()                          # CHARMM fills the System in
+
+    system.addForce(openmm.PythonForce(compute))
+    context = openmm.Context(system, integrator, platform)
+    omm.use_external_context(context)      # CHARMM drives it from here
+
+    energy.show()                          # your function is called
+    dynamics.run(...)                      # and once per step here
+
+Two things are worth knowing before you build a run around it.
+
+Your function is called TWICE for every ENERgy, and once per dynamics step.
+The second call fills in the CHARMM energy table, which asks OpenMM for each
+energy term separately. For a cheap function this does not matter. For a
+machine-learned potential it doubles the cost of every energy evaluation,
+though not of dynamics.
+
+It works on all four platforms: Reference, CPU, OpenCL and CUDA, for energies
+and for dynamics. Whatever platform the rest of the system runs on, your
+function is Python, so a slow function is slow everywhere -- unless the
+function itself puts the work on the GPU, which is what the machine-learning
+case does.
+
+A TORCH MODEL AS A FORCE
+------------------------
+
+The main use of this is a trained model. Your function moves the positions
+into a tensor, asks the model for the energy, and asks autograd for the
+forces:
+
+    import torch
+
+    model = my_trained_model.to("cuda")
+
+    def model_energy(state):
+        pos = state.getPositions(asNumpy=True).value_in_unit(unit.nanometer)
+        x = torch.tensor(pos, dtype=torch.float32, device="cuda",
+                         requires_grad=True)
+        e = model(x)
+        (grad,) = torch.autograd.grad(e, x)
+        return float(e.item()), -grad.detach().cpu().numpy()
+
+    system.addForce(openmm.PythonForce(model_energy))
+
+The energy is in kJ/mol and the forces in kJ/mol/nm, which is what OpenMM
+uses. CHARMM converts them.
+
+Note there is no TorchScript here. The model is called as an ordinary Python
+function. This matters because openmm-torch has deprecated its TorchForce,
+which depends on TorchScript, so a plain function is the route that will last.
+
+If you name a specific GPU in the Context properties, remember that a queueing
+system may give you a different card than the one you named. Leave the device
+out and let CUDA_VISIBLE_DEVICES decide.
+
+THE ORDER, AND WHY IT IS THAT WAY
+---------------------------------
+
+A Context is built on a System, and the System must already hold CHARMM's
+particles and forces when the Context is made. CHARMM also cannot hand a
+System outward afterwards: a C++ System pointer cannot be turned back into a
+usable Python object. So you create the System, CHARMM fills in that one, and
+only then do you build the Context on it.
+
+    system = openmm.System()          # you create it, empty
+    omm.use_external_system(system)   # CHARMM will fill in THIS one
+    energy.show()                     # ...and does, here
+    context = openmm.Context(system, integrator, platform, properties)
+    omm.use_external_context(context) # CHARMM drives it from now on
+
+WHO OWNS WHAT
+-------------
+
+You own the System object, the Context, the integrator inside it, and the
+platform choice. CHARMM never destroys any of them.
+
+CHARMM owns what goes into the System -- particles from the PSF, restraints,
+forces added through the force store, thermostat and barostat -- and it owns
+the coordinates. It pushes positions, velocities, time and box vectors in
+before every evaluation, so anything you set there is overwritten. Set
+coordinates through CHARMM, not through the Context.
+
+Because the integrator is yours, the timestep, temperature and friction in
+force are the ones you built it with, not the ones on the DYNAmics command.
+CHARMM says so when it notices a difference rather than pretending the command
+took effect. Its own time accounting still comes from the command, so keeping
+the two in step is your responsibility.
+
+Each dynamics command starts the integrator from clean state, which is what
+CHARMM does for its own Context by rebuilding it. This is not cosmetic: with
+that reset removed from CHARMM's own path, the stochastic restart stages of
+test/c37test/omm_dynamics.inp move by 0.8 to 3.6 per cent, while deterministic
+stages do not move at all.
+
+WHAT IS REFUSED
+---------------
+
+A Context built on a different System is refused: it would hold none of the
+forces CHARMM added, so its energies would be wrong rather than obviously
+broken. A Context offered before the System has been filled in is refused as
+well, since it would have no particles.
+
+Changing a force that is already in the System -- its energy term, its
+parameters, whether it is switched on -- is refused while you own the System.
+CHARMM's answer to such a change is to rebuild the System, which it cannot do
+to one it did not create, and filling the same System twice would count every
+particle and force a second time. Adding a force afterwards is fine: it is
+added to the System as it stands.
+
+Releasing gives back both the Context and the System, because the System cannot
+be filled in twice; CHARMM returns to making its own of each. Neither of your
+objects is destroyed.
+
+Example: tool/pycharmm/examples/example_openmm_external_context.py
+
+See *note usage:(doc/openmm.info)
+
+
+File: OpenMM, Node: Examples, Up: Top, Next: Top, Previous: Own-System-Context
 
 
 EXAMPLES

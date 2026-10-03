@@ -69,10 +69,12 @@ SUBROUTINE NBONDG(X,Y,Z,NNNBG,MXJNBG,JNBG,INBLOG,ING14,IGLO14, &
 #endif
   !
   ! QC:UW_031205: Make sure that QM/QM group interactions are excluded
+#if KEY_MNDO97==0 && KEY_SQUANTM==0
 #if KEY_GAMESS==1 || KEY_QUANTUM==1 || KEY_CADPAC==1 || KEY_SCCDFTB==1 || KEY_QCHEM==1 || KEY_QTURBO==1 || KEY_G09==1
   use gamess_fcm
   use energym
 #endif 
+#endif
   use chutil,only:atomid
   use machutil,only:die,timre,timrb
   !---   use nbutil_module,only:qinlist
@@ -165,6 +167,7 @@ SUBROUTINE NBONDG(X,Y,Z,NNNBG,MXJNBG,JNBG,INBLOG,ING14,IGLO14, &
   IF (qRep) nRepXG = 0
 #endif /* (repsetup)  REPLICA*/
   !
+#if KEY_MNDO97==0 && KEY_SQUANTM==0
 #if KEY_GAMESS==1 || KEY_QUANTUM==1 || KEY_CADPAC==1 || KEY_SCCDFTB==1 || KEY_QCHEM==1 || KEY_QTURBO==1 || KEY_G09==1
   !     QC: UW_031205 set up the QM list if QM energy is to be computed
   !     note that we don't do this for QUANTUM because it handles
@@ -205,6 +208,7 @@ SUBROUTINE NBONDG(X,Y,Z,NNNBG,MXJNBG,JNBG,INBLOG,ING14,IGLO14, &
      ENDIF
   ENDIF
 #endif 
+#endif
 
   CMPLTD=.FALSE.
   !
@@ -578,11 +582,13 @@ SUBROUTINE NBONDG(X,Y,Z,NNNBG,MXJNBG,JNBG,INBLOG,ING14,IGLO14, &
   ENDIF ! PRNLEV
 
 #endif /* (repprint)  REPLICA*/
+#if KEY_MNDO97==0 && KEY_SQUANTM==0
 #if KEY_GAMESS==1 || KEY_QUANTUM==1 || KEY_CADPAC==1 || KEY_SCCDFTB==1 || KEY_QCHEM==1 || KEY_QTURBO==1 || KEY_G09==1
   !          QC: UW_031205
   IF (PRNLEV >= 5.AND.(QETERM(QMEL))) &
        WRITE(OUTU,'(I9,A)') nqmexl,' QM group pairs excluded'
 #endif 
+#endif
 
   IF (TIMER == 1) THEN
      IF(PRNLEV >= 2) WRITE(OUTU,830) 'TOTAL TIME IN NBONDG'

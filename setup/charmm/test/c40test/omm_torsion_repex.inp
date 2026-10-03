@@ -104,7 +104,7 @@ repd reset
 outu 6
 prnlev 5 node 0
 
-if @result .ne. 2 echo TESTCASE RESULT: failed
-if @result .eq. 2 echo TESTCASE RESULT: passed
+if @result .ne. 2 echo OMM_TORSION_REPEX TESTCASE RESULT: fail
+if @result .eq. 2 echo OMM_TORSION_REPEX TESTCASE RESULT: pass
 
 stop

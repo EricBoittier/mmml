@@ -87,6 +87,11 @@ MODULE allocation
      module procedure alloc_2d
      module procedure alloc_3d
      module procedure alloc_4d
+
+#if KEY_MODELLER==1
+     module procedure alloc_5d
+#endif
+
   end INTERFACE
 
 CONTAINS
@@ -102,7 +107,7 @@ CONTAINS
     !  This routine handles explicit 1D array allocations
     !                                                  --RJP Nov 2008
 #if KEY_PARALLEL==1
-    use mpi
+    use mpi_f08
     use iso_c_binding
     use parallel,only:mpi_real8_size, mpi_real4_size
 #endif 
@@ -144,7 +149,7 @@ CONTAINS
     integer :: hit, locierr,loclb,locub
 #if KEY_PARALLEL==1
     type(c_ptr) :: cptr
-    integer(kind=MPI_ADDRESS_KIND) mpisize, mpiptr
+    integer(kind=MPI_ADDRESS_KIND) mpisize
 #endif 
     !***********************************************************************
     ! end of variable declarations
@@ -250,12 +255,12 @@ CONTAINS
           call wrndie(0,'<ALLOC_1D>','INVALID LOWER BOUND, ALLOCATING NON MPI MEMORY')
        else
           mpisize = locub-loclb+1
-          call mpi_alloc_mem(mpisize, MPI_INFO_NULL, mpiptr, locierr)
+          call mpi_alloc_mem(mpisize, MPI_INFO_NULL, cptr, locierr)
           if (locierr /= MPI_SUCCESS) then
              locierr = 1
           else
              locierr = 0
-             cptr = transfer(mpiptr, cptr)
+             ! cptr already set by mpi_alloc_mem
              call c_f_pointer(cptr, mibyp, [locub-loclb+1])
           endif
        endif
@@ -329,12 +334,12 @@ CONTAINS
           call wrndie(-5,'<ALLOC_1D>','MPI memory (mcrlp) must have lower bound=1')
        else
           mpisize = mpi_real8_size*(locub-loclb+1)
-          call mpi_alloc_mem(mpisize, MPI_INFO_NULL, mpiptr, locierr)
+          call mpi_alloc_mem(mpisize, MPI_INFO_NULL, cptr, locierr)
           if (locierr /= MPI_SUCCESS) then
              locierr = 1
           else
              locierr = 0
-             cptr = transfer(mpiptr, cptr)
+             ! cptr already set by mpi_alloc_mem
              call c_f_pointer(cptr, mcrlp, [locub-loclb+1])
           endif
        endif
@@ -349,12 +354,12 @@ CONTAINS
           call wrndie(-5,'<ALLOC_1D>','MPI memory (mcr4p) must have lower bound=1')
        else
           mpisize = mpi_real4_size*(locub-loclb+1)
-          call mpi_alloc_mem(mpisize, MPI_INFO_NULL, mpiptr, locierr)
+          call mpi_alloc_mem(mpisize, MPI_INFO_NULL, cptr, locierr)
           if (locierr /= MPI_SUCCESS) then
              locierr = 1
           else
              locierr = 0
-             cptr = transfer(mpiptr, cptr)
+             ! cptr already set by mpi_alloc_mem
              call c_f_pointer(cptr, mcr4p, [locub-loclb+1])
           endif
        endif
@@ -383,7 +388,7 @@ CONTAINS
     !  This routine handles explicit 2D array allocations
     !                                                     -- RJP Nov 2008 
 #if KEY_PARALLEL==1
-    use mpi
+    use mpi_f08
     use iso_c_binding
     use parallel,only:mpi_real8_size
 #endif 
@@ -420,7 +425,7 @@ CONTAINS
     integer :: hit, locierr,loclb1,locub1,loclb2,locub2
 #if KEY_PARALLEL==1
     type(c_ptr) :: cptr
-    integer(kind=MPI_ADDRESS_KIND) mpisize, mpiptr
+    integer(kind=MPI_ADDRESS_KIND) mpisize
 #endif 
     !***********************************************************************
     ! end of variable declarations
@@ -562,12 +567,12 @@ CONTAINS
           call wrndie(-5,'<ALLOC_1D>','MPI memory (mcrlp) must have lower bound=1')
        else
           mpisize = mpi_real8_size*(locub1-loclb1+1)*(locub2-loclb2+1)
-          call mpi_alloc_mem(mpisize, MPI_INFO_NULL, mpiptr, locierr)
+          call mpi_alloc_mem(mpisize, MPI_INFO_NULL, cptr, locierr)
           if (locierr /= MPI_SUCCESS) then
              locierr = 1
           else
              locierr = 0
-             cptr = transfer(mpiptr, cptr)
+             ! cptr already set by mpi_alloc_mem
              call c_f_pointer(cptr, mcrlp, [locub1-loclb1+1, locub2-loclb2+1])
           endif
        endif
@@ -1011,6 +1016,223 @@ CONTAINS
   !______________________________________________________________________
   !______________________________________________________________________
   !
+  !______________________________________________________________________
+  !______________________________________________________________________
+  !
+
+#if KEY_MODELLER==1
+  SUBROUTINE alloc_5d(filename,procname,arrayname,size,siz2,siz3,siz4,siz5, &
+       crl,cr4,cr8,rlg,intg,ci2,ci4,ci8,iby,ch1,ch2,ch4,ch6,ch8,ch16,log, &
+       cmpx,qdie,ierr,lbou,lbou2,lbou3,lbou4,lbou5)
+    !
+    !  This routine handles explicit 3D array allocations
+    !                                                --RJP Nov 2008
+    implicit none
+    character(len=*),intent(in) :: filename,procname,arrayname
+    integer,intent(in) :: size,siz2,siz3,siz4,siz5
+    integer,optional,intent(in) :: lbou,lbou2,lbou3,lbou4,lbou5
+    logical,optional,intent(in) :: qdie
+    integer,optional,intent(out) :: ierr
+    ! passed arrays, all optional arguments
+    real(kind=chm_real),allocatable,optional,dimension(:,:,:,:,:) :: crl
+    real(kind=chm_real4),allocatable,optional,dimension(:,:,:,:,:) :: cr4
+    real(kind=chm_real8),allocatable,optional,dimension(:,:,:,:,:) :: cr8
+    real,allocatable,optional,dimension(:,:,:,:,:) :: rlg
+    integer,allocatable,optional,dimension(:,:,:,:,:) :: intg
+    integer(kind=int_byte),allocatable,optional, &
+         dimension(:,:,:,:,:) :: iby
+    integer(kind=chm_int2),allocatable,optional, &
+         dimension(:,:,:,:,:) :: ci2
+    integer(kind=chm_int4),allocatable,optional, &
+         dimension(:,:,:,:,:) :: ci4
+    integer(kind=chm_int8),allocatable,optional, &
+         dimension(:,:,:,:,:) :: ci8
+    character(len=1),allocatable,optional,dimension(:,:,:,:,:) :: ch1
+    character(len=2),allocatable,optional,dimension(:,:,:,:,:) :: ch2
+    character(len=4),allocatable,optional,dimension(:,:,:,:,:) :: ch4
+    character(len=6),allocatable,optional,dimension(:,:,:,:,:) :: ch6
+    character(len=8),allocatable,optional,dimension(:,:,:,:,:) :: ch8
+    character(len=16),allocatable,optional,dimension(:,:,:,:,:) :: ch16
+    logical,allocatable,optional,dimension(:,:,:,:,:) :: log
+    complex(kind=chm_cmpx),allocatable,optional,dimension(:,:,:,:,:) :: cmpx
+    !
+    ! local variables
+    logical :: locqdie
+    integer :: hit,locierr,loclb1,locub1,loclb2,locub2,loclb3,locub3,loclb4,locub4,loclb5,locub5
+    !***********************************************************************
+    ! end of variable declarations
+    !***********************************************************************
+    ! determine bounds
+    loclb1 = 1
+    if(present(lbou)) then
+       loclb1 = lbou
+    endif
+    locub1 = loclb1 + size -1
+    !
+    loclb2 = 1
+    if(present(lbou2)) then
+       loclb2 = lbou2
+    endif
+    locub2 = loclb2 + siz2 -1
+    !
+    loclb3 = 1
+    if(present(lbou3)) then
+       loclb3 = lbou3
+    endif
+    locub3 = loclb3 + siz3 -1
+    !
+    loclb4 = 1
+    if(present(lbou4)) then
+       loclb4 = lbou4
+    endif
+    locub4 = loclb4 + siz4 -1
+    !
+    loclb5 = 1
+    if(present(lbou5)) then
+       loclb5 = lbou5
+    endif 
+    locub5 = loclb5 + siz5 -1
+    !
+    ! determine whether to die on errors
+    locqdie = .true.
+    if(present(qdie)) then
+       locqdie = qdie
+    endif
+    !----------------------------------------------------------------------
+    ! check to see which array type is present in arguments
+    ! chm_real
+    if(present(crl)) then
+       allocate(crl(loclb1:locub1,loclb2:locub2,loclb3:locub3,loclb4:locub4,loclb5:locub5), &
+            stat=locierr)
+       call proc_alloc_outpt(filename,procname,arrayname,size, &
+            'crl',5,locierr,locqdie,kind(crl), &
+            sz2p=siz2,sz3p=siz3,sz4p=siz4,sz5p=siz5,isallocated=allocated(crl))
+       ! general integer
+    else if(present(intg)) then
+       allocate(intg(loclb1:locub1,loclb2:locub2,loclb3:locub3,loclb4:locub4,loclb5:locub5), &
+            stat=locierr)
+       call proc_alloc_outpt(filename,procname,arrayname,size, &
+            'intg',5,locierr,locqdie,kind(intg),sz2p=siz2,sz3p=siz3,sz4p=siz4,sz5p=siz5, &
+            isallocated=allocated(intg))
+       ! general real
+    else if(present(rlg)) then
+       allocate(rlg(loclb1:locub1,loclb2:locub2,loclb3:locub3,loclb4:locub4,loclb5:locub5), &
+            stat=locierr)
+       call proc_alloc_outpt(filename,procname,arrayname,size, &
+            'rlg',5,locierr,locqdie,kind(rlg),sz2p=siz2,sz3p=siz3,sz4p=siz4,sz5p=siz5, &
+            isallocated=allocated(rlg))
+       ! character(len=6)
+    else if(present(ch6)) then
+       allocate(ch6(loclb1:locub1,loclb2:locub2,loclb3:locub3,loclb4:locub4,loclb5:locub5), &
+            stat=locierr)
+       call proc_alloc_outpt(filename,procname,arrayname,size, &
+            'ch6',5,locierr,locqdie,kind(ch6),sz2p=siz2,sz3p=siz3,sz4p=siz4,sz5p=siz5, &
+            isallocated=allocated(ch6))
+       ! character(len=8)
+    else if(present(ch8)) then
+       allocate(ch8(loclb1:locub1,loclb2:locub2,loclb3:locub3,loclb4:locub4,loclb5:locub5), &
+            stat=locierr)
+       call proc_alloc_outpt(filename,procname,arrayname,size, &
+            'ch8',5,locierr,locqdie,kind(ch8),sz2p=siz2,sz3p=siz3,sz4p=siz4,sz5p=siz5, &
+            isallocated=allocated(ch8))
+       !! chm_real4
+    else if(present(cr4)) then
+       allocate(cr4(loclb1:locub1,loclb2:locub2,loclb3:locub3,loclb4:locub4,loclb5:locub5), &
+            stat=locierr)
+       call proc_alloc_outpt(filename,procname,arrayname,size, &
+            'cr4',3,locierr,locqdie,kind(cr4),sz2p=siz2,sz3p=siz3,sz4p=siz4,sz5p=siz5, &
+            isallocated=allocated(cr4))
+       ! chm_int8
+    else if(present(ci8)) then
+       allocate(ci8(loclb1:locub1,loclb2:locub2,loclb3:locub3,loclb4:locub4,loclb5:locub5), &
+            stat=locierr)
+       call proc_alloc_outpt(filename,procname,arrayname,size, &
+            'ci8',3,locierr,locqdie,kind(ci8),sz2p=siz2,sz3p=siz3,sz4p=siz4,sz5p=siz5, &
+            isallocated=allocated(ci8))
+       ! logical
+    else if(present(log)) then
+       allocate(log(loclb1:locub1,loclb2:locub2,loclb3:locub3,loclb4:locub4,loclb5:locub5), &
+            stat=locierr)
+       call proc_alloc_outpt(filename,procname,arrayname,size, &
+            'log',3,locierr,locqdie,kind(log),sz2p=siz2,sz3p=siz3,sz4p=siz4,sz5p=siz5, &
+            isallocated=allocated(log))
+       ! chm_cmpx
+    else if(present(cmpx)) then
+       allocate(cmpx(loclb1:locub1,loclb2:locub2,loclb3:locub3,loclb4:locub4,loclb5:locub5), &
+            stat=locierr)
+       call proc_alloc_outpt(filename,procname,arrayname,size, &
+            'cmpx',3,locierr,locqdie,kind(cmpx),sz2p=siz2,sz3p=siz3,sz4p=siz4,sz5p=siz5, &
+            isallocated=allocated(cmpx))
+       !less common types
+       ! chm_real8
+    else if(present(cr8)) then
+       allocate(cr8(loclb1:locub1,loclb2:locub2,loclb3:locub3,loclb4:locub4,loclb5:locub5), &
+            stat=locierr)
+       call proc_alloc_outpt(filename,procname,arrayname,size, &
+            'cr8',3,locierr,locqdie,kind(cr8),sz2p=siz2,sz3p=siz3,sz4p=siz4,sz5p=siz5, &
+            isallocated=allocated(cr8))
+       ! chm_int4
+    else if(present(ci4)) then
+       allocate(ci4(loclb1:locub1,loclb2:locub2,loclb3:locub3,loclb4:locub4,loclb5:locub5), &
+            stat=locierr)
+       call proc_alloc_outpt(filename,procname,arrayname,size, &
+            'ci4',3,locierr,locqdie,kind(ci4),sz2p=siz2,sz3p=siz3,sz4p=siz4,sz5p=siz5, &
+            isallocated=allocated(ci4))
+       ! int_byte
+    else if(present(iby)) then
+       allocate(iby(loclb1:locub1,loclb2:locub2,loclb3:locub3,loclb4:locub4,loclb5:locub5), &
+            stat=locierr)
+       call proc_alloc_outpt(filename,procname,arrayname,size, &
+            'iby',3,locierr,locqdie,kind(iby),sz2p=siz2,sz3p=siz3,sz4p=siz4,sz5p=siz5 &
+            ,isallocated=allocated(iby))
+       ! chm_int2
+    else if(present(ci2)) then
+       allocate(ci2(loclb1:locub1,loclb2:locub2,loclb3:locub3,loclb4:locub4,loclb5:locub5), &
+            stat=locierr)
+       call proc_alloc_outpt(filename,procname,arrayname,size, &
+            'ci2',3,locierr,locqdie,kind(ci2),sz2p=siz2,sz3p=siz3,sz4p=siz4,sz5p=siz5, &
+            isallocated=allocated(ci2))
+       ! character(len=1)
+    else if(present(ch1)) then
+       allocate(ch1(loclb1:locub1,loclb2:locub2,loclb3:locub3,loclb4:locub4,loclb5:locub5), &
+            stat=locierr)
+       call proc_alloc_outpt(filename,procname,arrayname,size, &
+            'ch1',3,locierr,locqdie,kind(ch1),sz2p=siz2,sz3p=siz3,sz4p=siz4,sz5p=siz5, &
+            isallocated=allocated(ch1))
+       ! character(len=2)
+    else if(present(ch2)) then
+       allocate(ch2(loclb1:locub1,loclb2:locub2,loclb3:locub3,loclb4:locub4,loclb5:locub5), &
+            stat=locierr)
+       call proc_alloc_outpt(filename,procname,arrayname,size, &
+            'ch2',3,locierr,locqdie,kind(ch2),sz2p=siz2,sz3p=siz3,sz4p=siz4,sz5p=siz5, &
+            isallocated=allocated(ch2))
+       ! character(len=4)
+    else if(present(ch4)) then
+       allocate(ch4(loclb1:locub1,loclb2:locub2,loclb3:locub3,loclb4:locub4,loclb5:locub5), &
+            stat=locierr)
+       call proc_alloc_outpt(filename,procname,arrayname,size, &
+            'ch4',3,locierr,locqdie,kind(ch4),sz2p=siz2,sz3p=siz3,sz4p=siz4,sz5p=siz5, &
+            isallocated=allocated(ch4))
+       ! character(len=16)
+    else if(present(ch16)) then
+       allocate(ch16(loclb1:locub1,loclb2:locub2,loclb3:locub3,loclb4:locub4,loclb5:locub5), &
+            stat=locierr)
+       call proc_alloc_outpt(filename,procname,arrayname,size, &
+            'ch16',3,locierr,locqdie,kind(ch16),sz2p=siz2,sz3p=siz3,sz4p=siz4,sz5p=siz5, &
+            isallocated=allocated(ch16))
+    else
+       ! write warning if no array match
+       write(6,*) 'all5d No array matched list of available types.',filename,procname,arrayname
+       !        if(qdie) then call wrndie...
+    endif
+    ! save error status
+    if(present(ierr)) then
+       ierr = locierr
+    endif
+  end SUBROUTINE alloc_5d
+
+#endif
+
   SUBROUTINE alloc_vchar(filename,procname,arrayname,size, &
        cha,chlen,qdie,ierr,lbou)
     !
@@ -1067,8 +1289,15 @@ CONTAINS
   !______________________________________________________________________
   !______________________________________________________________________
   !
+
+#if KEY_MODELLER==1
+  SUBROUTINE proc_alloc_outpt(filename,procname,arrayname, &
+       size,arrtype,arrank,ierrp,qdiep,arkind,sz2p,sz3p,sz4p,sz5p,isallocated)
+#else
   SUBROUTINE proc_alloc_outpt(filename,procname,arrayname, &
        size,arrtype,arrank,ierrp,qdiep,arkind,sz2p,sz3p,sz4p,isallocated)
+#endif
+
     !
     !     This routine processes data associated with the memory
     !     allocation for an array
@@ -1079,7 +1308,11 @@ CONTAINS
     integer,intent(in) :: arrank,ierrp,arkind
     logical,intent(in) :: qdiep 
     integer,intent(in) :: size
+#if KEY_MODELLER==1
+    integer,optional,intent(in) :: sz2p,sz3p,sz4p,sz5p
+#else
     integer,optional,intent(in) :: sz2p,sz3p,sz4p
+#endif
     logical,optional,intent(in) :: isallocated
     !
     !     loca
@@ -1095,15 +1328,27 @@ CONTAINS
     if (ierrp.gt.0) then  !if unsuccessful allocation
        call allocerr(filename,procname,arrayname,size,qdie,isallocated)
        if (qaccumallocdb) call accum_allocfail(filename,procname, &
+#if KEY_MODELLER==1
+            arrayname,size,arrtype,arrank,arkind,sz2p,sz3p,sz4p,sz5p)
+#else
             arrayname,size,arrtype,arrank,arkind,sz2p,sz3p,sz4p)
+#endif
        !if accumulating database, call accumulation routine
     else 
        if (qaccumallocdb) call accum_allocdb(filename,procname, &
+#if KEY_MODELLER==1
+            arrayname,size,arrtype,arrank,arkind,sz2p,sz3p,sz4p,sz5p)
+#else
             arrayname,size,arrtype,arrank,arkind,sz2p,sz3p,sz4p)
+#endif
     endif
     ! if printing on the fly
     if(qprnallocf) call prnalloc_fly(filename,procname,arrayname, &
+#if KEY_MODELLER==1
+         size,arrtype,arrank,arkind,ierrp,sz2p,sz3p,sz4p,sz5p)
+#else
          size,arrtype,arrank,arkind,ierrp,sz2p,sz3p,sz4p)
+#endif
     !
 
   END SUBROUTINE proc_alloc_outpt
@@ -1134,7 +1379,11 @@ CONTAINS
   !______________________________________________________________________
   !
   SUBROUTINE accum_allocdb(filename,procname,arrayname, &
+#if KEY_MODELLER==1
+       size,arrtype,arrank,arkind,siz2,siz3,siz4,siz5)
+#else
        size,arrtype,arrank,arkind,siz2,siz3,siz4)
+#endif
     !
     !     Adds the passed array information to the database for the 
     !     corresponding successful allocation. 
@@ -1145,7 +1394,11 @@ CONTAINS
     character(len=*),intent(in) :: arrtype
     integer,intent(in) :: arrank,arkind
     integer,intent(in) :: size
+#if KEY_MODELLER==1
+    integer,optional,intent(in) :: siz2,siz3,siz4,siz5
+#else
     integer,optional,intent(in) :: siz2,siz3,siz4
+#endif
     ! local variables
     integer :: ii,locsize
     !
@@ -1174,6 +1427,9 @@ CONTAINS
     if(present(siz2)) locsize=locsize*siz2
     if(present(siz3)) locsize=locsize*siz3
     if(present(siz4)) locsize=locsize*siz4
+#if KEY_MODELLER==1
+    if(present(siz5)) locsize=locsize*siz5
+#endif
     !
     if(nallocentr.lt.allocdbarsz) then
        nallocentr = nallocentr + 1
@@ -1281,7 +1537,11 @@ CONTAINS
   !______________________________________________________________________
   !
   SUBROUTINE prnalloc_fly(filename,procname,arrayname, &
+#if KEY_MODELLER==1
+       size,artype,arrank,arkind,ierrp,siz2,siz3,siz4,siz5)
+#else
        size,artype,arrank,arkind,ierrp,siz2,siz3,siz4)
+#endif
     !
     !     Prints information about an allocation (successful or failed)
     !     immediately after it has occurred--i.e. "on the fly"
@@ -1290,7 +1550,11 @@ CONTAINS
     character(len=*),intent(in) :: filename,procname,arrayname
     character(len=*),intent(in) :: artype
     integer,intent(in) :: arrank,ierrp,size,arkind
+#if KEY_MODELLER==1
+    integer,optional,intent(in) :: siz2,siz3,siz4,siz5
+#else
     integer,optional,intent(in) :: siz2,siz3,siz4
+#endif
     ! local variables
     integer :: locsize
     !***************************************************************
@@ -1299,6 +1563,9 @@ CONTAINS
     if(present(siz2)) locsize=locsize*siz2
     if(present(siz3)) locsize=locsize*siz3
     if(present(siz4)) locsize=locsize*siz4
+#if KEY_MODELLER==1
+    if(present(siz5)) locsize=locsize*siz5
+#endif
     if(ierrp.eq.0) then
        write(6,'(A)') 'Successfully Allocated Array' 
        write(6,'(10X,A8,1X,A6,5X,A7,1X,A8,2X,A6,3X,A4,1X,A12,3X,A4)') &
@@ -1319,7 +1586,11 @@ CONTAINS
   !______________________________________________________________________
   !
   SUBROUTINE accum_allocfail(filename,procname,arrayname, &
+#if KEY_MODELLER==1
+       size,arrtype,arrank,arkind,siz2,siz3,siz4,siz5)
+#else
        size,arrtype,arrank,arkind,siz2,siz3,siz4)
+#endif
     !
     !     Adds the passed array information to the database for the
     !     corresponding failed allocation.
@@ -1331,7 +1602,11 @@ CONTAINS
     integer,intent(in) :: arrank,arkind
     !      logical,intent(in) :: qdiep
     integer,intent(in) :: size
+#if KEY_MODELLER==1
+    integer,optional,intent(in) :: siz2,siz3,siz4,siz5
+#else
     integer,optional,intent(in) :: siz2,siz3,siz4
+#endif
     ! local variables
     integer :: ii,locsize
     !***************************************************************
@@ -1362,6 +1637,9 @@ CONTAINS
     if(present(siz2)) locsize=locsize*siz2
     if(present(siz3)) locsize=locsize*siz3
     if(present(siz4)) locsize=locsize*siz4
+#if KEY_MODELLER==1
+    if(present(siz5)) locsize=locsize*siz5
+#endif
     !
     if(nfallocentr.lt.fallocdbarsz) then
        nfallocentr = nfallocentr + 1

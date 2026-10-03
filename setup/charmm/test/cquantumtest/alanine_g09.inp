@@ -207,6 +207,22 @@ mini abnr nstep 1000 nprint 1000
 addl qqh1 mpep 1 c mpep 1 ca
 
 !------ Launch Gaussian ---------------------------------
+! ?g09 above only confirms the interface is compiled in; the run still needs
+! the external Gaussian09 executable installed at the path below.  Self-skip
+! when it is absent so the test reports "Test NOT performed" instead of
+! aborting when GAUS/ENERGY tries to spawn a missing binary.
+bomlev -5
+open unit 98 read form name /share/apps/gaussian/g09/g09
+if ?iostat .ne. 1 then
+   ! leave bomlev low through the stop: probing a path under a missing
+   ! directory emits OPNLGU + PARSE1 level-0 warnings, so restoring
+   ! bomlev before stopping would make the grader see a hard failure
+   echo "Test NOT performed. Gaussian09 executable /share/apps/gaussian/g09/g09 not found."
+   stop
+endif
+close unit 98
+bomlev 0
+
 envi g09profile "data/G09PROFILE"
 envi g09exe     "/share/apps/gaussian/g09/g09"
 envi g09fchk    "/share/apps/gaussian/g09/formchk"

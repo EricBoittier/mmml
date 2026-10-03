@@ -69,8 +69,9 @@ def test_repository_api_surface_includes_interoperable_types_and_enums():
     assert not rows["dynamics_settings"]["issues"]
     assert report["summary"]["bind_c_types"] == 7
     assert report["summary"]["bind_c_enums"] == 2
-    # 346 -> 347: mlpot_set_virial (strain-virial correction for CPT NpT).
-    assert report["summary"]["total_bind_c_surface_entries"] == 347
+    # c49b1+ML/MM was 347. c52a1 adds the upstream C API (block, restraints,
+    # correl, rtf, keywords, …) on top of the ML/MM exports.
+    assert report["summary"]["total_bind_c_surface_entries"] == 754
 
 
 def test_optional_shared_library_probe_reports_missing_exports(monkeypatch, tmp_path):

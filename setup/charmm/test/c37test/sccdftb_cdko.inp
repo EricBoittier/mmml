@@ -6,10 +6,48 @@
 bomb 0
 
 if ?SCCDFTB .NE. 1 then
-  echo "Test NOT Performed."
+  echo SCCDFTB_CDKO TESTCASE RESULT: SKIP
   STOP
 endif
 
+! SCC-DFTB needs SCCDFTB_DATA pointing at a directory holding this test's
+! parameter file.  `genv' on an unset variable is a level-0 warning, which is
+! fatal at the default BOMLEV, so lower BOMLEV across the call and self-skip
+! when the data has not been provisioned here.  The file check matters as
+! well: SCCDFTB_DATA can be set while this particular file is absent, and
+! CHARMM then dies part way through reading parameters with no termination
+! line at all.
+set sccdftbdir UNSET_SCCDFTB_DATA
+set oldbomlev ?bomlev
+bomlev -5
+genv sccdftbdir SCCDFTB_DATA
+bomlev @oldbomlev
+if @sccdftbdir eq UNSET_SCCDFTB_DATA then
+   echo SCCDFTB_CDKO TESTCASE RESULT: SKIP
+   stop
+endif
+! Just the data directory -- streaming datadir.def would also turn `faster'
+! on, which this testcase has never run with and which would move its numbers.
+set 0 data/
+strc kopdat @0 "sccdftb_cdko.kopara"
+
+! DHGA reads three Gaussian parameters for the Hubbard derivative (v0, alpha,
+! q0) from the parameter file.  This testcase passes neither D3RD nor DHUB, so
+! dylcao.F skips the Hubbard-derivative block and reads those three from the
+! records straight after the pair list -- a layout the generated file does not
+! have.  The authors' example, data/sccdftb_cdko.sccdftbdat, carries the three
+! values but alongside its own older Hubbard derivatives, so whether they
+! transfer to the set built here is a question for whoever owns the
+! parameters.  Until then this asks for a file of its own and skips.
+strc sccdat @sccdftbdir "/sccdftb_OCPH_dhga.dat"
+bomlev -5
+open unit 98 read form name @sccdat
+if ?iostat .ne. 1 then
+   echo SCCDFTB_CDKO TESTCASE RESULT: SKIP
+   stop
+endif
+close unit 98
+bomlev @oldbomlev
 
 read rtf card
 * title  
@@ -279,17 +317,18 @@ define qm sele .not. resname tip3 end
 ! at data/sccdftb_cdko.sccdftbdat, the SCCDFTB parameter files
 ! can be downloaded from the www.dftb.org webpage (mio-1-1)
 
-! for a successful execution a file named ko_para.inp
-! needs to be located at the current working directory,
-! the corresponding example ko_para.inp file can be found
-! at data/sccdftb_cdko.kopara
+! The charge-dependent Klopman-Ohno parameters ship with the test data as
+! data/sccdftb_cdko.kopara.  KOPF names the file; without it the code looks
+! for ko_para.inp in the working directory, which is not where the test data
+! lives.
 
 scalar WMAIN set 1.0 sele (qm) .and. type O*  end
 scalar WMAIN set 2.0 sele (qm) .and. type C*  end
 scalar WMAIN set 3.0 sele (qm) .and. type P*  end
 scalar WMAIN set 4.0 sele (qm) .and. type H*  end
 
-SCCDftb remove chrg 0 sele qm end TEMP 0.00 scft 0.00000001 dhga cdko
+SCCDftb remove chrg 0 sele qm end TEMP 0.00 scft 0.00000001 dhga cdko -
+        DATF @sccdat KOPF @kopdat
 
 !energy
 mini sd nstep 100 nprint 10

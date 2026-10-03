@@ -28,6 +28,7 @@ described in the updated documentation.
 
 * Setup::               Building CHARMM and installing pycharmm
 * Use::                 Use and functional support of pycharmm
+* Parallel::            Running pycharmm under MPI (mpi4py)
 * Examples::            Examples of pycharmm use
 
 
@@ -42,44 +43,52 @@ There are two steps to setup pycharmm and CHARMM for use in Python programming.
 The first step is to build CHARMM as a shared object. Next, pycharmm must be
 installed as a python package using pip.
 
-To interface with pycharmm, CHARMM must be built as shared object.
-Add '--as-library' to the configure command and then build as usual.
-For example,
-$ ./configure --as-library
+To interface with pycharmm, CHARMM is built as shared object. To access
+CHARMM from a python script or interpreter, it is neccessary to install
+the pycharmm pip package. If the necessary prerequisits are present, CMake
+will automatically install the pycharmm pip package. CMake will check for a
+working python interpreter and use this python to install the pycharmm package.
+Be sure to activate the appropriate virtual environment before running the
+configure script.
+
+If the CMake output from the configure script indicates the wrong python
+interpreter, try putting the correct one first in the PATH environment variable
+before running configure, or make sure that the virtual environment is using
+the latest version of python. Usually, this will not be necessary.
+
+For example, if using conda,
+$ conda activate <desired environment name>
+$ ./configure
 $ make -j 2 -C build/cmake install
 
 After a build completes successfully, the shared object should be in the lib
-subdirectory of the install directory as libcharmm.so or libcharmm.dylib.
+subdirectory of the install directory as libchmm.so or libchmm.dylib.
+By default, pycharmm will use this library.
 
 To install pycharmm, Python and the Python package installer pip must be
 present. Please see Python documentation for the basic procedures to setup and
 install Python.
 
-To install pycharmm, use the path to the pycharmm directory as an argument to
-pip. For example, from the root of the CHARMM source directory,
-$ pip install tool/pycharmm
-
-At run time, set the environment variable CHARMM_LIB_DIR to the path of the
-CHARMM shared object.
+At run time, it is possible to use a libchmm.so or libchmm.dylib diffrent from
+the default by setting the environment variable CHARMM_LIB_DIR
+to the path of the desired CHARMM shared object. However,
+under ordinary circumstances, setting CHARMM_LIB_DIR is unnecessary.
 
 For example,
 bash shell: export CHARMM_LIB_DIR=/usr/local/charmm/lib
 csh shell: setenv CHARMM_LIB_DIR /usr/local/charmm/lib
 
-This can be added to your .bashrc or .cshrc so that the variable is always
-set.
+If the python package pdoc is installed in the active environment at
+configure time, html documentation will be produced and installed in
+the install prefix under the subdirectory html_doc/pycharmm.
 
 
 
-File: pycharmm, Node: Use, Up: Top, Next: Examples, Previous: Setup
+File: pycharmm, Node: Use, Up: Top, Next: Parallel, Previous: Setup
 
 
 USE
 ===
-
-Before running a Python script or starting a Python environment, set the
-environment variable CHARMM_LIB_DIR to the path of the directory containing
-the CHARMM shared object (See the Setup section).
 
 In a python interpreter or script, pycharmm modules must be loaded.
 In most cases, for each CHARMM command, there is a corresponding Python module
@@ -94,16 +103,13 @@ import os
 import sys
 
 try:
-    charmm_lib_dir = os.environ['CHARMM_LIB_DIR']
     charmm_data_dir = os.environ['CHARMM_DATA_DIR']
 except KeyError:
-    print('please set environment variables',
-          'CHARMM_LIB_DIR and CHARMM_DATA_DIR',
+    print('please set environment variable CHARMM_DATA_DIR',
           file=sys.stderr)
     sys.exit(1)
 
-import pycharmm.energy as energy
-import pycharmm.read as read
+from pycharmm import *
 
 rtf_fn = charmm_data_dir + '/top_all36_prot.rtf'
 read.rtf(rtf_fn)
@@ -118,7 +124,149 @@ read.prm(prm_fn, flex=True)
 energy.show()
 
 
-File: OpenMM, Node: Examples, Up: Top, Next: Top, Previous: Use
+File: pycharmm, Node: Parallel, Up: Top, Next: Examples, Previous: Use
+
+
+RUNNING PYCHARMM UNDER MPI (mpi4py)
+===================================
+
+Default model: one independent serial CHARMM per rank
+-----------------------------------------------------
+
+pycharmm is normally driven with mpi4py in a single-program,
+multiple-data (SPMD) style: every MPI rank runs the same Python script,
+and each rank hosts its own complete, independent, SERIAL CHARMM.  Each
+rank reads the whole system and computes its own energies and forces
+locally; there is no domain decomposition across ranks.  Coordination
+between ranks (exchanging coordinates, gathering energies, etc.) is done
+explicitly by the script through mpi4py.  This is the natural fit for
+ensemble methods -- replica exchange, free-energy windows (including
+BLaDE, which is single-rank by design), string-method replicas, and so
+on.
+
+Concretely, inside pycharmm every rank sees:
+
+    ?numnode = 1      and      ?mynode = 0
+
+regardless of how many processes mpirun launched.  CHARMM is serial on
+each rank, so its internal broadcasts and reductions do nothing, and one
+rank can never block waiting on another inside CHARMM.
+
+Practical rules
+---------------
+
+1. Get the rank and world size from mpi4py, NOT from CHARMM.  CHARMM's
+   ?numnode / ?mynode are always 1 / 0 under pycharmm and do not
+   describe the MPI world:
+
+       from mpi4py import MPI
+       comm = MPI.COMM_WORLD
+       rank = comm.Get_rank()      # 0 .. N-1
+       size = comm.Get_size()      # N
+
+2. Name per-rank output and scratch files by the mpi4py rank, so ranks
+   do not overwrite each other (e.g. f"out_{rank}.log", not a fixed
+   name driven by ?mynode).
+
+3. Import order does not matter.  Earlier versions could hang (the
+   master rank printed while the others sat idle) if pycharmm was
+   imported before mpi4py; that is fixed -- each rank now always comes
+   up as a single-rank CHARMM on MPI_COMM_SELF.
+
+A minimal SPMD example, run as "mpirun -np N python script.py":
+
+    from mpi4py import MPI
+    comm = MPI.COMM_WORLD
+    rank = comm.Get_rank()
+
+    from pycharmm import *
+    # ... read rtf/prm, build or read the system (each rank does this) ...
+
+    e = get_energy_value('ENER')          # this rank's own energy
+    all_e = comm.gather(e, root=0)        # collect across ranks via mpi4py
+    if rank == 0:
+        print('energies from all ranks:', all_e)
+
+
+Re-enabling a genuine multi-node CHARMM (advanced)
+--------------------------------------------------
+
+If instead you want CHARMM itself to run as one N-node parallel job
+(MPI_COMM_WORLD, ?numnode = N) -- for example to decompose a single
+system across ranks with CHARMM's own parallel force/energy machinery --
+set the environment variable CHARMM_MULTINODE to a truthy value
+(1, y, or t) before launching:
+
+    CHARMM_MULTINODE=1 mpirun -np N -x CHARMM_MULTINODE python script.py
+
+(The "-x CHARMM_MULTINODE" propagates the variable to every rank; some
+launchers export the environment automatically.)
+
+This is expert-level use and comes with a requirement: every rank must
+issue IDENTICAL CHARMM commands in lockstep.  CHARMM's parallel model is
+master/worker with collective communication, so any rank-dependent
+CHARMM call (for example "if rank == 0: minimize.run_sd(...)") will
+deadlock -- the master proceeds while the others wait for a broadcast
+that never matches.  Use mpi4py for anything that must differ between
+ranks; keep the CHARMM command stream the same everywhere.  When
+CHARMM_MULTINODE is unset (the default), each rank is an independent
+serial CHARMM as described above.
+
+
+Groups of parallel CHARMMs: N x M (experimental)
+------------------------------------------------
+
+The two models above are the endpoints of a spectrum: N independent
+serial CHARMMs (the default) and one N-node parallel CHARMM
+(CHARMM_MULTINODE).  In between is an N x M layout -- N groups of M
+ranks each, where every group is its own M-node parallel CHARMM.  This
+is the natural shape for, e.g., replica exchange where each replica is
+itself a multi-node parallel simulation.
+
+You build it by handing CHARMM the communicator it should run on.  Use
+mpi4py to split MPI_COMM_WORLD into N sub-communicators of M ranks, then
+pass this rank's sub-communicator to CHARMM with set_mpi_comm() BEFORE
+any other pycharmm call (the communicator is adopted when the CHARMM
+library first initializes, so it must be set first):
+
+    from mpi4py import MPI
+    world = MPI.COMM_WORLD
+    M = 2                                   # ranks per CHARMM group
+    color = world.Get_rank() // M           # 0 .. N-1  (which group)
+    group = world.Split(color, world.Get_rank() % M)
+
+    import pycharmm
+    pycharmm.set_mpi_comm(group)            # MUST precede any CHARMM call
+    from pycharmm import *                   # now the library comes up on `group`
+
+Inside each group CHARMM sees ?numnode = M and ?mynode = the group-local
+rank (0 .. M-1), and its internal force/energy decomposition runs across
+the M ranks of that group.  A value of M = 1 reproduces the default
+per-rank-serial model (each group is a one-rank CHARMM on its own
+communicator).
+
+set_mpi_comm() has the same lockstep requirement as CHARMM_MULTINODE:
+within a group every rank must issue IDENTICAL CHARMM commands, and you
+use mpi4py (not CHARMM) for anything that must differ between groups.
+
+EXPERIMENTAL -- known limitation.  For M > 1 the group runs CHARMM's
+master/worker command model: the group master reads and broadcasts each
+command while the workers receive it.  pycharmm drives CHARMM one
+command at a time from Python on every rank, and reconciling that
+per-command Python execution with the master/worker broadcast stream is
+not yet complete -- multi-command scripts on M > 1 groups can desync
+(typically hanging at shutdown).  Until that work lands (a dedicated
+worker-loop rework), treat M > 1 as experimental.  M = 1 (the N x 1
+default, with or without set_mpi_comm) is fully supported.
+
+A note on MPI ownership.  Whoever initializes MPI finalizes it.  When
+mpi4py is imported first it owns MPI, and CHARMM leaves MPI_Finalize to
+mpi4py's own atexit teardown; CHARMM only calls MPI_Finalize when it was
+CHARMM that called MPI_Init.  You therefore do not need to (and should
+not) call MPI.Finalize() by hand -- let mpi4py's normal shutdown run.
+
+
+File: pycharmm, Node: Examples, Up: Top, Next: Top, Previous: Parallel
 
 Examples
 ========

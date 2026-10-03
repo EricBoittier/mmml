@@ -81,10 +81,10 @@ SUBROUTINE VOPEN(UNIT,FILEX,FORM,ACCESS,ERR,DIRRLEN,CONV)
 ! BIOVIA Code Start
 #if KEY_UNIX==1 && KEY_LICENSE==0
 ! BIOVIA Code End
-  INTEGER, PARAMETER :: MXFILE=128
+  INTEGER, PARAMETER :: MXFILE=1024
 #else /**/
-  INTEGER, PARAMETER :: MXFILE=256
-#endif 
+  INTEGER, PARAMETER :: MXFILE=1024
+#endif
   CHARACTER(len=MXFILE) FILE
   CHARACTER(len=10) CRCONT
   LOGICAL QCONV
@@ -357,6 +357,195 @@ SUBROUTINE VOPEN(UNIT,FILEX,FORM,ACCESS,ERR,DIRRLEN,CONV)
   !
   RETURN
 END SUBROUTINE VOPEN
+
+!> @brief Set an OS environment variable from CHARMM.
+!> @details Implements the ENVIronment command.
+!>   Syntax: ENVI env_var_name value
+!>   Sets the OS environment variable env_var_name to value.
+!>   Double quotes are stripped from both arguments but preserve case
+!>   during command-line parsing.
+!> @param[in,out] comlyn Command line string (words consumed on return)
+!> @param[in,out] comlen Length of command line
+SUBROUTINE ENVSET(COMLYN, COMLEN)
+  use stream
+  use string
+  use cstuff, only: setenv
+  use, intrinsic :: iso_c_binding, only: C_NULL_CHAR
+  implicit none
+  character(len=*) COMLYN
+  integer COMLEN
+  integer, parameter :: maxenv = 120
+  character(len=maxenv) :: envvar, envval
+  integer :: lenvar, lenval, ipt, i
+
+  call nextwd(comlyn, comlen, envvar, maxenv - 1, lenvar)
+  call nextwd(comlyn, comlen, envval, maxenv - 1, lenval)
+
+  ! Remove double quotes
+  ipt = 0
+  do i = 1, lenvar
+     if (envvar(i:i) /= '"') then
+        ipt = ipt + 1
+        envvar(ipt:ipt) = envvar(i:i)
+     end if
+  end do
+  lenvar = ipt
+
+  ipt = 0
+  do i = 1, lenval
+     if (envval(i:i) /= '"') then
+        ipt = ipt + 1
+        envval(ipt:ipt) = envval(i:i)
+     end if
+  end do
+  lenval = ipt
+
+  envvar = envvar(1:lenvar) // C_NULL_CHAR
+  envval = envval(1:lenval) // C_NULL_CHAR
+  i = setenv(envvar, envval, 1)
+
+  if (i .ne. 0) then
+     call wrndie(0, '<ENVI>', 'Failed to set environment variable.')
+  end if
+END SUBROUTINE ENVSET
+
+!> @brief Read an OS environment variable into a CHARMM parameter.
+!> @details Implements the GENVironment command.
+!>   Syntax: GENV charmm_variable ENV_VAR_NAME
+!>   Reads the value of OS environment variable ENV_VAR_NAME and stores
+!>   it as CHARMM parameter charmm_variable, accessible via @charmm_variable.
+!>   The value is stored with its original case preserved.
+!> @param[in,out] comlyn Command line string (words consumed on return)
+!> @param[in,out] comlen Length of command line
+SUBROUTINE ENVGET(COMLYN, COMLEN)
+  use stream
+  use string
+  use cmdpar, only: parins, mxtlen
+  implicit none
+  character(len=*) COMLYN
+  integer COMLEN
+  integer, parameter :: maxenv = 120
+  character(len=mxtlen) :: toktmp
+  character(len=maxenv) :: envvar, envval
+  integer :: lentok, lenvar, lenval, ipt, i, ipar
+
+  ! First word: CHARMM variable name
+  call nextwd(comlyn, comlen, toktmp, mxtlen, lentok)
+  ! Second word: environment variable name
+  call nextwd(comlyn, comlen, envvar, maxenv - 1, lenvar)
+
+  ! Remove double quotes from env var name
+  ipt = 0
+  do i = 1, lenvar
+     if (envvar(i:i) /= '"') then
+        ipt = ipt + 1
+        envvar(ipt:ipt) = envvar(i:i)
+     end if
+  end do
+  lenvar = ipt
+
+  if (lentok .le. 0 .or. lenvar .le. 0) then
+     call wrndie(0, '<GENV>', &
+          'Syntax: GENV charmm_variable ENV_VAR_NAME')
+  else
+     call get_environment_variable(envvar(1:lenvar), envval, lenval)
+     if (lenval .le. 0) then
+        call wrndie(0, '<GENV>', &
+             'Environment variable ' // envvar(1:lenvar) // &
+             ' is not set.')
+     else
+        ipar = parins(toktmp, lentok, envval, lenval)
+        if (ipar < 0) then
+           call wrndie(0, '<GENV>', 'Failed to install parameter.')
+        endif
+     endif
+  endif
+  comlen = 0
+END SUBROUTINE ENVGET
+
+!> @brief Concatenate strings into a CHARMM parameter with case preservation.
+!> @details Implements the STRC (STRing Concatenate) command.
+!>   Syntax: STRC variable_name word1 word2 [word3 ...]
+!>   Extracts all remaining words from the command line, strips double
+!>   quotes from each, concatenates them without separators, and stores
+!>   the result as a CHARMM parameter accessible via @variable_name.
+!>
+!>   Double-quoted words preserve their original case through CHARMM's
+!>   command-line parsing. Unquoted words and @variable substitutions
+!>   are uppercased by the parser. This allows case-sensitive file paths
+!>   to be constructed by quoting the literal portions:
+!>
+!>   @code
+!>     genv mydir MY_ENV_VAR
+!>     strc mypath @mydir "/subdir/MyFile.dat"
+!>     ! @mypath now contains e.g. /home/user/data/subdir/MyFile.dat
+!>   @endcode
+!>
+!>   The command was spelled CATS when it was introduced and was renamed
+!>   for c52.  BLOCK has a CATS subcommand of its own (constrained atom
+!>   scaling, lambdadyn.F90), and every module command loop calls MISCOM
+!>   before it reads its own keywords -- so a word MISCOM claims never
+!>   reaches the module.  While this command was called CATS, a CATS line
+!>   inside BLOCK ... END was silently taken by this routine: the atom
+!>   selection never happened and the first word after CATS was overwritten
+!>   as a parameter.  Do not reuse a name that a module already defines.
+!>
+!> @param[in,out] comlyn Command line string (consumed on return)
+!> @param[in,out] comlen Length of command line
+SUBROUTINE STRCAT(COMLYN, COMLEN)
+  use stream
+  use string
+  use cmdpar, only: parins, mxtlen, mxvlen
+  implicit none
+  character(len=*) COMLYN
+  integer COMLEN
+  character(len=mxtlen) :: toktmp
+  character(len=mxvlen) :: result, word
+  integer :: lentok, reslen, wdlen, ipt, i, ipar
+
+  ! First word: CHARMM variable name (will be uppercased by parser)
+  call nextwd(comlyn, comlen, toktmp, mxtlen, lentok)
+
+  if (lentok .le. 0) then
+     call wrndie(0, '<STRC>', &
+          'Syntax: STRC variable_name word1 word2 ...')
+     comlen = 0
+     return
+  endif
+
+  ! Concatenate all remaining words, stripping double quotes
+  result = ' '
+  reslen = 0
+  do while (comlen .gt. 0)
+     call nextwd(comlyn, comlen, word, mxvlen, wdlen)
+     if (wdlen .le. 0) exit
+     ! Strip double quotes, preserving everything else
+     do i = 1, wdlen
+        if (word(i:i) /= '"') then
+           reslen = reslen + 1
+           if (reslen .le. mxvlen) result(reslen:reslen) = word(i:i)
+        end if
+     end do
+  end do
+
+  if (reslen .le. 0) then
+     call wrndie(0, '<STRC>', &
+          'Syntax: STRC variable_name word1 word2 ...')
+  else
+     if (reslen .gt. mxvlen) then
+        write(outu,'(A,I5,A,I5)') &
+             ' STRC> WARNING: result truncated from ', reslen, &
+             ' to ', mxvlen
+        reslen = mxvlen
+     endif
+     ipar = parins(toktmp, lentok, result, reslen)
+     if (ipar < 0) then
+        call wrndie(0, '<STRC>', 'Failed to install parameter.')
+     endif
+  endif
+  comlen = 0
+END SUBROUTINE STRCAT
+
 end module machio
 
 SUBROUTINE VINQRE(MODE,NAME,MAXLEN,LENGTH,QOPEN,QFORM,QWRITE, &

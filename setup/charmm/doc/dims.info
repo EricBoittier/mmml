@@ -1048,7 +1048,7 @@ appropriate parameters.
   to 1.0*10^-5.
 
 * Optimize BSKIp, SKIP, and NBIAs so that a transition close to the target
-  is achieved, say within COFF 0.5 Å (just using DBNM).
+  is achieved, say within COFF 0.5 A (just using DBNM).
 
 * Start with a reasonable number of dynamics steps, e.g. NSTEp 100,000 and
   a time step of 1-2 fs (SHAKE can be used).

@@ -60,6 +60,7 @@ READ { RTF { [APPEnd] [PRINt] }                        } { UNIT integer  }
      { SEQUence  { [ CARD ]                   }        }
      {           {   COOR  [ RESId ] [SEGI  <segid>] } }
      {           {   PDB   [ RESId ] [CHAIn <char>] }  }
+     {           {   MMCIF [ RESId ] [CHAIn <id>]   }  }
                                      [SEGI  <segid>] } }
                                      [NCHAin  <int]  } }
                                      [repeat(SKIP <resn>)] } }
@@ -115,6 +116,7 @@ READ { RTF { [APPEnd] [PRINt] }                        } { UNIT integer  }
  coor-spec ::= { FILE      [IFILE int [CONTinue]]      } coor-option
                { CARD      [OFFS  int] [ RESI ]        }
                { PDB    [OFFS  int] [MODEL int] [OFFI] }
+               { MMCIF  [OFFS  int] [MODEL int] [RESI] }
                { UNIVersal [OFFS  int] [ RESI ]        }
                { IGNOre                                }
                { DYNR      CURR|DELT|VEL               }
@@ -231,6 +233,13 @@ Each instance of <resold> will be replaced by <resnew>.
 read from SEQRES records, which is useful when there are missing residues
 in the ATOM records. Here FIRStresid (default 1) is used for the RESId 
 numbering. See examples in test/c39test/readpdb.inp.
+
+        The MMCIF option reads PDBx/mmCIF sequence information. By default,
+residues are collected from _atom_site rows, analogous to PDB ATOM/HETATM
+records. With SEQRes, residues are read from _pdbx_poly_seq_scheme when
+present, which can include residues missing from coordinates. The default
+identity fields are the author fields; LABEl uses the label_* fields instead.
+PDBX is accepted as an alias for MMCIF.
 
 File: io.info, Node: Coordinate, Up:Read, Previous:Sequence, Next: Universal
 
@@ -360,6 +369,13 @@ actual file format to be according to Protein Data Bank standards:
 The OFFI option enforces the official pdb format.  The segid (chain id)
 has to be one character in length on read  and it is truncated
 to one character on write.
+        The MMCIF option reads coordinates from the PDBx/mmCIF _atom_site
+category. It is intended for the same workflow as PDB coordinate input: build
+or read a matching PSF first, then read coordinates. RESId maps coordinates by
+SEGID/RESID labels; without RESId the residue number field is used. MODEL
+selects _atom_site.pdbx_PDB_model_num. The default identity fields are the
+author fields; LABEl uses the label_* fields instead. PDBX is accepted as an
+alias for MMCIF.
         Normally, the coordinates are not reinitialized before new values
 are read, but if this is desired, the INITialize keyword, will cause the
 coordinate values for all selected atoms to be initialized. Note that only
@@ -1015,8 +1031,8 @@ array ATCT in the RTF, to be placed at NTCT+1, where NTCT is the
 value of the largest atom-type-code specified to date.
 
 An atom name may not start with the following 4 letter sequence:
-   ‘NOAU','NOAC','NOAE','NOAN',’NODC’,’NODE’,’NODI’,
-   ’MASS',’BLNK’,’DELE’,'ALPH,',THOL','TYPE'
+   'NOAU','NOAC','NOAE','NOAN','NODC','NODE','NODI',
+   'MASS','BLNK','DELE','ALPH,',THOL','TYPE'
 This is restriction is imposed to simplify parsing when reading an RTF.
 So, you can't name your atoms DELETED nor MASSLESS nor NODE22 nor TYPE4 ...
 
@@ -1126,6 +1142,7 @@ File: io.info, Node: Write, Up: Top, Previous: Read, Next: Print
                {                                      }
                { { COORdinate coor-spec } [CARD]      }
                {                          [PDB [MODEL int [FIRSt|LAST]] [OFFI]}
+               {                          [MMCIF [MODEL int]]}
                {                          [DUMB]      }
                {                          [XYZ]       }
                { { IC [RESId] [SAVEd] } [FILE] [RTF]  }
@@ -1160,9 +1177,11 @@ is to be written in unformatted form (binary).  The option, CARD,
 specifies that a file is to written in formatted form.  For the
 coordinate and internal coordinate file, CARD is the default.  The
 coordinate option PDB gives a file in Protein Data Bank format, with
-just the ATOM records; the MODEL N option writes a PDB file in the NMR-style
-multiple coordinate set format (note that for this to work the file has to 
-be specified as UNIT <int>, not as NAME <string>): 
+just the ATOM records. The coordinate option MMCIF gives a PDBx/mmCIF
+_atom_site loop without PDB fixed-width atom or chain limits. For PDB output,
+the MODEL N option writes a file in the NMR-style multiple coordinate set
+format (note that for this to work the file has to be specified as UNIT <int>,
+not as NAME <string>):
 
 MODEL 0 (or no MODEL keyword) just write standard PDB file
 MODEL 1 writes beginning of multicoordinate file (title, MODEL 1,

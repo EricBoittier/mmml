@@ -1,6 +1,9 @@
   module cpustruc
   use chm_kinds
   use chm_types
+#if KEY_MPI==1
+  use mpi_f08, only: MPI_Comm
+#endif
   implicit none
 !NUMHOOD number of cpu neighborhoods
 !MYNHOOD integer corresponding to neighborhood (group of cpus)
@@ -41,7 +44,10 @@
       integer,allocatable,dimension(:),save :: HOODCPULST,HOODCPUHI,HOODCPUMNY
       integer(chm_int4),allocatable,dimension(:), save:: headrank
       REAL(chm_real),save :: RNUMNODH
-      integer(chm_int4),save :: MYNHOOD,MYKEY,MYKEYP,HOODCOM,HEADCOM,BASECOM,NUMNODHI4, &
+#if KEY_MPI==1
+      TYPE(MPI_Comm),save :: HOODCOM,HEADCOM,BASECOM
+#endif
+      integer(chm_int4),save :: MYNHOOD,MYKEY,MYKEYP,NUMNODHI4, &
        MYKEYB,MYKEYBP
       integer,save :: NUMHOOD=0,IMYKEYP=0,IMYNHDP=0,NUMNODH=0,IMYKEYBP=0
       integer,save ::  TSNTRIAL,TSNATOMX

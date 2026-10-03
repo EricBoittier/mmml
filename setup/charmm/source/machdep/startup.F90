@@ -67,7 +67,7 @@ SUBROUTINE ARGUMT(WANTQUA)
   use parallel
   ! VO string v
 #if KEY_MULTICOM==1 && KEY_MPI==1
-  use mpi          
+  use mpi_f08          
 #endif
 #if KEY_MULTICOM==1
   use multicom_aux 
@@ -388,21 +388,22 @@ SUBROUTINE SYSID(OSNAME)
   !
   !     AUTHOR: LENNART NILSSON MAY 1984
   !
+  use, intrinsic :: iso_c_binding, only: c_char, c_int, c_null_char
 #if KEY_GNU==1
   use parallel          
 #endif
 #if KEY_MPI==1 && KEY_PARCMD==1
-  use mpi                  
+  use mpi_f08                  
 #endif
   implicit none
 
 #if KEY_NONETWORK==0 /*net*/
   integer k
   interface
-    subroutine uninf(inf, ll, lhostnm, lhn) bind (c)
+    subroutine uninf(inf, ll, lhostnm, lhn) bind(c)
       use iso_c_binding, only: c_char, c_int
-      character(kind=c_char, len=1), intent(out), dimension(80) :: inf, lhostnm
-      integer(c_int), intent(inout) :: ll, lhn
+      character(kind=c_char, len=1), dimension(*) :: inf, lhostnm
+      integer(c_int), value :: ll, lhn
     end subroutine uninf
   end interface
 #endif
@@ -415,30 +416,45 @@ SUBROUTINE SYSID(OSNAME)
   IF(OSNAME  ==  ' ') OSNAME='MACINTOSH OSX'
 #elif KEY_GNU==1
 
-  ! getting gnu/iris
-  character, dimension(80) :: inf_array
-  character(len=80) :: INF
-  INTEGER :: LL = 50, I   ! not i*4 : MH09
-  character, dimension(80) :: lhostnm_array
-  character(len=80) :: LHOSTNM
-  integer :: lhn = 80
-#if KEY_PARCMD==1
-#if KEY_PARALLEL==1
+  ! c/c++ strings and their lengths
+  character(kind=c_char, len=1), dimension(80) :: inf_array, lhostnm_array
+  integer(c_int) :: ll, lhn
+
+  ! fortran strings
+  character(len=80) :: inf, lhostnm
+  integer :: i   ! not i*4 : MH09
+
+#if KEY_PARCMD==1 && KEY_PARALLEL==1
   INTEGER NP(MAXNODE),IP(MAXNODE),ST    
 #endif
-#endif
+
   ! BIOVIA Code Start
-  LL = 50
+  ll = 50
   lhn = 80
   ! BIOVIA Code End
-  osname(1:80)=" "
-  inf(1:80)=" "
+
+  osname(1:80) = " "
+
+  inf(1:80) = " "
   inf(1:6)="nohost"
-#if KEY_NONETWORK==0 /*net*/
-  CALL UNINF(INF_array, LL, LHOSTNM_array, LHN)
-  write(inf, '(80a)') (inf_array(k), k = 1, 80)
-  write(lhostnm, '(80a)') (lhostnm_array(k), k = 1, 80)
-#endif /* (net)*/
+
+  lhostnm(1:80) = " "
+
+#if KEY_NONETWORK==0
+  inf_array = c_null_char
+  lhostnm_array = c_null_char
+  call uninf(inf_array, ll, lhostnm_array, lhn)
+
+  do k = 1, ll
+    if (inf_array(k) == c_null_char) exit
+    inf(k:k) = inf_array(k)
+  end do
+
+  do k = 1, lhn
+    if (lhostnm_array(k) == c_null_char) exit
+    lhostnm(k:k) = lhostnm_array(k)
+  end do
+#endif /* KEY_NONETWORK==0 */
 
   OSNAME(1:LL)=INF(1:LL)
 

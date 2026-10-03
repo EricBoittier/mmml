@@ -16,6 +16,32 @@ if ?sccdftb .ne. 1 then stop
 
 stream datadir.def
 
+! SCC-DFTB needs SCCDFTB_DATA pointing at a directory holding this test's
+! parameter file.  `genv' on an unset variable is a level-0 warning, which is
+! fatal at the default BOMLEV, so lower BOMLEV across the call and self-skip
+! when the data has not been provisioned here.  The file check matters as
+! well: SCCDFTB_DATA can be set while this particular file is absent, and
+! CHARMM then dies part way through reading parameters with no termination
+! line at all.
+set sccdftbdir UNSET_SCCDFTB_DATA
+set oldbomlev ?bomlev
+bomlev -5
+genv sccdftbdir SCCDFTB_DATA
+bomlev @oldbomlev
+if @sccdftbdir eq UNSET_SCCDFTB_DATA then
+   echo SCCDFTBPATHINT2 TESTCASE RESULT: SKIP
+   stop
+endif
+strc sccdat @sccdftbdir "/sccdftb_ONCH.dat"
+bomlev -5
+open unit 98 read form name @sccdat
+if ?iostat .ne. 1 then
+   echo SCCDFTBPATHINT2 TESTCASE RESULT: SKIP
+   stop
+endif
+close unit 98
+bomlev @oldbomlev
+
 read rtf card
 * Acetone plus water topology file
 *
@@ -161,7 +187,7 @@ scalar WMAIN set 4.0 sele segi ket .and. type H*  SHOW end
 
 ! Default SCF convergence is 1.d-7, which is fine.
 ! 1.d-6 would give not so accurate forces
-sccdftb remove chrg 0 sele segid ket end SCFT 0.00000001
+sccdftb remove chrg 0 sele segid ket end SCFT 0.00000001 DATF @sccdat
 !
 ! -----------------------------------------------------------
 

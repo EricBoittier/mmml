@@ -1645,7 +1645,7 @@ contains
   ! *
   subroutine check_comp_nod(comp_nod)
     use rxncom,only:q_comp_nod
-    use mpi,only:mpi_success, mpi_integer, mpi_sum
+    use mpi_f08,only:mpi_success, mpi_integer, mpi_sum
     use parallel,only:mynod, comm_charmm
     implicit none
     ! Output

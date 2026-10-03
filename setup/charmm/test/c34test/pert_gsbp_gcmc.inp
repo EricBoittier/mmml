@@ -11,7 +11,7 @@
 ! Construct PHIX (external static field)
 !
 
-IF ?GSBP .NE. 1 THEN
+IF ?QGSBP .NE. 1 THEN
  echo "c33test/pert_gcmc_gsbp> Test NOT performed."
  STOP
 endif

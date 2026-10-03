@@ -1,0 +1,124 @@
+# GitLab CI for the CHARMM dev-release repository.
+#
+# Runner assumption: each runner has miniconda/miniforge installed at
+# $HOME/miniconda3 and is registered with the shell executor. No
+# persistent charmm-ci env is required; `conda env update` is
+# idempotent and fast on warm runners.
+#
+# Three jobs:
+#   * pycharmm:lint  — pyflakes on tests/, no CHARMM build.
+#   * charmm:build   — debug CHARMM build, installs pyCHARMM into the
+#                      conda env, artifacts the install tree + the
+#                      cmake-configured pycharmm staging dir.
+#   * pycharmm:test  — re-installs pyCHARMM from the artifact into a
+#                      fresh activation of the same env, runs the
+#                      default pytest sweep (skips slow + stateful).
+
+stages:
+  - lint
+  - build
+  - test
+
+variables:
+  CONDA_ENV: charmm-ci
+  CHARMM_PREFIX: $CI_PROJECT_DIR/install
+  PYCHARMM_STAGING: $CI_PROJECT_DIR/build/cmake/pycharmm
+
+# CONDA_ROOT is set in-script so $HOME is expanded by the runner's shell.
+.conda_setup: &conda_setup
+  - export CONDA_ROOT="$HOME/miniconda3"
+  - source "$CONDA_ROOT/etc/profile.d/conda.sh"
+  - conda env update -n $CONDA_ENV -f ci/environment.yml --prune
+  - conda activate $CONDA_ENV
+
+
+pycharmm:lint:
+  stage: lint
+  script:
+    - export CONDA_ROOT="$HOME/miniconda3"
+    - source "$CONDA_ROOT/etc/profile.d/conda.sh"
+    - conda activate $CONDA_ENV 2>/dev/null || conda env update -n $CONDA_ENV -f ci/environment.yml --prune
+    - conda activate $CONDA_ENV
+    - cd tool/pycharmm/tests
+    - python -m pyflakes test_*.py
+
+
+# Fast fail-first static check of the source changed in this MR: replays the
+# configured build's own compile flags with -fsyntax-only (no codegen, no
+# link), so it catches undefined identifiers / missing includes / syntax
+# errors in seconds instead of after the full charmm:build. A *configure*
+# (not a build) is enough to emit compile_commands.json + build.ninja, so
+# C/C++ (and, on a cuda runner, CUDA) are covered here; Fortran needs the
+# .mod files a build produces, so it is checked in charmm:build and auto-
+# skipped here. See tool/lint/README.md.
+source:lint:
+  stage: lint
+  allow_failure: false
+  script:
+    - *conda_setup
+    - ./configure --with-ninja -g --prefix=$CI_PROJECT_DIR/install
+    - LINT_BASE="origin/${CI_MERGE_REQUEST_TARGET_BRANCH_NAME:-master}"
+    - git fetch -q origin "${CI_MERGE_REQUEST_TARGET_BRANCH_NAME:-master}" || true
+    - python3 tool/lint/charmm-lint --build-dir build/cmake --base "$LINT_BASE"
+        --lang c --lang cuda --lang python
+
+
+charmm:build:
+  stage: build
+  script:
+    - *conda_setup
+    # --with-fftdock is intentionally omitted: the conda env pulls in
+    # khronos-opencl-icd-loader (via openmm), which makes CMake require
+    # clFFT or VkFFT for the fftdock OpenCL backend. clFFT is no longer
+    # maintained; VkFFT isn't cleanly packaged on conda-forge.
+    # test_cdocker.py is the only fftdock-exercising test in the default
+    # sweep and it skips in CI anyway (needs MMTSB obrotamer/convpdb.pl),
+    # so dropping fftdock costs no current coverage. Re-enable when a
+    # maintained OpenCL FFT backend is available.
+    - ./configure --with-ninja --with-repdstr -g --prefix=$CHARMM_PREFIX
+    - cd build/cmake && ninja install
+  artifacts:
+    paths:
+      - install/
+      - build/cmake/pycharmm/
+    expire_in: 1 day
+
+
+pycharmm:test:
+  stage: test
+  needs: [charmm:build]
+  script:
+    - *conda_setup
+    # Re-install the cmake-configured pycharmm package (its loader.py
+    # has CMAKE_INSTALL_PREFIX baked in pointing at $CHARMM_PREFIX).
+    - pip install --no-deps --force-reinstall $PYCHARMM_STAGING
+    - cd tool/pycharmm
+    # --capture=tee-sys so CHARMM's own output reaches the log instead of
+    # being held in pytest's buffer.  Pytest normally shows captured output
+    # only when it reports a failure, so a run that dies mid-test -- which
+    # has happened once, intermittently -- discards everything CHARMM said
+    # on the way down, leaving a job log with no evidence in it at all.
+    #
+    # The full log goes to a file, not straight to the job log: with CHARMM's
+    # output included a clean run is about 3 MB and 65k lines, which risks
+    # GitLab's job-log limit, and it truncates from the front -- losing the
+    # end, which is the part worth reading.  So the whole thing is kept as an
+    # artifact and only the tail is echoed for reading in the browser.
+    #
+    # 1500 lines, not a few hundred: CHARMM prints its shutdown banner after
+    # pytest's summary, so the FAILURES section is not last.  Measured at 339
+    # lines from the end on a run with one failure, which makes a 400-line
+    # tail a coin toss.
+    #
+    # `|| rc=$?` keeps a failing run from ending the script before the tail is
+    # printed.  Not named `status`, which is read-only in some shells.
+    - rc=0
+    - pytest --timeout=120 --tb=short --capture=tee-sys --junitxml=report.xml > pytest-full.log 2>&1 || rc=$?
+    - tail -n 1500 pytest-full.log
+    - exit $rc
+  artifacts:
+    when: always
+    paths:
+      - tool/pycharmm/pytest-full.log
+    reports:
+      junit: tool/pycharmm/report.xml

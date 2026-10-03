@@ -124,8 +124,7 @@ define qms sele segid SOLU end
 print coord sele qms end
 
 
-open unit 66 name @0mndo.inp form read
-mndo unit 66 sele qms end sele none end remo 
+mndo sele qms end sele none end remo am1 charge 0 
 
 energy
 

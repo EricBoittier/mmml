@@ -1,6 +1,8 @@
 module ensemble
   use chm_kinds
   use dimens_fcm
+#if KEY_ENSEMBLE==1
+  use mpi_f08, only: MPI_Comm
 ! stuff for ensemble code
 ! description of important vbls:
 !
@@ -35,7 +37,6 @@ module ensemble
 ! ENSDX,ENSDY,ENSDZ,ENSH,ENSEXPU,QPARPRM,QENSEXP,SWAPC,JENSC,
 ! ENSEBETA, EXPOFF
 !
-#if KEY_ENSEMBLE==1
   real(chm_real),allocatable,dimension(:) :: ensbuf
   real(chm_real),allocatable,dimension(:) :: ensdx
   real(chm_real),allocatable,dimension(:) :: ensdy
@@ -44,11 +45,12 @@ module ensemble
   integer whoiam,nensem,t2repo,rep2to
   integer ensemble_layers,current_ens_layer
   integer,parameter :: maxensemble_layers=1
-  integer,dimension(maxensemble_layers) :: comm_ensemble,comm_ens_index
+  TYPE(MPI_Comm),dimension(maxensemble_layers) :: comm_ensemble
+  integer,dimension(maxensemble_layers) :: comm_ens_index
   integer swbuf
   integer ensfrq,ensnsw
   integer ensexpu
-  integer comm_master
+  TYPE(MPI_Comm) :: comm_master
   logical slave_ens
   integer,parameter :: maxens=4096, ensbfl=120
   integer,parameter :: maxswp=(maxens+1)*maxens/2
@@ -58,6 +60,12 @@ module ensemble
   logical jrex,jrswap,jensc,qparprm,qensexp,swapc,qexpbw
   integer ensswmethod
   logical ensas,lmasternode,mastermaster
+  ! .true. only once a real ENSEMBLE command has split comm_charmm into
+  ! per-replica communicators and built comm_master across replica masters.
+  ! Stays .false. for a plain domain-decomposition run, so ensemble-only
+  ! cross-replica collectives (e.g. RDC/SSNMR averaging over comm_master) can
+  ! be skipped instead of deadlocking when only the master rank reaches them.
+  logical,save :: lensactive = .false.
   real(chm_real) enstem(maxens),ensdb(maxens),ensmyt,ensebeta,expoff(maxens)
   integer,save :: old_mynod,ensmasternod
   logical,save :: ensemble_verbose

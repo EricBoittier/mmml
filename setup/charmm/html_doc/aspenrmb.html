@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Atomic Solvation Parameter Model with Implicit Membrane</title>
+<link rel="stylesheet" href="charmmdoc.css">
+</head>
+<body>
+<div class="page-header">
+<h1>Atomic Solvation Parameter Model with Implicit Membrane</h1>
+<div class="nav"><a href="index.html">Index</a><a href="charmm.html">CHARMM Home</a><a href="commands.html">Commands</a></div>
+</div>
+<pre>
+<a id="Top"></a>
+<div class="charmmdoc">
+           Atomic Solvation Parameter  Model with Implicit Membrane
+
+Purpose: ASPENRMB is an extended version of ASPENR that includes the effect of 
+Implicit Membrane (IM) in surface area caculations. 
+ASPENRMB can be used to calculate  solvation free energy 
+and forces based on the solvent accessible Surface Area (SA) of each atom,  
+using Atomic Solvation Parameters (ASP).
+
+Gsolv = Sum ( Gamma_i * ASA_i + Gref_i )
+
+See also  aspener.info
+
+  The combined use of the GBIM and ASPENRMB modules permits  calculation of 
+the solvation  energy in the frames of the GBSA\IM model(Spassov et al., 2002)
+
+  Gsolv = Gpol + Gnp
+
+where the polar contribution  Gpol is calculated using the GBIM module
+(see <a href="gbim.html">gbim</a>) 
+
+and the  non-polar (hydrophobic) energy term is approximated by:
+       N
+Gnp = Sum ( Gamma_i * ASA_i + Gref_i )
+      i=1                
+
+Gamma_i is a parameter describing the SA contribution of  atom i to the
+non-polar energy term; ASA_i is the surface area of atom i with radius RvdW_i,
+Gref_i is a reference solvation energy. The most popular GBSA models use
+uniform ASP parameters, i.e., Gamma_i = const.
+
+Please report problems to vss@accelrys.com
+
+
+REFERENCES:
+
+V.Z. Spassov, L. Yan and S. Szalma. Introducing an Implicit Membrane in
+Generalized Born / Solvent Accessibility Continuum Solvent Models.
+J. Phys. Chem. B, 106,8726-8738 (2002).         
+                               
+
+* <a href="#Syntax">Syntax</a> | Syntax of ASPENRMB input
+* <a href="#Structure">Structure</a> | Structure of the .surf file containing ASP data
+* <a href="#Examples">Examples</a> | Usage examples of the ASPENRMB module
+
+</div>
+<a id="Syntax"></a>
+<div class="charmmdoc">
+<a href="#Top">Top</a>
+[SYNTAX ASPENRMB functions]
+
+
+The ASP / Implicit Membrane  specifications are similar to ASPENR and can be
+specified any time prior to an energy calculation and can be input either
+through reading a file or parsed directly off the command line - although the
+file route is more usual.  Once turned on, the ASP energy term is in place
+during the course of the CHARMM run, i.e., it cannot be turned off
+except using the skipe command, see *note Skipe (<a href="energy.html">energy</a>).
+
+Reading surf file:  open unit 1 read memb30.surf
+                    read saim unit 1
+                    close unit 1 
+
+</div>
+<a id="Structure"></a>
+<div class="charmmdoc">
+<a href="#Top">Top</a>
+The extended ASPENR module permits the effect of an Implicit Membrane
+to be included in the computation of solvation energies and forces
+based on the surface area models, such as that proposed by Wesson and
+Eisenberg (see <a href="aspener.html">aspener</a>) or only for the non-polar contribution to
+solvation energy, as in  GBSA/IM models.
+
+The values of the required parameters are read from a "surf" file
+which has the following syntax:
+
+* file:  memb30.surf
+! Note: Uniform asp's for solvent accessible surface area non-polar energy term
+!       They are in units of cal/(mol*A**2).
+!      
+ 1.40 30. 0. z  ! probe radius,  membrane  thickness,
+                ! membrane midplane  at Z = 0, membrane normal along Z axis
+! residue-type  atom-name  asp-value  radius  reference-area  swap-pairs
+ ANY              C         25.0       2.1         0.0
+ ANY              O         25.0       1.6         0.0
+ ANY              N         25.0       1.6         0.0
+ ANY              H         25.0       0.8         0.0
+ .....................................................
+ GLU              OE1       25.0       1.6         0.0
+ GLU              OE2       25.0       1.6         0.0
+END
+
+Notes:
+- ANY refers to any residue type
+- A negative radius causes the atom to be ignored (such as hydrogens,...)
+- Atom name can use CHARMM wildcard rules (not residue names).
+- These commands ar eprocessed sequentially.  If an atom is matched by
+  more than one line the LAST line is used.
+- This file is free field format.
+- If the membrane parameters are omitted or membrane thickness is set
+  to zero, the calculations are carried out without a membrane in the model. 
+
+</div>
+<a id="Examples"></a>
+<div class="charmmdoc">
+<a href="#Top">Top</a>
+                                   Examples
+
+
+The energy calculations/simulations/minimizations with the ASP / IM
+potential are activated using the following call:
+
+       open unit 1 read form name test.surf
+       read saim unit 1
+       close unit 1
+
+When you do an energy calculation, dynamics or minimization with
+ASPENRMB, you get columns in the log file printout with energy terms
+for ASP, e.g., 
+
+ENER ENR:  Eval#    ENERgy     Delta-E        GRMS
+ENER INTERN:         BONDs      ANGLes      UREY-b   DIHEdrals   IMPRopers
+ENER EXTERN:       VDWaals        ELEC      HBONds         ASP        USER
+ENER PBEQ:            PBnp      PBelec       GBEnr
+ ----------      ---------   ---------   ---------   ---------   ---------
+ENER&gt;        0   -67.45895    23.21501     0.92593
+ENER INTERN&gt;       0.16626     1.60325     0.00000     1.76170     0.09019
+ENER EXTERN&gt;      -6.94067   -40.92466     0.00000     5.60539     0.00000
+ENER PBEQ&gt;         0.00000     0.00000   -28.82040
+ ----------      ---------   ---------   ---------   ---------   ---------
+
+and the same during minimization and dynamics.
+
+see also: test cases c31test/gbsaim.inp
+</div>
+</pre>
+</body>
+</html>

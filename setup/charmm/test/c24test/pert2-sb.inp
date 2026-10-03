@@ -1,0 +1,207 @@
+* Testcase to check the interaction between PERT and SHAKE
+* One bond-length of a symmetric triatomic molecule (gas phase) is changed 
+* from 1 to 2 A.  (The analytical results is given at the end of the script)
+* Original testcase submitted into c24a3 by Stefan Boresch, June 30, 1995
+*
+
+! SB Feb 2026: Most of the old c24test/pert2.inp testcase doesn't work (anymore),
+! as a subtle change ! to the integrator, on which several passes relied,
+! have been patched out again at some point, and *Langevin* integration was disabled.
+! Rewrite for Langevin only, test only SHAKe and flexible
+
+if ?pert .ne. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+
+!  ---- MFC not bothering with the setup, dyna uses old integrator-not parallel
+!  SB: It's less the old integrator, but the test has only 3 atoms!
+if ?NUMNODE .gt. 1 then
+ echo "Test NOT performed."
+ stop
+endif
+
+if @?rand .eq. 0 set rand 2
+
+stream datadir.def
+
+! topology
+read rtf card 
+* topology file for triatomic model compounds
+*
+   22    1
+mass     1   d1     15.
+mass     2   d2     15.
+mass     3   d3     15.
+mass     4   d4     15.
+resi 3ato 0.0
+group
+atom a1     d1   0.0
+atom a2     d1   0.0
+atom a3     d1   0.0
+bond a1 a2  a2 a3
+thet a1 a2 a3
+end
+
+! parameters
+read para card
+* parameter file for triatomic model compounds
+*
+bond
+d1   d1   200.0    1.0
+d1   d2   200.0    2.0
+d1   d3   500.0    1.0
+d1   d4   500.0    2.0
+thetas
+d1   d1   d1    50.0    105.0
+d1   d1   d2    50.0    105.0
+d1   d1   d3    50.0    105.0
+d1   d1   d4    50.0    105.0
+nbond
+d1   0.0   -0.0   2.0
+d2   0.0   -0.0   2.0
+d3   0.0   -0.0   2.0
+d4   0.0   -0.0   2.0
+end
+
+read sequence card
+* triatomic model compound
+*
+1
+3ato
+
+gene 3ato
+
+! coordinates
+read coor card free
+* Dummy coordinates for triatomic model compound, need to be
+* minimized!
+*
+ 3
+ 1 1 3ato a1 -1.0  0.0  0.0
+ 2 1 3ato a2  0.0  0.0  0.0
+ 3 1 3ato a3  0.0  1.0  0.0
+
+pert sele all end
+scalar type set 2 sele atom 3ato 1 a3 end
+! change A2 - A3 bond length
+
+!              A2               A2
+!             /  \      ->     /  \
+!            A1   A3           A1  \
+!                                   A3
+
+
+! minimize starting coordinates, lamb=0.0
+energy inbfrq 1   lambda 0.0
+mini sd nstep 200 inbfrq 0 nprint 500  lambda 0.0
+
+! 1st pass: flexible molecule
+! ===========================
+
+open unit 12 write form name scratch/pertin
+write title unit 12
+** pert script file
+**
+*lstart 0.0  lstop 0.05 pstart  25000  pstop  50000  pwind lamb 0.025
+*lstart 0.05 lstop 0.1  pstart  75000  pstop 100000  pwind lamb 0.075
+*lstart 0.10 lstop 0.15 pstart 125000  pstop 150000  pwind lamb 0.125
+*lstart 0.15 lstop 0.2  pstart 175000  pstop 200000  pwind lamb 0.175
+*lstart 0.2  lstop 0.25 pstart 225000  pstop 250000  pwind lamb 0.225
+*lstart 0.25 lstop 0.3  pstart 275000  pstop 300000  pwind lamb 0.275
+*lstart 0.3  lstop 0.35 pstart 325000  pstop 350000  pwind lamb 0.325
+*lstart 0.35 lstop 0.4  pstart 375000  pstop 400000  pwind lamb 0.375
+*lstart 0.4  lstop 0.45 pstart 425000  pstop 450000  pwind lamb 0.425
+*lstart 0.45 lstop 0.5  pstart 475000  pstop 500000  pwind lamb 0.475
+*lstart 0.5  lstop 0.55 pstart 525000  pstop 550000  pwind lamb 0.525
+*lstart 0.55 lstop 0.6  pstart 575000  pstop 600000  pwind lamb 0.575
+*lstart 0.6  lstop 0.65 pstart 625000  pstop 650000  pwind lamb 0.625
+*lstart 0.65 lstop 0.7  pstart 675000  pstop 700000  pwind lamb 0.675
+*lstart 0.7  lstop 0.75 pstart 725000  pstop 750000  pwind lamb 0.725
+*lstart 0.75 lstop 0.8  pstart 775000  pstop 800000  pwind lamb 0.775
+*lstart 0.8  lstop 0.85 pstart 825000  pstop 850000  pwind lamb 0.825
+*lstart 0.85 lstop 0.9  pstart 875000  pstop 900000  pwind lamb 0.875
+*lstart 0.9  lstop 0.95 pstart 925000  pstop 950000  pwind lamb 0.925
+*lstart 0.95 lstop 1.0  pstart 975000  pstop 1000000 pwind lamb 0.975
+*end
+
+scalar fbeta set 20. sele all end
+
+open unit 12 read form name scratch/pertin
+!!open unit 11 writ form name scratch/null_file
+dyna start leap lang nstep 1000000 firstt 240. finalt 300. timest .001 -
+      	punit 12 iuncrd -1 iseed @rand @rand @rand @rand -
+	iunrea -1 iunwri -1 iprfrq 5000 -
+	nprint 1000 rbuf 0. tbath 300.
+
+set ti1 ?titot
+set tp1 ?tptot
+
+pert reset
+pert off
+
+! psf corresponds to earlier lamb 1.0; restore original state
+scalar type set 1 sele atom 3ato 1 a3 end
+read coor card free ! reread them
+* Dummy coordinates for triatomic model compound, need to be
+* minimized!
+*
+ 3
+ 1 1 3ato a1 -1.0  0.0  0.0
+ 2 1 3ato a2  0.0  0.0  0.0
+ 3 1 3ato a3  0.0  1.0  0.0
+
+energy inbfrq 1 
+mini sd nstep 200 inbfrq 0 nprint 500
+
+! 2nd pass: rigid molecule
+! ========================
+
+pert sele all end
+scalar type set 2 sele atom 3ato 1 a3 end
+! change A2 - A3 force constant
+
+energy inbfrq 1
+energy inbfrq 0
+
+shak bond para
+
+open unit 12 read form name scratch/pertin
+!!open unit 11 writ form name scratch/null_file
+dyna start leap lang nstep 1000000 firstt 240. finalt 300. timest .001 -
+      	punit 12 iuncrd -1 iseed @rand @rand @rand @rand -
+	iunrea -1 iunwri -1 iprfrq 5000 -
+	nprint 1000 rbuf 0. tbath 300. echeck 1000.
+
+set ti2 ?titot
+set tp2 ?tptot
+
+! Summary of results and hints how to interpret them:
+! ===================================================
+! 
+! Within the rigid rotator / harmonic oscillator approximation, the analytic result
+! for this transition (one bond length change from 1 to 2 Ang) is given by
+! (see J. Chem. Phys. 105, 5145–5154 (1996))
+!
+!  dA = -2 k T log(r0final/r0initial) = - 2 k T log (2/1) = appr. -0.83 kcal/mol
+!
+! With the integration lengths used, expect results to deviate up to +- 0.2 kcal/mol from
+! this reference value.
+!
+! Hint: by changing the atom type to 3 or 4, one can force change in force constant
+! and/or force constant & bond length simultaneously. If you extend the testcase yourself,
+! be prepared that results, in particular for TI,
+! may be in much poorer agreement with analytic reference results
+! since the built in trapezoidal
+! rule numerical quadrature is insufficient. In this case, extract the <dU/dl> values
+! for each individual step and use a better external numerical quadrature routine.
+! Simpson's rule should already be sufficent. (SB, Feb 2026)
+!
+
+echo "TI results: flexible  rigid"
+echo @ti1 @ti2
+echo "TP results: flexible  rigid"
+echo @tp1 @tp2
+
+stop
+

@@ -1,0 +1,5 @@
+# Usage
+
+DCM FLUX ... # function of theta --good for non-linear molecules
+
+DCM FLUX COSA # function of (1 - cos(theta)**2) --good for linear molecules

@@ -329,11 +329,15 @@ contains
     ! G1_h, G2_h          modified fields from each bead of the hydrogens
     !
     INTEGER IPOINT(NATC,NATC)
-    real(chm_real) G1(DM), G2(DM), TDD(DM,DM)
-    real(chm_real) KKK(MAXPO,MAXPOL),DKKK(MAXPO,MAXPOL)
-    real(chm_real) LLL(MAXPO,MAXPOL),DLLL(MAXPO,MAXPOL)
-    real(chm_real) DX(MAXPO,MAXPOL),DY(MAXPO,MAXPOL),DZ(MAXPO,MAXPOL)
-    real(chm_real) DR(MAXPO,MAXPOL)
+    real(chm_real) G1(DM), G2(DM)
+    ! These are dimensioned to the (large) MAXPO*MAXPOL / DM*DM maxima and must
+    ! be heap-allocated: as automatic (stack) arrays they total ~13.5 MB and
+    ! overflow the default 8 MB stack, segfaulting POLAR1 on entry for any input.
+    real(chm_real),allocatable :: TDD(:,:)
+    real(chm_real),allocatable :: KKK(:,:),DKKK(:,:)
+    real(chm_real),allocatable :: LLL(:,:),DLLL(:,:)
+    real(chm_real),allocatable :: DX(:,:),DY(:,:),DZ(:,:)
+    real(chm_real),allocatable :: DR(:,:)
     real(chm_real) G1_H(DM), G2_H(DM)
     real(chm_real) GTMP,G1TEMP(3),G2TEMP(3)
     real(chm_real) FIJ,EIJ,FTMP(3),AKKK,ALLL
@@ -358,6 +362,12 @@ contains
     EPOLAR=0.0D0
     E_OO=0.0D0
     E_OR=0.0D0
+
+    allocate(TDD(DM,DM))
+    allocate(KKK(MAXPO,MAXPOL),DKKK(MAXPO,MAXPOL))
+    allocate(LLL(MAXPO,MAXPOL),DLLL(MAXPO,MAXPOL))
+    allocate(DX(MAXPO,MAXPOL),DY(MAXPO,MAXPOL),DZ(MAXPO,MAXPOL))
+    allocate(DR(MAXPO,MAXPOL))
 
     !     WRITE(OUTU,*) 'SUBROUTINE POLAR1'
     !     WRITE(OUTU,*) 'NATOM=',NATOM,' N_O=',N_O,' N_H=',N_H
@@ -997,6 +1007,8 @@ contains
           WRITE(OUTU,*) 'FINAL EPOLAR ',EPOLAR
        ENDIF
     ENDIF
+
+    deallocate(TDD,KKK,DKKK,LLL,DLLL,DX,DY,DZ,DR)
 
     RETURN
   END SUBROUTINE POLAR1

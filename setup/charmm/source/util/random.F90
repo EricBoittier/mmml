@@ -55,10 +55,8 @@ module rndnum
   integer :: nrand, rngseries
   integer :: rngchoice,seedchoice,rngdistrchoice
 
-#if KEY_LIBRARY == 1
-  logical :: qapi_seed_set
-#endif
-  
+  logical :: qapi_seed_set = .false.
+
 contains
 
   subroutine rndnum_iniall
@@ -69,13 +67,10 @@ contains
     integer(chm_int8) :: count,rate,maxcount
     integer(chm_int4) :: count4,rate4,maxcount4
 
-#if KEY_LIBRARY == 1
     qapi_seed_set = .false. ! fortran std random_number
-    rngchoice = 2
-#else
-    rngchoice = 1 ! CLCG default now  
-#endif
-    
+    ! rngchoice = 2
+    rngchoice = 1 ! CLCG default now
+
     irndsd=1380662
     irntyp=0
     rnscal = ONE
@@ -142,12 +137,12 @@ module clcg_mod
   !integer,save :: lcgIg(4,Maxgen),lcgLg(4,Maxgen),lcgCg(4,Maxgen)
   integer :: lcgIg(4,Maxgen),lcgLg(4,Maxgen),lcgCg(4,Maxgen)
   data lcgmul/45991,207707,138556,49689/
-  data lcgmod/2147483647,2147483543,2147483423,2147483323/ 
+  data lcgmod/2147483647,2147483543,2147483423,2147483323/
 
 
   !=======================================================================
 contains
-  
+
   !CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
   !               Combined Linear Congruential Generator (CLCG)        C
   !  Adapted from Pierre L'Ecuyer & Terry H Andres' C version code.    C
@@ -159,7 +154,7 @@ contains
   ! [2] http://www.iro.umontreal.ca/~lecuyer/                          C
   !                                                                    C
   ! For further information, please contact                            C
-  !              Tamar Schlick                                         C  
+  !              Tamar Schlick                                         C
   !              schlick@nyu.edu                                       C
   ! Converted to FORTRAN by                                            C
   !               Xiaoliang Qian  10/7/99                              C
@@ -201,7 +196,7 @@ contains
   !  33333333, 44444444} and can be changed by calling SetIniSD        C
   !  after calling CLCGInit.                                           C
   !                                                                    C
-  !  This RNG can be used under parallel conditions to give            C 
+  !  This RNG can be used under parallel conditions to give            C
   !  independent random number sequence when each processor            C
   !  calls with different stream number g (e.g., RANDOM(g)).           C
   !                                                                    C
@@ -214,7 +209,7 @@ contains
   !  3. Call function RANDOM(k), where k is an integer from 1 to 100   C
   !     specifying the stream number. For parallel codes, k can be set C
   !     to a processor id number.                                      C
-  !CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC 
+  !CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
   subroutine CLCGInit (ISEED)
     !------------------------------------------------------------------------C
     !   Initialize the RNG with seed values in vector sd of dimension 4.     C
@@ -227,7 +222,7 @@ contains
     !   for j=1, ..., 4 corresponding to the 4 LCGs.                         C
     ! Converted to FORTRAN by                                                C
     !               Xiaoliang Qian  10/7/99                                  C
-    
+
   use chm_kinds
   use rndnum
 !  use exfunc
@@ -264,22 +259,22 @@ contains
     call SetiniSD (sd)
 
   end subroutine CLCGInit
-  
+
   !CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
-  
+
   subroutine SetiniSD (s)
     !------------------------------------------------------------------------C
     !  Set initial seed values for all 100 (= Maxgen, defined in clcg.f90)   C
     !  streams using the initial seeds from the first stream.                C
     ! Converted to FORTRAN by                                                C
     !               Xiaoliang Qian  10/7/99                                  C
-    
+
   use chm_kinds
 !  use exfunc
     implicit none
     !
-    integer g,s(4),j 
-    
+    integer g,s(4),j
+
     do j = 1,4
        lcgIg(j,1) = s(j)
     enddo
@@ -291,9 +286,9 @@ contains
        call IniGen (g,IniSD)
     enddo
   end subroutine SetiniSD
-  
+
   !CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
-  
+
   function RANDOM (g,label) result(random_rtn)
     !------------------------------------------------------------------------C
     !   Return a double precision uniformly distributed random number in     C
@@ -309,16 +304,16 @@ contains
 !  use parallel
   use rndnum
     implicit none
-    
+
     integer g,k,s,j
     real(chm_real) u(4), random_rtn,rng1
     integer  dv(4),mv(4)
     character(len=*),optional :: label
-    data dv/46693,10339,15499,43218/ 
-    data mv/25884, 870,3979,24121/ 
+    data dv/46693,10339,15499,43218/
+    data mv/25884, 870,3979,24121/
     data u/4.65661287524579692d-10,-4.65661310075985993d-10, &
          4.65661336096842131d-10,-4.65661357780891134d-10/
-    
+
     !
     if (qoldrng.or.(rngchoice==0)) then
        random_rtn = oldrandom(g)
@@ -365,41 +360,41 @@ contains
     !  instead of the default settings (routine SetiniSD).                   C
     ! Converted to FORTRAN by                                                C
     !               Xiaoliang Qian  10/7/99                                  C
-    
-    
+
+
     integer g,s(4),j
-    
+
     if (g  <=  1)  g = 1
     g= mod(g-1,Maxgen) + 1
-    
-    do j = 1,4          
+
+    do j = 1,4
        lcgIg(j,g) = s(j)
     enddo
-    call IniGen (g,IniSD)               
+    call IniGen (g,IniSD)
   end subroutine SetSeed
-  
+
   subroutine  GetSeed (g,s)
     !------------------------------------------------------------------------C
     !  This optional routine returns current seed value s for stream g       C
     ! Converted to FORTRAN by                                                C
     !               Xiaoliang Qian  10/7/99                                  C
-    
-    
+
+
     integer g,s(4),j
-    
+
     if (g  <=  1)  g = 1
     g= mod(g-1,Maxgen) + 1
-    
-    do  j = 1,4          
+
+    do  j = 1,4
        s(j)= lcgCg(j,g)
     enddo
     return
   end subroutine GetSeed
-  
-  
-  
+
+
+
   !CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
-  
+
   subroutine IniGen (g,stype)
     !------------------------------------------------------------------------
     !  This optional routine resets the gth stream so that the initial seed
@@ -407,9 +402,9 @@ contains
     !  seed (if stype = 3).
     ! Converted to FORTRAN by
     !               Xiaoliang Qian  10/7/99
-    
+
     integer g,stype,j,ig
-    
+
     ig=g
     if (ig  <=  1)  ig = 1
     ig= mod(ig-1,Maxgen) + 1
@@ -418,16 +413,16 @@ contains
           lcgLg(j,ig) = lcgIg(j,ig)
        else
           if (stype == NewSD)  &
-               lcgLg(j,ig) = MulMod (lcgaw(j),lcgLg(j,ig),lcgmod(j)) 
+               lcgLg(j,ig) = MulMod (lcgaw(j),lcgLg(j,ig),lcgmod(j))
        endif
        lcgCg(j,ig) = lcgLg(j,ig)
     enddo
     return
   end subroutine IniGen
-  
+
   !CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
-  
-  
+
+
   integer function MulMod (s,t,M)
     !--------------------------------------------------------------------C
     !  Return s*t mod M. All numbers out of range are truncated          C
@@ -437,8 +432,8 @@ contains
     !               Xiaoliang Qian  10/7/99                              C
 
     integer s,t,M,H
-    parameter (H = 32768) 
-    integer   S0,S1,q,qh,rh,k 
+    parameter (H = 32768)
+    integer   S0,S1,q,qh,rh,k
 
     if (s  <  0) s = s + M
     if (t  <  0) t = t + M
@@ -457,7 +452,7 @@ contains
           MulMod = H * (t - k * qh) - k * rh
 
 10        if (MulMod  <  0) then
-             MulMod = MulMod + M      
+             MulMod = MulMod + M
              goto 10
           endif
 
@@ -470,10 +465,10 @@ contains
           k = t / q
           MulMod = MulMod - k * (M - S1 * q)
           if (MulMod  >  0) MulMod = MulMod - M
-          MulMod = MulMod + S1 * (t - k * q) 
+          MulMod = MulMod + S1 * (t - k * q)
 
 20        if (MulMod  <  0) then
-             MulMod = MulMod + M      
+             MulMod = MulMod + M
              goto 20
           endif
        endif
@@ -482,19 +477,19 @@ contains
        MulMod = H * (MulMod - k * qh) - k * rh
 
 30     if (MulMod  <  0) then
-          MulMod = MulMod + M      
+          MulMod = MulMod + M
           goto 30
        endif
     endif
 
     if (S0  /=  0) then
        Q = M / S0
-       k = t / q                         
+       k = t / q
        MulMod = MulMod - k * (M - S0 * q)
        if (MulMod  >  0) MulMod = MulMod - M
-       MulMod = MulMod + S0 * (t - k * q) 
+       MulMod = MulMod + S0 * (t - k * q)
 40     if (MulMod  <  0)  then
-          MulMod = MulMod + M      
+          MulMod = MulMod + M
           goto 40
        endif
     endif
@@ -753,6 +748,14 @@ contains
     lrngseeds(1:nrand) = rngseeds(1:nrand)  ! we want previous ones as default
     call gtrmim(nrand,comlyn,comlen,'ISEE',lrngseeds,rngseeds,qpresent)
     if(qpresent)  then
+       ! If only one ISEED value was given, gtrmim now flags it with
+       ! gtrmim_err == -100. Broadcast slot 1 to all remaining slots so
+       ! `random iseed N` is actually reproducible (otherwise slots
+       ! 2:nrand keep their clock-seeded defaults from lines 737-740,
+       ! and rngchoice==2 / `random_seed(put=...)` consumes the partly-
+       ! random state).  rngmodseeds does this for the other ISEED
+       ! call sites; RANDSPEC has to do it itself.
+       if (gtrmim_err == -100) rngseeds(2:nrand) = rngseeds(1)
        if((rngchoice == 0).or.(rngchoice == 4)) irndsd = rngseeds(1)
        if(rngchoice == 1) call clcginit(irndsd)
        if(rngchoice == 4) call clcginit(irndsd)
@@ -763,12 +766,12 @@ contains
     ! With this flag ON parallel LD simulations are the same for any NUMNOD:
     QRANDPAR = (INDXA(COMLYN,COMLEN,'PARA') /= 0)
 
-    IF(INDXA(COMLYN,COMLEN,'UNIF') /= 0) THEN 
+    IF(INDXA(COMLYN,COMLEN,'UNIF') /= 0) THEN
        rngdistrchoice = 0 ! default from iniall.src
        IRNTYP=0
     ENDIF
 
-    IF(INDEX(COMLYN,'GAUS') /= 0) THEN 
+    IF(INDEX(COMLYN,'GAUS') /= 0) THEN
        rngdistrchoice = 1
        IRNTYP=1
        rnsgma = gtrmf(comlyn,comlen,'GAUS',one)
@@ -988,7 +991,7 @@ contains
     use chm_kinds
     use exfunc
     use dimens_fcm
-    use number 
+    use number
     use stream
     use string
     use comand
@@ -1014,23 +1017,23 @@ contains
     SAVE QRSETUP
     INTEGER RANDCNT
     DATA RANDCNT/0/
-    !   Given a seed integer, this subroutine 
+    !   Given a seed integer, this subroutine
     !   produces a random integer in the range between
     !   begnum and endnum and returns it in TOTAL.
     !   It can produce many series of random integers
     !   in a single run.  The period is not less than
-    !   10^14.  
-    !                            --R.J. Petrella 
+    !   10^14.
+    !                            --R.J. Petrella
     !
     SERIES = GTRMI(COMLYN,COMLEN,'SERI',-1)
     IF(INDXA(COMLYN,COMLEN,'SETU') > 0) THEN
        IF(SERIES == -1) THEN
           WRITE(OUTU,*) &
-               '  WARNING: NO SERIES SPECIFIED.  ASSUMING 1'       
+               '  WARNING: NO SERIES SPECIFIED.  ASSUMING 1'
           SERIES=1
        ENDIF
        WRITE(OUTU,*) '  SETTING UP RANDOM INTEGER GENERATION'
-       WRITE(OUTU,*) '  FROM UNIFORM DISTRIBUTION' 
+       WRITE(OUTU,*) '  FROM UNIFORM DISTRIBUTION'
        ISEEDN(SERIES) = -1
        BEGNUM(SERIES) = -1
        ENDNUM(SERIES) = -1
@@ -1069,7 +1072,7 @@ contains
                'RANDOM INTEGER GENERATION PARAMETERS NOT SET UP')
        ENDIF
     ENDIF
-    !      
+    !
     RANGE = ENDNUM(SERIES)-BEGNUM(SERIES)
     IF(RANGE <= 0) THEN
        CALL WRNDIE(-5,'<IRANDOM>', &
@@ -1104,7 +1107,7 @@ contains
           !        WRITE(6,*) 'INT(AB*FAC1)',INT(AB*FAC1),'INT(AB*FAC2)*10',
           !     & INT(AB*FAC2)*10
           RANDM1 = (INT(SHORT*FAC1))-(INT(SHORT*FAC2)*10)
-          !        WRITE(6,*) 'RANDM1 is ',RANDM1 
+          !        WRITE(6,*) 'RANDM1 is ',RANDM1
           TOTAL = TOTAL + FACTOR*RANDM1
           FACTOR = FACTOR*10
           ISEEDN(SERIES) = ISEEDN(SERIES) + 1

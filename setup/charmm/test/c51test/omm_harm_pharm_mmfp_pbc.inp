@@ -1,0 +1,328 @@
+* Testing cons harm absolute w/ PBC in OpenMM
+* MMFP GEO with w/ PBC OpenMM
+* RESD w/ PBC in OpenMM
+*
+
+! The system comprises a collection of LJ particles (1, 3 or 2) in a cubic
+! volume of 10 A per side (boxsize) that is treated with periodic boundary
+! conditions.
+
+! For the cons harm test a single particle is placed at the origin of the
+! volume (which is centered at half the boxsize) and restrained there with
+! absolute harmonic restraints. The particle is then translated past the
+! edge of the box, where the PBCs bring it back into the other side, and
+! the energy between CHARMM's PBC implementation and that in OpenMM are
+! tested by comparing the differences in energy.
+
+! For the MMFP test a single particle is placed  at the origin of the
+! volume (which is centered at half the boxsize) and restrained with respect
+! to a sphere, cylinder and plane using the MMFP restraints for inside,
+! outside and symmetric. The single particle is translated pas the edge of
+! the box and the energies from OpenMM are evaluated and compared to those
+! from the CHARMM implementation.
+
+! An analgous MMFP test is done for three LJ particles with the RCM keyword
+! where a single particle is moved such that the center of mass is moved from
+! inside the box past the edge and back in the other side. Energies from OpenMM
+! and CHARMM are compared to assess correctness.
+
+stream datadir.def
+set tol = 1e-5
+
+if ?openmm .ne. 1 then
+   echo "Test NOT performed."
+   stop
+endif
+
+if ?numnode .ne. 1 then
+   echo "Test NOT performed in parallel."
+   stop
+endif
+
+set emin = 0 !120
+set rmin2 = 0.5
+read rtf card
+* rtf file
+*
+33   0
+mass 1 lj 40
+
+resi lj 0
+atom lj lj 0
+
+end
+
+read param card
+* parameter file
+*
+nonbonded nbxmod 5 atom vatom cdiel switch vswitch -
+          cutnb 4.5 ctofnb 4.5 ctonnb 4.5 -
+          eps 1 e14fac 1 wmin 1.5
+lj 0 -@emin @rmin2
+
+end
+
+read sequ lj 1
+generate Ar
+
+!-----------------------Testing CONS HARM ABSOLUTE---------------------------
+
+label consharm
+   set boxsize = 10
+   calc bo2 = @boxsize / 2
+   skipe all excl harm
+
+   scalar x set 0
+   scalar y set 0
+   scalar z set 0
+   coor stat
+
+   crystal define cubic @boxsize @boxsize @boxsize 90 90 90
+   open unit 1 read form name @0/cubic.xtl
+   crystal read card unit 1
+   close unit 1
+
+   ! Set molecule center and image centering to coincide with OpenMM
+   coor trans xdir @bo2 ydir @bo2 zdir @bo2
+   image bysegid xcen @bo2 ycen @bo2 zcen @bo2
+
+   coor copy compare
+   cons harm absolute force 10 select all end comparison
+   energy
+   set i = 0
+   label hloop
+      energy
+      set e0 = ?harm
+      energy omm
+      set e1 = ?harm
+      @testcheck @e1 @e0 @tol OMM_HARM_PBC_ABSO_STEP@i
+      coor trans xdir 1
+      incr i by 1
+   if i le 10 goto hloop
+
+   cons harm clear
+crystal free
+
+
+!-----------------------Testing MMFP GEO---------------------------
+! MMFP GEO section
+
+label mmfpgeo
+set boxsize = 10
+calc bo2 = @boxsize / 2
+set rcm =
+set ircm = 0
+label dorcm
+
+   if ircm eq 0 then
+      scalar x set 0
+      scalar y set 0
+      scalar x set 0
+   else
+      set rcm = rcm
+      goto generate3
+   endif
+
+   label donegen
+   skipe all excl geo
+   print coor
+
+   crystal define cubic @boxsize @boxsize @boxsize 90 90 90
+   open unit 1 read form name @0/cubic.xtl
+   crystal read card unit 1
+   close unit 1
+
+   ! Set molecule center and image centering to coincide with OpenMM
+   coor trans xdir @bo2 ydir @bo2 zdir @bo2 select all end
+   image bysegid xcen @bo2 ycen @bo2 zcen @bo2 select all end
+   set ishape = 0
+   label shapes
+        set dir = xdir
+	set droff = 3
+        if @ishape eq 0 set shape = sphere
+        if @ishape eq 1 then
+	   set shape = cylinder
+	   set dir = zdir
+	endif
+        if @ishape eq 2 then
+	   set shape = planer
+	   set droff = 2 ! nonzero on purpose: only a nonzero offset can catch
+	                 ! the plane restraint losing the sign of its projection
+	endif
+	set mmf = 0
+	label mmfp
+
+	   if @mmf eq 0 set form = inside
+	   if @mmf eq 1 set form = outside
+	   if @mmf eq 2 set form = symmetric
+	   mmfp
+	     geo @shape harmonic @form @rcm -
+	        @dir 1 -
+		xref @bo2 yref @bo2 zref @bo2 -
+	        force 10 droff @droff select all end
+	   end
+	   mmfp
+	     geo print
+	   end
+	!
+	! Need to ensure R = sqrt((x-xref)**2+(y-yref)**2+(z-zref)**2) != 0
+	! At R = 0 geo energy in CHARMM is skipped
+	if ircm eq 0 then
+	   scalar x set 5.5
+	   scalar y set 5
+	   scalar z set 5
+	else
+	   coor copy
+	   coor translate xdir 5.5 ydir 5 zdir 5 select all end
+	endif
+
+	   set i = 0
+	   label loop
+	      energy
+	      set e0 = ?ener
+	      energy omm
+	      set e1 = ?ener
+	      coor stat
+	      incr i by 1
+	      @testcheck @e1 @e0 @tol OMM_MMFP_PBC_@shape_@form_R@ircm_STEP@i
+	      coor stat
+	      echo values @shape @rcm: ?xave @e0 @e1 @form
+	      coor translate xdir 1 select all end
+	   if i le 10 goto loop
+
+
+	   mmfp
+	      geo reset
+	   end
+
+	incr mmf by 1
+	if mmf le 2 goto mmfp
+   incr ishape by 1
+   if ishape le 2 goto shapes
+incr ircm by 1
+crystal free
+if ircm le 1 goto dorcm
+! MMFP GEO DISTANCE section
+
+label cmbonds
+   set boxsize = 30
+   calc bo2 = @boxsize / 2
+   calc step = @boxsize/10
+   skipe all excl geo
+   set rcm =
+   set nbonds = 1
+   label lbonds
+   if nbonds eq 1 then
+      delete atoms select all end
+      read sequ lj 1
+      generate ar1
+      read sequ lj 1
+      generate ar2
+      scalar x set 0
+      scalar y set 0
+      scalar z set 0
+      set sel1 = bynu 1
+      set sel2 = bynu 2
+      coor translate xdir -0.5 ydir 0 zdir 0 select @sel1 end
+      coor translate xdir 0.5 ydir 0 zdir 0 select @sel2 end
+      set iend 10
+   else
+      goto generate6
+      label donegen6
+      set sel1 = bynu 1:3
+      set sel2 = bynu 4:6
+      set rcm = rcm
+      set iend = 10
+   endif
+   calc icnt = @iend + 1
+   crystal define cubic @boxsize @boxsize @boxsize 90 90 90
+   open unit 1 read form name @0/cubic.xtl
+   crystal read card unit 1
+   close unit 1
+
+   ! Set molecule center and image centering to coincide with OpenMM
+   coor trans xdir @bo2 ydir @bo2 zdir @bo2 select all end
+   image bysegid xcen @bo2 ycen @bo2 zcen @bo2 select all end
+   coor trans xdir 0.5 ydir 0.5 zdir 0.5 select all end
+
+   mmfp
+      geo sphere @rcm distance -
+          harmonic symmetric force 10 droff 1 -
+          select @sel1 end select @sel2 end
+   end
+   mmfp
+      geo print
+   end
+
+   set i = 0
+   label dodis
+   energy
+   set e0 = ?ener
+   echo ?xcm ?ycm ?zcm ?xcm2 ?ycm2 ?zcm2 ?rgeo
+   energy omm
+   set e1 = ?ener
+   @testcheck @e1 @e0 @tol OMM_MMFP_PBC_DIST_N@nbonds_STEP@i
+   coor stat select @sel2 end
+   echo values sphere @rcm dist: ?xcm ?xcm2 ?xave ?rgeo @e0 @e1
+   coor translate xdir @step ydir 0 zdir 0 select @sel2 end
+   incr i by 1
+   if i le @iend goto dodis
+   mmfp
+      geo reset
+   end
+
+   incr nbonds by 1
+   crystal free
+if nbonds le 2 goto lbonds
+
+stop
+
+label generate3
+   delete atom select all end
+
+   read sequ lj 3
+   generate Ar
+
+   calc root32 = sqrt ( 3 ) / 2
+   set half  = 0.5
+
+   scalar x set 0
+   scalar y set 0
+   scalar z set 0
+   scalar x set 1 select bynu 1 end
+   scalar x set -@half select bynu 2 end
+   scalar y set @root32 select bynu 2 end
+   scalar x set -@half select bynu 3 end
+   scalar y set -@root32 select bynu 3 end
+
+   coor copy compare select all end
+goto donegen
+
+label generate6
+   delete atom select all end
+
+   read sequ lj 3
+   generate Ar1
+   read sequ lj 3
+   generate Ar2
+
+   calc root32 = sqrt ( 3 ) / 2
+   set half  = 0.5
+
+   scalar x set 0
+   scalar y set 0
+   scalar z set 0
+   scalar x set 1 select bynu 1 end
+   scalar x set -@half select bynu 2 .or. bynu 5 end
+   scalar y set @root32 select bynu 2 .or. bynu 5 end
+   scalar x set -@half select bynu 3 .or. bynu 6 end
+   scalar y set -@root32 select bynu 3 .or. bynu 6 end
+   coor trans xdir -1 select bynu 4 end
+   scalar x mult -1 select bynu 5:6 end
+   scalar y mult -1 select bynu 5:6 end
+   coor translate xdir -0.5 select bynu 1:3 end
+   coor translate xdir 0.5 select bynu 4:6 end
+
+   coor copy compare select all end
+goto donegen6
+

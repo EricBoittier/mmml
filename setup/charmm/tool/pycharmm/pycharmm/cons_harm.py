@@ -14,120 +14,93 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-"""
-Functions to set up and configure harmonic restraints.
+"""Functions to set up and configure harmonic restraints.
 
-Corresponds to CHARMM command `CONS HARMonic`  
+.. deprecated::
+    This module is deprecated. Use :mod:`pycharmm.restraints` instead:
+
+    - ``cons_harm.setup_absolute()`` → ``restraints.atoms.harmonic_absolute()``
+    - ``cons_harm.setup_best_fit()`` → ``restraints.atoms.harmonic_best_fit()``
+    - ``cons_harm.setup_relative()`` → ``restraints.atoms.harmonic_relative()``
+    - ``cons_harm.setup_pca()`` → ``restraints.positions.harmonic_pca()``
+    - ``cons_harm.turn_off()`` → ``restraints.atoms.harmonic_turn_off()``
+
+Corresponds to CHARMM command `CONS HARMonic`
 See [CONS HARMonic documentation](https://academiccharmm.org/documentation/version/c47b1/cons#HarmonicAtom)
+
+Functions
+=========
+- `setup_absolute` -- restrain atoms to fixed reference positions
+- `setup_best_fit` -- restrain atoms with best-fit superposition
+- `setup_relative` -- restrain atoms relative to another selection
+- `setup_pca` -- restrain atoms for PCA analysis
+- `turn_off` -- turn off all harmonic constraints
+
+Keyword Arguments
+=================
+Common keyword arguments for restraint functions:
+
+- `force_const` : float - restraint force constant k (default: 0.0)
+- `expo` : int - exponent on distance (default: 2 for harmonic)
+- `x_scale` : float - scale factor for x component (default: 1.0)
+- `y_scale` : float - scale factor for y component (default: 1.0)
+- `z_scale` : float - scale factor for z component (default: 1.0)
+- `q_mass` : int - if 1, multiply k by atom mass (default: 0)
+- `q_weight` : int - if 1, use weight array for k(i) (default: 0)
+- `q_no_rot` : int - if 1, disable rotational restraint (default: 0)
+- `q_no_trans` : int - if 1, disable translational restraint (default: 0)
 
 Examples
 ========
+>>> import pycharmm
 >>> import pycharmm.cons_harm as cons_harm
->>> import pycharmm.selection as selection
->>> import pycharmm.psf as psf
->>> cons_harm.setup_best_fit(force_const=10.0)
->>> natom = psf.get_natom()
->>> isel = select.none_selection(natom)
->>> isel = select.by_elt(range(0, 5), isel)
->>> isel = pycharmm.SelectAtoms().set_selection(isel)
->>> jsel = select.none_selection(natom)
->>> jsel = select.by_elt(range(5, 10), jsel)
->>> jsel = pycharmm.SelectAtoms().set_selection(jsel)
->>> cons_harm.setup_relative(isel, jsel, force_const=10.0)
+
+Setup absolute positional restraints on all atoms
+>>> cons_harm.setup_absolute(force_const=10.0)
+
+Setup best-fit restraints on backbone atoms
+>>> bb = pycharmm.SelectAtoms(atom_type='CA')
+>>> cons_harm.setup_best_fit(selection=bb, force_const=5.0)
+
+Setup relative restraints between two groups
+>>> sel1 = pycharmm.SelectAtoms(seg_id='PROA')
+>>> sel2 = pycharmm.SelectAtoms(seg_id='PROB')
+>>> cons_harm.setup_relative(sel1, sel2, force_const=10.0)
+
+Turn off all harmonic restraints
+>>> cons_harm.turn_off()
 """
 
-import ctypes
+import warnings
 
-import pycharmm
-import pycharmm.lib as lib
-
-
-_OPTIONS_fields = [('expo', ctypes.c_int),
-                   ('x_scale', ctypes.c_double),
-                   ('y_scale', ctypes.c_double),
-                   ('z_scale', ctypes.c_double),
-                   ('q_no_rot', ctypes.c_int),
-                   ('q_no_trans', ctypes.c_int),
-                   ('q_mass', ctypes.c_int),
-                   ('q_weight', ctypes.c_int),
-                   ('force_const', ctypes.c_double)]
-
-
-class _OPTIONS(ctypes.Structure):
-    """A ctypes struct to hold harmonic constraint settings
-
-    Attributes
-    ----------
-    expo : int 
-        exponent on diff between atom and ref atom
-    x_scale : float
-        global scale factor for the x component
-    y_scale : float
-        global scale factor for the y component
-    z_scale : float
-        global scale factor for the z component
-    q_no_rot : int
-        do not do rotational restraint
-    q_no_trans : int
-        do not do translational restraint
-    q_mass : int
-        multiply k by atom mass (natural freq of oscillation of sqrt(k))
-    q_weight : int
-        use weight array for k(i) and not force argument above
-    force_const : float, default = 0.0
-        restraint force constant k
-    """
-    _fields_ = _OPTIONS_fields
-
-
-_OPTIONS_defaults = (2, 1.0, 1.0, 1.0, 0, 0, 0, 0, 0.0)
-
-# TODO:
-# 1. separate fill structure routine in util.py
-# 2. add more error checking (eg relative:
-#    check that sum(iselect) == sum(jselect))
+from pycharmm import restraints
 
 
 def turn_off():
     """
     Turn off and clear settings for harmonic constraints
 
+    .. deprecated::
+        Use ``restraints.atoms.harmonic_turn_off()`` instead.
+
     Returns
     -------
     bool
         True if successful
     """
-    status = lib.charmm.cons_harm_turn_off()
-    bool(status)
-    return status
-
-
-def _make_opts(fields, settings):
-    """Make a new instance of _OPTIONS
-
-    Parameters
-    ----------
-    fields : list[string]
-        list of valid field names used to filter settings
-    settings : python dictionary
-        name and value for harmonic restraints settings
-
-    Returns
-    -------
-    _OPTIONS 
-        an instance filled with values from settings
-    """
-    new_opts = _OPTIONS(*_OPTIONS_defaults)
-    fields_types = dict(_OPTIONS_fields)
-    valid_settings = [(k, v) for k, v in settings.items() if k in fields]
-    for k, v in valid_settings:
-        setattr(new_opts, k, fields_types[k](v))  # TODO: need a try/catch here
-
-    return new_opts
+    warnings.warn(
+        "cons_harm.turn_off() is deprecated, use restraints.atoms.harmonic_turn_off()",
+        DeprecationWarning,
+        stacklevel=2
+    )
+    return restraints.atoms.harmonic_turn_off()
 
 
 def setup_pca(selection=None, comparison=False, **kwargs):
     """Configure and turn on absolute harmonic constraints for the selected atoms
+
+    .. deprecated::
+        Use ``restraints.positions.harmonic_pca()`` instead.
 
     *Valid* key word arguments for settings include
     `expo`, `x_scale`, `y_scale`, `z_scale`, `q_mass`, `q_weight`, and `force_const`
@@ -140,74 +113,68 @@ def setup_pca(selection=None, comparison=False, **kwargs):
         if true, apply restraints on comparison set instead of main set
     **kwargs : optional
         key word arguments for absolute harmonic constraints
-    
+
     Returns
     -------
     bool
         True if successful
     """
-    if not selection:
-        selection = pycharmm.SelectAtoms().all_atoms()
-
-    abs_fields = ['expo', 'x_scale', 'y_scale', 'z_scale',
-                  'q_mass', 'q_weight', 'force_const']
-    opts = _make_opts(abs_fields, kwargs)
-
-    c_sel = selection.as_ctypes()
-    c_comp = ctypes.c_int(comparison)
-    status = lib.charmm.cons_harm_setup_pca(c_sel,
-                                            ctypes.byref(c_comp),
-                                            ctypes.byref(opts))
-    status = bool(status)
-    return status
+    warnings.warn(
+        "cons_harm.setup_pca() is deprecated, use restraints.positions.harmonic_pca()",
+        DeprecationWarning,
+        stacklevel=2
+    )
+    return restraints.positions.harmonic_pca(
+        selection=selection, comparison=comparison, **kwargs
+    )
 
 
 def setup_absolute(selection=None, comparison=False, **kwargs):
     """
     Configure and turn on absolute harmonic restraints for the selected atoms
 
+    .. deprecated::
+        Use ``restraints.atoms.harmonic_absolute()`` instead.
+
     *Valid* key word arguments for settings include
     `expo`, `x_scale`, `y_scale`, `z_scale`, `q_mass`, `q_weight`, and `force_const`
 
     Parameters
     ----------
-    selection : pycharmm.SelectAtoms 
+    selection : pycharmm.SelectAtoms
         apply restraints to selected atoms; None -> all atoms
     comparison : bool, default = False
         if true, do restraints on comparison set instead of main set
     **kwargs : optional
         key word arguments for absolute harmonic constraints
 
-    Returns 
+    Returns
     -------
     bool
         True if successful
     """
-    if not selection:
-        selection = pycharmm.SelectAtoms().all_atoms()
-
-    abs_fields = ['expo', 'x_scale', 'y_scale', 'z_scale',
-                  'q_mass', 'q_weight', 'force_const']
-    opts = _make_opts(abs_fields, kwargs)
-
-    c_sel = selection.as_ctypes()
-    c_comp = ctypes.c_int(comparison)
-    status = lib.charmm.cons_harm_setup_absolute(c_sel,
-                                                 ctypes.byref(c_comp),
-                                                 ctypes.byref(opts))
-    status = bool(status)
-    return status
+    warnings.warn(
+        "cons_harm.setup_absolute() is deprecated, use restraints.atoms.harmonic_absolute()",
+        DeprecationWarning,
+        stacklevel=2
+    )
+    return restraints.atoms.harmonic_absolute(
+        selection=selection, comparison=comparison, **kwargs
+    )
 
 
 def setup_best_fit(selection=None, comparison=False, **kwargs):
     """Configure and turn on best fit harmonic restraints for the selected atoms
+
+    .. deprecated::
+        Use ``restraints.atoms.harmonic_best_fit()`` instead.
 
     *Valid* key word arguments for settings include
     `q_no_rot`, `q_no_trans`, `q_mass`, `q_weight`, `force_const`
 
     Parameters
     ----------
-    selection : pycharmm.SelectAtoms 
+    selection : pycharmm.SelectAtoms
         apply restraints to selected atoms
     comparison : bool
         if true, do restraints on comparison set instead of main set
@@ -219,24 +186,24 @@ def setup_best_fit(selection=None, comparison=False, **kwargs):
     bool
         True if successful
     """
-    if not selection:
-        selection = pycharmm.SelectAtoms().all_atoms()
-
-    best_fit_fields = ['q_no_rot', 'q_no_trans',
-                       'q_mass', 'q_weight', 'force_const']
-    opts = _make_opts(best_fit_fields, kwargs)
-
-    c_sel = selection.as_ctypes()
-    c_comp = ctypes.c_int(comparison)
-    status = lib.charmm.cons_harm_setup_best_fit(c_sel,
-                                                 ctypes.byref(c_comp),
-                                                 ctypes.byref(opts))
-    status = bool(status)
-    return status
+    warnings.warn(
+        "cons_harm.setup_best_fit() is deprecated, use restraints.atoms.harmonic_best_fit()",
+        DeprecationWarning,
+        stacklevel=2
+    )
+    return restraints.atoms.harmonic_best_fit(
+        selection=selection, comparison=comparison, **kwargs
+    )
 
 
 def setup_relative(iselection, jselection, comparison=False, **kwargs):
-    """Configure and turn on relative harmonic restraintfor the selected atoms
+    """Configure and turn on relative harmonic restraints for the selected atoms
+
+    .. deprecated::
+        Use ``restraints.atoms.harmonic_relative()`` instead.
+
+    The two selections must have the same number of selected atoms, as they
+    are paired element-wise for the relative restraint calculation.
 
     *Valid* key word arguments for settings include
     `q_no_rot`, `q_no_trans`, `q_mass`, `q_weight`, `force_const`
@@ -244,27 +211,29 @@ def setup_relative(iselection, jselection, comparison=False, **kwargs):
     Parameters
     ----------
     iselection : pycharmm.SelectAtoms
-        apply restraints to selected atoms
-    jselection : pycharmm.SelectAtoms  
-        apply restraints to selected atoms
+        first selection of atoms for restraints
+    jselection : pycharmm.SelectAtoms
+        second selection of atoms for restraints (must match iselection count)
     comparison : bool
         if true, apply restraints on comparison set instead of main set
-    **kwargs : optional 
+    **kwargs : optional
         key word arguments for relative harmonic constraints
+
     Returns
     -------
     bool
         True if successful
-    """
-    relative_fields = ['q_no_rot', 'q_no_trans',
-                       'q_mass', 'q_weight', 'force_const']
-    opts = _make_opts(relative_fields, kwargs)
 
-    c_isel = iselection.as_ctypes()
-    c_jsel = jselection.as_ctypes()
-    c_comp = ctypes.c_int(comparison)
-    status = lib.charmm.cons_harm_setup_relative(c_isel, c_jsel,
-                                                 ctypes.byref(c_comp),
-                                                 ctypes.byref(opts))
-    status = bool(status)
-    return status
+    Raises
+    ------
+    ValueError
+        if the number of selected atoms in iselection and jselection differ
+    """
+    warnings.warn(
+        "cons_harm.setup_relative() is deprecated, use restraints.atoms.harmonic_relative()",
+        DeprecationWarning,
+        stacklevel=2
+    )
+    return restraints.atoms.harmonic_relative(
+        selection1=iselection, selection2=jselection, comparison=comparison, **kwargs
+    )

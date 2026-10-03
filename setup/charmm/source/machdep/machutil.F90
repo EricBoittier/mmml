@@ -257,7 +257,7 @@ contains
     use chm_kinds
     use stream
 #if KEY_MPI==1
-    use mpi     
+    use mpi_f08     
 #endif
     use cstuff, only: stack_trace
 

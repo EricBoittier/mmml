@@ -109,7 +109,12 @@ nbonds elec atom cdie  vdw -
 
 energy
 
-@qcheck ?ENER -9800.05 0.01  slowgr_ips_init 
+! The static IPS/PERT energy is reproducible to the last digit and comes
+! out identical at every MPI rank count, so this is the real regression
+! guard here -- keep the tolerance tight.  Keep the value for the
+! post-dynamics sanity check below.
+set e0 ?ENER
+@qcheck @e0 -9800.05 0.01  slowgr_ips_init
 
 
 ! Set collision frequency for Langevin dynamics
@@ -146,7 +151,17 @@ writ coor pdb unit 16
 
 energy
 
-@qcheck ?ENER -9608.1 48.0  slowgr_ips_init 
+! NOT a regression guard, and deliberately loose.  This is the energy after
+! 200 steps of Langevin dynamics: the random-force stream depends on the
+! parallel decomposition, so the endpoint legitimately differs with the MPI
+! rank count (-9651 serial, -9629 on 2 ranks, -9695 on 8).  The old check
+! compared it against a captured -9608.1 +/- 48.0, which survived 1 and 2
+! ranks by luck and failed on 8 -- exactly the copy-pasted local-run value
+! test/data/test.str warns about.  Compare against this run's own starting
+! energy instead, with a band wide enough for that spread (largest drift
+! seen is ~171) yet still tight enough to catch a blown-up or NaN
+! trajectory.  Distinct label: this is not the "init" check above.
+@qcheck ?ENER @e0 500.0  slowgr_ips_dyna
 
 if @testfail eq 0 then
    set status PASS

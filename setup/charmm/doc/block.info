@@ -95,6 +95,8 @@ THBV COLL [int|ALL] real real
 
 THBV INDE [int|ALL] [real|AUTO]
 
+THBV FLAT [int|ALL] [real] [real]
+
 LDRStart
 
 LDWRite IUNL int NSAVL int  
@@ -123,6 +125,7 @@ MSLD [int_1 int_2 ... int_nblocks | NSITe int] { FNEXponential [real] }
                                                { F2Exponential }        
                                                { F2Sin }                
                                                { FFIX }
+                                               { FNPW }
                  ! note: int_1 must be 0, block 1 = environment = Site 0
 
 BLASsign int_block int_site
@@ -417,10 +420,18 @@ independent bias (INDE)
 with a default b coefficient of b=B*kT
     B = 0.5*ln(0.125*pi*Ns^2*B)
 
-The second argument of THBV chooses the collective bias or the independent
-bias. The third argument specifies a site, by number, or if the keyword ALL
-is used, will apply the bias to all sites. For the collecitve bias the
-syntax
+Furthermore, for the FNPW implicit constraints a flat bottom bias ensures
+transition rates remain high, and the fraction physical ligand at the
+exact end states is controlled by w and is roughly independent of the
+number of substituents.
+
+    V = { 0.5*k*kT*(abs(theta) - w*Ns)^2 for abs(theta)>w*Ns
+        { 0                              otherwise
+
+The second argument of THBV chooses the collective bias, the independent
+bias, or the flat bottom bias. The third argument specifies a site, by
+number, or if the keyword ALL is used, will apply the bias to all sites.
+For the collecitve bias the syntax
 
     THBV COLL ALL COEF POWER
 
@@ -437,6 +448,12 @@ will set the b value to the defalt value indicated above, and
 
 will set the coefficient to the real value given by COEF.
 
+For the flat bottom bias (for use with FNPW), 
+
+     THBV FLAT ALL 0.35 100
+
+will set w (the width) to the recommended value of 0.35 and k to the
+recommended value of 100 (in units of kT).
 
 17) LDRStart is used to restart the lambda dynamics runs.
 
@@ -745,7 +762,29 @@ iv) 2-block sin: F2SI   (based on constant pH-MD and theta-dynamics)
    lam(Site_a,sub_2) = 1.0 - sin(theta(Site_a))^2
 
 v) Fixed lambdas: FFIX  (lambda doesn't move from its starting value)
-   Useful for doing FEP or MBAR in systems set up for MSLD
+   Useful for doing FEP or MBAR in systems set up for MSLD. FFIX must
+   be used together with another implicit constraint, place it after
+   the implicit constraint it should be used with. Including no arguments
+   will fix lambda for all blocks, including some block indices will fix
+   only those blocks.
+
+iv) n-block piecewise constraint: FNPW
+   Significant improvement over FNEX implicit constraint. Samples exact
+   end states. Use without THBV FLAT will result in transition rates
+   decaying to 0. Use with THBV FLAT ensures fraction physical ligand
+   is roughly independent of the w parameter.
+                        __
+                       |   (theta(Site_a,sub_i) - phi(Site_a))**3
+   lam(Site_a,sub_i) = |             if theta(Site_a,sub_i) > phi(Site_a)
+                       |   0
+                       |__           otherwise
+
+   phi(Site_a) is implicitly defined by
+                         ----
+                         \
+                     1 = /    lam(Site_a,sub_j)
+                         ----
+                         all j
 
 The MSMA keyword is the Multi-Site lambda-dynamics equivalent to the
 LDMAtrix command and will automatically map the input lambda values
@@ -1330,64 +1369,119 @@ are supported:
 
 CLASS 1:
                __
-              |   CFORCE*(lambda - REF)**NPOWER  if lambda < REF   
-          V  =| 
-              |   0                              otherwise     
+              |   CFORCE*(lambda - REF)**NPOWER  if lambda < REF
+          V  =|
+              |   0                              otherwise
               |__
+
+         Lower-bound restraint. Applies a repulsive potential when lambda
+         falls below REF, pushing it back up. Useful for preventing lambda
+         from becoming too small. Commonly used between 2011 and 2015 for
+         lowering barriers between substituents without biasing above the
+         lambda cutoff (which was set to REF).
 
 
 CLASS 2:
                __
-              |   CFORCE*(lambda - REF)**NPOWER  if lambda > REF   
-          V  =| 
-              |   0                              otherwise     
+              |   CFORCE*(lambda - REF)**NPOWER  if lambda > REF
+          V  =|
+              |   0                              otherwise
               |__
+
+         Upper-bound restraint. Applies a repulsive potential when lambda
+         exceeds REF, pushing it back down. Useful for preventing lambda
+         from becoming too large. Uncommon.
 
 
 CLASS 3:
-              
-          V  =    CFORCE*[lambda(I) - lambda(J)]**NPOWER 
-            
+
+          V  =    CFORCE*[lambda(I) - lambda(J)]**NPOWER
+
+         Coupling restraint. Penalizes differences between two lambda values,
+         encouraging them to move together. Useful for coupling related
+         alchemical transformations. Uncommon.
+
 
 CLASS 4:
                __
-              |   CFORCE*(1.0 - ((lambda - REF)**2)/REF**2) if lambda < REF
+              |  -CFORCE*(1.0 - ((lambda - REF)**2)/REF**2)  if lambda < REF
           V  =|
-              |   0                                         otherwise
+              |  -CFORCE                                     otherwise
               |__
 
+         Quadratic bias toward REF. Applies a smooth quadratic potential that
+         decreases from 0 at lambda=0 to -CFORCE at lambda=REF. Designed to
+         discourage small lambda values by pushing them toward REF. Uncommon.
 
-CLASS 5:  
 
-          V  =    CFORCE*lambda(I)       
-         note: the CLASS 5 biasing potential is the same as invoking the 
-         biasing potential LAMBDAF in LDIN (except these biases will not
-         currently be taken into account in the TRAJ analysis routines). 
+CLASS 5:
+
+          V  =   -CFORCE*lambda(I)
+
+         Linear bias. Applies a constant force on lambda, equivalent to the
+         LAMBDAF biasing potential in LDIN. Note: these biases are not
+         currently accounted for in the TRAJ analysis routines. Uncommon,
+         LDIN is used for linear biases instead.
 
 
 CLASS 6:
 
           V  =    CFORCE*[lambda(I) * lambda(J)]
 
+         Product coupling. Penalizes simultaneous large values of two lambdas.
+         Useful for enforcing mutual exclusivity between alchemical states.
+         Quadratic bias introduced in 2017.
+
 
 CLASS 7:
 
           V  =    CFORCE*[lambda(I) * (1 - lambda(I))]/[lambda(I) + REF]
+
+         Self-exclusion bias. Penalizes intermediate lambda values, pushing
+         lambda toward 0 or 1. The REF parameter controls the smoothness
+         of the potential near lambda=0. Uncommon.
 
 
 CLASS 8:
 
           V  =    CFORCE*[lambda(I) * lambda(J)]/[lambda(I) + REF]
 
+         Endpoint trap bias. REF is typically set to 0.017, the width
+         half max of the endpoint traps. Introduced in 2017.
+
 
 CLASS 9:
 
           V  =    CFORCE*[lambda(J) * (1 - ((lambda(I) + REF)/REF)**NPOWER)]
 
+         Conditional suppression. Suppresses lambda(J) based on the value
+         of lambda(I). When lambda(I) is large, the potential on lambda(J)
+         becomes more negative. Uncommon.
+
 
 CLASS 10:
 
           V  =    CFORCE*[lambda(J) * (1 - exp(REF*lambda(I)))]
+
+          Skew bias. Introduced in 2018. Improves flattening when soft cores
+          are used. REF is typically set to 1/0.18.
+
+
+CLASS 11:
+
+          V  =    CFORCE*[lambda(I)**NPOWER * lambda(J)**REF]
+
+         Power-law product. Couples two lambdas with independent exponents.
+         NPOWER controls the power of lambda(I), REF controls the power of
+         lambda(J). Uncommon.
+
+
+CLASS 12:
+
+          V  =    CFORCE*[lambda(J)**NPOWER * lambda(I)/(lambda(I) + REF)]
+
+         Quadratic endpoint bias. Experimental. Improves flattening in
+         some landscapes with three or more substituents.
 
 
 (c) LDRStart

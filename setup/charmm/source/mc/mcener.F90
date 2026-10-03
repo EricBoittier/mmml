@@ -34,6 +34,7 @@ contains
     !
     use ace_module
     use bases_fcm
+    use datstr, only: NBGROW
     use deriv
     use econtmod
     use eef1_mod
@@ -267,10 +268,15 @@ contains
 #if KEY_ACE==1
     IF (LACE) THEN
        !         Set up the symmetric atom-exclusion list
-       IF (LFIRST) CALL STUP14(BDUMMY%IBLO14, &
-            BDUMMY%INB14, MCA14P, IMVATM,IAMC,NAMC)
+       IF (LFIRST) THEN
+          !       Ensure INB14 is large enough for the symmetric MCA14 list
+          I = STUP14_REQSZ(MCA14P, IMVATM, IAMC, NAMC)
+          IF (I > SIZE(BDUMMY%INB14)) CALL NBGROW(BDUMMY%INB14, I)
+          CALL STUP14(BDUMMY%IBLO14, &
+               BDUMMY%INB14, MCA14P, IMVATM,IAMC,NAMC)
+       ENDIF
     ENDIF
-#endif 
+#endif
 
 #if KEY_RGYCONS==1
         IF(QRGY) THEN
@@ -340,6 +346,9 @@ contains
     use energym
     use param
     use psf
+#if KEY_DOMDEC==1
+    use domdec_common, only: q_domdec
+#endif
 #if KEY_PATHINT==1
     use mpathint, only: epimc  
 #endif
@@ -366,8 +375,10 @@ contains
 #endif
 
 #if KEY_DOMDEC == 1
-    call wrndie(-5, '<EBNDED>', 'NOT READY FOR DOMDEC')
-    return
+    if (q_domdec) then
+       call wrndie(-5, '<EBNDED>', 'NOT READY FOR DOMDEC')
+       return
+    endif
 #endif /* KEY_DOMDEC */
 
     !       Initialization
@@ -549,16 +560,17 @@ contains
     !       Aaron R. Dinner
     !
     use number
+    use datstr, only: NBGROW
     use deriv
     use econtmod
     use enbond_mod
     use energym
 #if KEY_PERT==1
-    use epert_mod                     
+    use epert_mod
 #endif
     use param
 #if KEY_PERT==1
-    use pert                      
+    use pert
 #endif
     use psf
     use fast
@@ -601,6 +613,9 @@ contains
        IF (LGROUP) THEN
           CALL MKNLST(BNBND%INBLOG,BNBND%JNBG, IMVGRP, MCBLGP, IGMC,NGMC)
           !           Setup a miniature exclusion list
+          !           Ensure INB14 is large enough for the symmetric MCA14 list
+          N = STUP14_REQSZ(MCA14P, IMVATM, IAMC, NAMC)
+          IF (N > SIZE(BNBND%INB14)) CALL NBGROW(BNBND%INB14, N)
           CALL STUP14(BNBND%IBLO14,BNBND%INB14, MCA14P, IMVATM,IAMC,NAMC)
        ELSE
           CALL MKNLST(BNBND%INBLO,BNBND%JNB,IMVATM, MCBLO, IAMC,NAMC)
@@ -848,7 +863,6 @@ contains
           MCBLO(K)%A(MCCTR(K)) = IS
 
           IF (QPRIM .AND. (I.NE.K)) THEN
-             !           IF (QPRIM) THEN
              MCCTR(I) =  MCCTR(I) + 1
              MCBLO(I)%A(MCCTR(I)) = KS
           ENDIF
@@ -893,6 +907,31 @@ contains
     ENDDO
     RETURN
   END SUBROUTINE MKNLST
+
+  FUNCTION STUP14_REQSZ(MCA14,IMVATM,IAMC,NAMC) RESULT(N14)
+    !
+    !       Counts the number of exclusion entries that STUP14 will write
+    !       into INB14, so the caller can ensure the array is large enough.
+    !
+    type(chm_iptr), intent(in) :: MCA14(:)
+    INTEGER, intent(in) :: IMVATM(:)
+    INTEGER, intent(in) :: IAMC, NAMC
+    INTEGER :: N14
+    !
+    INTEGER :: I, J, K, NB
+
+    N14 = 0
+    DO I = IAMC, NAMC
+       IF (IMVATM(I) .GT. 0) THEN
+          NB = MCA14(I)%A(2)
+          DO J = 3, NB
+             K = MCA14(I)%A(J)
+             IF (K .LT. 0) K = -K
+             IF (IMVATM(I) .GE. IMVATM(K)) N14 = N14 + 1
+          ENDDO
+       ENDIF
+    ENDDO
+  END FUNCTION STUP14_REQSZ
 
   SUBROUTINE STUP14(IBLO14,INB14,MCA14,IMVATM,IAMC,NAMC)
     !

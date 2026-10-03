@@ -44,7 +44,7 @@ The second step is to compile the source in the build directory by invoking
 the make command which uses the makefile written by CMake in
 the configuration step.
 The third step is to install the binaries and support files into a path prefix
-designated during configuration by typing 'make install'. 
+designated during configuration by typing 'make install'.
 
 
 File: Cmake, Node: Configuration, Up: Top, Previous: Workflow, Next: Compilation
@@ -76,16 +76,17 @@ To see the currently supported list of options, use the --help option.
 $ ../charmm/configure --help
 Usage: configure [--option1] [--option2] ...
 
-Options:
-
 General options
 
 -p <install path>, --prefix <install path>
      install CHARMM into the given directory
 -g, --debug
-     include debug symbols in final exec
+     include debug symbols in final exec (CMAKE_BUILD_TYPE=Debug)
+--relwithdebinfo
+     optimised build with debug symbols (CMAKE_BUILD_TYPE=RelWithDebInfo)
 -l, --lite
      lite build of CHARMM (minimal pref.dat keywords)
+     turns all options off regardless of other arguments
 -c <path to cmake>, --cmake <path to cmake>
      use <path to cmake> to configure the build
 -a <keyword1,keyword2,...,keywordN>, --add <keyword1,keyword2,...,keywordN>
@@ -94,25 +95,230 @@ General options
      remove the keywords from the final pref.dat
 -D var1=val1 -D var2=val2 ... -D varN=valN
      set CMake variables to the given values
+-F flag
+     pass a flag to CMake (eg -F '-GNinja')
+--with-ninja
+     use ninja as the build program instead of make
+--without-new-files
+     do not scan for new files to add as source code
+-v, --verbose
+     stream CMake's full, raw output to the console as it configures.
+     By default configure runs quietly: CMake's progress chatter is
+     suppressed and, when configuration succeeds, configure prints a
+     single clean summary of the detected compilers, parallel runtime
+     and optional libraries/packages (with their versions and on-disk
+     locations) followed by enabled options.  Use --verbose when you
+     need the underlying CMake messages -- for example to debug a
+     failed library search or an unexpected compiler choice.  The
+     summary is still printed at the end in verbose mode.  (If
+     configuration fails, the CMake output is always shown regardless
+     of this flag.)
+
+The configuration summary
+--------------------------
+
+On a successful run configure prints a report like:
+
+  CHARMM configuration
+  ------------------------------------------------------------
+  Build type      Release
+  Generator       ninja
+  Install prefix  /home/jdoe/charmm-install
+  Library         shared
+
+  Compilers
+    C        found   GNU 13.2.0     /usr/bin/gcc
+    C++      found   GNU 13.2.0     /usr/bin/g++
+    Fortran  found   GNU 13.2.0     /usr/bin/gfortran
+
+  Parallelization
+    MPI      found   MPI standard 3.1   /usr/bin/mpif90
+
+  Libraries and packages
+    FFTW     found   double + single    /usr/lib/libfftw3.so
+    Intel MKL  not found
+    Python 3 found   3.11.5             /usr/bin/python3
+  ------------------------------------------------------------
+
+Packages that were searched for but not located are listed as
+"not found"; packages irrelevant to the requested build (or a --lite
+build) are omitted.  Status colours are used only when writing to an
+interactive terminal and are disabled automatically when the output is
+redirected or when the NO_COLOR environment variable is set.
+
+Debugging and runtime-correctness builds
+
+--with-checks
+     enable Fortran runtime checks (-fcheck=bounds,do,mem,pointer,
+     -finit-real=snan, -finit-integer=-2147483647 under gfortran;
+     -u -traceback under Intel).  Catches uninitialised locals and
+     out-of-bounds array accesses at run time.  Adds noticeable
+     runtime overhead; intended for development and CI debugging
+     builds, not production runs.
+--with-asan
+     enable AddressSanitizer instrumentation (shorthand for
+     --sanitize=address).  Catches heap-buffer-overflow,
+     use-after-free, double-free, stack-buffer-overflow, etc.,
+     with full stack traces.  Compatible with --with-ubsan; not
+     compatible with --with-tsan.  Adds 2-3x runtime overhead
+     and roughly doubles memory use.
+--with-ubsan
+     enable UndefinedBehaviorSanitizer (shorthand for
+     --sanitize=undefined).  Catches signed-integer overflow,
+     null pointer dereference, misaligned loads, illegal shifts,
+     etc.  Cheap; safe to combine with --with-asan.
+--with-tsan
+     enable ThreadSanitizer (shorthand for --sanitize=thread).
+     Catches data races.  Mutually exclusive with --with-asan
+     and the rarer --sanitize=memory; cmake will fatal-error if
+     you try to combine them.
+--sanitize <comma-separated list>
+     low-level form: enable arbitrary sanitisers by name, e.g.
+     ``--sanitize=address,undefined``.  Equivalent to the
+     ``-fsanitize=<name>`` set passed to gcc/clang.  Orthogonal
+     to --debug / --relwithdebinfo (works with any build type;
+     ``--relwithdebinfo --with-asan`` is the usual combination
+     for ASan runs where you want the test to actually finish
+     in a reasonable time).  Automatically adds
+     -fno-omit-frame-pointer -fno-sanitize-recover=all and -g
+     (when the build type doesn't already supply -g), and
+     applies the same flags to C, C++, Fortran (gfortran 12+, ifx,
+     flang-new), the executable linker, and the shared library
+     linker.  See "Sanitizer runtime notes" below for the toolchain
+     compatibility matrix -- in particular, gfortran on arm64 macOS
+     does not support sanitizers because GCC's runtime libraries
+     are not built for that platform.
+
+macOS SDK selection
+
+On macOS, configure checks that the chosen C compiler can actually link
+against its default SDK before handing off to cmake.  A conda-forge
+toolchain ships an older ld64 that cannot read the .tbd stub libraries of
+a recent Xcode / Command Line Tools SDK (e.g. SDK 26), so linking C/C++
+against the default SDK fails with undefined libSystem symbols such as
+_printf or ___stack_chk_fail.  When the default SDK does not link,
+configure automatically searches the installed SDKs (newest first, under
+/Library/Developer/CommandLineTools/SDKs and the Xcode SDK directory) and
+builds against the newest one that does link, passing it to cmake as
+CMAKE_OSX_SYSROOT and exporting SDKROOT / CONDA_BUILD_SYSROOT for the
+child build.  If nothing links, configure stops with a message listing
+the fixes (install an older CLT SDK -- SDK 15 is known to work; update
+the conda linker with ``conda update -c conda-forge cctools ld64``; use
+the system Apple toolchain; or pass a specific SDK yourself).
+
+The common cases -- Linux, the system Apple toolchain, or a macOS whose
+default SDK already links -- are left completely untouched.  To force a
+specific SDK regardless of the probe, pass it explicitly:
+
+     configure ... -D CMAKE_OSX_SYSROOT=/path/to/MacOSX15.sdk
+
+FFTDOCK Metal builds (--with-metal).  Only the host-side framework link
+uses CMAKE_OSX_SYSROOT; the .metal -> .metallib shader compilation is
+driven by ``xcrun -sdk macosx metal`` and resolves its own toolchain
+independently of the selected SDK.  When --with-metal is requested the
+SDK probe additionally requires the Metal / MetalPerformanceShaders /
+MetalPerformanceShadersGraph frameworks to link, so it only selects an
+SDK recent enough (macOS 14+) to build the MPSGraph FFTDOCK backend, and
+otherwise stops with the same remediation list.  Using the system Apple
+toolchain (its ld64 reads the newest SDK) sidesteps the probe entirely.
+
+Sanitizer runtime notes
+
+Toolchain support.  Each language is probed at configure time with
+``-fsanitize=<first-listed>``; if any of C, C++, or Fortran rejects
+the flag (because the compiler doesn't support it, or the sanitizer
+runtime library isn't installed), cmake fails fast with a clear
+error rather than letting the final link step blow up.  Known good
+combinations:
+  Linux + gcc/g++/gfortran >= 12          works (libasan in gcc pkg)
+  Linux + clang/clang++/flang-new         works
+  Linux + icx/icpx/ifx                    works (LLVM-based)
+  macOS arm64 + gfortran (Homebrew/conda) DOES NOT WORK -- GCC's
+      sanitizer runtimes are not built for arm64 macOS, so the
+      Fortran probe will fail with "library not found for -lasan".
+      Use Linux (container or VM) for sanitizer builds on a Mac,
+      or switch the Fortran compiler to flang-new.
+Older gfortran (< 12) has no ``-fsanitize=`` driver option at all
+and will be rejected with an explicit upgrade hint.
+
+Under OpenMPI the runtime-code patcher calls mprotect on executable
+pages, which AddressSanitizer blocks.  Without the workaround every
+MPI run dies inside ``mca_base_patcher_patch_apply_binary`` before
+any user code runs.  Set the following env vars before mpirun:
+    export OMPI_MCA_patcher=none
+    export OMPI_MCA_pml=ob1
+    export OMPI_MCA_btl=self,tcp
+    export OMPI_MCA_memory=^patcher
+or use mpich (which has no patcher) instead.
+
+LSan (leak detection, auto-enabled under ASan) reports a flood of
+"leaks" from CHARMM's module-level globals at process exit.  These
+are not real leaks -- module variables live for the life of the
+process by design.  Suppress with
+    export ASAN_OPTIONS=detect_leaks=0
+or include leaks=0 in any ASAN_OPTIONS you set for other reasons.
+
+A typical end-to-end sanitizer build invocation:
+    ./configure --relwithdebinfo --with-asan --with-ninja
+    cd build/cmake && ninja install
+    export ASAN_OPTIONS=halt_on_error=1:detect_leaks=0:symbolize=1
+    export OMPI_MCA_patcher=none OMPI_MCA_pml=ob1 OMPI_MCA_btl=self,tcp
+    export OMPI_MCA_memory=^patcher
+    mpirun -np 2 -x ASAN_OPTIONS -x OMPI_MCA_patcher -x OMPI_MCA_pml \
+        -x OMPI_MCA_btl -x OMPI_MCA_memory --bind-to none \
+        bin/charmm -input test/c20test/test.inp
 
 Non-default features
 
 --static
      link only static libs for a portable executable
--u, --domdec_gpu
+--with-abpo
+     include support for ABPO; requires MPI and activates ENSEMBLE
+--with-blade
+     include support for BLaDE GPU features
+--with-domdec_gpu, --domdec_gpu, -u
      include support for DOMDEC_GPU
+--with-ensemble
+     include support for ENSEMBLE replicas; requires MPI
 --with-fftdock
      include support for fftdock GPU features
---repdstr
+--with-gamess, --gamess, -q
+     include support for GAMESS QM/MM interface
+--with-gamus
+     include support for GAMUS
+--with-ljpme
+     include support for LJPME features
+--with-nih
+     include the NIH extra set of pref.dat keywords
+--with-nvtx
+     link NVIDIA Tools Extension library for NVIDIA Nsight profiling
+--with-pipf
+     include support for Polarizable Intermolecular Potential Function
+--with-repdstr, --repdstr
      include support for REPDSTR
--s, --sccdftb
-     include support for SCC-DFTB
---stringm
+--with-stringm, --stringm
      include support for STRINGM
+--with-sccdftb, --sccdftb, -s
+     include support for SCC-DFTB
 --with-x11
      include support for X11 graphics via XDISPLAY
--q, --gamess
-     include support for GAMESS QM/MM interface
+--with-tsri
+     include the TSRI extra set of pref.dat keywords
+--with-eabf
+     include eabf source files
+
+Non-default mutually exclusive QM/MM options
+
+--with-squantm
+     include support for squantum (not compatible with qchem)
+--with-g09
+     include support for Gaussian09
+--with-qturbo
+     include support for QTURBO
+--with-mndo97
+     include support for MNDO97 (not compatible with qchem)
+--with-qmmmsemi
+     include support for QMMMSEMI (AMBER semi-empirical qmmm)
 
 Compiler options
 
@@ -127,29 +333,77 @@ Compiler options
 
 Remove default features
 
+--without-library
+     only build an executable; do not build a shared library
+--without-colfft
+     skips compiling COLFFT features
+--without-cuda
+     skips compiling Nvidia CUDA features
 --without-domdec
      skips compiling DOMDEC features
+--without-exafmm
+     skips compiling ExaFMM support
 --without-fftw
      skips linking in the FFTW library
+--without-html
+     skips building and installing html documentation pages
 --without-mkl
      skips linking in Intel's MKL library
 --without-mpi
      skips compiling MPI features
+--without-opencl
+     skip compiling OpenCL features
 --without-openmm
      skips compiling OpenMM features
+--without-openmp
+     skips compiling OpenMP acceleration
+--without-qchem
+     skips compiling Q-CHEM features including the qchem executable
+--without-quantum
+     skips compiling QUANTUM features
+
+Helpful variables
+
+    Setting these variables is usually unnecessary.
+    It is usually enough to have the feature or
+    a related binary first in your path.
+
+Feature:  Environment variable(s)
+
+Compiler:  CC, CXX, FC, CUDACXX, PATH
+CUDA Toolkit:  CUDAToolkit_ROOT
+nvcc:  PATH, CUDACXX
+OpenMM:  OPENMM_PLUGIN_DIR, OPENMM_DIR, OPENMM_HOME
+FFTW:  FFTW_DIR, FFTW_HOME
+MKL:  MKLROOT, MKL_HOME
+
+Feature:  CMake variable(s)
+
+MPI:  MPI_Fortran_COMPILER, MPI_C_COMPILER, MPI_C++_COMPILER
+nvcc:  CMAKE_CUDA_COMPILER, CMAKE_CUDA_HOST_COMPILER,
+       CMAKE_CUDA_ARCHITECTURES
+CUDA Toolkit:  CUDAToolkit_ROOT
+OpenMM:  OPENMM_PLUGIN_DIR, OPENMM_LIBRARY, OPENMM_INCLUDE_DIR
+Cluster computing: on some heterogeneous compute clusters it
+    may be helpful to set the CMake variable arch_flag_all
+    to the compiler flag requesting the lowest common
+    instruction set among the nodes. For example, for GCC
+    instead of using the default -march=native, it may be
+    helpful to set -D arch_flag_all='-march=haswell' to avoid
+    illegal instruction set crashes.
 
 Some notable CMake variables (set with the -D <variable>=<value> option)
 
-CUDA_HOST_COMPILER
+CMAKE_CUDA_HOST_COMPILER
     the C/C++ host compiler that nvcc will used (passed via -ccbin)
-    
+
 optimization
     The optimization level 0, 1, 2, or 3 passed to the compiler via '-O<#>'.
     This will be added to the CHARMM_<Lang>_FLAGS_RELEASE CMake variable where
     Lang is C, CXX, and Fortran.
     It should not normally be necessary to set this flag. A default level is set
     in the CMakeLists.txt file.
-    
+
 arch_flag_C
 arch_flag_CXX
 arch_flag_Fortran
@@ -159,13 +413,7 @@ arch_flag_Fortran
     in the CMakeLists.txt file.
     For example, the default switch for GNU GCC is '-march=native'
 
-nvcc_ptx_target
-    Set a virtual architechture for CUDA code. The CUDA code will be compiled to PTX
-    for the given virtual architechture. The CUDA driver will compile the PTX to
-    a real GPU architecture at runtime. Use the compute number times 10, for example:
-    32, 35, 53, 75...
-
-nvcc_arch_target
+CMAKE_CUDA_ARCHITECTURES
     Set a real GPU architechture for CUDA code. The CUDA code will be compiled to
     the given real architechture. The CUDA driver will not use the JIT compiler at
     runtime. Use the compute number times 10, for example: 32, 35, 53, 75...
@@ -213,3 +461,12 @@ give test.com the first argument cmake intead of gnu or em64t.
 
 $ cd <prefix>/test
 $ ./test.com cmake ...
+
+Options given to configure and cmake as well as the original source directory
+can be printed from a charmm script prompt or file using the charmm command
+CONF. For example,
+
+ CHARMM>    conf
+ configure command line arguments ->-g --with-ninja<-
+ cmake command line arguments -> -DCMAKE_BUILD_TYPE=Debug -GNinja -DCMAKE_INSTALL_PREFIX=/home/bucknerj/src/charmm_builds/gnu -Din_place_install=ON<-
+ original source dir ->/home/testy/src/charmm_builds/gnu<-

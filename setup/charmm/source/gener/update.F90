@@ -736,7 +736,7 @@ SUBROUTINE CODES(ICB,ICT,ICP,ICI,NATOM,IMOVE,IAC,NBOND,IB,JB, &
 #if KEY_CFF==1
      !       the generation of the angle-angle cross terms requires that
      !       the angles be sorted
-     CALL SORT(NTHETA,EXCH5,ORDER5,JT,IT,KT,0,0,0,0,3)
+     CALL SORT(NTHETA,EXCH5,ORDER5,JT,IT,KT,(/0/),(/0/),(/0/),(/0/),3)
 #endif 
      ! reset counters
      DO I=1,NCT

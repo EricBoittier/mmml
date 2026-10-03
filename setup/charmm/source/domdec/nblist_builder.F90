@@ -1529,7 +1529,7 @@ contains
   subroutine print_debug_info(nblist)
     use stream
     use memory
-    use mpi
+    use mpi_f08
     use parallel
     use domdec_dr_common,only:comm_direct
     use nblist_types,only:nblist_t, TYPE_PAIR, TYPE_TILEX

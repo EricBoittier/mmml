@@ -239,8 +239,8 @@ Then the loop for the overlap integrals would be like this:
 
 The above is simplified model for illustration purposes only. For
 details see the actual code. All the code for calculating overlap
-energies and forces is in energy/eolap.src; command-line analysis is
-in misc/olap.src. Also see fcm/olap.fcm.
+energies and forces is in energy/eolap.F90; command-line analysis is
+in misc/olap.F90. Also see fcm/olap.fcm.
 
 The keyword to compile the method is ##OVERLAP.
 

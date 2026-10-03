@@ -1,0 +1,31 @@
+name: charmm-ci
+channels:
+  - conda-forge
+dependencies:
+  # Toolchain
+  - gfortran
+  - gxx
+  - gcc
+  - cmake
+  - ninja
+  - make
+  - pkg-config
+
+  # Numerics + I/O CHARMM links against
+  - fftw
+  - openblas
+  - openmpi
+  - openmpi-mpifort
+
+  # Python runtime for pyCHARMM
+  - python=3.12
+  - pip
+  - numpy
+  - pandas
+  - scipy
+  - pytest
+  - pytest-timeout
+  - pyflakes
+
+  # Optional but exercised by the default sweep
+  - openmm

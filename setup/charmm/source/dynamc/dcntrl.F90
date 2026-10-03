@@ -4,12 +4,10 @@ module dcntrl_mod
 contains
 
   SUBROUTINE DYNOPT(COMLYN, COMLEN &
-#if KEY_LIBRARY == 1
        , options &
        , in_vx, in_vy, in_vz &
        , out_vx, out_vy, out_vz &
-#endif /* KEY_LIBRARY */
-)
+       )
   !4/4/90 - switched shkapr from 2Xn to nX2. FORTRAN matrices
   ! go collumn-wise - Steve F.
   !
@@ -84,9 +82,12 @@ contains
   use coord,only:x,y,z
 #endif
 
-#if KEY_LIBRARY == 1
   use, intrinsic :: iso_c_binding, only: c_int, c_double
   use api_types, only: dynamics_settings
+
+#if KEY_MNDO97==1
+  use mndo97,  only: qmlay_main,qmlay_mts,nmlay_mdstp,qmlay_do_energy,qm_md_master
+  use qm1_info,only: qm_control_c
 #endif
 
   implicit none
@@ -130,7 +131,7 @@ contains
   real(chm_real),allocatable,dimension(:,:) :: VUIND
   INTEGER   NUIMG1,NESAV,N3
 #endif
-  LOGICAL   ORIG,VVERL
+  LOGICAL   ORIG,VVERL,blade_explicit_start
 #if KEY_DYNVV2==1
   LOGICAL   VVERL2
 #endif
@@ -138,7 +139,6 @@ contains
   real(chm_real),allocatable,dimension(:) :: IRFD
   INTEGER I,IRFTlen
 
-#if KEY_LIBRARY == 1
   ! args
   type(dynamics_settings), optional, intent(in) :: options
   ! Raw C-interoperable buffers from api_dynamics; the caller guarantees at
@@ -146,8 +146,14 @@ contains
   real(c_double), dimension(*), optional :: &
     in_vx, in_vy, in_vz, &
     out_vx, out_vy, out_vz
-#endif /* KEY_LIBRARY */
 
+#if KEY_MIDSINR == 1  /* MID-SINR */
+  logical :: q_midsinr,q_midsinr_vinit
+  integer :: L_val
+  real(chm_real) :: qmass_1_sinr,qmass_2_sinr,gamma_val_sinr
+  real(chm_real),pointer :: v_1ij(:,:,:)=>Null(), &
+                            v_2ij(:,:,:)=>Null()
+#endif /* MID-SINR */
   !     begin
 
 #if KEY_ENSEMBLE==1
@@ -164,15 +170,22 @@ contains
      CALL DYNUFO
      RETURN
   ENDIF
-  !
-  ! Parse the method option
-#if KEY_LIBRARY == 0
-  ILANG = 0
-  IREST = 0
-#endif
 
-  IF (INDXA(COMLYN, COMLEN, 'STRT')  >  0) IREST = 0
-  IF (INDXA(COMLYN, COMLEN, 'STAR')  >  0) IREST = 0
+  ! Parse the method option
+  if (.not. present(options)) then
+    ILANG = 0
+    IREST = 0
+  end if
+
+  blade_explicit_start = .false.
+  IF (INDXA(COMLYN, COMLEN, 'STRT')  >  0) THEN
+     IREST = 0
+     blade_explicit_start = .true.
+  ENDIF
+  IF (INDXA(COMLYN, COMLEN, 'STAR')  >  0) THEN
+     IREST = 0
+     blade_explicit_start = .true.
+  ENDIF
   IF (INDXA(COMLYN, COMLEN, 'REST')  >  0) IREST = 1
 #if KEY_TPS==1
   IF (INDXA(COMLYN, COMLEN, 'RTRJ')  >  0) IREST = 2
@@ -250,6 +263,36 @@ contains
 #if KEY_GRAPE==1
   lgrape=INDX(COMLYN,COMLEN,'GRAP',4) > 0
 #endif
+
+!
+! middle-scheme SIN(R) thermostat
+#if KEY_MIDSINR == 1  /* MID-SINR */
+  q_midsinr = INDXA(COMLYN,COMLEN,'MSIN') .GT. 0  ! MSINR
+
+  if(.not. VVERL) q_midsinr =.false.    ! only with velocity verlet
+
+  L_val         = GTRMI(COMLYN,COMLEN,'LVAL',1)     ! L-value
+  qmass_1_sinr  = GTRMF(COMLYN,COMLEN,'Q1MA',zero)  ! Q1 mass
+  qmass_2_sinr  = GTRMF(COMLYN,COMLEN,'Q2MA',zero)  ! Q2 mass
+  gamma_val_sinr= GTRMF(COMLYN,COMLEN,'FRCK',zero)  ! Friction kernel
+
+  q_midsinr_vinit=INDXA(COMLYN,COMLEN,'VINT') .GT. 0  ! init velocity
+  if(.not. q_midsinr) L_val         = 1
+  ! debug
+  !if(q_midsinr .and. prnlev>=2) write(outu,'(A)') '<DYNA>: iso-kinetic SIN-R thermostat is used.'
+#endif /* MID-SINR */
+
+! mndo97 mts control
+#if KEY_MNDO97==1
+  ! initialize md counter for mts-ai-qm/mm
+  if(.not.qm_md_master) qm_md_master=.true.  ! start using md run.
+  if(qmlay_main .and. qmlay_mts) then
+     nmlay_mdstp     = 0
+     qmlay_do_energy =.false.  ! default during mts-md, not adding ai-qm/mm gradients
+                               ! into dx/dy/dz in mndo97 energy calc.
+  end if
+#endif
+
 #if KEY_CHEQ==1
   !-------------- Charge Dynamics? -----------------------------
   ! work needed for partial CG fixing.
@@ -395,6 +438,10 @@ contains
         call chmalloc('dcntrl.src','DYNOPT','DUIND',3,NUIMG1,crl=DUIND)
         call chmalloc('dcntrl.src','DYNOPT','VUIND',3,NATOM ,crl=VUIND)
         call chmalloc('dcntrl.src','DYNOPT','IESAV',3,NESAV ,crl=IESAV)
+        ! Default: do NOT seed initial dipole velocities.  Armed below
+        ! only for a fresh-start run (IASVEL/=0); a restart keeps the
+        ! VUIND read from its file.
+        QPFVST = .FALSE.
      ENDIF
 
 
@@ -409,25 +456,30 @@ contains
      ENDIF
   ENDIF
 #endif
+
+  ! allocate memory
+#if KEY_MIDSINR == 1  /* MID-SINR */
+  if(associated(v_1ij)) deallocate(v_1ij)
+  if(associated(v_2ij)) deallocate(v_2ij)
+  allocate(v_1ij(3,L_val,natom))
+  allocate(v_2ij(3,L_val,natom))
+#endif /* MID-SINR */
+
   !.  assign velocity with comp.
 #if KEY_DHDGB==1
 !AP/MF
   VS_DHDGB(1:TOTALS)=SCOMP(1:TOTALS)
 #endif
 
-#if KEY_LIBRARY == 1
   if (present(in_vx)) then
      VX(1:natom)=in_vx(1:natom)
      VY(1:natom)=in_vy(1:natom)
      VZ(1:natom)=in_vz(1:natom)
   else
-#endif /* KEY_LIBRARY */
      VX(1:natom)=XCOMP(1:natom)
      VY(1:natom)=YCOMP(1:natom)
      VZ(1:natom)=ZCOMP(1:natom)
-#if KEY_LIBRARY == 1
   end if
-#endif
 
 #if KEY_OLDDYN==0
   IF(ORIG .AND. .NOT.QNOSE .AND. .NOT.QNOSP .AND. .NOT.VVERL) THEN
@@ -453,7 +505,8 @@ contains
   !
   call timer_start(T_dcntrl)
 
-  CALL DCNTRL(COMLYN,COMLEN,XOLD,YOLD,ZOLD,XNEW,YNEW,ZNEW,VX,VY,VZ,WCOMP, &
+  if (present(options)) then
+    CALL DCNTRL(COMLYN,COMLEN,XOLD,YOLD,ZOLD,XNEW,YNEW,ZNEW,VX,VY,VZ,WCOMP, &
 #if KEY_CHEQ==1
        CGNEW,CGOLD,VCG,FREECG, &
 #endif
@@ -464,6 +517,10 @@ contains
        IGAMMA,IRFT,IRFD,ORIG,VVERL &
 #if KEY_DYNVV2==1
        ,VVERL2    &
+#endif
+#if KEY_MIDSINR == 1
+       ,q_midsinr,v_1ij,v_2ij,L_val,qmass_1_sinr,qmass_2_sinr  &
+       ,gamma_val_sinr,q_midsinr_vinit                         &
 #endif
 #if KEY_TSM==1
        ,REACLS,PRODLS,PIGGLS,BACKLS &
@@ -478,31 +535,72 @@ contains
 !AP/MF
        ,SDEFOLD,SDEFNEW,VS_DHDGB,VK_DHDGB  &
 #endif
-#if KEY_LIBRARY == 1
-       , options &
-#endif
+       , blade_explicit_start, options &
        )
+  else
+    CALL DCNTRL(COMLYN,COMLEN,XOLD,YOLD,ZOLD,XNEW,YNEW,ZNEW,VX,VY,VZ,WCOMP, &
+#if KEY_CHEQ==1
+       CGNEW,CGOLD,VCG,FREECG, &
+#endif
+#if KEY_PIPF==1
+       UINDN,UINDO,VUIND, &
+#endif
+       BNBND, BIMAG, &
+       IGAMMA,IRFT,IRFD,ORIG,VVERL &
+#if KEY_DYNVV2==1
+       ,VVERL2    &
+#endif
+#if KEY_MIDSINR == 1
+       ,q_midsinr,v_1ij,v_2ij,L_val,qmass_1_sinr,qmass_2_sinr  &
+       ,gamma_val_sinr,q_midsinr_vinit                         &
+#endif
+#if KEY_TSM==1
+       ,REACLS,PRODLS,PIGGLS,BACKLS &
+#endif
+#if KEY_TNPACK==1
+       ,QEULER,QESTRT,QEHARM,KEHARM,RXHARM,RYHARM,RZHARM,LIEFF &
+#endif
+#if KEY_ACE==1
+       ,LACE,BSOLV        &
+#endif
+#if KEY_DHDGB==1
+!AP/MF
+       ,SDEFOLD,SDEFNEW,VS_DHDGB,VK_DHDGB  &
+#endif
+       , blade_explicit_start &
+       )
+  end if
 
   call timer_stop(T_dcntrl)
 
   ! Save final velocities in the comparison coordinates
-#if KEY_LIBRARY == 1
   if (present(out_vx)) then
      out_vx(1:natom) = vx(1:natom)
      out_vy(1:natom) = vy(1:natom)
      out_vz(1:natom) = vz(1:natom)
-  else
-#endif /* KEY_LIBRARY */
-     xcomp(1:natom) = vx(1:natom)
-     ycomp(1:natom) = vy(1:natom)
-     zcomp(1:natom) = vz(1:natom)
-#if KEY_LIBRARY == 1
   end if
-#endif /* KEY_LIBRARY */
+  xcomp(1:natom) = vx(1:natom)
+  ycomp(1:natom) = vy(1:natom)
+  zcomp(1:natom) = vz(1:natom)
 
 #if KEY_DHDGB==1
 !AP/MF
   SCOMP(1:TOTALS)=VS_DHDGB(1:TOTALS)
+#endif
+
+  ! free allocaed memory
+#if KEY_MIDSINR == 1
+  if(associated(v_1ij)) deallocate(v_1ij)
+  if(associated(v_2ij)) deallocate(v_2ij)
+#endif
+
+  ! mndo97 mts control
+#if KEY_MNDO97==1
+  ! reset md counter and others for mts-ai-qm/mm at the end of md.
+  if(qmlay_main .and. qmlay_mts) nmlay_mdstp        = 0
+  if(.not. qmlay_do_energy)      qmlay_do_energy    =.true.  ! default
+  if(qm_control_c%md_run)        qm_control_c%md_run=.false.
+  if(qm_md_master)               qm_md_master       =.false.
 #endif
   !
   ! Free all temporary space
@@ -640,7 +738,7 @@ subroutine dyn_parse_iseed(comlyn, comlen, &
   use string, only: indx, gtrmim
 
   use parallel, only: mynod
-  
+
 #if KEY_ABPO == 1
   use abpo_ltm, only: q_abpo
   use ensemble, only: old_mynod
@@ -649,7 +747,7 @@ subroutine dyn_parse_iseed(comlyn, comlen, &
 #if KEY_REPDSTR==1
     use repdstr, only: qrexchg, irepdstr
 #endif
-  
+
   implicit none
 
   ! input params
@@ -663,7 +761,7 @@ subroutine dyn_parse_iseed(comlyn, comlen, &
 
   qpresent = .false.
   lrngseeds = 0
-  
+
   IF(IREST == 1.AND.ILANG == 1.AND.               & !lni_080627
        INDX(COMLYN,COMLEN,'ISEE',4) > 0)  &
        CALL WRNDIE(-1,'<DCNTRL>', &
@@ -717,20 +815,20 @@ subroutine dyn_parse_iseed(comlyn, comlen, &
   ! call chmdealloc('dcntrl.src','DCNTRL','lrngseeds',Nrand,intg=lrngseeds)
 end subroutine dyn_parse_iseed
 
-#if KEY_LIBRARY == 1
 subroutine dyn_init_rng(irest, ilang)
   use chm_kinds, only: chm_int4
   use rndnum, only: nrand, rngseeds, qapi_seed_set
   use parallel, only: mynod
-  
+
 #if KEY_ABPO == 1
+  use abpo_ltm, only: q_abpo
   use ensemble, only: old_mynod
 #endif
 
 #if KEY_REPDSTR==1
     use repdstr, only: qrexchg, irepdstr
 #endif
-  
+
   implicit none
 
   ! input params
@@ -744,7 +842,7 @@ subroutine dyn_init_rng(irest, ilang)
      call wrndie(-1, '<DCNTRL>', &
           'REUSE OF RANDOM SEED IS NOT RECOMMENDED')
   end if
-    
+
 #if KEY_REPDSTR==1
   ! wxw: set different iseeds for different replicas
   ! DRR: Since each replica now has their own COMM_CHARMM, do
@@ -758,7 +856,7 @@ subroutine dyn_init_rng(irest, ilang)
      end do
   end if
 #endif
-  
+
   ! For STARTs we generate new random seeds from system clock
   ! LNilsson October 2010
   if (irest == 0 .and. .not. qapi_seed_set) then
@@ -768,18 +866,17 @@ subroutine dyn_init_rng(irest, ilang)
         rngseeds(1:nrand) = count4 + 50000 * old_mynod
      else
 #endif /* KEY_ABPO */
-        
+
         rngseeds(1:nrand) = count4 + 50000 * mynod
-        
+
 #if KEY_ABPO==1
      end if
 #endif
   end if
-  
+
   call random_seed(put = rngseeds)
   qapi_seed_set = .false.
 end subroutine dyn_init_rng
-#endif
 
 SUBROUTINE DCNTRL(COMLYN,COMLEN,XOLD,YOLD,ZOLD, &
      XNEW,YNEW,ZNEW,VX,VY,VZ,VK, &
@@ -792,6 +889,10 @@ SUBROUTINE DCNTRL(COMLYN,COMLEN,XOLD,YOLD,ZOLD, &
      BNBND,BIMAG,GAMMA,RFT,RFD,ORIG,VVERL  &
 #if KEY_DYNVV2==1
      ,VVERL2                               &
+#endif
+#if KEY_MIDSINR == 1
+     ,q_midsinr,v_1ij,v_2ij,L_val,qmass_1,qmass_2 &
+     ,gamma_val,q_midsinr_vinit                   &
 #endif
 #if KEY_TSM==1
      ,REACLS,PRODLS,PIGGLS,BACKLS          &
@@ -808,9 +909,7 @@ SUBROUTINE DCNTRL(COMLYN,COMLEN,XOLD,YOLD,ZOLD, &
 #if KEY_DHDGB==1
      ,SDEFOLD,SDEFNEW,VS_DHDGB,VK_DHDGB    &
 #endif
-#if KEY_LIBRARY
-     , options &
-#endif /* KEY_LIBRARY */
+     , blade_explicit_start, options &
      )
   !
   !     DCNTRL DISPATCHES THE DYNAMICS LOOPS.
@@ -834,11 +933,9 @@ SUBROUTINE DCNTRL(COMLYN,COMLEN,XOLD,YOLD,ZOLD, &
   !     CONTROL FLOW PUT INTO FLECS 1/8/81 DJS
   !
 
-#if KEY_LIBRARY == 1
   use, intrinsic :: iso_c_binding, only: c_int, c_double
   use api_types, only: dynamics_settings
   use api_custom, only: custom_dynam_call, custom_dynam_is_set
-#endif
 
   use pme_module,only:qpme
   use new_timer,only:timer_stpstrt,timer_start,timer_stop,  &
@@ -902,7 +999,7 @@ SUBROUTINE DCNTRL(COMLYN,COMLEN,XOLD,YOLD,ZOLD, &
   use pert_mod
   use code
   use rndnum
-  use reawri
+  use reawri, tbath => dyn_tbath
   use sbound
   use shake
   use stream
@@ -946,7 +1043,7 @@ SUBROUTINE DCNTRL(COMLYN,COMLEN,XOLD,YOLD,ZOLD, &
        nbiasv, &
        msld_ndegf, &
        ldm_init_qmcfr, &
-       ilaldm, gammatheta, tbld, thetabib, thetam, igammald, qthetadm, &
+       ilaldm, gammatheta, gammathetablk, tbld, thetabib, thetam, igammald, qthetadm, &
        biblam,bimlam, &
        nsavl, &
        qmcfr, wangf, wangfi, mcpro, mccount, &
@@ -977,10 +1074,10 @@ SUBROUTINE DCNTRL(COMLYN,COMLEN,XOLD,YOLD,ZOLD, &
   use sgld,only: SGTYPE,SGAVG0,SGAVG1,SGAVP0,SGAVP1,SGEXP, &
 #endif
 #if KEY_SGLD==1
-       TSGAVG,TSGAVP,TEMPSG,SGFT,SGFF,SGFD,TSGSET,SGSIZE, &    
+       TSGAVG,TSGAVP,TEMPSG,SGFT,SGFF,SGFD,TSGSET,SGSIZE, &
 #endif
 #if KEY_SGLD==1
-       QSGLD,QSGMD,QSGBZ,QSGCOM,&           
+       QSGLD,QSGMD,QSGBZ,QSGCOM,&
 #endif
 #if KEY_SGLD==1
        ISGSTA,ISGEND,psgld,sgfree
@@ -1001,16 +1098,16 @@ SUBROUTINE DCNTRL(COMLYN,COMLEN,XOLD,YOLD,ZOLD, &
   use squantm, only : LTRBOMD,q_apply_tr_bomd,i_md_step,i_md_step_old
 #endif
   use consph, only: dophmc,phrdrstrt,phwrirstrt,write_ph_state,tstate,phrsvrunum
+  use omm_ctrl, only : omm_requested
+  use blade_ctrl_module, only : blade_requested
 #if KEY_OPENMM==1
   use omm_glblopts, only : qtor_repex, torsion_lambda
   use omm_dynopts, only : omm_dynopts_t, omm_parse_options, omm_report_options
-  use omm_ctrl, only : omm_requested
   use omm_main, only : omm_dynamics, omm_change_lambda
 #endif
 #if KEY_BLADE==1
-  use blade_ctrl_module, only : blade_requested
   use blade_dynopts, only : blade_dynopts_t, blade_parse_options, blade_report_options
-  use blade_main, only : blade_dynamics
+  use blade_main, only : blade_dynamics, dynamics_mode, DYN_CONTINUE
 #endif
 #if KEY_DOMDEC==1
   use domdec_common,only:natoml,atoml,q_domdec, q_split
@@ -1035,10 +1132,9 @@ SUBROUTINE DCNTRL(COMLYN,COMLEN,XOLD,YOLD,ZOLD, &
   use cstuff, only: fsystem
   implicit none
 
-#if KEY_LIBRARY == 1
   ! args
+  logical, intent(in) :: blade_explicit_start
   type(dynamics_settings), optional, intent(in) :: options
-#endif /* KEY_LIBRARY */
 
   real(chm_real),allocatable,dimension(:) :: XNSE,YNSE,ZNSE
 #if KEY_MTS==1
@@ -1121,12 +1217,12 @@ SUBROUTINE DCNTRL(COMLYN,COMLEN,XOLD,YOLD,ZOLD, &
 #endif
   real(chm_real) SCALED,HEAT,HEAT2,TEMNEW,JHTEMP
   real(chm_real) SEED
-  integer,allocatable,dimension(:) :: lrngseeds
+  integer :: ignored_rngseeds(nrand)
   logical qpresent
   INTEGER NPRIV,NPRIVOLD,NDEGF,IGVOPT,NFREAT
   INTEGER NDEGFI,IDYNPR,ISTART,ISTOP,NCYCLE,IPSTOP,NXTISTART
   INTEGER I,J, IDEGF, ISTPSA, IS, IPT, ITRANS, LDYNA, BTMI
-  real(chm_real) TBATH,RBUF,DELTEM,AVETEM
+  real(chm_real) RBUF,DELTEM,AVETEM
   INTEGER PRLOLD
   INTEGER NAVER
   INTEGER PBMLEV,IJ,ITM
@@ -1231,8 +1327,16 @@ SUBROUTINE DCNTRL(COMLYN,COMLEN,XOLD,YOLD,ZOLD, &
   type(blade_dynopts_t) :: blade_opt
 #endif
 
-#if KEY_LIBRARY == 1
   real(chm_real) :: custom_ret_val
+
+#if KEY_MIDSINR == 1
+  logical :: q_midsinr,q_midsinr_vinit
+  integer :: L_val,k_tmp,kk
+  real(chm_real) :: qmass_1,qmass_2,gamma_val
+  real(chm_real) :: v_1ij(3,L_val,natom),v_2ij(3,L_val,natom)
+  real(chm_real) :: aa_val,bb_val,cc_val,dd_val,rand_val(3),PIS, &
+                    z_val,r1_tmp,r2_tmp,rr_tmp(6)
+  real(chm_real) :: ref_temperature
 #endif
 
   DATA ISCALE,IHTFRQ/0,0/
@@ -1241,7 +1345,6 @@ SUBROUTINE DCNTRL(COMLYN,COMLEN,XOLD,YOLD,ZOLD, &
   DATA ISCVEL,IASORS,ICHECW,IPRFRQ/0,0,1,1000/
   DATA QAVER/.FALSE./
 
-#if KEY_LIBRARY == 1
   if (present(options)) then
      ieqfrq = options%ieqfrq
      ntrfrq = options%ntrfrq
@@ -1254,7 +1357,6 @@ SUBROUTINE DCNTRL(COMLYN,COMLEN,XOLD,YOLD,ZOLD, &
      iprfrq = options%iprfrq
      ihtfrq = options%ihtfrq
   end if
-#endif
 
   QCNSTP = INDXA(COMLYN,COMLEN,'PCON')  >  0
 # if KEY_REPDSTR==1
@@ -1364,35 +1466,36 @@ SUBROUTINE DCNTRL(COMLYN,COMLEN,XOLD,YOLD,ZOLD, &
   QDYNCALL = .FALSE.
 
   !
-  ! Parse commands for openmm runs
-  want_openmm = .false.
-#if KEY_OPENMM==1
+  ! Parse commands for openmm runs.
+  ! omm_requested / blade_requested abort via WRNDIE if the corresponding
+  ! backend is requested on a build that wasn't compiled with it; on
+  ! supported builds they additionally set the system_dirty flag.
   want_openmm = omm_requested(COMLYN, COMLEN, 'DCNTRL')
- ! if (want_openmm) then
-!     omm_opt = omm_parse_options(comlyn, comlen, 'DCNTRL')
- ! endif
-#endif
-  want_blade = .false.
-#if KEY_BLADE==1
-  want_blade = blade_requested(COMLYN, COMLEN, 'DCNTRL')
+  want_blade = blade_requested(COMLYN, COMLEN, 'DCNTRL', &
+       IREST, blade_explicit_start)
+#if KEY_REPDSTR==1
+  if (want_blade .and. qrepdstr) then
+     if (qfastrepdstr) call wrndie(-5, 'DCNTRL', &
+          'FAST replica exchange is not supported with BLaDE.')
+  endif
 #endif
   !
   !     read the i/o units for dynamics.
   !
   ! iuncrd 11 iunvel 0 iunwri 10 iunrea 10 kunit 0
-#if KEY_LIBRARY == 1
-  IUNCRD = GTRMI(COMLYN, COMLEN, 'IUNC', iuncrd)
-  IUNREA = GTRMI(COMLYN, COMLEN, 'IUNR', iunrea)
-  IUNVEL = GTRMI(COMLYN, COMLEN, 'IUNV', iunvel)
-  IUNWRI = GTRMI(COMLYN, COMLEN, 'IUNW', iunwri)
-  KUNIT = GTRMI(COMLYN, COMLEN, 'KUNI', kunit)
-#else /* KEY_LIBRARY */
-  IUNCRD=GTRMI(COMLYN,COMLEN,'IUNC',-1)
-  IUNREA=GTRMI(COMLYN,COMLEN,'IUNR',-1)
-  IUNVEL=GTRMI(COMLYN,COMLEN,'IUNV',-1)
-  IUNWRI=GTRMI(COMLYN,COMLEN,'IUNW',-1)
-  KUNIT=GTRMI(COMLYN,COMLEN,'KUNI',-1)
-#endif /* KEY_LIBRARY */
+  if (present(options)) then
+    IUNCRD = GTRMI(COMLYN, COMLEN, 'IUNC', iuncrd)
+    IUNREA = GTRMI(COMLYN, COMLEN, 'IUNR', iunrea)
+    IUNVEL = GTRMI(COMLYN, COMLEN, 'IUNV', iunvel)
+    IUNWRI = GTRMI(COMLYN, COMLEN, 'IUNW', iunwri)
+    KUNIT = GTRMI(COMLYN, COMLEN, 'KUNI', kunit)
+  else
+    IUNCRD=GTRMI(COMLYN,COMLEN,'IUNC',-1)
+    IUNREA=GTRMI(COMLYN,COMLEN,'IUNR',-1)
+    IUNVEL=GTRMI(COMLYN,COMLEN,'IUNV',-1)
+    IUNWRI=GTRMI(COMLYN,COMLEN,'IUNW',-1)
+    KUNIT=GTRMI(COMLYN,COMLEN,'KUNI',-1)
+  end if
 
   IUNQMC=GTRMI(COMLYN,COMLEN,'IUNQ',-1)
   IUNXYZ=GTRMI(COMLYN,COMLEN,'IUNX',-1)
@@ -1492,17 +1595,21 @@ SUBROUTINE DCNTRL(COMLYN,COMLEN,XOLD,YOLD,ZOLD, &
 #endif
           NPRIV,JHSTRT,NDEGF,NSTEP,NSAVC,NSAVV,SEED, &
           AVETEM,ISTPSA,LDYNA &
+#if KEY_MIDSINR == 1
+         ,q_midsinr,q_midsinr_vinit     &
+         ,v_1ij,v_2ij,L_val             &
+#endif
 #if KEY_BLOCK==1
-          ,QLMC,QLDM,NBLOCK,BIXLAM,BLDOLD,BIVLAM,NSAVL &  /*ldm*/
+         ,QLMC,QLDM,NBLOCK,BIXLAM,BLDOLD,BIVLAM,NSAVL &  /*ldm*/
 #endif
 #if KEY_FOURD==1
-          ,VFD,FDOLD                 &
+         ,VFD,FDOLD                 &
 #endif
 #if KEY_SCCDFTB==1
-          ,qlamda,qpkac,qsccres,icntdyn,iavti,dvdl,dvdlav,dtmp1 &
+         ,qlamda,qpkac,qsccres,icntdyn,iavti,dvdl,dvdlav,dtmp1 &
 #endif
 #if KEY_DHDGB==1
-          ,QFHDGB,TOTALS,SDEF,SDEFOLD,VS_DHDGB        &
+         ,QFHDGB,TOTALS,SDEF,SDEFOLD,VS_DHDGB        &
 #endif
           )
      NPRIVOLD=NPRIV
@@ -1623,13 +1730,26 @@ SUBROUTINE DCNTRL(COMLYN,COMLEN,XOLD,YOLD,ZOLD, &
   ISCALE=GTRMI(COMLYN,COMLEN,'ISCA',ISCALE)
   ISCVEL=GTRMI(COMLYN,COMLEN,'ISCV',ISCVEL)
 
-#if KEY_LIBRARY == 0
-  call dyn_parse_iseed(comlyn, comlen, irest, ilang, iseed)
-#else
-  ! TODO: see if user has set rngseeds with api fun call
-  !       then we could clear the setting if necessary
-  call dyn_init_rng(irest, ilang)
-#endif /* KEY_LIBRARY */
+#if KEY_BLADE==1
+  ! ABIC keeps the live BLaDE RNG state; do not reseed unused CHARMM streams.
+  if (want_blade .and. dynamics_mode == DYN_CONTINUE) then
+    ! Still consume ISEED so accepted continuation input is fully parsed.
+    if (.not. present(options)) then
+      call gtrmim(nrand, comlyn, comlen, 'ISEE', &
+           rngseeds, ignored_rngseeds, qpresent)
+    end if
+  else
+#endif
+    if (.not. present(options)) then
+      call dyn_parse_iseed(comlyn, comlen, irest, ilang, iseed)
+    else
+      ! TODO: see if user has set rngseeds with api fun call
+      !       then we could clear the setting if necessary
+      call dyn_init_rng(irest, ilang)
+    end if
+#if KEY_BLADE==1
+  endif
+#endif
 
   IPRFRQ=GTRMI(COMLYN,COMLEN,'IPRF',IPRFRQ)
   NSAVC=GTRMI(COMLYN,COMLEN,'NSAVC',NSAVC)
@@ -2003,17 +2123,11 @@ SUBROUTINE DCNTRL(COMLYN,COMLEN,XOLD,YOLD,ZOLD, &
   ELSE
 #endif /* KEY_ENSEMBLE */
 
-#if KEY_LIBRARY == 1
-     if (present(options)) then
-        tbath = options%tbath
-     else
-#endif /* KEY_LIBRARY */
-
+  if (present(options)) then
+     tbath = options%tbath
+  else
      TBATH=GTRMF(COMLYN,COMLEN,'TBAT',FINALT)
-
-#if KEY_LIBRARY == 1
   end if
-#endif /* KEY_LIBRARY */
 
 #if KEY_ENSEMBLE==1
   ENDIF
@@ -2181,6 +2295,23 @@ SUBROUTINE DCNTRL(COMLYN,COMLEN,XOLD,YOLD,ZOLD, &
      ENDDO
   ENDIF
 #endif
+
+  ! middle sin(r) thermostat (velocity) variables
+#if KEY_MIDSINR == 1  /* MID-SINR */
+  ! temperature values
+  ref_temperature = GTRMF(COMLYN,COMLEN,'T2VA',FINALT)
+  KBT             = ref_temperature*KBOLTZ
+
+  ! init of middle sin(r) thermostat variables.
+  if(q_midsinr .and. q_midsinr_vinit) then
+     !do itm = 1,natom
+     !   v_1ij(1:3,1:L_val,itm) = zero  ! zeroing values...
+     !   v_2ij(1:3,1:L_val,itm) = zero
+     !end do
+     call midsinr_thermostat_init1(natom,L_val,qmass_1,qmass_2,gamma_val,KBT,DELTA, &
+                                   v_1ij,v_2ij,iseed)
+  end if
+#endif /* MID-SINR */
   !
   IDYNPR=0
   !
@@ -2909,9 +3040,9 @@ SUBROUTINE DCNTRL(COMLYN,COMLEN,XOLD,YOLD,ZOLD, &
   ! Scale velocities - scale factor has been input
   IF(IREST == 1) THEN
      IF(ISCALE /= 0) THEN
-        CALL SCAVEL(SCALED,X,Y,Z,VX,VY,VZ,zero, &
+        CALL SCAVEL(SCALED,X,Y,Z,VX,VY,VZ,VK, &
              AMASS,NDEGF,0,IGVOPT,NATOM,IMOVE, &
-             zero,0,.false.,0)
+             zero,0,.false.,IDGF2)
         QSTPRT=.TRUE.
      ENDIF
      !
@@ -2964,12 +3095,23 @@ SUBROUTINE DCNTRL(COMLYN,COMLEN,XOLD,YOLD,ZOLD, &
         ENDIF
 #endif
      !
+#if KEY_BLADE==1
+     IF(want_blade .and. dynamics_mode == DYN_CONTINUE) THEN
+        ! ABIC retains the live BLaDE velocities.
+     ELSE IF(IASVEL /= 0) THEN
+#else
      IF(IASVEL /= 0) THEN
+#endif
         IF(TSTRUC /= FMARK) THEN
            TEMNEW=MAX(TWO*FIRSTT-TSTRUC,ZERO)
         ELSE
            TEMNEW=1.25*FIRSTT
         ENDIF
+#if KEY_MIDSINR == 1
+        ! system velocity or E_kin needs to be scaled by (L+1)/L.
+        ! so, velocities are generated at scaled temperature.
+        if(q_midsinr) TEMNEW =(float(L_val)/float(L_val+1))*ref_temperature
+#endif
         !
 #if KEY_CHEQ==1
         ! Zero CG temperature
@@ -2989,6 +3131,26 @@ SUBROUTINE DCNTRL(COMLYN,COMLEN,XOLD,YOLD,ZOLD, &
                  VUIND(J,I) = ZERO
               ENDDO
            ENDDO
+           ! Zeroing VUIND here is not by itself enough to control the
+           ! initial dipole velocity: PFDYN reconstructs it as a Verlet
+           ! finite difference (UINDN-UINDO)/(2*DELTA), and on a fresh
+           ! start UINDO=0 while UIND holds the first-order/SCF dipole, so
+           ! that difference is a spurious ~UIND/DELTA kick (~500x at
+           ! DELTA=0.001) that heats the dipole bath and blows up SHAKE on
+           ! step 1.  Arm the one-shot Maxwell-Boltzmann seeding of the
+           ! initial dipole velocities at temperature TSTAU ("tsta"); the
+           ! draw is deferred to the first PFDYN call (once DPFST has
+           ! bootstrapped UIND(0)), which back-steps UINDO from UIND so the
+           ! reconstructed velocity matches the draw -- or, for TSTAU<=0,
+           ! seeds UINDO=UIND for a genuine cold start.  Capture the same
+           ! Gaussian option ASSVEL uses for the atomic velocities; the RNG
+           ! seed IPFVSD is captured AFTER the ASSVEL call below (not here)
+           ! so the dipole draw continues that random stream instead of
+           ! replaying it -- oldrandom advances the seed in place.  This
+           ! block is fresh-start only (restart takes the IREST==1 branch
+           ! above), so restart runs keep the UINDO they read from file.
+           QPFVST = .TRUE.
+           IPFVGO = IASVEL
            !
            ! ONE CAN USE ZERO ORDER INDUCED DIPOLE AS INITIAL VALUES (NUFRS>1),
            ! OTHERWISE USE ZEROES (NUFRS=1)
@@ -3029,6 +3191,13 @@ SUBROUTINE DCNTRL(COMLYN,COMLEN,XOLD,YOLD,ZOLD, &
              ,QFHDGB,VS_DHDGB,SAMASS,TOTALS  &
 #endif
              )
+
+#if KEY_PIPF==1
+        ! Capture the post-ASSVEL RNG seed for the deferred dipole-velocity
+        ! draw in PFVSEED, so the draw continues the atomic-velocity random
+        ! stream rather than replaying it (oldrandom advances ISEED in place).
+        IF (QPFVST) IPFVSD = ISEED
+#endif
 
         !eh050802 Reset MASS/IMOVE array
         IF (NDRUDE > 0) THEN
@@ -3415,6 +3584,17 @@ SUBROUTINE DCNTRL(COMLYN,COMLEN,XOLD,YOLD,ZOLD, &
   endif
 ! #endif
 
+!! middle sin(r) thermostat (velocity) variables
+!#if KEY_MIDSINR == 1  /* MID-SINR */
+!  if(q_midsinr .and. q_midsinr_vinit) then
+!     ! reference taget temperature = (L+1)/L*system_temp
+!     ! <1/2 m v_i^2> = L/L+1 kT/2 &
+!     ! LkT = sum m v_i^2 + q1*L/(L+1) sum (sum v_1ij^2)
+!     call midsinr_temperature_check(natom,atfrst,atlast,L_val,qmass_1,qmass_2,ndegf, &
+!                                    imove,amass,vx,vy,vz,v_1ij,v_2ij,-1000)
+!  end if
+!#endif /* MID-SINR */
+
   !=======================================================================
   !
   !     start the main loop over ncycle.
@@ -3531,9 +3711,15 @@ SUBROUTINE DCNTRL(COMLYN,COMLEN,XOLD,YOLD,ZOLD, &
               IF(TBLD /= 0.0) THEN
                  CALL LNGFIL2THETA(ILALDM,IPSTOP,GAMMATHETA &
                       ,TBLD,DELTA,THETABIB,THETAM)
+                 IF(ALLOCATED(gammathetablk)) &
+                    CALL LNGFIL2THETA_BLK(ILALDM,IPSTOP,GAMMATHETABLK &
+                      ,TBLD,DELTA,BIBLAM,NBLOCK,BIMLAM)
               ELSE
                  CALL LNGFIL2THETA(ILALDM,IPSTOP,GAMMATHETA &
                       ,TBATH,DELTA,THETABIB,THETAM)
+                 IF(ALLOCATED(gammathetablk)) &
+                    CALL LNGFIL2THETA_BLK(ILALDM,IPSTOP,GAMMATHETABLK &
+                      ,TBATH,DELTA,BIBLAM,NBLOCK,BIMLAM)
               ENDIF
            else
               IF(ILALDM) THEN
@@ -3588,14 +3774,27 @@ SUBROUTINE DCNTRL(COMLYN,COMLEN,XOLD,YOLD,ZOLD, &
      TERMINATEDYN=.FALSE.
 #endif
 
-#if KEY_LIBRARY == 1
-     if (custom_dynam_is_set()) then
-        custom_ret_val =  custom_dynam_call(istart, natom, &
-             vx, vy, vz, &
-             xnew, ynew, znew, &
-             xold, yold, zold)
-     end if
-#endif
+        if (custom_dynam_is_set()) then
+           custom_ret_val =  custom_dynam_call(istart, natom, &
+                vx, vy, vz, &
+                xnew, ynew, znew, &
+                xold, yold, zold, &
+                x, y, z)
+           if(custom_ret_val == 0.0) then
+              call free_dcntrl_space
+              PRNLEV=PRLOLD
+              RETURN
+           endif
+        end if
+
+!     if (custom_dynam_is_set()) then
+!        custom_ret_val =  custom_dynam_call(istart, natom, &
+!             vx, vy, vz, &
+!             xnew, ynew, znew, &
+!             xold, yold, zold, &
+!             x, y, z)
+!        if(custom_ret_val == 0.0) runok = .false.
+!     end if
 
      ! call-dynamc-and-take-care-of-equilibration
      !
@@ -3663,6 +3862,11 @@ SUBROUTINE DCNTRL(COMLYN,COMLEN,XOLD,YOLD,ZOLD, &
                    ,XMI,YMI,ZMI,XMM,YMM,ZMM &
 #endif
                    ,XNSE,YNSE,ZNSE &
+#if KEY_MIDSINR == 1
+                   ,q_midsinr,v_1ij,v_2ij,L_val,ISEED  &
+                   ,qmass_1,qmass_2,gamma_val          &
+                   ,q_midsinr_vinit                    &
+#endif
                    )
               call timer_start(T_dcntrl)
               ! BEGIN DYNA VV2 (G. Lamoureux)
@@ -3727,7 +3931,7 @@ SUBROUTINE DCNTRL(COMLYN,COMLEN,XOLD,YOLD,ZOLD, &
         omm_opt%temperatureReference = finalt
         call omm_dynamics(omm_opt, VX, VY, VZ, XOLD, YOLD, ZOLD, &
               JHTEMP, GAMMA, NDEGF, IGVOPT, NPRIV, ISTART, ISTOP, &
-              IPRFRQ, ISVFRQ, NTRFRQ, RUNOK)
+              IPRFRQ, ISVFRQ, NTRFRQ, RUNOK, QKUHEAD)
 #endif
         call timer_start(T_dcntrl)
      ELSE IF (want_blade) THEN
@@ -3762,7 +3966,11 @@ SUBROUTINE DCNTRL(COMLYN,COMLEN,XOLD,YOLD,ZOLD, &
                 IXAVE,IYAVE,IZAVE, &
                 QKUHEAD,RUNOK, &
                 IEQ4,IHT4,TIN4,FSTT4,FNLT4,TWH4,TWL4,ICH4, &
-                IASORS,ISCVEL,IASVEL)
+                IASORS,ISCVEL,IASVEL &
+#if KEY_MIDSINR == 1
+               ,q_midsinr,v_1ij,v_2ij,L_val  &
+#endif
+                )
            call timer_start(T_dcntrl)
         ELSE
 #endif /* (4ddyna)*/
@@ -3812,7 +4020,11 @@ SUBROUTINE DCNTRL(COMLYN,COMLEN,XOLD,YOLD,ZOLD, &
 #if KEY_TPS==1
                 ,QTPS,INBCUT &
 #endif
+#if KEY_MIDSINR == 1
+                ,q_midsinr,v_1ij,v_2ij,L_val  &
+#endif
                )
+
 
 #if KEY_TMD==1
            if(qtmd.and.(.not.qzeta).and.(tmdrhof <= tmdfrms))then
@@ -4243,11 +4455,11 @@ SUBROUTINE DCNTRL(COMLYN,COMLEN,XOLD,YOLD,ZOLD, &
      if (q_replica_exchange) then
        if (phval.ge.-9000.0) then
          ! NOTE: Ok to reference mynod here since REPDSTR requires PARALLEL
-         if (mynod.eq.0) then 
+         if (mynod.eq.0) then
            do btmi=1,nres
              ophstate(btmi)=tstate(btmi)
            enddo
-         endif 
+         endif
        endif
        q_repd_want_blade=want_blade
        call exchange_calc(x,y,z,wmain,vx,vy,vz,xold,yold,zold,eprop(epot),eprop(temps),&
@@ -4508,6 +4720,9 @@ endif  ! If LMOBHY
 #endif
                 npriv,jhstrt,ndegf,nstep, &
                 nsavc,nsavv,seed,avetem,istpsa,ldyna &
+#if KEY_MIDSINR == 1
+               ,q_midsinr,v_1ij,v_2ij,L_val &
+#endif
 #if KEY_BLOCK==1
                 ,qlmc,qldm, nblock, bixlam,bldold,bivlam,nsavl &  /*ldm*/
 #endif
@@ -4672,6 +4887,9 @@ endif  ! If LMOBHY
 #endif
              NPRIV,JHSTRT,NDEGF,NSTEP, &
              NSAVC,NSAVV,SEED,AVETEM,ISTPSA,LDYNA &
+#if KEY_MIDSINR == 1
+            ,q_midsinr,v_1ij,v_2ij,L_val          &
+#endif
 #if KEY_BLOCK==1
              ,QLMC,QLDM, NBLOCK, BIXLAM,BLDOLD,BIVLAM,NSAVL &  /*ldm*/
 #endif

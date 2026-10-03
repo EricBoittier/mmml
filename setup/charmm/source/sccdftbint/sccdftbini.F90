@@ -236,6 +236,23 @@ SUBROUTINE SCCTBINI(COMLYN,COMLEN)
   LPRVEC=(INDXA(COMLYN,COMLEN,'PRVC').GT.0)  
   ICHSCC=GTRMI(COMLYN,COMLEN,'CHRG',0)
 
+  ! DATF keyword: path to sccdftb.dat parameter file
+  ! Use double quotes to preserve case: DATF "@path/file.dat"
+  ! Fallback: 'sccdftb.dat' in the current working directory.
+  CALL SCCFILEKEY(COMLYN,COMLEN,'DATF',sccdat_file,'sccdftb.dat')
+  WRITE(outu,'(A,A)') ' SCCINT> Using parameter file: ', &
+       TRIM(sccdat_file)
+
+  ! DISPF keyword: path to the Slater-Kirkwood dispersion parameters.
+  ! Same shape as DATF, and needed for the same reason -- the file used to
+  ! be read from the working directory under a fixed name, so a testcase
+  ! could not point at the copy that ships in the test data directory.
+  CALL SCCFILEKEY(COMLYN,COMLEN,'DSPF',disp_file,'DISPERSION.INP')
+
+  ! KOPF keyword: path to the charge-dependent Klopman-Ohno parameters,
+  ! read by chardkoread below.  Same reason as DSPF.
+  CALL SCCFILEKEY(COMLYN,COMLEN,'KOPF',kopara_file,'ko_para.inp')
+
 ! Guanhua_puja_QC_UW1212: use which mixer
 ! 0: simple mixing
 ! 1: Anderson mixing
@@ -3229,12 +3246,24 @@ SUBROUTINE UMBRESCC(X,Y,Z,CTOT,DX,DY,DZ,PRNLEV,OUTU)
 end SUBROUTINE UMBRESCC
 
 subroutine chardkoread
-      use sccdftbsrc, only:lcdko,kalpha,kbeta,nmmtype,mmname,mmuh
-      integer itype,ntypej,izipj,i
+      use sccdftbsrc, only:lcdko,kalpha,kbeta,nmmtype,mmname,mmuh, &
+                          kopara_file
+      use stream, only: outu
+      integer itype,ntypej,izipj,i,ios
       !common /kopara/ lcdko,kalpha,kbeta,nmmtype,mmname,mmuh
       !save /kopara/
 
-      open(unit=54,file='ko_para.inp',status='unknown')
+      ! status='old': a missing ko_para.inp used to be created here, empty,
+      ! and the read below then failed at EOF with nothing said about the
+      ! file.  c37test/sccdftb_cdko.inp is the testcase that needs it.
+      open(unit=54,file=kopara_file,status='old',iostat=ios)
+      if (ios /= 0) then
+         write(outu,'(A,A)') &
+              ' CHARDKOREAD> cannot open Klopman-Ohno parameters: ', &
+              trim(kopara_file)
+         call wrndie(-5,'<CHARDKOREAD>', &
+              'charge-dependent Klopman-Ohno parameter file not readable')
+      endif
       rewind (54)
       read (54,*) ntypej,nmmtype
       do itype=1, ntypej
@@ -3254,4 +3283,5 @@ subroutine chardkoread
 
       return
 end subroutine chardkoread
+
 #endif 

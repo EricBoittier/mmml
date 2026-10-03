@@ -2,7 +2,17 @@
 module api_dynamics
   implicit none
 
-#if KEY_LIBRARY == 1
+#if KEY_BLADE == 1
+  interface
+    integer(c_int) function blade_exchange_temperature( &
+         system, expected_temperature, new_temperature) bind(c)
+      use, intrinsic :: iso_c_binding, only: c_ptr, c_int, c_double
+      implicit none
+      type(c_ptr), value :: system
+      real(c_double), value :: expected_temperature, new_temperature
+    end function blade_exchange_temperature
+  end interface
+#endif
 
 contains
 
@@ -13,11 +23,11 @@ contains
   !
   !> param[in] options data structure holding dynamics settings
   !> param[in] in_vx x-component of initial velocity for each atom 1:natom
-  !> param[in] in_vy z-component of initial velocity for each atom 1:natom
+  !> param[in] in_vy y-component of initial velocity for each atom 1:natom
   !> param[in] in_vz z-component of initial velocity for each atom 1:natom
-  !> param[out] out_vx x-component of initial velocity for each atom 1:natom
-  !> param[out] out_vy z-component of initial velocity for each atom 1:natom
-  !> param[out] out_vz z-component of initial velocity for each atom 1:natom
+  !> param[out] out_vx x-component of final velocity for each atom 1:natom
+  !> param[out] out_vy y-component of final velocity for each atom 1:natom
+  !> param[out] out_vz z-component of final velocity for each atom 1:natom
   integer(c_int) function dynamics_run(options, &
        in_vx_ptr, in_vy_ptr, in_vz_ptr, &
        out_vx_ptr, out_vy_ptr, out_vz_ptr) bind(c)
@@ -362,6 +372,161 @@ contains
     dynamics_set_finalt = finalt
     finalt = new_finalt
   end function dynamics_set_finalt
+
+  !> @brief apply an accepted FAST-style NVT temperature-label exchange
+  !
+  ! Rescales the persistent atomic velocities and updates the physical
+  ! thermostat targets. The effective lambda thermostat temperature is
+  ! preserved; a zero TBLD sentinel may be materialized.
+  !
+  !> @param[in] expected_temperature current temperature label in Kelvin
+  !> @param[in] new_temperature accepted temperature label in Kelvin
+  !> @return 1 success; -1 constant pressure; -2 temperature mismatch;
+  !>         -3 unavailable velocity state; -4 BLaDE mismatch;
+  !>         -5 unavailable live BLaDE state;
+  !>         0 invalid input
+  integer(c_int) function dynamics_exchange_temperature( &
+       expected_temperature, new_temperature) bind(c)
+    use, intrinsic :: iso_c_binding, only: &
+         c_associated, c_double, c_int
+    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
+    use chm_kinds, only: chm_real
+    use consta, only: kboltz
+    use coordc, only: xcomp, ycomp, zcomp
+#if KEY_BLOCK == 1
+    use lambdam, only: ilaldm, tbld
+#endif
+    use nose_mod, only: nobl, qnose, qpcon, qtcon, rtmpr
+    use psf, only: natom, ndrude
+    use reawri, only: &
+         firstt, finalt, tbath => dyn_tbath, tref, reft, kbt, &
+         qcnstp, qcnstt, qnpt
+#if KEY_BLADE == 1
+    use blade_main, only: blade_initialized, system_dirty
+    use blade_module, only: system
+#endif
+#if KEY_OPENMM == 1
+    use omm_main, only: omm_invalidate, omm_pressure_active
+#endif
+#if KEY_SGLD == 1
+    use sgld, only: qsgld, qsgmd
+#endif
+
+    implicit none
+
+    real(c_double), intent(in) :: expected_temperature, new_temperature
+
+    real(c_double) :: scale, tolerance
+    integer(c_int) :: blade_status
+
+    dynamics_exchange_temperature = 0_c_int
+    if (.not. ieee_is_finite(expected_temperature) .or. &
+         .not. ieee_is_finite(new_temperature)) return
+    if (expected_temperature <= 0.0_c_double .or. &
+         new_temperature <= 0.0_c_double) return
+
+    if (qcnstp .or. qpcon .or. ndrude > 0 .or. &
+         ((qnose .or. qtcon) .and. nobl > 1)) then
+      dynamics_exchange_temperature = -1_c_int
+      return
+    end if
+#if KEY_OPENMM == 1
+    if (omm_pressure_active()) then
+      dynamics_exchange_temperature = -1_c_int
+      return
+    end if
+#endif
+#if KEY_SGLD == 1
+    if (qsgld .or. qsgmd) then
+      dynamics_exchange_temperature = -1_c_int
+      return
+    end if
+#endif
+
+    tolerance = 64.0_c_double * &
+         real(epsilon(real(expected_temperature, chm_real)), c_double) * &
+         max(1.0_c_double, abs(expected_temperature))
+    if (abs(real(finalt, c_double) - expected_temperature) > tolerance .or. &
+         abs(real(tbath, c_double) - expected_temperature) > tolerance .or. &
+         abs(real(kbt / kboltz, c_double) - expected_temperature) > tolerance) then
+      dynamics_exchange_temperature = -2_c_int
+      return
+    end if
+    if (qcnstt .and. &
+         abs(real(tref, c_double) - expected_temperature) > tolerance) then
+      dynamics_exchange_temperature = -2_c_int
+      return
+    end if
+    if (qnpt .and. &
+         abs(real(reft, c_double) - expected_temperature) > tolerance) then
+      dynamics_exchange_temperature = -2_c_int
+      return
+    end if
+    if ((qnose .or. qtcon) .and. &
+         abs(real(rtmpr(1), c_double) - expected_temperature) > tolerance) then
+      dynamics_exchange_temperature = -2_c_int
+      return
+    end if
+
+    if (natom < 1 .or. .not. allocated(xcomp) .or. &
+         .not. allocated(ycomp) .or. .not. allocated(zcomp) .or. &
+         size(xcomp) < natom .or. size(ycomp) < natom .or. &
+         size(zcomp) < natom) then
+      dynamics_exchange_temperature = -3_c_int
+      return
+    end if
+
+#if KEY_BLADE == 1
+    if (blade_initialized .and. c_associated(system)) then
+      if (system_dirty) then
+        dynamics_exchange_temperature = -5_c_int
+        return
+      end if
+      blade_status = blade_exchange_temperature( &
+           system, expected_temperature, new_temperature)
+      if (blade_status == -3) then
+        dynamics_exchange_temperature = -1_c_int
+        return
+      else if (blade_status == -1) then
+        dynamics_exchange_temperature = -4_c_int
+        return
+      else if (blade_status /= 1) then
+        dynamics_exchange_temperature = -5_c_int
+        return
+      end if
+    end if
+#endif
+
+    if (new_temperature == expected_temperature) then
+      dynamics_exchange_temperature = 1_c_int
+      return
+    end if
+
+#if KEY_OPENMM == 1
+    call omm_invalidate()
+#endif
+
+#if KEY_BLOCK == 1
+    if (ilaldm .and. tbld == 0.0_chm_real) then
+      tbld = tbath
+    end if
+#endif
+
+    scale = sqrt(new_temperature / expected_temperature)
+    xcomp(1:natom) = xcomp(1:natom) * real(scale, chm_real)
+    ycomp(1:natom) = ycomp(1:natom) * real(scale, chm_real)
+    zcomp(1:natom) = zcomp(1:natom) * real(scale, chm_real)
+
+    firstt = real(new_temperature, chm_real)
+    finalt = real(new_temperature, chm_real)
+    tbath = real(new_temperature, chm_real)
+    tref = real(new_temperature, chm_real)
+    reft = real(new_temperature, chm_real)
+    kbt = real(new_temperature, chm_real) * kboltz
+    rtmpr(1) = real(new_temperature, chm_real)
+
+    dynamics_exchange_temperature = 1_c_int
+  end function dynamics_exchange_temperature
 
   !> @brief change temperature increment every IHTFRQ steps for heating stage
   !
@@ -768,5 +933,5 @@ contains
          read_only=.true., formatted=.true., new_unit=iunrea)
     if (qsuccess) success = 1
   end function dynamics_set_iunrea
-#endif /* KEY_LIBRARY */
+
 end module api_dynamics

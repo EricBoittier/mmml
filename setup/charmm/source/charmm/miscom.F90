@@ -35,7 +35,7 @@ recursive subroutine MAINCOMX(COMLYN,COMLEN,LUSED)
   use dcntrl_mod, only: dynopt
   use estats_mod,only: anal
 #if KEY_ESTATS==1
-  use estats_mod,only: estats        
+  use estats_mod,only: estats
 #endif
   use cveloci_mod,only: cveloci
   use mltcanon,only:mltcanon_prs
@@ -43,19 +43,19 @@ recursive subroutine MAINCOMX(COMLYN,COMLEN,LUSED)
   use cadpac_mod,only:cadini
   use cstran_mod,only:cstran
 #if KEY_QMMMSEMI==1
-  use qmmmsemi,only: qmmm_startup         
+  use qmmmsemi,only: qmmm_startup
 #endif
 #if KEY_EPMF==1
-  use epmf, only: epmf_set                
+  use epmf, only: epmf_set
 #endif
 #if KEY_PRIMO==1
-  use primomodule, only: primo_set        
+  use primomodule, only: primo_set
 #endif
   use genborn,only: genborn_set
   use gbim, only: SetGBIM
-  use gbmv, only:gbmv_set                 
-  use omm_mses, only:mses_set                 
-  use gbsw, only: gbsw_set                
+  use gbmv, only:gbmv_set
+  use omm_mses, only:mses_set
+  use gbsw, only: gbsw_set
 
 
 #if KEY_DENBIAS==1
@@ -66,32 +66,32 @@ recursive subroutine MAINCOMX(COMLYN,COMLEN,LUSED)
   use gnn, only: gnncall
   use tamdmodule, only: tamd
 #if KEY_MSCALE==1
-  use mscalemod, only: mscale             
+  use mscalemod, only: mscale
 #endif
 #if KEY_CSA==1 || KEY_DISTENE==1
-  use csacommmod                          
+  use csacommmod
 #endif
   use repdstrmod, only: repdstrmain
 #if KEY_OVERLAP==1
-  use olapmod,only:olapcmd                
+  use olapmod,only:olapcmd
 #endif
 #if KEY_RPATH==1
-  use EPATHMOD, ONLY: PATHPS              
+  use EPATHMOD, ONLY: PATHPS
 #endif
 #if KEY_FLUCQ==1
-  use flucqm, only: fqinit                
+  use flucqm, only: fqinit
 #endif
 #if KEY_TSALLIS==1
-  use tsallis_module,only: iascale,qttsall 
+  use tsallis_module,only: iascale,qttsall
 #endif
 #if KEY_FACTS==1
-  use facts_module,only:fctini            
+  use facts_module,only:fctini
 #endif
 #if KEY_AFM==1
-  use afm_module,only: afmini              
+  use afm_module,only: afmini
 #endif
 #if KEY_AXD==1
-  use axd_module,only: axdini              
+  use axd_module,only: axdini
 #endif
   use gukini_mod,only: gukini
   use gamess_fcm,only: qmused_qchem,qmused_g09,qmused_turbo,qmused_gamess
@@ -100,32 +100,32 @@ recursive subroutine MAINCOMX(COMLYN,COMLEN,LUSED)
   use traj_mod,only:reatrj,wrttrj,trajio
   use block_fcm, only : block
 #if KEY_SCPISM==1
-  use scpismm,only:scpparse                
+  use scpismm,only:scpparse
 #endif
   use corman_mod,only:corcom
 #if KEY_DMCONS==1
-  use dmcons,only:dmcset                   
+  use dmcons,only:dmcset
 #endif
 #if KEY_HQBM==1
-  use hqbmm, only: hqbmini                 
+  use hqbmm, only: hqbmini
 #endif
   use pull_mod, only: pull_setup
   use rmsdyn_mod,only:rmsdyn
 #if KEY_GENETIC==1
-  use galgor,only:genetic_alg             
+  use galgor,only:genetic_alg
 #endif
 #if KEY_PATHINT==1
-  use mpathint, only: pint_init            
+  use mpathint, only: pint_init
 #endif
 #if KEY_POLAR==1
-  use polarm, only: polar0                 
+  use polarm, only: polar0
 #endif
 #if KEY_RGYCONS==1
-  use rgym, only: rgyset                   
+  use rgym, only: rgyset
 #endif
-  use rush_mod, only: rush                 
+  use rush_mod, only: rush
 #if KEY_RXNCOR==1
-  use lup, only: lupopt                    
+  use lup, only: lupopt
 #endif
   use grid_dock, only: gridset
 #if KEY_FFTDOCK == 1
@@ -135,33 +135,33 @@ recursive subroutine MAINCOMX(COMLYN,COMLEN,LUSED)
 #endif /* OPENMM */
 #endif /* FFTDOCK */
 #if KEY_ASPENER==1
-  use eef1_mod, only: eef1                 
+  use eef1_mod, only: eef1
 #endif
 ! #if KEY_MOBHY==1
   use mobhy_mod, only: mobhy
 ! #endif
 #if KEY_PBEQ==1
-  use pbeq, only: pbeq0                    
+  use pbeq, only: pbeq0
 #endif
 #if KEY_TORQUE==1
-  use torque, only: torque_parse           
+  use torque, only: torque_parse
 #endif
-  use consph, only: getphresidues          
+  use consph, only: getphresidues
 #if KEY_EDS==1
-  use edsmod, only: process_eds            
+  use edsmod, only: process_eds
 #endif
 #if KEY_CHEQ==1
-  use cheq,only: cheqprep 
+  use cheq,only: cheqprep
 #endif
   use scalar_module, only: scalar
 #if KEY_PROTO==1
-  use proto_mod,only:proto     
+  use proto_mod,only:proto
 #endif
   use intcor_module,only: intcor
   use rdfsol_mod,only:rdfsol
   use rxcons,only:rxconsps
 #if KEY_CORSOL==1
-  use corsol_mod,only:corsol     
+  use corsol_mod,only:corsol
 #endif
   use shell,only:shlini
   use correl_mod,only: correl
@@ -171,31 +171,31 @@ recursive subroutine MAINCOMX(COMLYN,COMLEN,LUSED)
   use travelmain,only: trek
   use nbndcc_util
 #if KEY_RXNCOR==1
-  use rxpath,only:pathc            
+  use rxpath,only:pathc
 #endif
 #if KEY_RXNCOR==1
-  use rxdefs,only:rxpars           
+  use rxdefs,only:rxpars
 #endif
   use replica_mod,only:replica
 #if KEY_DYNVV2==1
-  use tpvv2,only: tpcontrol         
+  use tpvv2,only: tpcontrol
 #endif
   use resdist,only:redset
   use machutil,only:jobdat
 #if KEY_CHARMMRATE==1
-  use charmmrate_mod,only:charmmrate   
+  use charmmrate_mod,only:charmmrate
 #endif
 #if KEY_MC==1
-  use mcc, only: mccall               
+  use mcc, only: mccall
 #endif
 #if KEY_MC==1
-  use mcmoveio, only: moverd, movewr  
+  use mcmoveio, only: moverd, movewr
 #endif
 #if KEY_MC==1
-  use mcmoveln, only: moveln          
+  use mcmoveln, only: moveln
 #endif
 #if KEY_MC==1
-  use mcmvad                          
+  use mcmvad
 #endif
 # if KEY_ACTBOND==1
   use eintern_fast, only: bactiv
@@ -208,7 +208,7 @@ recursive subroutine MAINCOMX(COMLYN,COMLEN,LUSED)
   use eutil
   use fitchg
 #if KEY_MCMA==1
-  use mcmamod                         
+  use mcmamod
 #endif
 #if KEY_OPENMM==1
   use omm_ctrl, only : omm_command, omm_system_changed
@@ -222,9 +222,12 @@ recursive subroutine MAINCOMX(COMLYN,COMLEN,LUSED)
   use shapes
   use tbmts
   use varcutm
+#if KEY_CONFIGURE == 1
+  use config_mod, only: print_config
+#endif
   use vibran_m
 #if KEY_DOMDEC==1
-  use domdec,only:domdec_com          
+  use domdec,only:domdec_com
 #endif
   use linkatom
   use drude
@@ -233,17 +236,17 @@ recursive subroutine MAINCOMX(COMLYN,COMLEN,LUSED)
   use paral4,only: setcpustruc, test_po
 #endif
 #if KEY_ENSEMBLE==1
-  use ensemble,only:nensem,old_mynod,whoiam,ensprint     
+  use ensemble,only:nensem,old_mynod,whoiam,ensprint
 #endif
 #if KEY_ABPO==1
-  use abpo_ltm  
+  use abpo_ltm
 #endif
 #if KEY_ABPO==1
-  use abpo,only:abpo_cntrl 
+  use abpo,only:abpo_cntrl
 #endif
   use prssre
 #if KEY_GAMUS==1
-  use gamusmodule,only:gamusinit 
+  use gamusmodule,only:gamusinit
 #endif
 #if KEY_MULTICOM==1 /*  VO : stringm v */
   use multicom, only: multicom_main
@@ -268,12 +271,18 @@ use keywords, only: print_keys
 use cstuff, only: unbuffer_stdout
 use extbond ! Pezzella 15.05.2019
 use triakern ! Pezzella 10.12.2019
+use kernn ! Kaeser July 2024
 use fullkern ! Pezzella 11.07.2020
 use opencl_parse_mod, only: ocl_parse
 #ifdef KEY_RESIZE
 use deriv
 use resize,only: resize_array,set_rszf
 #endif
+
+#if KEY_MLMM==1 
+  use mlps_ini, only : mlps_setup   ! eemlp
+#endif
+
   implicit none
   character(len=*) comlyn
   integer comlen
@@ -282,7 +291,7 @@ use resize,only: resize_array,set_rszf
   !     The following are local variables.
 
 #if KEY_TSALLIS==1
-  integer   err  
+  integer   err
 #endif
   integer   freeat
   integer  :: i,ierror
@@ -309,8 +318,7 @@ use resize,only: resize_array,set_rszf
 
 #ifdef KEY_RESIZE
   real(chm_real):: cutim0
-#endif  
-
+#endif
   lused=.true.
 
 #if KEY_MULTICOM==1 /*  VO stringm : conditional evaluation in parallel */
@@ -338,7 +346,7 @@ use resize,only: resize_array,set_rszf
 #if KEY_BLADE == 1
   case('BLAD') cmds
      call blade_command(comlyn, comlen)
-#endif 
+#endif
   case('BLOC') cmds
      call block(comlyn,comlen)
 #if KEY_TSALLIS==1
@@ -359,7 +367,7 @@ use resize,only: resize_array,set_rszf
                 x,y,z,wmain,.true.)
         endif
      endif
-#endif 
+#endif
   case('NOSE') cmds
      call nosect(comlyn,comlen)
   case('MTS ') cmds
@@ -372,6 +380,8 @@ use resize,only: resize_array,set_rszf
      call cadini(comlyn,comlen)
   case('CLEA') cmds
      call clear_something
+  case('CONF') cmds
+     call print_config()
   case('CONS') cmds
      call cstran(comlyn,comlen)
   case('COOR') cmds
@@ -386,20 +396,20 @@ use resize,only: resize_array,set_rszf
 #if KEY_DIMS==1
   case('DIMS') cmds
      call dimsinit(comlyn,comlen)
-#endif 
-  case('ENSE') cmds    
+#endif
+  case('ENSE') cmds
      call enscmd(comlyn,comlen)
 
 #if KEY_CHARMMRATE==1
   case('POLY','RATE') cmds
      call charmmrate(comlyn,comlen)
-#endif 
+#endif
   case('NBAC') cmds
      call nbactv(comlyn,comlen)
 #if KEY_ACTBOND==1
   case('BACT') cmds
      call bactiv(comlyn,comlen)
-#endif 
+#endif
   case('MKCL') cmds
      call mkclust(comlyn,comlen)
 #if KEY_ESTATS==1
@@ -436,7 +446,7 @@ use resize,only: resize_array,set_rszf
 #if KEY_TMD==1
   case('TMDI') cmds
      call tmdinit(comlyn,comlen)
-#endif 
+#endif
   case('DYNA') cmds
 #if KEY_ABPO==1
      if (q_abpo) then
@@ -460,29 +470,29 @@ use resize,only: resize_array,set_rszf
            call set_rszf('miscom.F90','MAINCOMX',.false.)
         endif
      endif
-#endif          
+#endif
      call gete0('ENER', comlyn, comlen)
 #ifdef KEY_RESIZE
      call resize_array('miscom.F90','MAINCOMX')
-#endif     
+#endif
 #if KEY_CHEQ==1
   case('FQBA') cmds
      call nosefq(comlyn,comlen)
   case('CHEQ') cmds
      call cheqprep(comlyn,comlen)
-#endif 
+#endif
   case('FLUC') cmds
 #if KEY_FLUCQ==1
      call fqinit(comlyn,comlen)
 #else /**/
      CALL WRNDIE(-1,'<CHARMM>','FLUCQ code is not compiled.')
-#endif 
+#endif
   case('FOUR') cmds
      call parse4d(comlyn, comlen)
 #if KEY_FACTS==1
   case('FACT') cmds
      call fctini(comlyn,comlen)
-#endif 
+#endif
   case('GBOR') cmds
      call genborn_set(comlyn, comlen)
   case('GBIM') cmds
@@ -504,11 +514,11 @@ use resize,only: resize_array,set_rszf
 #if KEY_EPMF==1
   case('EPMF') cmds
      call epmf_set(comlyn,comlen)
-#endif 
+#endif
 #if KEY_PRIMO==1
    case('PRIM') cmds
      call primo_set(comlyn,comlen)
-#endif 
+#endif
   case('GENE') cmds
      call handle_generate_command(comlyn, comlen, istart)
   case('GETE') cmds
@@ -533,7 +543,7 @@ use resize,only: resize_array,set_rszf
 #if KEY_NOGRAPHICS==0
   case('GRAP') cmds
      call graphx
-#endif 
+#endif
   case('HBON') cmds
      if(ihbfrq == 0) ihbfrq=999
      call update(comlyn,comlen,x,y,z,wmain,.true., &
@@ -542,7 +552,7 @@ use resize,only: resize_array,set_rszf
      if(ihbfrq == 999) ihbfrq=0
 #ifdef KEY_RESIZE
      call resize_array('miscom.F90','MAINCOMX')
-#endif     
+#endif
   case('HBTR') cmds
      call hbtrim
   case('HBUI') cmds
@@ -581,11 +591,11 @@ use resize,only: resize_array,set_rszf
 #if KEY_RXNCONS==1
   case('RCON') cmds
      call rxconsps(comlyn, comlen)
-#endif 
+#endif
 #if KEY_RXNCOR==1
   case('LUPO') cmds
      call lupopt(comlyn,comlen)
-#endif 
+#endif
 #if KEY_CSA==1 || KEY_DISTENE==1
   case('MAST') cmds
      call masterdstr(comlyn,comlen)
@@ -598,8 +608,8 @@ use resize,only: resize_array,set_rszf
 #if KEY_CSA==1
   case('CSA ') cmds
      call csacntrl(comlyn,comlen)
-#endif 
-#endif 
+#endif
+#endif
   case('MC  ') cmds
 #if KEY_MC==1 /*mc1*/
      call mccall(comlyn,comlen)
@@ -623,8 +633,8 @@ use resize,only: resize_array,set_rszf
   case('MNDO') cmds
 #if KEY_MNDO97==1
      qmused_mndo97=.true.
-     CALL MNDINI(COMLYN,COMLEN)
-#endif 
+     CALL MNDINI_main(COMLYN,COMLEN)
+#endif
   case('MOLV') cmds
      CALL MOLVCO(COMLYN,COMLEN)
   case('MONI') cmds
@@ -667,7 +677,7 @@ use resize,only: resize_array,set_rszf
      call mscale(0,comlyn,comlen)
   case('SERV') cmds
      call mscale(1,comlyn,comlen)
-#endif 
+#endif
   case('NBON') cmds
      if(inbfrq == 0) inbfrq=999
 #ifdef KEY_RESIZE
@@ -680,13 +690,13 @@ use resize,only: resize_array,set_rszf
            call set_rszf('miscom.F90','MAINCOMX',.false.)
         endif
      endif
-#endif          
+#endif
      call update(comlyn,comlen,x,y,z,wmain,.true., &
           .false.,.true.,.false.,.true.,0,[zero],[zero],[zero],[zero],[zero],[zero])
      if(inbfrq == 999) inbfrq=0
 #ifdef KEY_RESIZE
      call resize_array('miscom.F90','MAINCOMX')
-#endif     
+#endif
   case('NOE ') cmds
      call noeset
   case('RESD') cmds
@@ -727,11 +737,11 @@ use resize,only: resize_array,set_rszf
 #if KEY_OPENMM==1
   case('OMM ') cmds
      call omm_command(comlyn, comlen)
-#endif 
+#endif
 #if KEY_PARCMD==1
   case('PARA') cmds
      call parcmd(comlyn,comlen)
-#endif 
+#endif
   case('PATC') cmds
      call patch(comlyn,comlen)
 
@@ -741,16 +751,16 @@ use resize,only: resize_array,set_rszf
      call startphmd(comlyn,comlen)
   case('PHTE') cmds
      call dophmdtest(comlyn, comlen)
-#endif 
+#endif
 #if KEY_PBEQ==1
   case('PBEQ') cmds
      call pbeq0
-#endif 
+#endif
 #if KEY_GRID==1
   case('GRID') cmds
      call gridset(comlyn, comlen)
 #endif
-#if KEY_FFTDOCK == 1     
+#if KEY_FFTDOCK == 1
   case('FFTG') cmds
      call fft_dock_set(comlyn, comlen)
 #if KEY_OPENMM == 1
@@ -763,15 +773,15 @@ use resize,only: resize_array,set_rszf
 #if KEY_POLAR==1
   case('POLA') cmds
      call polar0
-#endif 
+#endif
 #if KEY_PATHINT==1
   case('PINT') cmds
      call pint_init(comlyn,comlen)
-#endif 
+#endif
 #if KEY_PNM==1
   case('PNM') cmds
      call pnm_main(comlyn,comlen)
-#endif 
+#endif
   case('PRES') cmds
      call getprs(comlyn,comlen)
   case('PRIN') cmds
@@ -787,11 +797,11 @@ use resize,only: resize_array,set_rszf
 #else /**/
      qmused_quantum=.true.
      call qmdefn(comlyn,comlen)
-#endif 
+#endif
 #if KEY_QMMMSEMI==1
   case('IFQN') cmds
      call qmmm_startup(comlyn,comlen,natom,x,y,z)
-#endif 
+#endif
   case('READ') cmds
      call mainio(wrd)
 #if KEY_GENETIC==1
@@ -802,7 +812,7 @@ use resize,only: resize_array,set_rszf
      ELSEIF (IndxA(comLyn,comLen,'EVOL') > 0) then
         CALL Genetic_Alg(.false.,.true.)
      endif
-#endif 
+#endif
   case('RENA') cmds
      !---- Procedure PROCESS-RENAME-COMMAND
      call crename(comlyn,comlen)
@@ -820,27 +830,27 @@ use resize,only: resize_array,set_rszf
 #if KEY_HQBM==1
   case('HQBM') cmds  ! 02-Jul-1997
      call hqbmini
-#endif 
+#endif
 #if KEY_AFM==1
   case('AFM') cmds   ! 20-Jun-2003
      call afmini
-#endif 
+#endif
 #if KEY_AXD==1
   case('AXD') cmds
      call axdini(natom)
-#endif 
+#endif
   case('RISM') cmds
      call rismcmd
 #if KEY_RPATH==1
   case('RPAT') cmds
      call pathps(comlyn,comlen)
-#endif 
+#endif
 #if KEY_RXNCOR==1
   case('PATH') cmds
      call pathc(x,y,z,xcomp,ycomp,zcomp,wmain,comlyn,comlen)
   case('RXNC') cmds
      call rxpars
-#endif 
+#endif
   case('SBOU') cmds
      !---- Procedure PROCESS-SOLVENT-BOUNDARY-COMMANDS
 #if KEY_NOMISC==1
@@ -855,7 +865,7 @@ use resize,only: resize_array,set_rszf
      case('READ') solvboun
         call sbread
      end select solvboun
-#endif 
+#endif
      !---- End Procedure PROCESS-SOLVENT-BOUNDARY-COMMANDS
   case('SCAL') cmds
      call scalar
@@ -864,7 +874,7 @@ use resize,only: resize_array,set_rszf
   case('SCCD') cmds
      qmused_sccdftb=.true.
      call scctbini(comlyn,comlen)
-#endif 
+#endif
   case('SHAK') cmds
      call shkcom(comlyn, comlen)
 #if KEY_SHAPES==1 /*shpcom*/
@@ -903,11 +913,11 @@ use resize,only: resize_array,set_rszf
 #if KEY_ADUMB==1
   case('UMBR') cmds
      call umban(comlyn,comlen)
-#endif 
+#endif
 #if KEY_GAMUS==1
   case('GAMU','GUMB')
      CALL GAMUSINIT(COMLYN,COMLEN)
-#endif 
+#endif
      !mf switch stdout to unbuffered I/O
   case('UNBU') cmds
 #if KEY_UNIX==1
@@ -937,7 +947,7 @@ use resize,only: resize_array,set_rszf
            call set_rszf('miscom.F90','MAINCOMX',.false.)
         endif
      endif
-#endif     
+#endif
      lcomp=(indxa(comlyn,comlen,'COMP') > 0)
      if (lcomp) then
         call update(comlyn,comlen,xcomp,ycomp,zcomp,wcomp,.true., &
@@ -948,7 +958,7 @@ use resize,only: resize_array,set_rszf
      endif
 #ifdef KEY_RESIZE
      call resize_array('miscom.F90','MAINCOMX')
-#endif     
+#endif
      !---- End Procedure PROCESS-UPDATE-COMMAND
   case('VARC') cmds
      call setup_varcut(comlyn,comlen,natom)
@@ -960,7 +970,9 @@ use resize,only: resize_array,set_rszf
      call ext_bond_set(comlyn,comlen)
   case('TKRN') cmds ! Pezzella 10.12.2019
      call tria_kern_set(comlyn,comlen)
- case('FLMK') cmds  ! Pezzela 11.07.2020
+  case('KRNN') cmds ! Kaeser July 2024
+     call kernn_set(comlyn,comlen)
+  case('FLMK') cmds  ! Pezzela 11.07.2020
      call fullkern_set(comlyn,comlen)
   case('IMAG') cmds
      !---- Procedure PROCESS-IMAGE-SPECIFY-COMMAND
@@ -980,7 +992,7 @@ use resize,only: resize_array,set_rszf
   case('DRAW') cmds
      !       For XDISPLAY
      call drawit(-1,x,y,z,xcomp,ycomp,zcomp)
-#endif 
+#endif
 #if KEY_NOMISC==0
   case('BARI') cmds
      !---- Procedure PROCESS-BARRIER-COMMAND
@@ -1002,7 +1014,7 @@ use resize,only: resize_array,set_rszf
      call rmsdyn('main',x,y,z,wmain,xcomp,ycomp,zcomp,wcomp,natiml,amass)
 
      !---- End Procedure PROCESS-RMSDYNAMICS-COMMAND
-#endif 
+#endif
 #if KEY_QUANTUM==1 || KEY_GAMESS==1 || KEY_GAMESSUK==1 || KEY_CADPAC==1 || \
     KEY_SCCDFTB==1 || KEY_QCHEM==1 || KEY_MNDO97==1 || KEY_SQUANTM==1 || \
     KEY_QTURBO==1 || KEY_G09==1
@@ -1010,28 +1022,28 @@ use resize,only: resize_array,set_rszf
      call addlnat(outu)
   case('RELL') cmds
      call rellnat(outu)
-#endif 
+#endif
 #if KEY_QUANTUM==1
   case('MULL') cmds
      call mullik(comlyn,comlen)
-#endif 
+#endif
 #if KEY_QUANTUM==1 || KEY_SCCDFTB==1 || KEY_SQUANTM==1 || KEY_QCHEM==1 || KEY_GAMESSUK==1 || KEY_QTURBO==1
   case('QUB ') cmds
      call qub(comlyn,comlen)
-#endif 
+#endif
 #if KEY_SQUANTM==1
   case('SQUA') cmds
      qmused_squantm=.true.
      call sqmini(comlyn,comlen)
-#endif 
+#endif
 #if KEY_DMCONS==1
   case('DMCO') cmds
      call dmcset
-#endif 
+#endif
 #if KEY_RGYCONS==1
   case('RGYR') cmds
      call rgyset
-#endif 
+#endif
   case('ETEN') cmds
      call etenset
   case('ETSR') cmds
@@ -1039,32 +1051,32 @@ use resize,only: resize_array,set_rszf
 #if KEY_ASPENER==1
   case('EEF1') cmds
      call eef1
-#endif 
+#endif
 #if KEY_SCPISM==1
   case('SCPI') cmds
      call scpparse
-#endif 
+#endif
 #if KEY_SASAE==1
   case('SASA') cmds
      call sasini(comlyn,comlen)
-#endif 
+#endif
   case('PREF') cmds
      call print_keys()
 #if KEY_EMAP==1
   case('EMAP') cmds
      call emapopt(comlyn, comlen)
-#endif 
+#endif
      ! BEGIN DRUDE (B. Roux and G. Lamoureux)
   case('DRUD') cmds
      IF (Indx(comlyn,comlen,'L_WALL',6) > 0) then
         ! Lei Huang, impose hard wall constraint on drude bond length
         L_WALL = GTRMF(COMLYN,COMLEN,'L_WALL',0.2)
-     
+
         IF(L_WALL .gt. 0.0) THEN
           QHARDWALL = .true.
 #if KEY_PARALLEL==1
           IF(mynod .eq. 0) then
-#endif 
+#endif
             WRITE(outu,*)   &
             'Hard wall constraint on drude bond length is turned ON. L_WALL = ',L_WALL
 #if KEY_PARALLEL==1
@@ -1087,10 +1099,10 @@ use resize,only: resize_array,set_rszf
 
   case('TPCO','NOS2') cmds
 #if KEY_DYNVV2==1
-     call tpcontrol(comlyn,comlen)                     
+     call tpcontrol(comlyn,comlen)
 #endif
 #if KEY_DYNVV2==0
-     CALL WRNDIE(0,'<CHARMM>','DYNA VV2 not compiled') 
+     CALL WRNDIE(0,'<CHARMM>','DYNA VV2 not compiled')
 #endif
 
   case('FITC') cmds
@@ -1103,12 +1115,12 @@ use resize,only: resize_array,set_rszf
   case('RDFS') cmds
      !       new solvent radial distribution function module
      call rdfsol
-#endif 
+#endif
 #if KEY_SHELL==1
   case('SHEL') cmds
      !       shell decomposition module
      call shlini
-#endif 
+#endif
 
   case('ZMOD') cmds
      call zerom
@@ -1128,7 +1140,7 @@ use resize,only: resize_array,set_rszf
      end if
 #else /**/
      CALL WRNDIE(-1,'<CHARMM>','PIPF code is not compiled.')
-#endif 
+#endif
   case('RUSH') cmds
      call rush(comlyn,comlen)
 #if KEY_CORSOL==1 /*corsol*/
@@ -1153,7 +1165,7 @@ use resize,only: resize_array,set_rszf
   case('EDS') cmds
      ! process EDS command
      call process_eds(comlyn,comlen)
-#endif 
+#endif
 #if KEY_DOMDEC==1
   case('DOMD') cmds
      call domdec_com(comlyn, comlen)
@@ -1181,23 +1193,48 @@ use resize,only: resize_array,set_rszf
   case('CCS ') cmds
     CALL CSSET
 #endif
+
+#if KEY_EABF==1
+!-------------------------------!
+!---------eABF Routines---------!
+!-------------------------------!
+    case('ABFP')
+    call READ_EABF_PARAMETERS(COMLYN,COMLEN)
+    case('ABFC')
+    call EABF_CV_PARAMETERS(COMLYN,COMLEN)
+    case('MKSL')
+    call MAKE_SELECTIONS(COMLYN,COMLEN)
+    case('DESL')
+    call DESELECT_LISTS()
+    case('IREF')
+    call INITILIZE_REFERENCE()
+    case('SREF')
+    call COPY_REFERENCE(COMLYN,COMLEN)
+#endif
+
 ! #if KEY_MOBHY==1
-  case('MOBH') cmds
+ case('MOBH') cmds
     CALL MOBHY
 ! #endif
      !
   case default cmds
      lused=.false.
 #if KEY_ENSEMBLE==1
-     if(nensem > 1 ) write(outu,'(3(a,i3),2a)') &     
+     if(nensem > 1 ) write(outu,'(3(a,i3),2a)') &
 #endif
 #if KEY_ENSEMBLE==1
-          ">>> Ensemble ",whoiam," Node ",mynod," Worldnod ",old_mynod, &    
+          ">>> Ensemble ",whoiam," Node ",mynod," Worldnod ",old_mynod, &
 #endif
 #if KEY_ENSEMBLE==1
-          " ---- cmd problem = ",comlyn(1:comlen)       
+          " ---- cmd problem = ",comlyn(1:comlen)
 #endif
      call wrndie(0,'<CHARMM>','Unrecognized command: '//WRD)
+
+#if KEY_MLMM==1
+   case('MLMM') cmds
+    call mlps_setup(comlyn,comlen)
+#endif
+
   end select cmds
 
   return
@@ -1219,11 +1256,11 @@ SUBROUTINE MISCOM(COMLYN,MXCMS2,COMLEN,LUSED)
 
   ! 12/12/07 SL: use module cross to allocate memory for RMD arrays
 #if KEY_RMD==1
-  use cross, only: CROSSINIT, QCROS     
+  use cross, only: CROSSINIT, QCROS
 #endif
 #if KEY_REPDSTR==1
   use repdstrmod
-  use mpi
+  use mpi_f08
 #endif
   use chm_kinds
   use dimens_fcm
@@ -1232,13 +1269,14 @@ SUBROUTINE MISCOM(COMLYN,MXCMS2,COMLEN,LUSED)
   use ctitla
   use eutil
 #if KEY_BLOCK==1
-  use lambdam       
+  use lambdam
 #endif
   use fast
 #if KEY_LOOKUP==1
-  use lookup,only:wwsetup        
+  use lookup,only:wwsetup
 #endif
   use machdep
+  use machio, only: envset, envget, strcat
   use param_store, only: write_real_params, write_int_params, write_str_params
   use select
   use stream
@@ -1253,7 +1291,7 @@ SUBROUTINE MISCOM(COMLYN,MXCMS2,COMLEN,LUSED)
   use clcg_mod,only: randspec, irandom
   use machutil,only:timre,timrb,daytim,wcpu,csystem
 #if KEY_VALBOND==1
-  use valbond, only: vbcomm   
+  use valbond, only: vbcomm
 #endif
   use mtp_fcm
   use mtpl_fcm
@@ -1261,7 +1299,7 @@ SUBROUTINE MISCOM(COMLYN,MXCMS2,COMLEN,LUSED)
   use dcm_fcm,only: dcm
 
 #if KEY_MMPT==1
-  use mmpt_fcm,only:mmptinit                              
+  use mmpt_fcm,only:mmptinit
 #endif
 #if KEY_MSMMPT==1
   use msmmpt_fcm,only:msmmptinit
@@ -1275,10 +1313,8 @@ SUBROUTINE MISCOM(COMLYN,MXCMS2,COMLEN,LUSED)
 #endif
 
 #if KEY_UNIX==1
-  use cstuff, only: setenv
-  use, intrinsic :: iso_c_binding, only: C_NULL_CHAR
 #endif /* UNIX */
-  
+
   implicit none
 
   character(len=*) comlyn
@@ -1292,7 +1328,7 @@ SUBROUTINE MISCOM(COMLYN,MXCMS2,COMLEN,LUSED)
   integer lentok
   logical   eof, done, ok
 #if KEY_MULTICOM==1 /*   VO : conditionals  */
-  logical :: ok2                
+  logical :: ok2
 #endif
   character(len=4)   wrd,junk
   integer lenvar,lenval,ipt
@@ -1328,7 +1364,7 @@ SUBROUTINE MISCOM(COMLYN,MXCMS2,COMLEN,LUSED)
 
   loop101: do while(.not. done)
      done=.true.
-     parOp = -1 
+     parOp = -1
      wrd=nexta4(comlyn,comlen)
 
      !     main conditional for processing commands
@@ -1338,7 +1374,13 @@ SUBROUTINE MISCOM(COMLYN,MXCMS2,COMLEN,LUSED)
        ! We are inside an 'if' block. Check for further control statements.
        if (repd_if_block_stat(repd_inside_if_block).lt.1 .and. wrd.eq.'IF  ') then
          ! IF statement inside non-active 'if' block. Check if this is a new 'if' block.
-         i = index(comlyn, 'THEN')
+         ! Search for THEN only before any comment marker
+         j = index(comlyn(1:comlen), '!')
+         if (j .gt. 0) then
+           i = index(comlyn(1:j-1), 'THEN')
+         else
+           i = index(comlyn(1:comlen), 'THEN')
+         endif
          if (i .gt. 0) then
            !write (outu,'(2(a,i6))') 'DBG: THEN idx= ', i, '  len comlyn= ', len_trim(comlyn)
            if ((len_trim(comlyn) - i) .lt. 4) then
@@ -1369,7 +1411,7 @@ SUBROUTINE MISCOM(COMLYN,MXCMS2,COMLEN,LUSED)
      endif
 #    endif /* KEY_REPDSTR */
 #if KEY_MULTICOM==1 /* (mcom)  VO : conditionals for stringm */
-     !     if/else/endif followed by 'ELSE IF (peek_if)' MUST be processed first; 
+     !     if/else/endif followed by 'ELSE IF (peek_if)' MUST be processed first;
      !     this is to permit the evaluation of multi-line nested conditionals in parallel
      !======================================================================================
       IF (WRD.EQ.'ELSE') THEN
@@ -1386,7 +1428,7 @@ SUBROUTINE MISCOM(COMLYN,MXCMS2,COMLEN,LUSED)
      !
       ELSE IF (WRD.EQ.'ENDI') THEN
         OK=pop_if() ! pop the 'if' stack
-        if (.not.OK) then 
+        if (.not.OK) then
           call wrndie(0,' MISCOM>','UNEXPECTED ENDIF STATEMENT.')
         endif
         COMLEN=0
@@ -1440,7 +1482,7 @@ SUBROUTINE MISCOM(COMLYN,MXCMS2,COMLEN,LUSED)
           ENDIF
         ENDIF
        else
-     !       remove conditional without processing 
+     !       remove conditional without processing
         CALL NEXTWD(COMLYN,COMLEN,TOKTMP,MXTLEN,LENTOK) ! remove token
         WRD=NEXTA4(COMLYN,COMLEN)                       ! remove operand
         CALL NEXTWD(COMLYN,COMLEN,VALTMP,MXVLEN,LENVAL) ! remove value
@@ -1449,24 +1491,24 @@ SUBROUTINE MISCOM(COMLYN,MXCMS2,COMLEN,LUSED)
      ! general, be false on some nodes (and true on others).
      !
        OK=OK.and.OK2           ! i.e. conditions at both levels need to be valid
-       call push_if(OK) ! add level to the `if' stack 
+       call push_if(OK) ! add level to the `if' stack
      !
        IF (OK) THEN ! execute commands
           IF(PRNLEV.GE.2) WRITE(OUTU,94)
   94      FORMAT(' IF test evaluated as true.  Performing command')
           DONE=.false. ! tells miscom to re-start (see end of routine)
           CALL TRIMA(COMLYN,COMLEN)
-          IF(COMLYN(1:4).EQ.'THEN') then 
+          IF(COMLYN(1:4).EQ.'THEN') then
             WRD=NEXTA4(COMLYN,COMLEN) ! i.e. remove 'THEN' from the line; this is a multi-line conditional terminated by ENDIF
           ELSE
            OK=pop_if() ! this is a one-line conditional without ELSE/ENDIF, so pop the stack (reuse 'OK' logical)
-          ENDIF 
+          ENDIF
        ELSE ! I.E. (.NOT.OK) THEN ! will skip loop body
           WRD=NEXTA4(COMLYN,COMLEN)
           JUNK=NEXTA4(COMLYN,COMLEN)
      !
           IF((WRD.EQ.'THEN').AND.(JUNK.eq.'    '))THEN
-              IF(PRNLEV.GE.2.and.OK2) WRITE(OUTU,'(A)') & ! write only if prev. level execution valid 
+              IF(PRNLEV.GE.2.and.OK2) WRITE(OUTU,'(A)') & ! write only if prev. level execution valid
 &               ' IF test evaluated as false.  Skip to ELSE or ENDIF'
           ELSE
              IF(PRNLEV.GE.2.and.OK2) WRITE(OUTU,'(A)') &
@@ -1488,12 +1530,12 @@ SUBROUTINE MISCOM(COMLYN,MXCMS2,COMLEN,LUSED)
         kk=nexti(comlyn,comlen)
         if(kk <  -2)then
 #if KEY_MULTICOM==1 /*  VO */
-         if (mynod.eq.0) then                   
+         if (mynod.eq.0) then
 #endif
            if (prnlev >= 2) write(outu,'(a)') &
                 ' MISCOM> Setting BOMLev < -2 is NOT a good idea.'
 #if KEY_MULTICOM==1
-         endif                                  
+         endif
 #endif
         endif
         bomlev=kk
@@ -1509,7 +1551,7 @@ SUBROUTINE MISCOM(COMLYN,MXCMS2,COMLEN,LUSED)
 #else /**/
         call wrndie(-1,'<MISCOM>', &
              'CROSS NOT AVAILABLE - NOT COMPILED WITH RMD FLAG')
-#endif 
+#endif
      ELSE IF (WRD == 'MRMD') THEN
 #if KEY_MRMD==1
 #if KEY_PARALLEL==1
@@ -1526,21 +1568,21 @@ SUBROUTINE MISCOM(COMLYN,MXCMS2,COMLEN,LUSED)
 #else /**/
          CALL WRNDIE(-1,'<MISCOM>', &
                 'VALB NOT AVAILABLE - NOT COMPILED WITH VALBOND FLAG')
-#endif 
+#endif
      else if (wrd == 'MMPT') then
 #if KEY_MMPT==1
         CALL MMPTINIT
 #else /**/
         CALL wrndie(-1,'<MISCOM>', &
              'MMPT NOT AVAILABLE - NOT COMPILED WITH MMPT FLAG')
-#endif  
+#endif
      else if (wrd == 'MSPT') then
 #if KEY_MSMMPT==1
         CALL MSMMPTINIT
 #else /**/
         CALL wrndie(-1,'<MISCOM>', &
              'MSMMPT NOT AVAILABLE - NOT COMPILED WITH MSMMPT FLAG')
-#endif 
+#endif
      else if (wrd == 'DATE') then
         if(prnlev >= 2) then
            call daytim(k,l,m,ii,jj,kk)
@@ -1571,8 +1613,8 @@ SUBROUTINE MISCOM(COMLYN,MXCMS2,COMLEN,LUSED)
         if(iecho == 0) iecho=outu
      else if (wrd == 'ECHO') then
         ! just echo command line, without concern for its length, and skip first blank
-        if(prnlev >= 2)then 
-           if(comlen >= 2)then 
+        if(prnlev >= 2)then
+           if(comlen >= 2)then
               write(iecho,'(a)') comlyn(2:comlen)
            else
               write(iecho,'(1x)')
@@ -1582,37 +1624,21 @@ SUBROUTINE MISCOM(COMLYN,MXCMS2,COMLEN,LUSED)
 
 #if KEY_UNIX==1 /*unix*/
      else if (wrd == 'ENVI') then
-        !---- process-environment-command
-        call nextwd(comlyn, comlen, envvar, maxenv - 1, lenvar)
-        call nextwd(comlyn, comlen, envval, maxenv - 1, lenval)
-
-        ipt = 0
-        do i = 1, lenvar
-           if (envvar(i:i) /= '"') then  ! clean double quote
-              ipt = ipt + 1
-              envvar(ipt:ipt) = envvar(i:i)
-           end if
-        end do
-        lenvar = ipt
-        
-        ipt = 0
-        do i = 1, lenval
-           if (envval(i:i) /= '"') then  ! clean double quote
-              ipt = ipt + 1
-              envval(ipt:ipt) = envval(i:i)
-           end if
-        end do
-        lenval = ipt
-
-        envvar = envvar(1:lenvar) // C_NULL_CHAR
-        envval = envval(1:lenval) // C_NULL_CHAR
-        i = setenv(envvar, envval, 1)
-
-        if (i .ne. 0) then
-           call wrndie(0, '<MISCOM>', &
-                'failed to change environment variable')
-        end if
+        !---- ENVIronment: set an OS environment variable
+        call envset(comlyn, comlen)
+        comlen = 0
 #endif /* (unix)*/
+
+     else if (wrd == 'GENV') then
+        !---- GENVironment: read OS environment variable into CHARMM parameter
+        call envget(comlyn, comlen)
+
+     else if (wrd == 'STRC') then
+        !---- STRCat: concatenate strings into a CHARMM parameter.
+        !     Named STRC rather than CATS because BLOCK has a CATS
+        !     subcommand, and MISCOM is called before BLOCK reads its
+        !     own keywords -- see the comment on STRCAT in machio.F90.
+        call strcat(comlyn, comlen)
 
      else if (wrd == 'EXPO') then
         !---- process-exponent-command
@@ -1649,7 +1675,7 @@ SUBROUTINE MISCOM(COMLYN,MXCMS2,COMLEN,LUSED)
            dpcomm=1
         case('SPCO') fasteroption
            dpcomm=-1
-#endif 
+#endif
         case('BUCK') fasteroption
            IF(WRNLEV >= 2) WRITE (OUTU,'(A)') &
                 ' MISCOM> Bucket fast routine is removed.'
@@ -1678,7 +1704,7 @@ SUBROUTINE MISCOM(COMLYN,MXCMS2,COMLEN,LUSED)
            WRD='OFF'
            I=3
            CALL BOUND(WRD,I)
-#endif 
+#endif
         ENDIF
         LFAST=FASTER
         !
@@ -1747,7 +1773,7 @@ SUBROUTINE MISCOM(COMLYN,MXCMS2,COMLEN,LUSED)
            CALL PSND4(EOF,1)
 #endif
            IF(COMLEN > 0) CALL PSNDC(COMLYN(1:COMLEN),1)
-#endif 
+#endif
            IF(EOF) THEN
               COMLYN='END-OF-FILE'
               COMLEN=11
@@ -1898,7 +1924,7 @@ SUBROUTINE MISCOM(COMLYN,MXCMS2,COMLEN,LUSED)
           else
             if (prnlev.ge.2) write(outu,'(a)') ' IF test evaluated as true.'
           endif
-        else ! Asynchronous IF 
+        else ! Asynchronous IF
           if (qrepdstr.and.(.not.qrdqtt)) then
             ! Asynchronous 'if' block support is not active and reading from a
             ! single script. All replicas must stay in sync.
@@ -1950,8 +1976,11 @@ SUBROUTINE MISCOM(COMLYN,MXCMS2,COMLEN,LUSED)
                  READ(ISTRM,'(A)',END=946,ERR=946) COMLYN(1:80)
                  COMLEN=80
                  CALL CNVTUC(COMLYN,COMLEN)
+                 ! Strip comment before searching for THEN
+                 I=INDEX(COMLYN(1:COMLEN),'!')
+                 IF (I > 0) COMLEN=I-1
                  WRD=NEXTA4(COMLYN,COMLEN)
-                 IF (WRD == 'IF  '.and. INDEX(COMLYN,'THEN') /= 0)THEN
+                 IF (WRD == 'IF  '.and. INDEX(COMLYN(1:COMLEN),'THEN') /= 0)THEN
                     ILEVEL=ILEVEL+1
                  ENDIF
                  IF (WRD == 'ENDI')THEN
@@ -1960,7 +1989,7 @@ SUBROUTINE MISCOM(COMLYN,MXCMS2,COMLEN,LUSED)
                  OK=(ILEVEL == 0)
                  IF ((WRD == 'ELSE').AND.(ILEVEL <= 1)) OK=.TRUE.
                  IF (.NOT.OK) GOTO 112
-946              IF (.NOT.OK) THEN    
+946              IF (.NOT.OK) THEN
                     CALL WRNDIE(-2,'<MISCOM>', &
                          'Unable to find ELSE or ENDIF')
                  ENDIF
@@ -1972,7 +2001,7 @@ SUBROUTINE MISCOM(COMLYN,MXCMS2,COMLEN,LUSED)
            ENDIF
         ENDIF
 #       if KEY_REPDSTR==1
-        endif ! Asynchronous IF 
+        endif ! Asynchronous IF
 #       endif
         !
 #endif /*(mcom) */
@@ -2002,8 +2031,11 @@ SUBROUTINE MISCOM(COMLYN,MXCMS2,COMLEN,LUSED)
            READ(ISTRM,'(A)',END=947,ERR=947) COMLYN(1:80)
            COMLEN=80
            CALL CNVTUC(COMLYN,COMLEN)
+           ! Strip comment before searching for THEN
+           I=INDEX(COMLYN(1:COMLEN),'!')
+           IF (I > 0) COMLEN=I-1
            WRD=NEXTA4(COMLYN,COMLEN)
-           IF (WRD == 'IF  '.and. INDEX(COMLYN,'THEN') /= 0)THEN
+           IF (WRD == 'IF  '.and. INDEX(COMLYN(1:COMLEN),'THEN') /= 0)THEN
               ILEVEL=ILEVEL+1
            ENDIF
            IF (WRD == 'ENDI')THEN
@@ -2053,7 +2085,7 @@ SUBROUTINE MISCOM(COMLYN,MXCMS2,COMLEN,LUSED)
         !# <caves>-Aug-13-1993 (Leo Caves) Limited parameter manipulation
         IPAR =  PARMAN(COMLYN,COMLEN)
         IF(IPAR < 0) THEN
-           CALL WrnDie(0,'<MISCOM>','Error in parameter modification') 
+           CALL WrnDie(0,'<MISCOM>','Error in parameter modification')
            COMLEN = 0
         ENDIF
         !
@@ -2069,9 +2101,9 @@ SUBROUTINE MISCOM(COMLYN,MXCMS2,COMLEN,LUSED)
         CALL MTP
         !
 
-     ELSE IF (WRD.EQ.'DCM') THEN              
-        !  atomic multipole moments DCM module 
-        CALL DCM 
+     ELSE IF (WRD.EQ.'DCM') THEN
+        !  atomic multipole moments DCM module
+        CALL DCM
 
      ELSE IF (WRD.EQ.'MTPL') THEN
         !  atomic multipole moments MTPL module--uses local axis systems for
@@ -2091,8 +2123,8 @@ SUBROUTINE MISCOM(COMLYN,MXCMS2,COMLEN,LUSED)
         OUTU  =NEXTI(COMLYN,COMLEN)
         CALL set_param('OUTU',OUTU)
 #if KEY_REPDSTR==1
-        QWRQTT=.TRUE.                                  
-        CALL DREPSETIO(IOLEV,PRNLEV,WRNLEV)                   
+        QWRQTT=.TRUE.
+        CALL DREPSETIO(IOLEV,PRNLEV,WRNLEV)
 #endif
      ELSE IF (WRD == 'PRLE' .OR. WRD.EQ.'PRNL') THEN
         I=NEXTI(COMLYN,COMLEN)
@@ -2120,14 +2152,14 @@ SUBROUTINE MISCOM(COMLYN,MXCMS2,COMLEN,LUSED)
 
 #else /**/
         PRNLEV=I
-#endif 
+#endif
         CALL set_param('PRNLEV',PRNLEV)
 #if KEY_NOMISC==0
      ELSE IF (WRD == 'QUIC' .OR. WRD.EQ.'Q') THEN
         CALL QUICKA()
      ELSE IF (WRD == 'AIDX') THEN
         CALL AIDX()
-#endif 
+#endif
      ELSE IF (WRD == 'RAND') THEN
         CALL RANDSPEC()
         !
@@ -2218,14 +2250,14 @@ SUBROUTINE MISCOM(COMLYN,MXCMS2,COMLEN,LUSED)
 
      ELSE IF (WRD == 'STRE') THEN
         !
-#if KEY_REPDSTR==1 
+#if KEY_REPDSTR==1
         IF(QREPDSTR) QRDQTT=.TRUE.
-#endif 
+#endif
         CALL PUSTRM(COMLYN,MXCMS2,COMLEN)
         !
-        ! Process automatic set options: 
+        ! Process automatic set options:
         !  STREam filename   parm1 parm2 parm3 ...
-        !     this becomes:   IN1   IN2   IN3  ... 
+        !     this becomes:   IN1   IN2   IN3  ...
         IF(COMLEN > 0) THEN
            I=0
            DO WHILE(COMLEN > 0 .AND. I < 9)
@@ -2260,8 +2292,8 @@ SUBROUTINE MISCOM(COMLYN,MXCMS2,COMLEN,LUSED)
         !
 #if KEY_LOOKUP==1
      ELSE IF (WRD == 'NBSO'.OR.WRD.EQ.'LOOK')THEN
-        CALL WWSETUP(COMLYN,COMLEN) 
-#endif 
+        CALL WWSETUP(COMLYN,COMLEN)
+#endif
         !
      ELSE IF (WRD == 'TITL') THEN
         !---- PROCESS-TITLE-COMMAND
@@ -2277,7 +2309,7 @@ SUBROUTINE MISCOM(COMLYN,MXCMS2,COMLEN,LUSED)
      ELSE IF (WRD == 'LDTI') THEN
         !---- PROCESS-TITLE-COMMAND FOR Lambda Dynamics
         CALL RDTITL(TITLEL,NTITLL,ISTRM,0)
-#endif 
+#endif
         !
      ELSE IF (WRD == 'TRIM') THEN
         !---- PROCESS-TRIM-COMMAND
@@ -2299,7 +2331,7 @@ SUBROUTINE MISCOM(COMLYN,MXCMS2,COMLEN,LUSED)
                 CALL FILSPC(VALNAM(IPAR),I,VALLEN(IPAR))
            CALL COPSUB(VALNAM(IPAR),MXVLEN, &
                 VALLEN(IPAR),VALNAM(IPAR),J,I)
-           IF(PRNLEV >= 2) CALL PARWRI(OUTU,IPAR,1) 
+           IF(PRNLEV >= 2) CALL PARWRI(OUTU,IPAR,1)
         ELSE
            CALL WrnDie(0,'<MISCOM>', &
                 ' Parameter not found. Nothing to trim.')
@@ -2338,7 +2370,7 @@ SUBROUTINE MISCOM(COMLYN,MXCMS2,COMLEN,LUSED)
 ! BIOVIA Code End
 #else /**/
         WRNLEV=I
-#endif 
+#endif
         CALL set_param('WRNLEV',WRNLEV)
      ELSE IF (WRD == 'IOLE') THEN
         I=NEXTI(COMLYN,COMLEN)
@@ -2361,7 +2393,7 @@ SUBROUTINE MISCOM(COMLYN,MXCMS2,COMLEN,LUSED)
         ENDIF
 #else /**/
         IOLEV=I
-#endif 
+#endif
         CALL set_param('IOLEV',IOLEV)
      ELSE IF (WRD == 'LONG') THEN
         QLONGL=.TRUE.
@@ -2386,7 +2418,7 @@ SUBROUTINE MISCOM(COMLYN,MXCMS2,COMLEN,LUSED)
      !
      !# <caves>-Aug-13-1993 (Leo Caves)
      ! support existing parameter operations. prefer that any further operations
-     ! be placed in a separate evaluation function. 
+     ! be placed in a separate evaluation function.
      ! eg LET command: SUBROUTINE PARMAN
      IF (parOp > 0) THEN
         INCREM=GTRMF(COMLYN,COMLEN,'BY',ONE)
@@ -2446,10 +2478,10 @@ subroutine setupff(comlyn,comlen)
   use psf
   use param_store, only: set_param
 #if KEY_CFF==1
-  use cff_fcm  
+  use cff_fcm
 #endif
 #if KEY_MMFF==1
-  use mmffm  
+  use mmffm
 #endif
   use stream
   use string
@@ -2466,14 +2498,14 @@ subroutine setupff(comlyn,comlen)
      call set_param('CCELEC',ccelec)
      if(prnlev >= 2) write(outu,'(" AMBER Force Field will be used")')
   endif
-     
+
   if(indxa(comlyn,comlen,'CHARMM') > 0) then
      ffield=charmm
      ccelec=ccelec_charmm
      call set_param('CCELEC',ccelec)
      if(prnlev >= 2) write(outu,'(" CHARMM Force Field will be used")')
   endif
-     
+
 #if KEY_MMFF==1 || KEY_CFF==1 /*mmff_cff*/
 #if KEY_CFF==1
   if(indxa(comlyn,comlen,'CFF') > 0) then
@@ -2481,7 +2513,7 @@ subroutine setupff(comlyn,comlen)
      ! Allocate data structures for CFF force fields. cb3
      if(.not. allocated(itflg)) call allocate_cff
   endif
-#endif 
+#endif
 #if KEY_MMFF==1
   if(indxa(comlyn,comlen,'MMFF') > 0) then
 
@@ -2500,9 +2532,9 @@ subroutine setupff(comlyn,comlen)
 #if KEY_PERT==1
      if (qpert) then
         call wrndie(-2,'<SETUPFF>','MMFF is not compatible with PERT')
-     end if     
+     end if
 #endif /* pert */
-     
+
      e14fac=0.75
      v14fac=1.
      ffield=mmff
@@ -2516,7 +2548,7 @@ subroutine setupff(comlyn,comlen)
         i=indxa(comlyn,comlen,'ATOM')
      endif
   endif
-#endif 
+#endif
 
   if(indxa(comlyn,comlen,'CHARMM') > 0) then
      ffield=charmm

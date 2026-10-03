@@ -66,7 +66,8 @@ Functions
 - `get_sggamma` -- get apparent friction constants for SGMD/SGLD simulation
 - `set_sggamma` -- for select atoms, set apparent friction constants for SGMD/SGLD
 - `get` -- get scalar atom properties
-
+- `store_number` - store a named scalar array into a numbered [0-9] scalar array
+- `recall_number` - recall a numbered scalar array [0-9] into a named scalar array
 Examples
 ========
 Set fbeta of all atoms to 1.0 
@@ -80,10 +81,36 @@ Set fbeta of all atoms to 1.0
 import ctypes
 
 import pycharmm
-import pycharmm.lib as lib
+from pycharmm.loader import lib
+from pycharmm.trace import traced
 import pycharmm.psf as psf
 
+def store_number(scalar_array,numbered_array,**kwargs):
+    """Stores a filled array into one of the numbered arrays 0-9
+    Input
+    =====
+    scalar_array:   str
+    numbered_array: str
+    selection:      SelectAtoms()
+    """
+    store_command =    join_command = ' '.join(['scalar', scalar_array, 'store',numbered_array])
+    store_script = pycharmm.script.CommandScript(store_command,**kwargs)
+    store_script.run()
+    return
 
+def recall_number(scalar_array,numbered_array,**kwargs):
+    """Recalls a numbered array and stores it in a named scalar array
+    Input
+    =====
+    scalar_array:   str
+    numbered_array: str
+    selection:      SelectAtoms()
+    """
+    recall_command =    join_command = ' '.join(['scalar', scalar_array, 'recall',numbered_array])
+    recall_script = pycharmm.script.CommandScript(recall_command,**kwargs)
+    recall_script.run()
+    return
+    
 def get_charges():
     """Get charges for the atoms
 
@@ -94,14 +121,48 @@ def get_charges():
     """
     n = psf.get_natom()
     charges = (ctypes.c_double * n)(0)
-    status = lib.charmm.scalar_get_charges(charges)
+    status = lib.scalar_get_charges(charges)
     qstatus = bool(status)
     if not qstatus:
         raise RuntimeError('There was a problem getting charges.')
 
     return list(charges)
 
+def get_pdens():
+    """Get QM density for atoms from AM1/PM3 calculation
 
+    Returns
+    -------
+    dictionary with keys (n1st, nlast,pdens)
+        dict{'nlst':[*natom],'nlast:[*natom],'pdens':[...]
+    """
+    n = psf.get_natom()
+    n1st = (ctypes.c_int * n)(0)
+    nlast = (ctypes.c_int * n)(0)
+    status = lib.scalar_get_norbs(n1st,nlast)
+    qstatus = bool(status)
+    if not qstatus:
+        raise RuntimeError('scalar.get_pdens: There was a problem getting norbs.')
+    print(list(n1st))
+    print(list(nlast))
+    ndens = 0
+    for i in range(n):
+        for j in range(n1st[i],nlast[i]+1):
+            ndens += 1
+    ndens = int(ndens*(ndens+1)/2)
+    print('Current value of ndens:',ndens)
+    pdens = (ctypes.c_double * ndens)(0)
+    status = lib.scalar_get_pdens(pdens)
+    qstatus = bool(status)
+    if not qstatus:
+        raise RuntimeError('scalar.get_pdens: There was a problem getting pdens.')
+
+    d_pdens = {'n1st':list(n1st),'nlast':list(nlast),'pdens':list(pdens)}
+
+    return d_pdens
+
+
+@traced('scalar.set_charges')
 def set_charges(charges, selection=None):
     """Set charges for the selected atoms
 
@@ -117,7 +178,7 @@ def set_charges(charges, selection=None):
     Returns
     -------
     int
-        status code returned by lib.charmm.scalar_set_charges routine
+        status code returned by charmm's scalar set api routine
     """
     n = psf.get_natom()
     charges = (ctypes.c_double * n)(*charges)
@@ -127,7 +188,7 @@ def set_charges(charges, selection=None):
 
     c_sel = selection.as_ctypes()
 
-    status = lib.charmm.scalar_set_charges(charges, c_sel)
+    status = lib.scalar_set_charges(charges, c_sel)
     qstatus = bool(status)
     if not qstatus:
         raise RuntimeError('There was a problem setting charges.')
@@ -145,7 +206,7 @@ def get_masses():
     """
     n = psf.get_natom()
     masses = (ctypes.c_double * n)(0)
-    status = lib.charmm.scalar_get_masses(masses)
+    status = lib.scalar_get_masses(masses)
     qstatus = bool(status)
     if not qstatus:
         raise RuntimeError('There was a problem getting masses.')
@@ -153,6 +214,7 @@ def get_masses():
     return list(masses)
 
 
+@traced('scalar.set_masses')
 def set_masses(masses, selection=None):
     """Set masses for the selected atoms
 
@@ -168,7 +230,7 @@ def set_masses(masses, selection=None):
     Returns
     -------
     int
-        status code returned by lib.charmm.scalar_set_masses routine
+        status code returned by charmm's scalar set api routine
     """
     n = psf.get_natom()
     masses = (ctypes.c_double * n)(*masses)
@@ -178,7 +240,7 @@ def set_masses(masses, selection=None):
 
     c_sel = selection.as_ctypes()
 
-    status = lib.charmm.scalar_set_masses(masses, c_sel)
+    status = lib.scalar_set_masses(masses, c_sel)
     qstatus = bool(status)
     if not qstatus:
         raise RuntimeError('There was a problem setting masses.')
@@ -196,7 +258,7 @@ def get_fbetas():
     """
     n = psf.get_natom()
     fbetas = (ctypes.c_double * n)(0)
-    status = lib.charmm.scalar_get_fbetas(fbetas)
+    status = lib.scalar_get_fbetas(fbetas)
     qstatus = bool(status)
     if not qstatus:
         raise RuntimeError('There was a problem getting fbetas.')
@@ -204,6 +266,7 @@ def get_fbetas():
     return list(fbetas)
 
 
+@traced('scalar.set_fbetas')
 def set_fbetas(fbetas, selection=None):
     """Set friction coefficients for the selected atoms
 
@@ -219,7 +282,7 @@ def set_fbetas(fbetas, selection=None):
     Returns
     -------
     int
-           status code returned by lib.charmm.scalar_set_fbetas routine
+           status code returned by charmm's scalar set api routine
     """
     n = psf.get_natom()
     fbetas = (ctypes.c_double * n)(*fbetas)
@@ -229,7 +292,7 @@ def set_fbetas(fbetas, selection=None):
 
     c_sel = selection.as_ctypes()
 
-    status = lib.charmm.scalar_set_fbetas(fbetas, c_sel)
+    status = lib.scalar_set_fbetas(fbetas, c_sel)
     qstatus = bool(status)
     if not qstatus:
         raise RuntimeError('There was a problem setting fbetas.')
@@ -247,7 +310,7 @@ def get_econt():
     """
     n = psf.get_natom()
     old_values = (ctypes.c_double * n)(0)
-    status = lib.charmm.scalar_get_econt(old_values)
+    status = lib.scalar_get_econt(old_values)
     qstatus = bool(status)
     if not qstatus:
         raise RuntimeError('There was a problem getting econt.')
@@ -255,6 +318,7 @@ def get_econt():
     return list(old_values)
 
 
+@traced('scalar.set_econt')
 def set_econt(new_vals, selection=None):
     """For selected atoms, update the energy partition array
 
@@ -270,7 +334,7 @@ def set_econt(new_vals, selection=None):
     Returns
     -------
     int 
-        status code returned by lib.charmm.scalar_set_econt routine
+        status code returned by charmm's scalar set api routine
     """
     n = psf.get_natom()
     new_vals = (ctypes.c_double * n)(*new_vals)
@@ -280,7 +344,7 @@ def set_econt(new_vals, selection=None):
 
     c_sel = selection.as_ctypes()
 
-    status = lib.charmm.scalar_set_econt(new_vals, c_sel)
+    status = lib.scalar_set_econt(new_vals, c_sel)
     qstatus = bool(status)
     if not qstatus:
         raise RuntimeError('There was a problem setting econt.')
@@ -298,7 +362,7 @@ def get_epcont():
     """
     n = psf.get_natom()
     old_values = (ctypes.c_double * n)(0)
-    status = lib.charmm.scalar_get_epcont(old_values)
+    status = lib.scalar_get_epcont(old_values)
     qstatus = bool(status)
     if not qstatus:
         raise RuntimeError('There was a problem getting epcont.')
@@ -306,6 +370,7 @@ def get_epcont():
     return list(old_values)
 
 
+@traced('scalar.set_epcont')
 def set_epcont(new_vals, selection=None):
     """For selected atoms, update the free energy difference atom partition
 
@@ -321,7 +386,7 @@ def set_epcont(new_vals, selection=None):
     Returns
     -------
     int 
-        status code returned by lib.charmm.scalar_set_epcont API routine
+        status code returned by charmm's scalar set api routine
     """
     n = psf.get_natom()
     new_vals = (ctypes.c_double * n)(*new_vals)
@@ -331,7 +396,7 @@ def set_epcont(new_vals, selection=None):
 
     c_sel = selection.as_ctypes()
 
-    status = lib.charmm.scalar_set_epcont(new_vals, c_sel)
+    status = lib.scalar_set_epcont(new_vals, c_sel)
     qstatus = bool(status)
     if not qstatus:
         raise RuntimeError('There was a problem setting epcont.')
@@ -349,7 +414,7 @@ def get_constraints():
     """
     n = psf.get_natom()
     old_values = (ctypes.c_double * n)(0)
-    status = lib.charmm.scalar_get_constraints(old_values)
+    status = lib.scalar_get_constraints(old_values)
     qstatus = bool(status)
     if not qstatus:
         raise RuntimeError('There was a problem getting constraints.')
@@ -357,6 +422,7 @@ def get_constraints():
     return list(old_values)
 
 
+@traced('scalar.set_constraints')
 def set_constraints(new_vals, selection=None):
     """For selected atoms, update the harmonic restraint constants
 
@@ -372,7 +438,7 @@ def set_constraints(new_vals, selection=None):
     Returns
     -------
     int 
-        status code returned by lib.charmm.scalar_set_constraints API routine
+        status code returned by charmm's scalar set api routine
     """
     n = psf.get_natom()
     new_vals = (ctypes.c_double * n)(*new_vals)
@@ -382,7 +448,7 @@ def set_constraints(new_vals, selection=None):
 
     c_sel = selection.as_ctypes()
 
-    status = lib.charmm.scalar_set_constraints(new_vals, c_sel)
+    status = lib.scalar_set_constraints(new_vals, c_sel)
     qstatus = bool(status)
     if not qstatus:
         raise RuntimeError('There was a problem setting constraints.')
@@ -400,7 +466,7 @@ def get_move():
     """
     n = psf.get_natom()
     old_values = (ctypes.c_int * n)(0)
-    status = lib.charmm.scalar_get_move(old_values)
+    status = lib.scalar_get_move(old_values)
     qstatus = bool(status)
     if not qstatus:
         raise RuntimeError('There was a problem getting move.')
@@ -408,6 +474,7 @@ def get_move():
     return list(old_values)
 
 
+@traced('scalar.set_move')
 def set_move(new_vals, selection=None):
     """For selected atoms, update the flags indicating which atoms move
 
@@ -423,7 +490,7 @@ def set_move(new_vals, selection=None):
     Returns
     -------
     status : list[int]
-        status code returned by lib.charmm.scalar_set_move API routine
+        status code returned by charmm's scalar set api routine
     """
     n = psf.get_natom()
     new_vals = (ctypes.c_int * n)(*new_vals)
@@ -433,7 +500,7 @@ def set_move(new_vals, selection=None):
 
     c_sel = selection.as_ctypes()
 
-    status = lib.charmm.scalar_set_move(new_vals, c_sel)
+    status = lib.scalar_set_move(new_vals, c_sel)
     qstatus = bool(status)
     if not qstatus:
         raise RuntimeError('There was a problem setting move.')
@@ -451,7 +518,7 @@ def get_ignore():
     """
     n = psf.get_natom()
     old_values = (ctypes.c_int * n)(0)
-    status = lib.charmm.scalar_get_ignore(old_values)
+    status = lib.scalar_get_ignore(old_values)
     qstatus = bool(status)
     if not qstatus:
         raise RuntimeError('There was a problem getting ignore.')
@@ -459,6 +526,7 @@ def get_ignore():
     return list(old_values)
 
 
+@traced('scalar.set_ignore')
 def set_ignore(new_vals, selection=None):
     """For selected atoms, update the ASP flags indicating which atoms are ignored
 
@@ -474,7 +542,7 @@ def set_ignore(new_vals, selection=None):
     Returns
     -------
     int
-        status code returned by lib.charmm.scalar_set_ignore API routine
+        status code returned by charmm's scalar set api routine
     """
     n = psf.get_natom()
     new_vals = (ctypes.c_int * n)(*new_vals)
@@ -484,7 +552,7 @@ def set_ignore(new_vals, selection=None):
 
     c_sel = selection.as_ctypes()
 
-    status = lib.charmm.scalar_set_ignore(new_vals, c_sel)
+    status = lib.scalar_set_ignore(new_vals, c_sel)
     qstatus = bool(status)
     if not qstatus:
         raise RuntimeError('There was a problem setting ignore.')
@@ -502,7 +570,7 @@ def get_aspv():
     """
     n = psf.get_natom()
     old_values = (ctypes.c_double * n)(0)
-    status = lib.charmm.scalar_get_aspv(old_values)
+    status = lib.scalar_get_aspv(old_values)
     qstatus = bool(status)
     if not qstatus:
         raise RuntimeError('There was a problem getting aspv.')
@@ -510,6 +578,7 @@ def get_aspv():
     return list(old_values)
 
 
+@traced('scalar.set_aspv')
 def set_aspv(new_vals, selection=None):
     """For selected atoms, update ASP parameter values 
 
@@ -525,7 +594,7 @@ def set_aspv(new_vals, selection=None):
     Returns
     -------
     int
-        status code returned by lib.charmm.scalar_set_aspv API routine
+        status code returned by charmm's scalar set api routine
     """
     n = psf.get_natom()
     new_vals = (ctypes.c_double * n)(*new_vals)
@@ -535,7 +604,7 @@ def set_aspv(new_vals, selection=None):
 
     c_sel = selection.as_ctypes()
 
-    status = lib.charmm.scalar_set_aspv(new_vals, c_sel)
+    status = lib.scalar_set_aspv(new_vals, c_sel)
     qstatus = bool(status)
     if not qstatus:
         raise RuntimeError('There was a problem setting aspv.')
@@ -553,7 +622,7 @@ def get_vdw_surf():
     """
     n = psf.get_natom()
     old_values = (ctypes.c_double * n)(0)
-    status = lib.charmm.scalar_get_vdw_surf(old_values)
+    status = lib.scalar_get_vdw_surf(old_values)
     qstatus = bool(status)
     if not qstatus:
         raise RuntimeError('There was a problem getting vdw_surf.')
@@ -561,6 +630,7 @@ def get_vdw_surf():
     return list(old_values)
 
 
+@traced('scalar.set_vdw_surf')
 def set_vdw_surf(new_vals, selection=None):
     """For select atoms, update vdw radius for ASP solvation energy, includes probe radius
 
@@ -576,7 +646,7 @@ def set_vdw_surf(new_vals, selection=None):
     Returns
     -------
     int
-        status code returned by lib.charmm.scalar_set_vdw_surf routine
+        status code returned by charmm's scalar set api routine
     """
     n = psf.get_natom()
     new_vals = (ctypes.c_double * n)(*new_vals)
@@ -586,7 +656,7 @@ def set_vdw_surf(new_vals, selection=None):
 
     c_sel = selection.as_ctypes()
 
-    status = lib.charmm.scalar_set_vdw_surf(new_vals, c_sel)
+    status = lib.scalar_set_vdw_surf(new_vals, c_sel)
     qstatus = bool(status)
     if not qstatus:
         raise RuntimeError('There was a problem setting vdw_surf.')
@@ -604,7 +674,7 @@ def get_rscale():
     """
     n = psf.get_natom()
     old_values = (ctypes.c_double * n)(0)
-    status = lib.charmm.scalar_get_rscale(old_values)
+    status = lib.scalar_get_rscale(old_values)
     qstatus = bool(status)
     if not qstatus:
         raise RuntimeError('There was a problem getting rscale.')
@@ -612,6 +682,7 @@ def get_rscale():
     return list(old_values)
 
 
+@traced('scalar.set_rscale')
 def set_rscale(new_vals, selection=None):
     """For select atoms, update radius scale factor for nonbonded (vdw)
 
@@ -627,7 +698,7 @@ def set_rscale(new_vals, selection=None):
     Returns
     -------
     int
-        status code returned by lib.charmm.scalar_set_rscale API routine
+        status code returned by charmm's scalar set api routine
     """
     n = psf.get_natom()
     new_vals = (ctypes.c_double * n)(*new_vals)
@@ -637,7 +708,7 @@ def set_rscale(new_vals, selection=None):
 
     c_sel = selection.as_ctypes()
 
-    status = lib.charmm.scalar_set_rscale(new_vals, c_sel)
+    status = lib.scalar_set_rscale(new_vals, c_sel)
     qstatus = bool(status)
     if not qstatus:
         raise RuntimeError('There was a problem setting rscale.')
@@ -655,7 +726,7 @@ def get_wcad():
     """
     n = psf.get_natom()
     old_values = (ctypes.c_double * n)(0)
-    status = lib.charmm.scalar_get_wcad(old_values)
+    status = lib.scalar_get_wcad(old_values)
     qstatus = bool(status)
     if not qstatus:
         raise RuntimeError('There was a problem getting wcad.')
@@ -663,6 +734,7 @@ def get_wcad():
     return list(old_values)
 
 
+@traced('scalar.set_wcad')
 def set_wcad(new_vals, selection=None):
     """For select atoms, update Weeks, Chandler, Anderson LJ Potential decomp
 
@@ -688,7 +760,7 @@ def set_wcad(new_vals, selection=None):
 
     c_sel = selection.as_ctypes()
 
-    status = lib.charmm.scalar_set_wcad(new_vals, c_sel)
+    status = lib.scalar_set_wcad(new_vals, c_sel)
     qstatus = bool(status)
     if not qstatus:
         raise RuntimeError('There was a problem setting wcad.')
@@ -706,7 +778,7 @@ def get_alpha():
     """
     n = psf.get_natom()
     old_values = (ctypes.c_double * n)(0)
-    status = lib.charmm.scalar_get_alpha(old_values)
+    status = lib.scalar_get_alpha(old_values)
     qstatus = bool(status)
     if not qstatus:
         raise RuntimeError('There was a problem getting alpha.')
@@ -724,7 +796,7 @@ def get_effect():
     """
     n = psf.get_natom()
     old_values = (ctypes.c_double * n)(0)
-    status = lib.charmm.scalar_get_effect(old_values)
+    status = lib.scalar_get_effect(old_values)
     qstatus = bool(status)
     if not qstatus:
         raise RuntimeError('There was a problem getting effect.')
@@ -742,7 +814,7 @@ def get_radius():
     """
     n = psf.get_natom()
     old_values = (ctypes.c_double * n)(0)
-    status = lib.charmm.scalar_get_radius(old_values)
+    status = lib.scalar_get_radius(old_values)
     qstatus = bool(status)
     if not qstatus:
         raise RuntimeError('There was a problem getting radius.')
@@ -760,7 +832,7 @@ def get_fqprin():
     """
     n = psf.get_natom()
     old_values = (ctypes.c_double * n)(0)
-    status = lib.charmm.scalar_get_fqprin(old_values)
+    status = lib.scalar_get_fqprin(old_values)
     qstatus = bool(status)
     if not qstatus:
         raise RuntimeError('There was a problem getting fqprin.')
@@ -778,7 +850,7 @@ def get_fqzeta():
     """
     n = psf.get_natom()
     old_values = (ctypes.c_double * n)(0)
-    status = lib.charmm.scalar_get_fqzeta(old_values)
+    status = lib.scalar_get_fqzeta(old_values)
     qstatus = bool(status)
     if not qstatus:
         raise RuntimeError('There was a problem getting fqzeta.')
@@ -796,7 +868,7 @@ def get_fqchi():
     """
     n = psf.get_natom()
     old_values = (ctypes.c_double * n)(0)
-    status = lib.charmm.scalar_get_fqchi(old_values)
+    status = lib.scalar_get_fqchi(old_values)
     qstatus = bool(status)
     if not qstatus:
         raise RuntimeError('There was a problem getting fqchi.')
@@ -814,7 +886,7 @@ def get_fqmass():
     """
     n = psf.get_natom()
     old_values = (ctypes.c_double * n)(0)
-    status = lib.charmm.scalar_get_fqmass(old_values)
+    status = lib.scalar_get_fqmass(old_values)
     qstatus = bool(status)
     if not qstatus:
         raise RuntimeError('There was a problem getting fqmass.')
@@ -832,7 +904,7 @@ def get_fqjz():
     """
     n = psf.get_natom()
     old_values = (ctypes.c_double * n)(0)
-    status = lib.charmm.scalar_get_fqjz(old_values)
+    status = lib.scalar_get_fqjz(old_values)
     qstatus = bool(status)
     if not qstatus:
         raise RuntimeError('There was a problem getting fqjz.')
@@ -850,7 +922,7 @@ def get_fqcforce():
     """
     n = psf.get_natom()
     old_values = (ctypes.c_double * n)(0)
-    status = lib.charmm.scalar_get_fqcforce(old_values)
+    status = lib.scalar_get_fqcforce(old_values)
     qstatus = bool(status)
     if not qstatus:
         raise RuntimeError('There was a problem getting fqcforce.')
@@ -858,6 +930,7 @@ def get_fqcforce():
     return list(old_values)
 
 
+@traced('scalar.set_fqcforce')
 def set_fqcforce(new_vals, selection=None):
     """For select atoms, update FQ charge force
 
@@ -883,7 +956,7 @@ def set_fqcforce(new_vals, selection=None):
 
     c_sel = selection.as_ctypes()
 
-    status = lib.charmm.scalar_set_fqcforce(new_vals, c_sel)
+    status = lib.scalar_set_fqcforce(new_vals, c_sel)
     qstatus = bool(status)
     if not qstatus:
         raise RuntimeError('There was a problem setting fqcforce.')
@@ -901,7 +974,7 @@ def get_fqold():
     """
     n = psf.get_natom()
     old_values = (ctypes.c_double * n)(0)
-    status = lib.charmm.scalar_get_fqold(old_values)
+    status = lib.scalar_get_fqold(old_values)
     qstatus = bool(status)
     if not qstatus:
         raise RuntimeError('There was a problem getting fqold.')
@@ -909,6 +982,7 @@ def get_fqold():
     return list(old_values)
 
 
+@traced('scalar.set_fqold')
 def set_fqold(new_vals, selection=None):
     """For select atoms, update FQ charges from last timestep
 
@@ -934,7 +1008,7 @@ def set_fqold(new_vals, selection=None):
 
     c_sel = selection.as_ctypes()
 
-    status = lib.charmm.scalar_set_fqold(new_vals, c_sel)
+    status = lib.scalar_set_fqold(new_vals, c_sel)
     qstatus = bool(status)
     if not qstatus:
         raise RuntimeError('There was a problem setting fqold.')
@@ -952,7 +1026,7 @@ def get_varc():
     """
     n = psf.get_natom()
     old_values = (ctypes.c_double * n)(0)
-    status = lib.charmm.scalar_get_varc(old_values)
+    status = lib.scalar_get_varc(old_values)
     qstatus = bool(status)
     if not qstatus:
         raise RuntimeError('There was a problem getting varc.')
@@ -960,6 +1034,7 @@ def get_varc():
     return list(old_values)
 
 
+@traced('scalar.set_varc')
 def set_varc(new_vals, selection=None):
     """For select atoms, set variable cutoffs of LJ interaction
 
@@ -987,7 +1062,7 @@ def set_varc(new_vals, selection=None):
 
     c_sel = selection.as_ctypes()
 
-    status = lib.charmm.scalar_set_varc(new_vals, c_sel)
+    status = lib.scalar_set_varc(new_vals, c_sel)
     qstatus = bool(status)
     if not qstatus:
         raise RuntimeError('There was a problem setting varc.')
@@ -1005,7 +1080,7 @@ def get_sgwt():
     """
     n = psf.get_natom()
     old_values = (ctypes.c_double * n)(0)
-    status = lib.charmm.scalar_get_sgwt(old_values)
+    status = lib.scalar_get_sgwt(old_values)
     qstatus = bool(status)
     if not qstatus:
         raise RuntimeError('There was a problem getting sgwt.')
@@ -1013,6 +1088,7 @@ def get_sgwt():
     return list(old_values)
 
 
+@traced('scalar.set_sgwt')
 def set_sgwt(new_vals, selection=None):
     """For select atoms, set self-guiding weights for SGLD simulation
 
@@ -1038,7 +1114,7 @@ def set_sgwt(new_vals, selection=None):
 
     c_sel = selection.as_ctypes()
 
-    status = lib.charmm.scalar_set_sgwt(new_vals, c_sel)
+    status = lib.scalar_set_sgwt(new_vals, c_sel)
     qstatus = bool(status)
     if not qstatus:
         raise RuntimeError('There was a problem setting sgwt.')
@@ -1056,7 +1132,7 @@ def get_sggamma():
     """
     n = psf.get_natom()
     old_values = (ctypes.c_double * n)(0)
-    status = lib.charmm.scalar_get_sggamma(old_values)
+    status = lib.scalar_get_sggamma(old_values)
     qstatus = bool(status)
     if not qstatus:
         raise RuntimeError('There was a problem getting sggamma.')
@@ -1064,6 +1140,7 @@ def get_sggamma():
     return list(old_values)
 
 
+@traced('scalar.set_sggamma')
 def set_sggamma(new_vals, selection=None):
     """For select atoms, set apparent friction constants for SGMD/SGLD
 
@@ -1089,7 +1166,7 @@ def set_sggamma(new_vals, selection=None):
 
     c_sel = selection.as_ctypes()
 
-    status = lib.charmm.scalar_set_sggamma(new_vals, c_sel)
+    status = lib.scalar_set_sggamma(new_vals, c_sel)
     qstatus = bool(status)
     if not qstatus:
         raise RuntimeError('There was a problem setting sggamma.')

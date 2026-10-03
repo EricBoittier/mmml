@@ -21,6 +21,7 @@ SUBROUTINE EPERT(X, Y, Z, DX, DY, DZ, QECONT, ECONT, &
   !     added (optional) lambda-dependent MMFP-term
   !
   use ewald,only:lewald,ewvirial,kappa,kspace,ewldex
+  use ecnstr_mod, only: ecnstr
 #if KEY_MSCALE==1
   use mscalemod, only: qmscale,emscale                          
 #endif
@@ -911,11 +912,11 @@ SUBROUTINE EPERT(X, Y, Z, DX, DY, DZ, QECONT, ECONT, &
              PRKCNST,NATOMP,PRKCEXP, &
              PRXHSCAL,PRYHSCAL, &
              PRZHSCAL,-1,NUMHSETP, &
-             PRTYPEH,PRIHSET, &
+             PRTYPEH,PRPARHSET,PRIHSET, &
              PRQHNORT,PRQHNOTR, &
              X,Y,Z,DX,DY,DZ,QECONT,ECONT, &
              DD1,IUPT,QSECDL &
-             ,(/0/),(/0,0/),(/0,0/),(/0,0/) &
+             ,numpcap,prpcax,prpcay,prpcaz &
              )
 
         IF(TIMER > 1) CALL WRTTIM('Harmonic constraint energy times:')
@@ -1061,11 +1062,11 @@ SUBROUTINE EPERT(X, Y, Z, DX, DY, DZ, QECONT, ECONT, &
              PRKCNST,NATOMP,PRKCEXP, &
              PRXHSCAL,PRYHSCAL, &
              PRZHSCAL,1,NUMHSETP, &
-             PRTYPEH,PRIHSET, &
+             PRTYPEH,PRPARHSET,PRIHSET, &
              PRQHNORT,PRQHNOTR, &
              X,Y,Z,DX,DY,DZ,QECONT,ECONT, &
              DD1,IUPT,QSECDL &
-             ,(/0/),(/0,0/),(/0,0/),(/0,0/) &
+             ,numpcap,prpcax,prpcay,prpcaz &
              )
 
         IF(TIMER > 1) CALL WRTTIM('Harmonic constraint energy times:')
@@ -1081,7 +1082,7 @@ SUBROUTINE EPERT(X, Y, Z, DX, DY, DZ, QECONT, ECONT, &
              PRKCNST,NATOMP,PRKCEXP, &
              PRXHSCAL,PRYHSCAL, &
              PRZHSCAL,2,NUMHSETP, &
-             PRTYPEH,PRIHSET, &
+             PRTYPEH,PRPARHSET,PRIHSET, &
              PRQHNORT,PRQHNOTR, &
              X,Y,Z,DX,DY,DZ,QECONT,ECONT, &
              DD1,IUPT,QSECDL &
@@ -1195,7 +1196,7 @@ SUBROUTINE EPERT(X, Y, Z, DX, DY, DZ, QECONT, ECONT, &
         IF(QZEGEO.AND.QETPRT(GEO)) THEN
            CALL GEO2(ETPRTM(GEO),NATOM,X,Y,Z,DX,DY,DZ, &
                 PLSGEO, PNGEO,PNTGEO, &
-                PIGEO, PJGEO,AMASS, &
+                PIGEO, PJGEO,PBLGEO,AMASS, &
                 PXRGEO,PYRGEO,PZRGEO,PTRGEO, &
                 PXDGEO,PYDGEO,PZDGEO,PDRGEO, &
                 PDTGEO,PFCGEO,PP1GEO,PP2GEO, &
@@ -1734,10 +1735,10 @@ SUBROUTINE EPERT(X, Y, Z, DX, DY, DZ, QECONT, ECONT, &
      IF(QCNSTR.AND.QETERM(CHARM)) THEN
         CALL ECNSTR(ETPRTL(CHARM),QCNSTR,REFX,REFY,REFZ,KCNSTR,NATOM, &
              KCEXPN,XHSCALE,YHSCALE,ZHSCALE,-1, &
-             NUMHSETS,TYPHSET,IHSET,QHNORT,QHNOTR, &
+             NUMHSETS,TYPHSET,PARHSET,IHSET,QHNORT,QHNOTR, &
              X,Y,Z,DX,DY,DZ,QECONT,ECONT, &
              DD1,IUPT,QSECDL &
-             ,(/0/),(/0,0/),(/0,0/),(/0,0/) &
+             ,numpca,pcax,pcay,pcaz &
              )
 
         IF(TIMER > 1) CALL WRTTIM('Harmonic constraint energy times:')
@@ -1909,10 +1910,10 @@ SUBROUTINE EPERT(X, Y, Z, DX, DY, DZ, QECONT, ECONT, &
      IF(QCNSTR.AND.QETERM(CHARM)) THEN
         CALL ECNSTR(ETPRTL(CHARM),QCNSTR,REFX,REFY,REFZ,KCNSTR,NATOM, &
              KCEXPN,XHSCALE,YHSCALE,ZHSCALE,1, &
-             NUMHSETS,TYPHSET,IHSET,QHNORT,QHNOTR, &
+             NUMHSETS,TYPHSET,PARHSET,IHSET,QHNORT,QHNOTR, &
              X,Y,Z,DX,DY,DZ,QECONT,ECONT, &
              DD1,IUPT,QSECDL &
-             ,(/0/),(/0,0/),(/0,0/),(/0,0/) &
+             ,numpca,pcax,pcay,pcaz &
              )
 
         IF(TIMER > 1) CALL WRTTIM('Harmonic constraint energy times:')
@@ -1925,7 +1926,7 @@ SUBROUTINE EPERT(X, Y, Z, DX, DY, DZ, QECONT, ECONT, &
      IF(QCNSTR.AND.QETERM(PCHARM) .and. numpca>0) THEN
         CALL ECNSTR(ETPRTL(PCHARM),QCNSTR,REFX,REFY,REFZ,KCNSTR,NATOM, &
              KCEXPN,XHSCALE,YHSCALE,ZHSCALE,2, &
-             NUMHSETS,TYPHSET,IHSET,QHNORT,QHNOTR, &
+             NUMHSETS,TYPHSET,PARHSET,IHSET,QHNORT,QHNOTR, &
              X,Y,Z,DX,DY,DZ,QECONT,ECONT, &
              DD1,IUPT,QSECDL &
              ,numpca,pcax,pcay,pcaz &
@@ -1993,7 +1994,7 @@ SUBROUTINE EPERT(X, Y, Z, DX, DY, DZ, QECONT, ECONT, &
         IF(QGEO.AND.QETERM(GEO)) THEN
            CALL GEO2(ETPRTL(GEO),NATOM,X,Y,Z,DX,DY,DZ, &
                 LSTGEO,NGEO,NTGEO, &
-                IGEO,JGEO,AMASS, &
+                IGEO,JGEO,BLGEO,AMASS, &
                 XRGEO,YRGEO,ZRGEO,TRGEO, &
                 XDGEO,YDGEO,ZDGEO,DRGEO, &
                 DTGEO,FCGEO,P1GEO,P2GEO, &
@@ -2424,10 +2425,10 @@ SUBROUTINE EPERT(X, Y, Z, DX, DY, DZ, QECONT, ECONT, &
   IF(QEHARM.AND.QETERM(EHARM)) THEN
      CALL ECNSTR(ETERM(EHARM),QEHARM,RXHARM,RYHARM, &
           RZHARM,KEHARM,NATOM, (/ 2 /), &
-          (/ ONE /), (/ ONE /), (/ ONE /), 1, 1, (/ 0 /), IHHARM, (/ .false. /), (/ .false. /), &
+          (/ ONE /), (/ ONE /), (/ ONE /), 1, 1, (/ 0 /), (/ 0 /), IHHARM, (/ .false. /), (/ .false. /), &
           X,Y,Z,DX,DY,DZ,.FALSE., (/ ZERO /), DD1, &
           IUPT,QSECD &
-          ,(/0/),(/0,0/),(/0,0/),(/0,0/) &
+          ,numpca,pcax,pcay,pcaz &
           )
 
      IF(TIMER > 1) CALL WRTTIM('Harmonic restraint energy times:')
@@ -2493,7 +2494,7 @@ SUBROUTINE EPERT(X, Y, Z, DX, DY, DZ, QECONT, ECONT, &
         IF(QGEO.AND.QETERM(GEO)) THEN
            CALL GEO2(ETERM(GEO),NATOM,X,Y,Z,DX,DY,DZ, &
                 LSTGEO,NGEO,NTGEO, &
-                IGEO,JGEO,AMASS, &
+                IGEO,JGEO,BLGEO,AMASS, &
                 XRGEO,YRGEO,ZRGEO,TRGEO, &
                 XDGEO,YDGEO,ZDGEO,DRGEO, &
                 DTGEO,FCGEO,P1GEO,P2GEO, &
@@ -4666,7 +4667,7 @@ end SUBROUTINE ESSNBG
 #endif
     real(chm_real) ENB, EEL
     INTEGER IFRSTA,ILASTA,NATOM, NATC
-    INTEGER IBLO(*),INB(*),ICALL
+    INTEGER IBLO(*),INB(*)
     real(chm_real) CG(*),RSCLF(*),CNBA(*), CNBB(*)
     INTEGER IAC(*), ITC(*),MAXROW
     real(chm_real)  EPS, E14FAC,VBOX,FIPS
@@ -4701,7 +4702,7 @@ end SUBROUTINE ESSNBG
   IF (LPERT.AND.(TQPSSP.or.QBPSSP)) THEN
 #else /**/
   IF (LPERT.AND.TQPSSP) THEN
-#endif 
+#endif
     CALL  ESSIPSPERT(ENB,EEL,IFRSTA,ILASTA,NATOM,NATC,  &
           LVDW,LELEC,LVIPS,LEIPS,LCONS,LDBEXP,INB,IBLO, &
           CG,RSCLF,CNBA,CNBB,IAC,ITC,MAXROW,&
@@ -4718,7 +4719,7 @@ end SUBROUTINE ESSNBG
     CGF=CCELEC/EPS
     SRIPS2=SRIPS*SRIPS
     QIPSUPD=MOD(NIPSCNT,NIPSFRQ) == 0
-    NIPSCNT=NIPSCNT+ICALL
+    NIPSCNT=NIPSCNT+1
     !
     ! check to see if IPS parameters need to be updated
 
@@ -5156,7 +5157,7 @@ end SUBROUTINE ESSNBG
     implicit none
     real(chm_real) ENB, EEL
     INTEGER IFRSTA,ILASTA,NATOM, NATC
-    INTEGER IBLO(*),INB(*),ICALL
+    INTEGER IBLO(*),INB(*)
     real(chm_real) CG(*),RSCLF(*),CNBA(*), CNBB(*)
     INTEGER IAC(*), ITC(*),MAXROW
     real(chm_real)  EPS, E14FAC,VBOX,FIPS
@@ -5183,7 +5184,7 @@ end SUBROUTINE ESSNBG
     real(chm_real) AXX,AYY,AZZ,AXY,AXZ,AYZ,DDF
     real(chm_real)  SIG,AKR,CKR,EXPAR,EXPCR,ENBA,ENBC,DFA,DFC,DFIJ
     real(chm_real)  SIGEX,EXPAREX,EXPCREX,SRIPS2
-       
+
     real(chm_real) PIPSE0L,PIPSVA0L,PIPSVC0L,PIPSVACL,PIPSVCCL
     real(chm_real) PCODLL0,PVADLL0,PVCDLL0
     real(chm_real) AIPSVAL(0:5),AIPSVCL(0:5),BIPSVAL(5),BIPSVCL(5)
@@ -5196,7 +5197,7 @@ end SUBROUTINE ESSNBG
     CGF=CCELEC/EPS
     SRIPS2=SRIPS*SRIPS
     QIPSUPD=MOD(NIPSCNT,NIPSFRQ) == 0
-    NIPSCNT=NIPSCNT+ICALL
+    NIPSCNT=NIPSCNT+1
     !
     IF(leips) THEN
       RIPS2RE=ONE/(RIPS2+LAPSSP*ALAMBD)
@@ -5238,12 +5239,13 @@ end SUBROUTINE ESSNBG
       PIPSVC0L=PIPSVC0*EXPLC
       PIPSVACL=PIPSVAC*EXPLA
       PIPSVCCL=PIPSVCC*EXPLC
-    ELSE 
+    ELSE
       RIPS2RV=ONE/(RIPS2+LAPSSP*DLAMBD)
       RIPS6RV=RIPS2RV*RIPS2RV*RIPS2RV
       R2=LAPSSP*DLAMBD
       R2DLAM = ONE/(R2+LAPSSP*DLAMBD)
       U2=R2*RIPS2RV
+      U4=U2*U2
       PVC=AIPSVC(0)+U2*(AIPSVC(1) &
                   +U2*(AIPSVC(2)+U2*(AIPSVC(3)+U2*(AIPSVC(4) &
                   +U4*(AIPSVC(5)+U4*AIPSVC(6))))))

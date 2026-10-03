@@ -21,7 +21,7 @@ References:
     molecular ions in traps
     Xin Tong, Tibor Nagy, Juvenal Yosa Reyes, Matthias Germann, 
     Markus Meuwly*, Stefan Willitsch*
-    Chemical Physics Letters, Volume 547, 21 September 2012, Pages 1–8
+    Chemical Physics Letters, Volume 547, 21 September 2012, Pages 18
 [3] Constructing multidimensional molecular potential energy surfaces from
    ab initio data
    Timothy Hollebeek, Tak-San Ho, Herschel Rabitz*
@@ -983,10 +983,10 @@ energy  ETERM(MRMD)  = energy correction to PSF
 --------------------------------------
 Other modules refering to MRMD module:
 --------------------------------------
-charmm/miscom.src : calls MRMD_INIT
-energy/energy.src : calls EMRMD
-energy/energym.src: defines MRMD=103
-energy/eutil.src  : defines CETERM(MRMD)='ERMD'                        
-misc/genetic.src  : calls EMRMD
-pert/epert.src    : calls EMRMD 
-pert/icpert.src   : calls EMRMD
+charmm/miscom.F90 : calls MRMD_INIT
+energy/energy.F90 : calls EMRMD
+energy/energym.F90: defines MRMD=103
+energy/eutil.F90  : defines CETERM(MRMD)='ERMD'
+misc/genetic.F90  : calls EMRMD
+pert/epert.F90    : calls EMRMD
+pert/icpert.F90   : calls EMRMD

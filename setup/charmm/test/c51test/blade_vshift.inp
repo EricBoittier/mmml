@@ -1,0 +1,239 @@
+* BLaDE nonbonded energy combinatorial test for DHFR in solvent
+* Testing all 9 combinations: VDW (vswitch/vfswitch/vshift) x ELEC (fswitch/pme/fshift)
+* This test validates the VSHIFT implementation in BLaDE
+*
+
+if ?blade .ne. 1 then
+   echo "Test NOT performed."
+   stop
+endif
+
+! BLaDE needs a GPU of its own for every OpenMP thread in every rank, and
+! all ranks on one node see the same devices -- so N ranks x T threads want
+! N*T GPUs.  ?NGPU honours CUDA_VISIBLE_DEVICES; ?NTHREAD is the OpenMP
+! team size.  Across several nodes this is conservative, each node bringing
+! its own GPUs, so it can skip a run that would in fact work -- a needless
+! skip beats aborting inside BLaDE, which is what happens when the counts
+! do not add up.  Reported as an explicit SKIP because the grader matches
+! "TESTCASE RESULT: SKIP" but not the mixed-case "Test NOT performed" this
+! guard printed before.
+calc bladegpu = ?numnode * ?nthread
+if ?ngpu .lt. @bladegpu then
+   echo BLADE_VSHIFT TESTCASE RESULT: SKIP
+   stop
+endif
+
+stream datadir.def
+
+LABEL buildmol
+
+open unit 1 read form name @{0}top_all22_prot.inp
+read rtf card unit 1
+close unit 1
+
+! NOTE: if using CMAP terms, parameters must be loaded with FLEX
+open unit 1 read form name @{0}par_all22_prot.inp
+read param card unit 1
+close unit 1
+
+open unit 1 read form name @{0}5dfr_minimized.crd
+read sequ coor unit 1
+close unit 1
+
+generate 5dfr setup first nter last cter
+
+read sequ tip3 7023
+generate wat setup noangl nodihe
+
+read coor pdb resi name @{0}5dfr_solv-cube_equil.pdb
+
+
+set size 62.23
+set theta 90.0
+crystal define cubic @size @size @size @theta @theta @theta
+crystal build cutoff 11 noper 0
+image byseg xcen 0.0 ycen 0.0 zcen 0.0 select segid 5dfr end
+image byres xcen 0.0 ycen 0.0 zcen 0.0 select segid wat end
+
+set ntests = 9
+skipe all excl vdw elec imnb imel ewks ewse ewex ewqc
+set itest = 1
+set pme = Ewald kappa 0.320 pmEwald order 4 fftx 64 ffty 64 fftz 64
+
+label dotest
+
+    ! VSWITCH tests (VDW method 0)
+    if itest eq 1 then
+       set switching = vswitch @pme
+       set testname vsw.pme
+       set rtol 1e-6
+    endif
+    if itest eq 2 then
+       set switching = vswitch fswitch noewald
+       set testname vsw.fsw
+       set rtol 1e-6
+    endif
+    if itest eq 3 then
+       set switching = vswitch fshift noewald
+       set testname vsw.fsh
+       set rtol 1e-6
+    endif
+
+    ! VFSWITCH tests (VDW method 1)
+    if itest eq 4 then
+       set switching = vfswitch @pme
+       set testname vfsw.pme
+       set rtol 2e-5
+    endif
+    if itest eq 5 then
+       set switching = vfswitch fswitch noewald
+       set testname vfsw.fsw
+       set rtol 2e-5
+    endif
+    if itest eq 6 then
+       set switching = vfswitch fshift noewald
+       set testname vfsw.fsh
+       set rtol 2e-5
+    endif
+
+    ! VSHIFT tests (VDW method 2) - NEW
+    if itest eq 7 then
+       set switching = vshift @pme
+       set testname vsh.pme
+       set rtol 1e-6
+    endif
+    if itest eq 8 then
+       set switching = vshift fswitch noewald
+       set testname vsh.fsw
+       set rtol 1e-6
+    endif
+    if itest eq 9 then
+       set switching = vshift fshift noewald
+       set testname vsh.fsh
+       set rtol 1e-6
+    endif
+
+    set elabel = post@testname
+
+    energy eps 1.0 cutnb 11 cutim 11 ctofnb 9 ctonnb 7.5 -
+           @switching
+    set expected  = ?ener
+    coor force compare
+
+    set return from_force_test
+    goto test_forces_part_one
+    label from_force_test
+
+    energy blade
+    set actual = ?ener
+    coor force compare
+
+    GOTO doetest
+    LABEL posttest
+
+    set forceTol = 5e-2
+    set return from_force_test_two
+    goto test_forces_part_two
+    label from_force_test_two
+
+    incr itest by 1
+if itest le 9 goto dotest
+
+! Per-check pass/fail is reported by @testcheck above (energy +
+! avg/max force for each of the 9 VDW x ELEC combinations); the
+! grader scores on those.
+
+STOP
+
+LABEL doetest
+! Calculate error
+calc abserr abs(@actual - @expected)
+
+! Check if abserr is NaN by string comparison (CHARMM converts to uppercase)
+set abserrstr @abserr
+set testpassed 0
+set isnan 0
+
+! CHARMM converts NaN to uppercase in comparisons, so compare with NAN
+if @abserrstr .eq. NAN then
+   set isnan 1
+endif
+
+! Only do comparison if not NaN
+! relerr for the diagnostic echo (testcheck recomputes internally);
+! only meaningful when actual is finite.
+if @isnan .eq. 0 then
+   calc relerr = @abserr / abs ( @expected )
+endif
+
+! Print statistics
+echo ------------------------------------------------------------
+echo TEST: @testname
+echo   Expected:   @expected
+echo   Actual:     @actual
+echo   Abs Error:  @abserr
+echo   Rel Error:  @relerr
+echo   Tolerance:  @rtol
+if @isnan .eq. 1 then
+   ! BLaDE energy is NaN -> force a failing testcheck
+   @testcheck 1.0 0.0 -0.5 BLADE_VSHIFT_ENERGY_@testname
+else
+   @testcheck @actual @expected @rtol BLADE_VSHIFT_ENERGY_@testname
+endif
+GOTO posttest
+
+label test_forces_part_one
+   scalar xcomp store 1
+   scalar ycomp store 2
+   scalar zcomp store 3
+
+   scalar 1 store 7
+   scalar 2 store 8
+   scalar 3 store 9
+
+   scalar 1 *store 7  !f_x*f_x
+   scalar 2 *store 8  !f_y*f_y
+   scalar 3 *store 9  !f_z*f_z
+
+   scalar 9 +store 7
+   scalar 8 +store 7  !f_x^2+f_y^2+f_z^2
+
+   scalar wcomp recall 7
+   scalar wcomp stat
+
+   calc forceave = sqrt( ?save )
+   calc forcemax = sqrt( ?smax )
+goto @return
+
+label test_forces_part_two
+  scalar 1 mult -1.0      ! multiply reference forces by -1
+  scalar 2 mult -1.0
+  scalar 3 mult -1.0
+
+  scalar xcomp +store 1   ! add test forces to reference forces
+  scalar ycomp +store 2
+  scalar zcomp +store 3
+
+  scalar 1 store 4
+  scalar 2 store 5
+  scalar 3 store 6
+
+  scalar 4 *store 1
+  scalar 5 *store 2
+  scalar 6 *store 3
+
+  scalar 3 +store 1
+  scalar 2 +store 1      ! magnitude of force difference squared
+
+  scalar wcomp recall 1
+  scalar wcomp stat
+
+  calc dforceave = sqrt( ?save )
+  calc dforcemax = sqrt( ?smax )
+  echo forces diff save is @dforceave and smax is @dforcemax
+  echo forces save is @forceave and smax is @forcemax
+
+  @testcheck @dforceave 0 @forceTol BLADE_VSHIFT_FORCEAVE_@testname
+  @testcheck @dforcemax 0 @forceTol BLADE_VSHIFT_FORCEMAX_@testname
+
+goto @return

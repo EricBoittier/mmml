@@ -397,7 +397,7 @@ module pins
     use consta, only: kboltz
     use number, only: zero,one,two
     use stream, only: prnlev,outu
-    use mpi, only: mpi_double_precision
+    use mpi_f08, only: mpi_double_precision
     use energym, only: epot,eprop,energy
     use ensemble
     
@@ -681,7 +681,7 @@ module pins
   
     use ensemble, only: nensem, comm_master, lmasternode
     use parallel
-    use mpi
+    use mpi_f08
     
     implicit none
     
@@ -691,7 +691,8 @@ module pins
     real(chm_real),dimension(natom) :: array,tmpv
     
     !local
-    integer(chm_int4) :: ierror,stat(mpi_status_size),itag,icom
+    integer(chm_int4) :: ierror,itag,icom
+    TYPE(MPI_Status) :: stat
     integer(chm_int4) :: i,n1
     
     itag = 9

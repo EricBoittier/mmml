@@ -73,7 +73,7 @@ Current limitations of DOMDec:
   electrostatics.
 - In order to use SHAKE, must use "shake fast" and have FSSHK keyword in
   pref.dat
-- Must use Leapfrog Verlet integrator (in module dynamc.src):
+- Must use Leapfrog Verlet integrator (in module dynamc.F90):
   - LEAP, LANG, and CPT all work.
   - PERT and TSM do not work.
 - Only supports orthogonal simulation boxes.

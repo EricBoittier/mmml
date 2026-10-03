@@ -1,46 +1,36 @@
-__kernel void generateProtGrid(__global float * d_probes,
-                               __global float * d_parameter,
-                               __global float * d_GridPot,
-                               int NGrids, int NAtoms,
-                               __global int * GridNum,
-                               __global float * GridMinCoor,
-                               float Fa , float Fb, float Gmax,
-                               float DGrid, float VdwEmax,
-                               float ElecReplEmax, float ElecAttrEmax,
-                               float CCELEC_CHARMM, int ElecMode, float Dielec) {
+/* gpu_compat.h is prepended at compile time */
+
+KERNEL void generateProtGrid(GLOBAL float * d_probes,
+                             GLOBAL float * d_parameter,
+                             GLOBAL float * d_GridPot,
+                             int NGrids, int NAtoms,
+                             GLOBAL int * GridNum,
+                             GLOBAL float * GridMinCoor,
+                             float Fa , float Fb, float Gmax,
+                             float DGrid, float VdwEmax,
+                             float ElecReplEmax, float ElecAttrEmax,
+                             float CCELEC_CHARMM, int ElecMode, float Dielec) {
   /*
     Kernel of generating protein grid
     Each thread handle a grid point
   */
-  // int GridGlobalId = get_group_id(0) * get_local_size(0) + get_local_id(0);
-  int GridGlobalId = get_global_id(0);
+  int GridGlobalId = THREAD_ID;
   int NumGridPoints = GridNum[0] * GridNum[1] * GridNum[2];
-  /*
-    if(GridGlobalId==0){
-    printf("I am thread %d\n",GridGlobalId);
-    printf("NumGridPoints=%d\n",NumGridPoints);
-    printf("NAtoms=%d\n",NAtoms);
-    }*/
   if(GridGlobalId<NumGridPoints){
     int Gridx,Gridy,Gridz;
     int gridIdx;
     //calculate the 3-d grid x,y,z index from the 1-d global index
     //GridPotId=(Gridx*GridNum[1]+Gridy)*GridNum[2]+Gridz
     Gridx = GridGlobalId/(GridNum[1]*GridNum[2]);
-    Gridy = (GridGlobalId%(GridNum[1]*GridNum[2]))/GridNum[0];
-    Gridz = (GridGlobalId%(GridNum[1]*GridNum[2]))%GridNum[0];
+    Gridy = (GridGlobalId%(GridNum[1]*GridNum[2]))/GridNum[2];
+    Gridz = (GridGlobalId%(GridNum[1]*GridNum[2]))%GridNum[2];
 
     //calculate the grid point coordinate
-    //grid point coordinate build from GridPotId
     float x,y,z;
     x = GridMinCoor[0]+Gridx*DGrid;
     y = GridMinCoor[1]+Gridy*DGrid;
     z = GridMinCoor[2]+Gridz*DGrid;
-    /*
-      if(GridGlobalId==0){
-      printf("Grid x=%d y=%d z=%d\n",Gridx,Gridy,Gridz);
-      printf("x=%f y=%f z=%f\n",x,y,z);
-      }*/
+
     int n;
     float atomx,atomy,atomz;
     float eps,vdwr,cg;
@@ -54,7 +44,6 @@ __kernel void generateProtGrid(__global float * d_probes,
     int NumFeaturePerAtom=8;
 
     for(n=0; n<NAtoms; ++n){
-      //read atom parameters from global memory
       atomx=d_parameter[NumFeaturePerAtom*n+0];
       atomy=d_parameter[NumFeaturePerAtom*n+1];
       atomz=d_parameter[NumFeaturePerAtom*n+2];
@@ -64,15 +53,8 @@ __kernel void generateProtGrid(__global float * d_probes,
       hd=   d_parameter[NumFeaturePerAtom*n+6];
       ha=   d_parameter[NumFeaturePerAtom*n+7];
       eps_sqrt = sqrt(fabs(eps));
-      //calculate distance between grid point and atom n
       r = sqrt((atomx-x)*(atomx-x)+(atomy-y)*(atomy-y)+(atomz-z)*(atomz-z));
       rh = r - Fb;
-      //calculate electrostatic energy
-      /*
-        if(GridGlobalId==0){
-        printf("%d x=%f y=%f z=%f eps=%f vdwr=%f cg=%f r=%f\n",n,
-        atomx,atomy,atomz,eps,vdwr,cg,r);
-        }*/
 
       /*Electrostatics*/
       //ElecMode == 0 cdie
@@ -169,5 +151,5 @@ __kernel void generateProtGrid(__global float * d_probes,
       }
 
     } //end looping all atoms
-  }//enf if (GlobalId <  NumGridPoints)
+  }//end if (GlobalId < NumGridPoints)
 }

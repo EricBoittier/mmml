@@ -44,10 +44,8 @@ module pme_module
   integer,allocatable,dimension(:),save :: lmy_ks
 #if KEY_SQUANTM==1 || KEY_MNDO97==1 || KEY_QCHEM==1 || KEY_QTURBO==1 || KEY_G09==1
   integer,allocatable,dimension(:),save :: lmy_ks_inv   
-#endif
 
   ! for qm/mm-pme version
-#if KEY_SQUANTM==1 || KEY_MNDO97==1 || KEY_QCHEM==1 || KEY_QTURBO==1 || KEY_G09==1
   ! for qm-qm interactions.
   real(chm_real),allocatable,dimension(:,:),save :: qm_atm_grad_comp
   integer, save :: igood_qmmm
@@ -371,15 +369,13 @@ contains
     !
     ! QM/MM-Ewald
 #if KEY_QUANTUM==1 
-#if KEY_GAMESS==0 && KEY_GAMESSUK==0 && KEY_QTURBO==0 && \
-    KEY_G09==0 && KEY_QCHEM==0 && KEY_MNDO97==0 && KEY_SCCDFTB==0 
+#if KEY_GAMESS==0 && KEY_GAMESSUK==0 && KEY_QTURBO==0 && KEY_G09==0 && KEY_QCHEM==0 && KEY_MNDO97==0 && KEY_SCCDFTB==0 
     use quantm,only: LQMEWD, QSETUPKQ, QCGSC   
 #endif
 #endif
-#if KEY_GAMESS==1 || KEY_GAMESSUK==1  || KEY_QTURBO==1 || \
-    KEY_G09==1 || KEY_QCHEM==1 || KEY_MNDO97==1 || KEY_SCCDFTB==1 
+#if KEY_GAMESS==1 || KEY_GAMESSUK==1  || KEY_QTURBO==1 || KEY_G09==1 || KEY_QCHEM==1 || KEY_MNDO97==1 || KEY_SCCDFTB==1 
 #if KEY_SQUANTM==0
-    use mndo97,only: lqmewd                    
+    use mndo97,only: lqmewd
 #endif
 #endif 
 #if KEY_SQUANTM==1
@@ -443,8 +439,8 @@ contains
     !
     ! Basically, calculate K space PME potential at QM atom position.
     !
-    use qm1_info,only: qm_control_r,qm_main_r,mm_main_r
-    use qmmmewald_module, only : qmmm_ewald_r
+    use qm1_info,only: qm_control_c,qm_main_c,mm_main_c
+    use qmmmewald_module, only : qmmm_ewald_c
 #endif
 
     !
@@ -538,38 +534,25 @@ contains
        if(qljpme) call ljpme_self_energy(ETERM(LJSEL), QETERM(LJSEL), dkappa, ljc6)
 #endif
 
-#if KEY_MNDO97==1 /*mndo_and_others*/
+#if KEY_QUANTUM==1 || KEY_SQUANTM==1 || KEY_GAMESS==1 || KEY_GAMESSUK==1 || KEY_QCHEM==1 || KEY_QTURBO==1 || KEY_G09==1 || KEY_MNDO97==1
+#if KEY_MNDO97==1 
     ! this should check later, if initialization has been done correctly.
-    if(q_qmmm_pme_do .or. .not. lqmewd) then
-       ewvirial(1:9)=zero
-    end if
+    if(q_qmmm_pme_do .or. .not. lqmewd) then ! ewvirial(1:9)=zero
 #else
-#if KEY_QUANTUM==1 || KEY_SQUANTM==1 || KEY_GAMESS==1 || \
-    KEY_GAMESSUK==1 || KEY_QCHEM==1 || KEY_QTURBO==1 || KEY_G09==1
-    if(.not.lqmewd) then      
+    if(.not.lqmewd) then
+#endif
 #endif
        ewvirial(1:9)=zero
-#if KEY_QUANTUM==1 || KEY_SQUANTM==1 || KEY_GAMESS==1 || \
-    KEY_GAMESSUK==1 || KEY_QCHEM==1 || KEY_QTURBO==1 || KEY_G09==1
-    endif                     
+#if KEY_QUANTUM==1 || KEY_SQUANTM==1 || KEY_GAMESS==1 || KEY_GAMESSUK==1 || KEY_QCHEM==1 || KEY_QTURBO==1 || KEY_G09==1 || KEY_MNDO97==1
+    end if
 #endif
-#endif  /*mndo_and_others*/
 
 #if KEY_MNDO97==1 
     if(q_qmmm_pme_do) then
-       nquant = qm_main_r%numat
-       qmmm_ewald_r%empot_pme(1:nquant)   =zero
-       qmmm_ewald_r%empot_qm_pme(1:nquant)=zero
-    endif
-!!    ! put QM charges if cpmd run.
-!!    if(lqmewd .and. qm_control_r%q_do_cpmd_pme) then
-!!       ! put the mulliken charge on cg array
-!!       do i=1,nquant
-!!          nn     =iabs(qm_control_r%qminb(i))
-!!          qm_control_r%cgqmmm(i) = cg(nn)
-!!          cg(nn) = mm_main_r%qm_charges(i)
-!!       end do
-!!    end if
+       nquant = qm_main_c%numat
+       qmmm_ewald_c%empot_pme(1:nquant)   =zero
+       qmmm_ewald_c%empot_qm_pme(1:nquant)=zero
+    end if
 #endif
 
     eqcor=zero
@@ -1066,24 +1049,6 @@ contains
     endif
 #endif 
     !
-!!#if KEY_MNDO97==1
-!!    if(lqmewd .and. qm_control_r%q_do_cpmd_pme) then
-!!       ! put the mulliken charge on cg array
-!!       do i=1,nquant
-!!          nn     =iabs(qm_control_r%qminb(i))
-!!          cg(nn) = qm_control_r%cgqmmm(i)
-!!       end do
-!!       ! correct energy: since ewald energy component includes qm charges.
-!!#if KEY_PARALLEL==1
-!!       if(mynod.eq.0) then
-!!#endif
-!!          if(qeksum) eksum = eksum - qm_control_r%E_ewald_corr  ! substract this amount.
-!!#if KEY_PARALLEL==1
-!!       end if
-!!#endif
-!!    end if
-!!#endif
-
     return
   end subroutine pme
   
@@ -1135,8 +1100,8 @@ contains
   use memory
 #if KEY_MNDO97==1
   use mndo97,only: lqmewd
-  use qm1_info,only: qm_control_r,qm_main_r,mm_main_r
-  use qmmmewald_module, only : qmmm_ewald_r
+  use qm1_info,only: qm_control_c,qm_main_c,mm_main_c
+  use qmmmewald_module, only : qmmm_ewald_c
   use gamess_fcm, only : IGMSEL
 #endif
      !
@@ -1176,7 +1141,7 @@ contains
 #endif
 #if KEY_MNDO97==1
     integer    :: nquant
-    logical    :: q_grad_and_pot, q_cpmd
+    logical    :: q_grad_and_pot
     logical    :: q_qmmm_pme_do
 #endif
     !.ab.Update nattot....
@@ -1279,37 +1244,17 @@ contains
        if(q_qmmm_pme_do) then
           ! to use in gradient evaluation.
           igood_qmmm=igood
-          nquant    = qm_main_r%numat
+          nquant    = qm_main_c%numat
 
-          q_cpmd        = qm_control_r%q_do_cpmd_pme
           q_grad_and_pot=.true.        ! for the computation of potential.
-          if(q_cpmd) then
-             ! qarray_mm is used to take only qarray qm-mm interaction potential.
-             qarray_mm(1:siz_q)=qarray(1:siz_q)
-
-             ! Fill charge-grid array relevant for qm atoms only.
-             ! This will be used later for the computation of gradient component
-             ! applied to each MM atoms by each QM atoms.
-             !
-             ! For q_cpmd case.. qarray contains qm-mm + qm-qm component.
-             !
-             call fill_ch_grid_qm_mm(kbot,ktop,nquant,mm_main_r%qm_charges, &
-                                     x,y,z,recip,natom,xnsymm, &
-                                     nfftdim1,nfftdim2,mxyslabs, &
-                                     lmy_ks_inv,latm, &
-                                     qm_control_r%qminb,q_grad_and_pot,q_cpmd)
-             ! for qm-mm component
-             call fft_backrc(Qarray_mm,nfftdim1,nfftdim2,nfftdim3,nffwork)
-          else
-             ! Fill charge-grid array relevant for qm atoms only.
-             ! This will be used later for the computation of gradient component
-             ! applied to each MM atoms by each QM atoms.
-             call fill_ch_grid_qm_mm(kbot,ktop,nquant,mm_main_r%qm_charges, &
-                                     x,y,z,recip,natom,xnsymm, &
-                                     nfftdim1,nfftdim2,mxyslabs, &
-                                     lmy_ks_inv,latm, &
-                                     qm_control_r%qminb,q_grad_and_pot,q_cpmd)
-          end if
+          ! Fill charge-grid array relevant for qm atoms only.
+          ! This will be used later for the computation of gradient component
+          ! applied to each MM atoms by each QM atoms.
+          call fill_ch_grid_qm_mm(kbot,ktop,nquant,mm_main_c%qm_charges, &
+                                  x,y,z,recip,natom,xnsymm, &
+                                  nfftdim1,nfftdim2,mxyslabs, &
+                                  lmy_ks_inv,latm, &
+                                  qm_control_c%qminb,q_grad_and_pot)
        end if
 #endif /*mndo97*/
 
@@ -1349,10 +1294,8 @@ contains
        !
 
 #if KEY_MNDO97==1 /*mndo97*/
-       if(q_qmmm_pme_do) then
-          ! save for later virial calculation (none q_cpmd case).
-          if(.not. q_cpmd) qarray_mm(1:siz_q)=Qarray(1:siz_q)
-       end if
+       ! save for later virial calculation
+       if(q_qmmm_pme_do) qarray_mm(1:siz_q)=Qarray(1:siz_q)
 #endif /*mndo97*/
 
        call timer_stpstrt(T_FFT,T_scsum)                  
@@ -1362,11 +1305,7 @@ contains
        !.ab.Calculate.E.
        call scalar_sum(qfinit,rewcut, &
             ewald_coeff,volume,recip, &
-            nfftdim1,nfftdim2,nfftdim3,eer,virial  &
-#if KEY_MNDO97==1
-           ,q_qmmm_pme_do   &
-#endif
-           )
+            nfftdim1,nfftdim2,nfftdim3,eer,virial)
        !.ab.On return: Q=FT(Q).B.C
        call timer_stpstrt(T_scsum,T_FFT)                  
        !
@@ -1397,17 +1336,13 @@ contains
 #if KEY_MNDO97==1 /*mndo97*/
 
        if(q_qmmm_pme_do) then
-          ! forward fft of qarray_mm (for qm-qm component)
-          if(q_cpmd) call fft_forwardrc(Qarray_mm,nfftdim1,nfftdim2,nfftdim3,nffwork)
-
           call potential_sumrc_qm_mm(igood, kbot, ktop, natom, nquant,                 &
                                      Qarray,Qarray_mm,                                 &
-                                     qmmm_ewald_r%empot_pme,qmmm_ewald_r%empot_qm_pme, &
+                                     qmmm_ewald_c%empot_pme,qmmm_ewald_c%empot_qm_pme, &
                                      qm_atm_grad_comp,                                 &
                                      recip,volume,forder,nfftdim1,nfftdim2,nfftdim3,   &
                                      lmy_ks_inv,latm,xnsymm,                           &
-                                     igmsel,qm_control_r%mminb2(1:natom),qm_control_r%qminb, &
-                                     q_cpmd)
+                                     igmsel,qm_control_c%mminb2(1:natom),qm_control_c%qminb)
        end if
 #endif
        !
@@ -2367,11 +2302,7 @@ end subroutine do_pme_phmd
   !***********************************************************************
   subroutine scalar_sum( &
        qfinit,rewcut,ewaldcof,volume,recip, &
-       nfftdim1,nfftdim2,nfftdim3,eer,vir   &
-#if KEY_MNDO97==1
-      ,q_qmmm_pme_do    &
-#endif
-      )
+       nfftdim1,nfftdim2,nfftdim3,eer,vir)
 
   use pmeutil,only:mxzslabs,mxzstart, &
      nfft1,nfft2,nfft3,bsp_mod1,bsp_mod2,bsp_mod3
@@ -2414,10 +2345,6 @@ end subroutine do_pme_phmd
 #if KEY_BLOCK==1
   use block_ltm ! block_fcm -> block_ltm -- Y Huang 2017
 #endif
-#if KEY_MNDO97==1
-  use mndo97,only: lqmewd
-  use qm1_info,only: qm_control_r,qm_main_r,mm_main_r
-#endif 
      !...##INCLUDE '~/charmm_fcm/pme_par.f90'
      !
     LOGICAL,intent(in) :: QFINIT
@@ -2441,10 +2368,6 @@ end subroutine do_pme_phmd
     real(chm_real) :: MHAT1s,MHAT2s,MHAT3s,MSQs,STRUC2s,msqrs
     real(chm_real) :: dens,eterms,vterms,estrs
     integer i
-#if KEY_MNDO97==1
-    logical :: q_cpmd
-    logical :: q_qmmm_pme_do
-#endif
     !av_080628
 #if KEY_BLOCK==1
     INTEGER                 :: IBL,JBL,IB,JB,KK,INXI,INXJ
@@ -2457,10 +2380,6 @@ end subroutine do_pme_phmd
     !...##ENDIF
 #endif /*  close BLOCK*/
     !av_080628
-#if KEY_MNDO97==1
-    q_cpmd = .false.
-    if(q_qmmm_pme_do) q_cpmd = qm_control_r%q_do_cpmd_pme
-#endif
     FAC = PI**2/EWALDCOF**2
     MCUT= TWO*PI*REWCUT
     QFIN=QFINIT
@@ -2486,11 +2405,6 @@ end subroutine do_pme_phmd
     if(mynod == 0)then     
 #endif
        qarray(1:2)=zero
-#if KEY_MNDO97==1
-       if(q_qmmm_pme_do) then
-          if(qm_control_r%q_do_cpmd_pme) qarray_mm(1:2) = zero
-       end if
-#endif
 #if KEY_PARALLEL==1
     endif                  
 #endif
@@ -2791,14 +2705,6 @@ end subroutine do_pme_phmd
                 endif
                 Qarray(IPT3)   = ETERM * Qarray(IPT3)
                 Qarray(IPT3+1) = ETERM * Qarray(IPT3+1)
-
-#if KEY_MNDO97==1
-                ! this is for the qm-mm only component, whereas Qarray_local has all.
-                if(q_cpmd) then
-                   Qarray_mm(IPT3)   = ETERM * Qarray_mm(IPT3)
-                   Qarray_mm(IPT3+1) = ETERM * Qarray_mm(IPT3+1)
-                end if
-#endif
                 !
                 IPT3=IPT3+2
              ENDDO
@@ -3344,7 +3250,7 @@ end subroutine do_pme_phmd
   SUBROUTINE fill_ch_grid_qm_mm(kbot, ktop, numat, scf_mchg_2, &
                                 x,y,z,recip,natom,xnsymm, &
                                 nfftdim1,nfftdim2,nfftdim3, &
-                                my_ks_inv,latm,qminb_local,q_grad_and_pot,q_cpmd)
+                                my_ks_inv,latm,qminb_local,q_grad_and_pot)
 
   use pmeutil,only:nfft1,nfft2,nfft3,forder, &
                    mxystart,mxyslabs,  &  !##PARALLEL
@@ -3392,7 +3298,7 @@ end subroutine do_pme_phmd
   integer :: qminb_local(*)
   integer :: latm,my_ks_inv(*)
   integer :: kbot, ktop, xnsymm
-  logical :: q_grad_and_pot,q_cpmd
+  logical :: q_grad_and_pot
 
   real(chm_real) :: prod,proda
   real(chm_real) :: fr1n,fr2n,fr3n,w
@@ -3432,10 +3338,8 @@ end subroutine do_pme_phmd
   ! Initialization...
   dim_q0 = 2*nfftdim1*nfftdim2*nfftdim3
   if(q_grad_and_pot) then
-     if(.not.q_cpmd) then
-        i_qarray_mm        = 0                   ! i have to allocate this array first somewhere
-        r_qarray_mm        = zero                ! same
-     end if
+     i_qarray_mm        = 0                   ! i have to allocate this array first somewhere
+     r_qarray_mm        = zero                ! same
   else
      qarray(1:dim_q0) = zero
   end if
@@ -3490,14 +3394,9 @@ end subroutine do_pme_phmd
                  do ith1 = 1,forder
                     ! In the end, it will be something like:
                     ! Qarray(i_qarray_mm(i,j,k,iqm))= sum_iqm [r_qarray_mm(i,j,k,iqm)*qm_chareg(iqm)]
-                    if(q_cpmd) then
-                       !Qarray(ipt2)=Qarray(ipt2)+half*THETA1(ITH1,IGOOD)*PROD*scf_mchg_2(iqm)
-                       qarray(ipt2)=qarray(ipt2)+THETA1(ITH1,IGOOD)*PROD*scf_mchg_2(iqm)
-                    else
-                       i_qarray_mm(ith1,ith2,ith3,iqm)=ipt2                     ! pointer for qarray_qm
-                       r_qarray_mm(ith1,ith2,ith3,iqm)=THETA1(ITH1,IGOOD)*PROD  ! value for qarray_qm, contribution
-                                                                                ! from iqm atom.
-                    end if
+                    i_qarray_mm(ith1,ith2,ith3,iqm)=ipt2                     ! pointer for qarray_qm
+                    r_qarray_mm(ith1,ith2,ith3,iqm)=THETA1(ITH1,IGOOD)*PROD  ! value for qarray_qm, contribution
+                                                                             ! from iqm atom.
 
                     ipt2=ipt2+rcskip
                     if(ipt2 >= ipt3) ipt2=ipt2-nfft1*rcskip
@@ -3537,7 +3436,7 @@ end subroutine do_pme_phmd
                               qm_atm_grad_comp_local,                       &
                               recip,volume,ordr,nfftdim1,nfftdim2,nfftdim3, &
                               my_ks_inv,latm,xnsymm,                        &
-                              igmsel_local,mminb2_local,qminb_local,q_cpmd)
+                              igmsel_local,mminb2_local,qminb_local)
   !
   ! This routine compute the potential at the QM atom sites applied by all MM atoms.
   !
@@ -3571,7 +3470,6 @@ end subroutine do_pme_phmd
   integer,intent(in) :: my_ks_inv(*), &
                         igmsel_local(*),mminb2_local(*),qminb_local(*)
   real(chm_real),intent(in) :: recip(9)
-  logical            :: q_cpmd
 
   integer :: igoo,ig,iqm,n
   integer :: I,J,K,KQ,i_keep,j_keep,k_keep,ITH1,ITH2,ITH3,IPT1,IPT2,IPT3
@@ -3640,43 +3538,28 @@ end subroutine do_pme_phmd
 
                IPT2= rcskip*((IPT1+J)*NFFTDIMrc+I)+1
                IPT3= IPT2 + rcskip*(NFFT1-I)
-               if(q_cpmd) then
-                  do ITH1 = 1,ORDR
-                     Pot    =Pot   +P_tmp2*qarray_local(IPT2)*THETA1(ITH1,ig)
-                     Pot_mm =Pot_mm+P_tmp2*qarray_mm_local(IPT2)*THETA1(ITH1,ig)
-                     IPT2=IPT2+rcskip
-                     IF(IPT2 >= IPT3) IPT2=IPT2-NFFT1*rcskip
-                  end do
-               else
-                  do ITH1 = 1,ORDR
-                     Pot    =Pot+P_tmp2*qarray_local(IPT2)*THETA1(ITH1,ig)
-                     fxyz(1)=fxyz(1)+val(1)*qarray_local(IPT2)*DTHETA1(ITH1,igoo)
-                     fxyz(2)=fxyz(2)+val(2)*qarray_local(IPT2)*THETA1(ITH1,ig)
-                     fxyz(3)=fxyz(3)+val(3)*qarray_local(IPT2)*THETA1(ITH1,ig)
+               do ITH1 = 1,ORDR
+                  Pot    =Pot+P_tmp2*qarray_local(IPT2)*THETA1(ITH1,ig)
+                  fxyz(1)=fxyz(1)+val(1)*qarray_local(IPT2)*DTHETA1(ITH1,igoo)
+                  fxyz(2)=fxyz(2)+val(2)*qarray_local(IPT2)*THETA1(ITH1,ig)
+                  fxyz(3)=fxyz(3)+val(3)*qarray_local(IPT2)*THETA1(ITH1,ig)
 
-                     IPT2=IPT2+rcskip
-                     IF(IPT2 >= IPT3) IPT2=IPT2-NFFT1*rcskip
-                  end do
-               end if
+                  IPT2=IPT2+rcskip
+                  IF(IPT2 >= IPT3) IPT2=IPT2-NFFT1*rcskip
+               end do
             end do
 #if KEY_PARALLEL==1
          end if
 #endif
       end do
       !
-      if(q_cpmd) then
-         ! qm-mm component & qm-qm component
-         ewd_potential(iqm)   = ewd_potential(iqm)    + CFACT*Pot_mm       ! mm only
-         ewd_potential_qm(iqm)= ewd_potential_qm(iqm) + CFACT*(Pot-Pot_mm) ! qm only
-      else
-         ewd_potential(iqm)= ewd_potential(iqm) + CFACT*Pot
-         qm_atm_grad_comp_local(1,iqm)=qm_atm_grad_comp_local(1,iqm)+ &
-                                       CFACT2*(recip(1)*fxyz(1)+recip(4)*fxyz(2)+recip(7)*fxyz(3))
-         qm_atm_grad_comp_local(2,iqm)=qm_atm_grad_comp_local(2,iqm)+ &
-                                       CFACT2*(recip(2)*fxyz(1)+recip(5)*fxyz(2)+recip(8)*fxyz(3))
-         qm_atm_grad_comp_local(3,iqm)=qm_atm_grad_comp_local(3,iqm)+ &
-                                       CFACT2*(recip(3)*fxyz(1)+recip(6)*fxyz(2)+recip(9)*fxyz(3))
-      end if
+      ewd_potential(iqm)= ewd_potential(iqm) + CFACT*Pot
+      qm_atm_grad_comp_local(1,iqm)=qm_atm_grad_comp_local(1,iqm)+ &
+                                    CFACT2*(recip(1)*fxyz(1)+recip(4)*fxyz(2)+recip(7)*fxyz(3))
+      qm_atm_grad_comp_local(2,iqm)=qm_atm_grad_comp_local(2,iqm)+ &
+                                    CFACT2*(recip(2)*fxyz(1)+recip(5)*fxyz(2)+recip(8)*fxyz(3))
+      qm_atm_grad_comp_local(3,iqm)=qm_atm_grad_comp_local(3,iqm)+ &
+                                    CFACT2*(recip(3)*fxyz(1)+recip(6)*fxyz(2)+recip(9)*fxyz(3))
   end do loopig
 
   RETURN

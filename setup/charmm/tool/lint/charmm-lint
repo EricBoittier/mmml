@@ -1,0 +1,457 @@
+#!/usr/bin/env python3
+"""charmm-lint -- fast, pre-build static checks for the CHARMM source tree.
+
+Goal: catch obvious errors (undefined identifiers, missing includes, bad USE,
+syntax, undefined variables) *locally, in seconds*, before the slow gollum CUDA
+build round-trip.  The motivating case (MR!380) was a `gpuCheck` undefined
+identifier in source/blade/src/restrain/restrain.cu that only surfaced after a
+full ~10 min ninja build; a syntax-only pass catches that class instantly.
+
+Design principle: DO NOT reconstruct compiler commands -- replay the build's own.
+  * C / C++ / CUDA  -> replay each file's entry from compile_commands.json with
+                       -fsyntax-only (no codegen, no link).
+  * Fortran (.F90)  -> CMake does not emit Fortran into compile_commands.json, so
+                       we read the exact per-file preprocess/scan edge out of
+                       build.ninja and replay it with gfortran -fsyntax-only.
+  * Python (.py)    -> ruff (falls back to pyflakes if ruff is absent). ruff
+                       finds a subtree's own pyproject.toml/ruff.toml, so e.g.
+                       tool/pycharmm is checked with tool/pycharmm's rules.
+
+Because it replays the build's real flags, the checks stay in sync with the
+configured build and produce no false positives from mis-guessed -DKEY_* keys.
+
+Host-agnostic: a language is checked only if the artifacts it needs are present.
+On macOS the local build has cuda=OFF, so .cu files are absent from
+compile_commands.json and are silently skipped -- run charmm-lint on gollum
+(cuda build) to cover CUDA.  See tool/lint/README.md.
+
+Usage:
+    tool/lint/charmm-lint                 # lint files changed vs the base branch
+    tool/lint/charmm-lint --all           # lint the whole tree
+    tool/lint/charmm-lint FILE [FILE...]  # lint specific files
+    tool/lint/charmm-lint --lang cuda --all
+    tool/lint/charmm-lint --build-dir build/cmake --base origin/master
+
+Exit status is nonzero if any file fails its check.
+"""
+
+import argparse
+import json
+import os
+import re
+import shlex
+import shutil
+import subprocess
+import sys
+import tempfile
+from concurrent.futures import ThreadPoolExecutor
+
+# ---------------------------------------------------------------------------
+# file classification
+# ---------------------------------------------------------------------------
+C_EXTS = {".c", ".cc", ".cxx", ".cpp", ".h", ".hpp", ".hxx"}
+CUDA_EXTS = {".cu", ".cuh"}
+FORTRAN_EXTS = {".F90", ".f90", ".F", ".f"}
+PY_EXTS = {".py"}
+
+LANG_OF_EXT = {}
+for e in C_EXTS:
+    LANG_OF_EXT[e] = "c"
+for e in CUDA_EXTS:
+    LANG_OF_EXT[e] = "cuda"
+for e in FORTRAN_EXTS:
+    LANG_OF_EXT[e] = "fortran"
+for e in PY_EXTS:
+    LANG_OF_EXT[e] = "python"
+
+ALL_LANGS = ("fortran", "c", "cuda", "python")
+
+
+def lang_of(path):
+    return LANG_OF_EXT.get(os.path.splitext(path)[1])
+
+
+# ---------------------------------------------------------------------------
+# small terminal helpers
+# ---------------------------------------------------------------------------
+_TTY = sys.stdout.isatty()
+
+
+def _c(code, s):
+    return f"\033[{code}m{s}\033[0m" if _TTY else s
+
+
+def red(s):
+    return _c("31", s)
+
+
+def green(s):
+    return _c("32", s)
+
+
+def yellow(s):
+    return _c("33", s)
+
+
+def dim(s):
+    return _c("2", s)
+
+
+# ---------------------------------------------------------------------------
+# git file selection
+# ---------------------------------------------------------------------------
+def repo_root():
+    out = subprocess.run(
+        ["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True
+    )
+    if out.returncode != 0:
+        sys.exit("charmm-lint: not inside a git repository")
+    return out.stdout.strip()
+
+
+def changed_files(base):
+    """Files changed vs the merge-base with `base`, plus working-tree changes."""
+    def git(args):
+        r = subprocess.run(["git"] + args, capture_output=True, text=True)
+        return r.stdout.splitlines() if r.returncode == 0 else []
+
+    mb = subprocess.run(
+        ["git", "merge-base", "HEAD", base], capture_output=True, text=True
+    )
+    files = set()
+    if mb.returncode == 0:
+        files.update(git(["diff", "--name-only", mb.stdout.strip(), "HEAD"]))
+    else:
+        print(yellow(f"charmm-lint: no merge-base with {base}; "
+                     "using working-tree changes only"))
+    files.update(git(["diff", "--name-only"]))           # unstaged
+    files.update(git(["diff", "--name-only", "--cached"]))  # staged
+    files.update(git(["ls-files", "--others", "--exclude-standard"]))  # untracked
+    return sorted(files)
+
+
+def all_source_files(root):
+    files = []
+    for base in ("source", "tool", "pycharmm"):
+        d = os.path.join(root, base)
+        for dirpath, _dirs, names in os.walk(d):
+            if "/.git" in dirpath or "/build" in dirpath:
+                continue
+            for n in names:
+                if lang_of(n):
+                    files.append(os.path.relpath(os.path.join(dirpath, n), root))
+    return files
+
+
+# ---------------------------------------------------------------------------
+# compile_commands.json (C / C++ / CUDA)
+# ---------------------------------------------------------------------------
+def load_compile_db(build_dir):
+    path = os.path.join(build_dir, "compile_commands.json")
+    if not os.path.isfile(path):
+        return {}
+    with open(path) as fh:
+        entries = json.load(fh)
+    db = {}
+    for e in entries:
+        f = e["file"]
+        if not os.path.isabs(f):
+            f = os.path.normpath(os.path.join(e.get("directory", ""), f))
+        db[os.path.realpath(f)] = e
+    return db
+
+
+def _entry_tokens(entry):
+    if "arguments" in entry:
+        return list(entry["arguments"])
+    return shlex.split(entry["command"])
+
+
+def _strip_output_and_dep_flags(tokens):
+    """Drop -c / -o OUT / -M* so the command only parses, never emits."""
+    out = []
+    skip = 0
+    for i, t in enumerate(tokens):
+        if skip:
+            skip = 0
+            continue
+        if t == "-c":
+            continue
+        if t == "-o":
+            skip = 1
+            continue
+        if t in ("-MT", "-MF", "-MQ"):
+            skip = 1
+            continue
+        if t in ("-MD", "-MMD", "-MP", "-MG"):
+            continue
+        out.append(t)
+    return out
+
+
+def check_c_family(entry):
+    tokens = _strip_output_and_dep_flags(_entry_tokens(entry))
+    if not tokens:
+        return 1, "empty compile command"
+    # -fsyntax-only: parse + semantic-check only, no codegen/link.
+    # -Werror=implicit-function-declaration: on older (Apple) clang a C call to
+    # an undeclared function is only a warning; promote it so typo'd/ missing-
+    # include function calls (the gpuCheck class) fail the lint. Harmless for
+    # C++, which already treats undeclared identifiers as hard errors.
+    for flag in ("-Werror=implicit-function-declaration", "-fsyntax-only"):
+        tokens.insert(1, flag)
+    r = subprocess.run(
+        tokens, cwd=entry.get("directory") or None,
+        capture_output=True, text=True,
+    )
+    return r.returncode, (r.stderr or r.stdout)
+
+
+# CUDA: build a clean clang cuda syntax-only command from the portable subset of
+# the nvcc entry (-D / -I / -isystem / -std / -include).  We deliberately drop
+# nvcc-only flags (-gencode, -Xcompiler, -ccbin, ...) that clang can't parse and
+# that a syntax check does not need.  Tunable on gollum via the env vars below.
+CUDA_CLANG = os.environ.get("CHARMM_LINT_CUDA_CLANG", "clang++")
+CUDA_ARCH = os.environ.get("CHARMM_LINT_CUDA_ARCH", "sm_70")
+CUDA_PATH = os.environ.get("CHARMM_LINT_CUDA_PATH")  # optional --cuda-path
+
+
+def check_cuda(entry):
+    if not shutil.which(CUDA_CLANG.split()[0]):
+        return None, f"{CUDA_CLANG} not found (set CHARMM_LINT_CUDA_CLANG)"
+    src = entry["file"]
+    toks = _entry_tokens(entry)
+    keep = []
+    i = 0
+    while i < len(toks):
+        t = toks[i]
+        if t in ("-D", "-I", "-isystem", "-include") and i + 1 < len(toks):
+            keep += [t, toks[i + 1]]
+            i += 2
+            continue
+        if (t.startswith(("-D", "-I")) or t.startswith("-isystem")
+                or t.startswith("-std=")):
+            keep.append(t)
+        i += 1
+    cmd = [*shlex.split(CUDA_CLANG), "-x", "cuda", "-fsyntax-only",
+           f"--cuda-gpu-arch={CUDA_ARCH}", "-Wno-unknown-cuda-version"]
+    if CUDA_PATH:
+        cmd.append(f"--cuda-path={CUDA_PATH}")
+    cmd += keep + [src]
+    r = subprocess.run(cmd, cwd=entry.get("directory") or None,
+                       capture_output=True, text=True)
+    return r.returncode, (r.stderr or r.stdout)
+
+
+# ---------------------------------------------------------------------------
+# Fortran: replay the preprocess/scan edge from build.ninja
+# ---------------------------------------------------------------------------
+class NinjaFortran:
+    """Maps an absolute .F90 path -> its scan-edge DEFINES/FLAGS/INCLUDES."""
+
+    def __init__(self, build_dir):
+        self.build_dir = build_dir
+        self.by_src = {}
+        self.moddir = tempfile.mkdtemp(prefix="charmm-lint-mod.")
+        bn = os.path.join(build_dir, "build.ninja")
+        if os.path.isfile(bn):
+            self._parse(open(bn).read())
+
+    def _parse(self, text):
+        lines = text.splitlines()
+        n = len(lines)
+        i = 0
+        edge_re = re.compile(r"^build .*Fortran_PREPROCESS_SCAN__")
+        src_re = re.compile(r"(\S+\.(?:F90|f90|F|f))(?:\s|$|\|)")
+        while i < n:
+            if edge_re.match(lines[i]):
+                # the source is the first .F90 token after the rule name
+                srcs = src_re.findall(lines[i])
+                src = None
+                for s in srcs:
+                    if os.path.isabs(s):
+                        src = s
+                        break
+                vars = {}
+                j = i + 1
+                while j < n and lines[j].startswith("  "):
+                    m = re.match(r"^  (\w+) = (.*)$", lines[j])
+                    if m:
+                        vars[m.group(1)] = m.group(2)
+                    j += 1
+                if src:
+                    self.by_src[os.path.realpath(src)] = vars
+                i = j
+            else:
+                i += 1
+
+    def command(self, abspath):
+        vars = self.by_src.get(os.path.realpath(abspath))
+        if vars is None:
+            return None
+        defines = shlex.split(vars.get("DEFINES", ""))
+        flags = [f for f in shlex.split(vars.get("FLAGS", "")) if f != "-O2"]
+        includes = shlex.split(vars.get("INCLUDES", ""))
+        return (["gfortran", "-fsyntax-only", "-cpp",
+                 "-Wno-missing-include-dirs",  # build-only generated wrapper dirs
+                 *defines, *flags, *includes,
+                 "-I" + self.build_dir, "-J" + self.moddir, abspath])
+
+
+def check_fortran(ninja, abspath):
+    cmd = ninja.command(abspath)
+    if cmd is None:
+        return None, "no build.ninja scan edge (needs a configured local build)"
+    r = subprocess.run(cmd, capture_output=True, text=True)
+    return r.returncode, (r.stderr or r.stdout)
+
+
+# ---------------------------------------------------------------------------
+# Python: ruff (falls back to pyflakes)
+# ---------------------------------------------------------------------------
+def _ruff_cmd():
+    """Return a runnable ruff command, or None if ruff is not installed."""
+    exe = shutil.which("ruff")
+    if exe:
+        return [exe]
+    probe = subprocess.run([sys.executable, "-m", "ruff", "--version"],
+                           capture_output=True, text=True)
+    return [sys.executable, "-m", "ruff"] if probe.returncode == 0 else None
+
+
+def check_python(abspath):
+    """Lint one .py file with ruff, or with pyflakes if ruff is unavailable.
+
+    ruff's default rules (E4/E7/E9/F) cover what pyflakes reports and it is much
+    faster.  It also discovers per-directory configuration by walking up from the
+    file, so a subtree with its own pyproject.toml/ruff.toml -- tool/pycharmm,
+    for instance -- is checked against that subtree's own rules rather than a
+    single tree-wide set.
+    """
+    ruff = _ruff_cmd()
+    if ruff:
+        cmd = ruff + ["check", "--output-format", "concise", abspath]
+    else:
+        exe = shutil.which("pyflakes")
+        cmd = [exe, abspath] if exe else [sys.executable, "-m", "pyflakes", abspath]
+    r = subprocess.run(cmd, capture_output=True, text=True)
+    return r.returncode, (r.stdout or r.stderr)
+
+
+# ---------------------------------------------------------------------------
+# driver
+# ---------------------------------------------------------------------------
+def main(argv=None):
+    ap = argparse.ArgumentParser(
+        description="Fast pre-build static checks for the CHARMM tree.")
+    ap.add_argument("files", nargs="*", help="specific files to lint")
+    ap.add_argument("--all", action="store_true",
+                    help="lint the whole tree instead of changed files")
+    ap.add_argument("--base", default=os.environ.get("CHARMM_LINT_BASE",
+                    "origin/master"),
+                    help="base ref for changed-file detection (default origin/master)")
+    ap.add_argument("--build-dir", default=None,
+                    help="build dir with compile_commands.json + build.ninja "
+                         "(default: auto-detect build/cmake)")
+    ap.add_argument("--lang", action="append", choices=ALL_LANGS,
+                    help="restrict to these languages (repeatable)")
+    ap.add_argument("-j", "--jobs", type=int, default=os.cpu_count() or 4)
+    ap.add_argument("-q", "--quiet", action="store_true",
+                    help="only print failures")
+    args = ap.parse_args(argv)
+
+    root = repo_root()
+    os.chdir(root)
+    build_dir = args.build_dir or os.path.join(root, "build", "cmake")
+
+    langs = set(args.lang) if args.lang else set(ALL_LANGS)
+
+    # ---- select files ----
+    if args.files:
+        rels = args.files
+    elif args.all:
+        rels = all_source_files(root)
+    else:
+        rels = changed_files(args.base)
+
+    targets = []  # (relpath, abspath, lang)
+    for rel in rels:
+        lg = lang_of(rel)
+        if lg and lg in langs:
+            ab = os.path.realpath(os.path.join(root, rel))
+            if os.path.isfile(ab):
+                targets.append((rel, ab, lg))
+
+    if not targets:
+        if not args.quiet:
+            print(green("charmm-lint: nothing to check"))
+        return 0
+
+    # ---- load backends lazily ----
+    need_c = any(t[2] in ("c", "cuda") for t in targets)
+    compile_db = load_compile_db(build_dir) if need_c else {}
+    need_f = any(t[2] == "fortran" for t in targets)
+    ninja = NinjaFortran(build_dir) if need_f else None
+
+    if need_c and not compile_db:
+        print(yellow("charmm-lint: no compile_commands.json in "
+                     f"{os.path.relpath(build_dir, root)} -- C/C++/CUDA skipped. "
+                     "Configure a build with CMAKE_EXPORT_COMPILE_COMMANDS=ON."))
+    if need_f and ninja is not None and not ninja.by_src:
+        print(yellow("charmm-lint: no build.ninja scan edges in "
+                     f"{os.path.relpath(build_dir, root)} -- Fortran skipped. "
+                     "Configure+build a local (no-cuda) tree first."))
+
+    # ---- run one file ----
+    def run(target):
+        rel, ab, lg = target
+        if lg == "python":
+            rc, out = check_python(ab)
+        elif lg == "fortran":
+            if ninja is None or ab not in ninja.by_src:
+                return (rel, lg, "skip",
+                        "not in build.ninja (configure a local build)")
+            rc, out = check_fortran(ninja, ab)
+        elif lg in ("c", "cuda"):
+            entry = compile_db.get(ab)
+            if entry is None:
+                return (rel, lg, "skip",
+                        "not in compile_commands.json "
+                        + ("(build cuda=ON on gollum)" if lg == "cuda"
+                           else "(header or excluded file)"))
+            rc, out = (check_cuda(entry) if lg == "cuda"
+                       else check_c_family(entry))
+        else:
+            return (rel, lg, "skip", "unsupported")
+        if rc is None:
+            return (rel, lg, "skip", out.strip())
+        return (rel, lg, "pass" if rc == 0 else "fail", out.strip())
+
+    with ThreadPoolExecutor(max_workers=args.jobs) as pool:
+        results = list(pool.map(run, targets))
+
+    # ---- report ----
+    n_pass = n_fail = n_skip = 0
+    for rel, lg, status, out in results:
+        if status == "fail":
+            n_fail += 1
+            print(f"{red('FAIL')} [{lg}] {rel}")
+            for line in out.splitlines():
+                print("    " + line)
+        elif status == "skip":
+            n_skip += 1
+            if not args.quiet:
+                print(f"{dim('skip')} [{lg}] {rel}  {dim('-- ' + out)}")
+        else:
+            n_pass += 1
+            if not args.quiet:
+                print(f"{green('ok')}   [{lg}] {rel}")
+
+    summary = (f"charmm-lint: {n_pass} ok, {n_fail} failed, {n_skip} skipped "
+               f"({len(targets)} files)")
+    print((red if n_fail else green)(summary))
+    return 1 if n_fail else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

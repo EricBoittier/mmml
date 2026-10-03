@@ -104,17 +104,28 @@ close unit 10
 
 ENERGY
 
-set refener 17.13667 
+set testfail 0
 
-calc diff = abs(?ener - @refener)
-if diff gt 0.001 then
-   echo "Test failed, incorrect total energy"
-   stop
-endif
+! Total energy (relative tolerance 0.0001)
+@testcheck ?ener 18.09285 0.0001 fmdcm_flux_ener
 
+! Electrostatic energy — primary DCM contribution from off-center charges
+@testcheck ?elec 5.50584 0.0001 fmdcm_flux_elec
+
+! VDW energy — must be unaffected by DCM charge placement
+@testcheck ?vdw 12.26306 0.0001 fmdcm_flux_vdw
+
+! Bond energy — internal geometry, independent of DCM
+@qcheck ?bond 0.25832 -0.00001 fmdcm_flux_bond
+
+! Angle energy — internal geometry, independent of DCM
+@qcheck ?angl 0.06563 -0.00001 fmdcm_flux_angl
+
+! Force derivative test (small step needed due to DCM energy surface curvature)
 coor force comp
+TEST FIRST STEP 0.0001
 
-TEST FIRST
+echo fmdcm_flux test failures: @testfail
 
-echo "TEST SUCCESSFUL"
+stop
 

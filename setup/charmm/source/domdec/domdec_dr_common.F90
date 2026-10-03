@@ -10,7 +10,7 @@ module domdec_dr_common
 !#if KEY_CMPI==0 /*not_cmpi*/
   use chm_kinds
   use dimens_fcm
-  use mpi,only:MPI_STATUS_SIZE
+  use mpi_f08,only:MPI_Comm,MPI_Status,MPI_Request
   implicit none
   private
 
@@ -37,7 +37,7 @@ module domdec_dr_common
   integer :: nrecip = 0
 
   ! MPI Commmunicators
-  integer comm_recip, comm_direct, comm_direct_recip
+  TYPE(MPI_Comm) :: comm_recip, comm_direct, comm_direct_recip
 
   ! Defines direct and reciprocal node mapping:
   ! direct_nodes(1:ndirect) = node ranks for direct nodes 1:ndirect
@@ -45,7 +45,8 @@ module domdec_dr_common
   integer, allocatable, dimension(:) :: direct_nodes, recip_nodes
 
   ! Save variables
-  integer comm_charmm_save, numnod_save, mynod_save
+  TYPE(MPI_Comm) :: comm_charmm_save
+  integer numnod_save, mynod_save
 
   ! Mynod (rank) after start_direct_recip is called
   ! direct nodes: mynod_split = 0...ndirect-1
@@ -53,7 +54,8 @@ module domdec_dr_common
   integer mynod_split
 
   integer(int_byte), pointer, dimension(:) :: commbuffer
-  integer, allocatable, dimension(:) :: commbuffersize, reqbuffer
+  integer, allocatable, dimension(:) :: commbuffersize
+  TYPE(MPI_Request), allocatable, dimension(:) :: reqbuffer
   integer, allocatable, dimension(:) :: commbufferpos, commnode
 
   integer ncomm, nreqbuffer
@@ -449,7 +451,7 @@ contains
   ! * Undo split direct/recip
   ! *
   subroutine merge_direct_recip()
-    use mpi
+    use mpi_f08
     use domdec_common,only:ndirect, q_cons_node, q_split
     use parallel_groups,only:free_comm_group
     use memory,only:chmdealloc
@@ -502,7 +504,7 @@ contains
   ! *
   subroutine split_direct_recip()
     use parallel
-    use mpi
+    use mpi_f08
     use stream
     use memory
     use parallel_groups,only:split_comm_group, create_comm_group
@@ -806,14 +808,15 @@ contains
   ! * NOTE: Can only be called when direct/recip split is ON
   ! *
   subroutine copy_to_recip(x, y, z)
-    use mpi
+    use mpi_f08
     use psf,only:natom
     use domdec_common,only:ndirect, q_split
     implicit none
     ! Input / Output
     real(chm_real) x(*), y(*), z(*)
     ! Variables
-    integer status(MPI_STATUS_SIZE), ierror
+    TYPE(MPI_Status) :: status
+    integer ierror
 
     if (.not.q_split) then
        call wrndie(-5,'<domdec_dr_common>','copy_to_recip called when direc/recip split is OFF')
@@ -900,8 +903,7 @@ contains
 
     ! reqbuffer
     if (allocated(reqbuffer)) then
-       call chmdealloc('domdec_dr_common.src','uninit_dr_common','reqbuffer',&
-            size(reqbuffer),intg=reqbuffer)
+       deallocate(reqbuffer)
     endif
 
     ! commnode

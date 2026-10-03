@@ -1,0 +1,83 @@
+* BLaDE ABIC must preserve the pending Langevin random draw
+* across segmented dynamics and intervening energy evaluation.
+*
+
+if ?blade .ne. 1 then
+   echo "Test NOT performed. BLADE must be defined in pref.dat"
+   stop
+endif
+
+! BLaDE needs a GPU of its own for every OpenMP thread in every rank, and
+! all ranks on one node see the same devices -- so N ranks x T threads want
+! N*T GPUs.  ?NGPU honours CUDA_VISIBLE_DEVICES; ?NTHREAD is the OpenMP
+! team size.  Across several nodes this is conservative, each node bringing
+! its own GPUs, so it can skip a run that would in fact work -- a needless
+! skip beats aborting inside BLaDE, which is what happens when the counts
+! do not add up.  Reported as an explicit SKIP because the grader matches
+! "TESTCASE RESULT: SKIP" but not the mixed-case "Test NOT performed" this
+! guard printed before.
+calc bladegpu = ?numnode * ?nthread
+if ?ngpu .lt. @bladegpu then
+   echo BLADE_ABIC_RNG TESTCASE RESULT: SKIP
+   stop
+endif
+
+stream datadir.def
+
+read rtf card name @0/top_all36_prot.rtf
+read param flex card name @0/par_all36_prot.prm
+
+read sequ ala 2
+generate dala first ace last ct3 setup
+ic param
+ic seed 1 cay 1 cy 1 n
+ic build
+
+set a 40.0
+crystal define cubic @a @a @a 90.0 90.0 90.0
+open unit 1 read form name @0/cubic.xtl
+crystal read card unit 1
+close unit 1
+
+scalar x store 1
+scalar y store 2
+scalar z store 3
+scalar fbeta set 5.0 select all end
+nbonds cutnb 12 ctofnb 10 ctonnb 8 fswitch vfswitch
+update
+
+dynamics leap start timestep 0.001 nstep 2 nprint 2 iprfrq 2 -
+     iseed 24681357 iasvel 1 nsavc 0 nsavv 0 iunwri 0 isvfrq 0 -
+     firstt 298 finalt 298 ntrfrq 0 blade
+
+energy blade abic
+
+! ISEED remains accepted on ABIC but must not reseed the live trajectory.
+open unit 31 write form name @{9}/blade_abic_segmented.res
+dynamics leap timestep 0.001 nstep 2 nprint 2 iprfrq 2 -
+     iseed 97531 iasvel 1 nsavc 0 nsavv 0 iunwri 31 isvfrq 2 -
+     firstt 298 finalt 298 ntrfrq 0 blade abic
+
+blade off
+scalar x recall 1
+scalar y recall 2
+scalar z recall 3
+blade on
+
+open unit 32 write form name @{9}/blade_abic_oneshot.res
+! Explicit START must win over the otherwise contradictory ABIC modifier.
+dynamics leap start timestep 0.001 nstep 4 nprint 4 iprfrq 4 -
+     iseed 24681357 iasvel 1 nsavc 0 nsavv 0 iunwri 32 isvfrq 4 -
+     firstt 298 finalt 298 ntrfrq 0 blade abic
+
+read coor dynr curr name @{9}/blade_abic_segmented.res comp
+read coor dynr curr name @{9}/blade_abic_oneshot.res
+coor rms
+@testcheck ?rms 0.0 -1.0e-5 BLADE_ABIC_RNG_CONTINUITY
+
+read coor dynr vel name @{9}/blade_abic_segmented.res comp
+read coor dynr vel name @{9}/blade_abic_oneshot.res
+coor rms
+@testcheck ?rms 0.0 -1.0e-5 BLADE_ABIC_VELOCITY_CONTINUITY
+
+stop

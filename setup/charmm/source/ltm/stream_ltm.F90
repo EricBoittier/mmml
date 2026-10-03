@@ -1,5 +1,8 @@
 module stream
   use chm_kinds
+#if KEY_MULTICOM==1
+  use mpi_f08, only: MPI_Comm
+#endif
   !     This is the STREAM data block.
   !     It contains information abount the current runstream.
   !
@@ -34,7 +37,7 @@ module stream
   integer   nstrm,istrm,jstrm(mxstrm),outu,prnlev,iolev,iecho
   !
 #if KEY_MULTICOM==1
-  integer :: comm_strm(mxstrm)
+  TYPE(MPI_Comm) :: comm_strm(mxstrm)
   ! VO Added ^ MULTICOM functionality: in addition to the streams, we store the communicator
   ! over which to broadcast the input line at each level
   ! This provides a clean way to split inputs

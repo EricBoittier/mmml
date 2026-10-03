@@ -331,12 +331,7 @@ dynamics leap start timestep 0.002 nstep 100 nprint 10 iprfrq 1000 -
      hoover reft 298 tmass 250 tbath 298     ! Constant temperature
 
 calc edd = ?vdw + ?elec
-calc diff = abs(@eold - @edd)
-echo @diff
-if diff gt 0.009 then
-   echo "Test failed (Run domdec on GPU)"
-!   stop
-endif
+@testcheck @edd @eold .000001 GPU_ENER
 
 calc viridd = ?viri
 calc pressidd = ?prsi

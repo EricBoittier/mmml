@@ -1,4 +1,5 @@
-
+CHARMM Element doc/prefx.info 1.1
+
 File: prefx.info, Node: Top, Up: (developer.info)Tools, Previous: (developer.info)Tools, Next: (developer.info)makemod
 
                           CHARMM Preprocessing
@@ -221,7 +222,7 @@ Expand subcommands control section (immediately following the ##EXPAND):
     the ##EXPAND line (before the .when.) are temporarily set and no code
     expansion is processed.
 
-Example (from nbonds/enbfs8.src):
+Example (from nbonds/enbfs8p.F90):
       ...
       ...
       ...

@@ -12,6 +12,31 @@ bomb 0
 
 if ?SCCDFTB .ne. 1 then stop
 
+! SCC-DFTB needs SCCDFTB_DATA set to a directory holding the DFTB parameter
+! file sccdftb_CHNO.dat (not in the repo; contact Marcus Elstner).  genv aborts
+! hard when SCCDFTB_DATA is unset, so guard it and self-skip house-style when
+! the data is not provisioned.
+set sccdftbdir UNSET_SCCDFTB_DATA
+set oldbomlev ?bomlev
+bomlev -5
+genv sccdftbdir SCCDFTB_DATA
+bomlev @oldbomlev
+if @sccdftbdir eq UNSET_SCCDFTB_DATA then
+   echo DXL_BOMD_TEST1 TESTCASE RESULT: SKIP
+   stop
+endif
+
+stream datadir.def
+strc sccdat @sccdftbdir "/sccdftb_CHNO.dat"
+bomlev -5
+open unit 98 read form name @sccdat
+if ?iostat .ne. 1 then
+   echo DXL_BOMD_TEST1 TESTCASE RESULT: SKIP
+   stop
+endif
+close unit 98
+bomlev @oldbomlev
+
 read rtf card
 * Taken from top_all22_prot.inp
 *
@@ -219,58 +244,102 @@ scalar WMAIN set 3.0 sele qm .and. type N*  SHOW end
 scalar WMAIN set 4.0 sele qm .and. type O*  SHOW end
 
 ! YOU HAVE TO HAVE a sccdftb.dat FILE!
-SCCDFTB remove CHRG 0 SELE qm END TEMP 0.00 SCFT 1.d-8 mull iguess 105
+SCCDFTB remove CHRG 0 SELE qm END TEMP 0.00 SCFT 1.d-8 mull iguess 105 DATF @sccdat
 
+energy
+! A self-reported result short-circuits the comparison against the
+! benchmark, so whatever is not asserted here stops being checked.
+! QMEL is read first, at the untouched geometry, so it does not depend
+! on the probes below.  It is the one captured number and is quoted for
+! the 3ob set; it earns its place because the invariants below are all
+! satisfied by an energy that is self-consistent but wrong.
+@testcheck ?qmel -10499.75316 0.000001 dxl_bomd_test1_qmel
+! Forces on an isolated system sum to zero (Newton's third law).
+scalar dx stat
+set fx = ?stot
+scalar dy stat
+set fy = ?stot
+scalar dz stat
+set fz = ?stot
+calc fnet = abs(@fx) + abs(@fy) + abs(@fz)
+@testcheck @fnet 0 -0.000001 dxl_bomd_test1_netforce
+! A rigid shift must not change the energy.  Tolerance 1e-4 because
+! ?ENER is read at print precision.
+set e0 = ?ener
+coor trans xdir 1.0 ydir 0.0 zdir 0.0 dist 3.7
+energy
+calc edrift = abs ( ?ener - @e0 )
+@testcheck @edrift 0 -0.0001 dxl_bomd_test1_translation
+coor trans xdir -1.0 ydir 0.0 zdir 0.0 dist 3.7
 energy
 
 mini sd   nstep 10   nprint 1
 mini abnr nstep 1000 nprint 10
 
-! Friction setup for Langevin dynamics at 310K
-scalar FBETA set 10.0 sele all end
+! ---------------------------------------------------------------------
+! What this testcase is for
+! ---------------------------------------------------------------------
+! DXL-BOMD (`iguess 105' above) propagates an auxiliary density alongside
+! the nuclei so that a loose SCF still gives forces good enough to conserve
+! energy.  Conserved energy is therefore the property worth checking, and it
+! needs no reference value: run without a thermostat and the total energy
+! must come back the same.
+!
+! The runs below are short on purpose.  What they exercise -- the
+! extrapolation, the restart file written and read back, the integrator --
+! does not need more steps, and the drift measured over 400 of them is
+! already four orders of magnitude inside the tolerance.  Running 160,000
+! steps and looking at none of them, which is what this file used to do,
+! took 7.7 minutes and checked nothing.
 
-open unit 12 form writ name ala.heat.leap.res
-open unit 13 file writ name ala.heat.leap.dcd
-! Start Langevin dynamics
-dynamics leap start timestep 0.001 nstep 10000 nprint 1 iprfrq 10 -
-   iseed 31415926 -
-   firstt 100 finalt 310 teminc 10.0 -
+! ---- heat, then hand over through a restart file ----
+open unit 12 form writ name @9dxl_heat.res
+dynamics leap start timestep 0.001 nstep 500 nprint 500 iprfrq 1000 -
+   iseed 31415926 firstt 100 finalt 310 teminc 10.0 -
    ihtfrq 100 ieqfrq 0 ntrfrq 1000 inbfrq 100000 -
-   iasors 1 iasvel 1 iscvel 0 ICHECW 0 TWINDH 10.0 TWINDL -10.0 -
-   iunwri 12 nsavc 100 nsavv 0 iuncrd 13 eps 1.0
-
+   iasors 1 iasvel 1 iscvel 0 ichecw 0 twindh 10.0 twindl -10.0 -
+   iunwri 12 nsavc 0 nsavv 0 eps 1.0
 close unit 12
-close unit 13
 
-! Equilibration Langevin dynamics
-open unit 11 read form name ala.heat.leap.res
-open unit 12 writ form name ala.eq.leap.res
-open unit 13 writ file name ala.eq.leap.dcd
-
-dynamics leap restart timestep 0.001 nstep 50000 nprint 10 iprfrq 1000 -
-   firstt 310 finalt 310 teminc 10.0 -
-   ihtfrq 0 ieqfrq 10 ntrfrq 1000 inbfrq 100000 -
-   iasors 1 iasvel 1 iscvel 0 ICHECW 0 TWINDH 10.0 TWINDL -10.0 -
-   iunwri 12 nsavc 1000 nsavv 0 iuncrd 13 iunread 11 eps 1.0
-
+! ---- equilibrate from that restart, writing another ----
+open unit 11 read form name @9dxl_heat.res
+open unit 12 form writ name @9dxl_equil.res
+dynamics leap restart timestep 0.001 nstep 500 nprint 500 iprfrq 1000 -
+   firstt 310 finalt 310 ihtfrq 0 ieqfrq 10 ntrfrq 1000 inbfrq 100000 -
+   iasors 1 iasvel 1 iscvel 0 ichecw 0 twindh 10.0 twindl -10.0 -
+   iunread 11 iunwri 12 nsavc 0 nsavv 0 eps 1.0
 close unit 11
 close unit 12
-close unit 13
 
-! Normal Langevin dynamics
-open unit 11 read form name ala.eq.leap.res
-open unit 12 writ form name ala.1.leap.res
-open unit 13 writ file name ala.1.leap.dcd
-
-dynamics leap restart timestep 0.001 nstep 100000 nprint 10 iprfrq 1000 -
-   firstt 310 finalt 310 teminc 10.0 -
-   ihtfrq 0 ieqfrq 10 ntrfrq 1000 inbfrq 100000 -
-   iasors 1 iasvel 1 iscvel 0 ICHECW 0 TWINDH 10.0 TWINDL -10.0 -
-   iunwri 12 nsavc 1000 nsavv 0 iuncrd 13 iunread 11 eps 1.0
-
+! ---- the check: no thermostat, no rescaling, no translation removal, so
+!      the total energy is a conserved quantity ----
+open unit 11 read form name @9dxl_equil.res
+open unit 12 form writ name @9dxl_nve1.res
+dynamics leap restart timestep 0.001 nstep 200 nprint 200 iprfrq 1000 -
+   firstt 310 finalt 310 ihtfrq 0 ieqfrq 0 ntrfrq 0 inbfrq 100000 -
+   iasors 1 iasvel 1 iscvel 0 ichecw 0 -
+   iunread 11 iunwri 12 nsavc 0 nsavv 0 eps 1.0
 close unit 11
 close unit 12
-close unit 13
+set tote0 = ?tote
+
+open unit 11 read form name @9dxl_nve1.res
+dynamics leap restart timestep 0.001 nstep 400 nprint 400 iprfrq 1000 -
+   firstt 310 finalt 310 ihtfrq 0 ieqfrq 0 ntrfrq 0 inbfrq 100000 -
+   iasors 1 iasvel 1 iscvel 0 ichecw 0 -
+   iunread 11 nsavc 0 nsavv 0 eps 1.0
+close unit 11
+
+! Measured drift over these 400 steps is 0.022 kcal/mol on a total energy of
+! -10525, so the bound below has a factor of ~20 in hand.  A density that is
+! not being propagated properly drifts by orders of magnitude more than this,
+! which is the failure worth catching.
+calc edrift = abs ( ?tote - @tote0 )
+@testcheck @edrift 0 -0.5 dxl_bomd_test1_nve_conserved
+
+! The temperature is free to move while the energy is conserved -- measured
+! runs sit between 215 and 250 K -- so this asserts only that the system did
+! not blow up: the tolerance is relative, so the band is 0 to 600 K.
+@testcheck ?temp 300 1.0 dxl_bomd_test1_temperature
 
 STOP
-

@@ -19,7 +19,8 @@
 """
 
 import ctypes
-import pycharmm.lib as lib
+# import pycharmm.loader as lib
+from pycharmm.loader import lib
 import pycharmm.coor as coor
 
 
@@ -31,7 +32,7 @@ def get_natc():
     n : integer
         current total number of atc entries
     """
-    n = lib.charmm.param_get_natc()
+    n = lib.param_get_natc()
     return n
 
 
@@ -47,7 +48,7 @@ def get_atc():
     buffers = [ctypes.create_string_buffer(8) for _ in range(n)]
     pointers = (ctypes.c_char_p * n)(*map(ctypes.addressof, buffers))
 
-    lib.charmm.param_get_atc(pointers)
+    lib.param_get_atc(pointers)
     res = [b.value.decode(errors='ignore') for b in buffers]
     return res
 
@@ -62,7 +63,7 @@ def get_charge() :
     """
     natom = coor.get_natom()
     c_charge = (ctypes.c_double * natom)()
-    lib.charmm.param_get_charge(c_charge)
+    lib.param_get_charge(c_charge)
 
     charge = [c_charge[i] for i in range(natom)]
     return charge
@@ -78,7 +79,7 @@ def get_vdwr() :
     """
     natom = coor.get_natom()
     c_vdwr = (ctypes.c_double * natom)()
-    lib.charmm.param_get_vdwr(c_vdwr)
+    lib.param_get_vdwr(c_vdwr)
 
     vdwr = [c_vdwr[i] for i in range(natom)]
     return vdwr
@@ -94,7 +95,7 @@ def get_epsilon():
     """
     natom = coor.get_natom()
     c_epsilon = (ctypes.c_double * natom)()
-    lib.charmm.param_get_epsilon(c_epsilon)
+    lib.param_get_epsilon(c_epsilon)
 
     epsilon = [c_epsilon[i] for i in range(natom)]
     return epsilon

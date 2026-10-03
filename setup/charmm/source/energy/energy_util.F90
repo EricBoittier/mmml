@@ -10,7 +10,7 @@ module energy_util
 
   ! Public subroutines
   public set_mtsflags, calc_dmcons, write_dmcons, calc_umbrella_potential, calc_adumb_potential
-  public calc_dihe_restraints, calc_noe_restraints, calc_redcns, calc_dbias, calc_hmcm
+  public calc_dihe_restraints, calc_noe_restraints, calc_redcns, calc_cats, calc_dbias, calc_hmcm
   public zero_energy_terms
 #if KEY_DOMDEC==1
   public energy_recip, init_auxdata, write_to_auxdata, read_from_auxdata, get_nauxdata
@@ -24,6 +24,9 @@ subroutine energy_recip(x, y, z, dx, dy, dz, qsecd)
   use dimens_fcm
   use energym,only:eterm, qeterm, ewksum, ewself, ewqcor, ewutil, umbr, dmc, adumb, &
        nauxdata, auxdata, cdihe, noe, resd, charm, hmcm
+#if KEY_MLMM==1
+  use energym,only:mlps ! eemlp
+#endif
   use ewald,only:kspace, ewvirial
   use memory
   use psf,only:natom, cg, cgtot
@@ -59,6 +62,13 @@ subroutine energy_recip(x, y, z, dx, dy, dz, qsecd)
 #endif
   use dmcons,only:ndmc            
   use number
+
+#if KEY_MLMM==1
+  use mlps_ini, only: mlps_use, with_pol_op_1, ml_pol_energy  !eemlp
+  use mlps_ene, only: calc_mlps_force     !eemlp
+  use mlps_pol_ene, only: calc_mlps_pol_force ! eemlp
+#endif
+
   implicit none
   ! Input / Output parameters
   real(chm_real), intent(inout) :: x(*), y(*), z(*)
@@ -87,6 +97,9 @@ subroutine energy_recip(x, y, z, dx, dy, dz, qsecd)
   call init_auxdata(nauxdata, auxdata)
 
   nloop = 0
+#if KEY_PARALLEL==1
+  TIMMER = ECLOCK()
+#endif
 
   do while (.true.)
 
@@ -137,6 +150,32 @@ subroutine energy_recip(x, y, z, dx, dy, dz, qsecd)
         call calc_dihe_restraints(eterm(cdihe), x, y, z, dx, dy, dz, dd1_dummy, iupt_dummy, qsecd)
         ! NOE
         call calc_noe_restraints(eterm(noe), x, y, z, dx, dy, dz, dd1_dummy, iupt_dummy, qsecd)
+        ! BLOCK Lambda Dynamics CATS restraints.
+        !
+        ! This accumulates into eterm(noe) rather than eterm(cats), which looks
+        ! wrong and is deliberate.  Only a pure reciprocal node reaches here,
+        ! and under q_split the constraint node IS a reciprocal node
+        ! (domdec_dr_common.F90), so this is the only call that fires in a
+        ! split run.  Energy terms travel back to the direct nodes packed into
+        ! auxdata by auxdata_kernel / read_from_auxdata, which carry a fixed
+        ! set -- the same set doc/domdec.info lists under "Currently supports
+        ! following constraints".  CATS is not in that set and has no slot, so
+        ! a value left in eterm(cats) here is computed and then dropped.
+        ! Borrowing NOE's slot is what gets the number across at all.
+        !
+        ! auxdata used to pack NOE only when noenum > 0, the count of real NOE
+        ! restraints, so a run with CATS restraints and no NOE restraints
+        ! computed this and then dropped it.  Both auxdata routines now also
+        ! ask cats_restraints_active().  Forces were never affected -- they are
+        ! packed per atom, not here.
+        !
+        ! Making this eterm(cats) for real means giving CATS its own auxdata
+        ! slot and adding it to the domdec.info list, i.e. making CATS a
+        ! supported DOMDEC constraint.  That is a feature decision, not a
+        ! cleanup.  energy.F90 uses eterm(cats) on the non-split path, and
+        ! BLaDE fills eterm(cats) from its own eecats term, so ?CATS is
+        ! correct everywhere except here.
+        call calc_cats(eterm(noe), x, y, z, dx, dy, dz)
         ! REDCNS
         call calc_redcns(eterm(resd), x, y, z, dx, dy, dz, dd1_dummy, iupt_dummy, qsecd)
         
@@ -160,6 +199,15 @@ subroutine energy_recip(x, y, z, dx, dy, dz, qsecd)
 
      endif
      !-----------------------------------------------------------------------
+
+#if KEY_MLMM==1
+     ! ML/MM (MLMM) is a non-DOMDEC feature and is evaluated exactly once, in
+     ! energy(). energy_recip() runs only on DOMDEC reciprocal cores; evaluating
+     ! the ML hook here as well would double-count the ML forces after
+     ! comm_force_among_recip in a DOMDEC PME-split run. It is therefore
+     ! intentionally NOT evaluated here (mlmm.info documents MLMM as
+     ! incompatible with DOMDEC).
+#endif
 
      call timer_start(T_rec)
      if (.not.q_domdec) then
@@ -387,7 +435,8 @@ end subroutine energy_recip
 #if KEY_MTS==1
        if(ene2) then
 #endif
-          if((noenum.gt.0) .and. qeterm(noe)) then
+          ! Must match auxdata_kernel exactly; see cats_restraints_active.
+          if(((noenum.gt.0) .or. cats_restraints_active()) .and. qeterm(noe)) then
              if (mynod == 0) eterm(noe) = auxdata(nauxdata+1)
              nauxdata = nauxdata + 1
           endif
@@ -607,7 +656,10 @@ end subroutine energy_recip
 #if KEY_MTS==1
        if(ene2) then                                          
 #endif
-          if((noenum.gt.0) .and. qeterm(noe)) then
+          ! CATS restraints ride in this slot too -- calc_cats accumulates
+          ! into eterm(noe) on the reciprocal node -- so the slot has to be
+          ! sent when they are active even if there are no NOE restraints.
+          if(((noenum.gt.0) .or. cats_restraints_active()) .and. qeterm(noe)) then
              if (present(auxdata)) then
                 auxdata(nauxdata+1) = eterm(noe)
              endif
@@ -959,6 +1011,9 @@ end subroutine energy_recip
     real(chm_real) TIMMER, TIMME1
     INTEGER IPT
 #endif /* (pll)*/
+#if KEY_PARALLEL==1
+    TIMMER = ECLOCK()
+#endif
 
 #if KEY_ADUMB==1
     !
@@ -1256,6 +1311,71 @@ end subroutine energy_recip
 #endif
     return
   end subroutine calc_noe_restraints
+
+  subroutine calc_cats(ecats, x, y, z, dx, dy, dz)
+    use block_ltm
+    use lambdam
+#if KEY_PARALLEL==1
+    use parallel,only:mynod, inode
+#endif
+#if KEY_DOMDEC==1
+    use domdec_common,only:q_domdec, q_cons_node
+#endif
+
+    implicit none
+    ! Input / Output
+    real(chm_real), intent(inout) :: ecats
+    real(chm_real), intent(in) :: x(*), y(*), z(*)
+    real(chm_real), intent(inout) :: dx(*), dy(*), dz(*)
+    logical execute
+
+#if KEY_BLOCK==1
+
+    execute = .true.
+
+#if KEY_DOMDEC==1
+    if (q_domdec) then
+       execute = execute .and. q_cons_node
+    else
+#endif
+#if KEY_PARALLEL==1
+       execute = execute .and. (mynod == inode(5))
+#endif
+#if KEY_DOMDEC==1
+    endif
+#endif
+
+    if (execute) then
+       if (qmld) call msld_add_restraints(nblock,x,y,z,dx,dy,dz,ecats)
+    endif
+#endif
+
+  end subroutine calc_cats
+
+  !> .TRUE. when BLOCK CATS restraints can contribute to the energy.
+  !!
+  !! calc_cats accumulates into eterm(noe) on the reciprocal node (see
+  !! energy_recip), so the NOE auxdata slot has to be sent whenever CATS
+  !! restraints are active, not only when there are real NOE restraints.
+  !! Both auxdata_kernel and read_from_auxdata ask this one function, because
+  !! they are hand-mirrored: if the sender packs a slot the receiver does not
+  !! expect, every value after it is read from the wrong offset.
+  !!
+  !! The three flags are set while parsing BLOCK, which every rank does, so
+  !! this gives the same answer on the direct and reciprocal nodes.  The
+  !! condition is the same one msld_add_restraints itself applies before it
+  !! adds anything.
+  logical function cats_restraints_active()
+#if KEY_BLOCK==1
+    use lambdam,only:qmld, qldm_scalecons, kscalecons
+#endif
+    implicit none
+#if KEY_BLOCK==1
+    cats_restraints_active = qmld .and. qldm_scalecons .and. kscalecons > 0
+#else
+    cats_restraints_active = .false.
+#endif
+  end function cats_restraints_active
 
   ! . General distance restraints.
   subroutine calc_redcns(eresd, x, y, z, dx, dy, dz, dd1, iupt, qsecd)

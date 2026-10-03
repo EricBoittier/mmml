@@ -515,7 +515,7 @@ void Matrix3d<T>::copy(int src_x0, int src_y0, int src_z0,
 				     mat->xsize, mat->ysize, mat->zsize,
 				     &data[src_pos], &mat->data[dst_pos]);
 
-  cudaCheck(cudaThreadSynchronize());
+  cudaCheck(cudaDeviceSynchronize());
 
   std::cout << "After copy:"<< std::endl;
   mat->print(0,0,0,0,1,1);

@@ -13,11 +13,12 @@ if ?numnode .ne. 1 then
 endif
 
 stream datadir.def
+set testfail 0
 
 if @?nsteps eq 0 set nsteps = 100
 if @?openmm eq 0 set openmm = 1
 if @openmm gt 0 then
-   omm on
+   omm on precision mixed
 else
    omm off
 endif
@@ -79,6 +80,10 @@ dynamics leap start timestep 0.002 -
      eps 1.0 cutnb @cutoff cutim @cutim ctofnb @ctofnb ctonnb @ctonnb vswi -
      ewald kappa @kappa pme order 4 fftx @nmesh ffty @nmesh fftz @nmesh ntrfq @nsteps !PME
 
+! Stage 1 start: check final PE
+@testcheck ?ener -4346.57221 0.0001 nve_start_ener
+calc etotref = ?ener + ?totk
+
 open unit 10 write form name @9/openmm.res
 
 !  Energies at step 100 should match step 0 here
@@ -93,6 +98,12 @@ dynamics leap restart timestep 0.002 -
      iunread 10 iunwrite 10 -
      eps 1.0 cutnb @cutoff cutim @cutim ctofnb @ctofnb ctonnb @ctonnb vswi -
      ewald kappa @kappa pme order 4 fftx @nmesh ffty @nmesh fftz @nmesh ntrfq @nsteps !PME
+
+! Stage 1 restart: check final PE and NVE total energy conservation
+@testcheck ?ener -4412.00835 0.0001 nve_restart_ener
+! NVE: total energy should be conserved (absolute tolerance)
+calc etotend = ?ener + ?totk
+@qcheck @etotend @etotref -1.0 nve_etot_conserve
 
 !!!!**************STAGE 2*************************!!!!
 read coor pdb name @0/@pdb resi
@@ -111,6 +122,9 @@ dynamics leap start timestep 0.002 -
      ewald kappa @kappa pme order 4 fftx @nmesh ffty @nmesh fftz @nmesh ntrfq @nsteps - !PME
      andersen colfreq 10
 
+! Stage 2 start: Andersen NVT final PE
+@testcheck ?ener -4440.15383 0.0001 ander_nvt_start_ener
+
 open unit 10 write form name @9/openmm.res
 
 !  Energies at step 100 should match step 0 here
@@ -127,6 +141,8 @@ dynamics leap restart timestep 0.002 -
      ewald kappa @kappa pme order 4 fftx @nmesh ffty @nmesh fftz @nmesh ntrfq @nsteps - !PME
      andersen colfreq 10
 
+! Stage 2 restart: Andersen NVT final PE
+@testcheck ?ener -4471.10731 0.0001 ander_nvt_restart_ener
 
 !!!!**************STAGE 3*************************!!!!
 read coor pdb name @0/@pdb resi
@@ -145,6 +161,9 @@ dynamics leap start timestep 0.002 -
      ewald kappa @kappa pme order 4 fftx @nmesh ffty @nmesh fftz @nmesh ntrfq @nsteps - !PME
      langevin gamma 6
 
+! Stage 3 start: Langevin NVT final PE
+@testcheck ?ener -4442.80784 0.0001 lang_nvt_start_ener
+
 open unit 10 write form name @9/openmm.res
 
 !  Energies at step 100 should match step 0 here
@@ -161,6 +180,8 @@ dynamics leap restart timestep 0.002 -
      ewald kappa @kappa pme order 4 fftx @nmesh ffty @nmesh fftz @nmesh ntrfq @nsteps - !PME
      langevin gamma 6
 
+! Stage 3 restart: Langevin NVT final PE
+@testcheck ?ener -4459.08031 0.0001 lang_nvt_restart_ener
 
 !!!!**************STAGE 4*************************!!!!
 read coor pdb name @0/@pdb resi
@@ -179,6 +200,9 @@ dynamics leap start timestep 0.002 -
      ewald kappa @kappa pme order 4 fftx @nmesh ffty @nmesh fftz @nmesh ntrfq @nsteps - !PME
      andersen colfrq 500 prmc iprssfrq 10 pref 2
 
+! Stage 4 start: Andersen NPT final PE
+@testcheck ?ener -4692.32200 0.0001 ander_npt_start_ener
+
 open unit 10 write form name @9/openmm.res
 
 !  Energies at step 100 should match step 0 here
@@ -194,6 +218,9 @@ dynamics leap restart timestep 0.002 -
      eps 1.0 cutnb @cutoff cutim @cutim ctofnb @ctofnb ctonnb @ctonnb vswi -
      ewald kappa @kappa pme order 4 fftx @nmesh ffty @nmesh fftz @nmesh ntrfq @nsteps - !PME
      andersen colfrq 500 prmc iprssfrq 10 pref 2
+
+! Stage 4 restart: Andersen NPT final PE
+@testcheck ?ener -4736.52009 0.0001 ander_npt_restart_ener
 
 !!!!**************STAGE 5*************************!!!!
 read coor pdb name @0/@pdb resi
@@ -212,6 +239,9 @@ dynamics leap start timestep 0.002 -
      ewald kappa @kappa pme order 4 fftx @nmesh ffty @nmesh fftz @nmesh ntrfq @nsteps - !PME
      langevin gamma 6 prmc iprssfrq 10 pref 2
 
+! Stage 5 start: Langevin NPT final PE
+@testcheck ?ener -4470.87025 0.0001 lang_npt_start_ener
+
 open unit 10 write form name @9/openmm.res
 
 !  Energies at step 100 should match step 0 here
@@ -228,6 +258,9 @@ dynamics leap restart timestep 0.002 -
      ewald kappa @kappa pme order 4 fftx @nmesh ffty @nmesh fftz @nmesh ntrfq @nsteps - !PME
      langevin gamma 6 prmc iprssfrq 10 pref 2
 
+! Stage 5 restart: Langevin NPT final PE
+@testcheck ?ener -4520.11255 0.0001 lang_npt_restart_ener
+
 !!!!**************STAGE 6*************************!!!!
 read coor pdb name @0/@pdb resi
 
@@ -242,6 +275,9 @@ dynamics leap start timestep 0.002 -
      eps 1.0 cutnb @cutoff cutim @cutim ctofnb @ctofnb ctonnb @ctonnb vswi -
      ewald kappa @kappa pme order 4 fftx @nmesh ffty @nmesh fftz @nmesh ntrfq @nsteps !PME
 
+! Stage 6a: ieqfrq with velocity reassignment
+@testcheck ?ener -4558.31573 0.0001 ieqfrq_reassign_ener
+
 read coor pdb name @0/@pdb resi
 
 !!!!!!!!!!!!!!Constant temperature using CHARMM's ieqfrq, scale velocities
@@ -255,6 +291,10 @@ dynamics leap start timestep 0.002 -
      eps 1.0 cutnb @cutoff cutim @cutim ctofnb @ctofnb ctonnb @ctonnb vswi -
      ewald kappa @kappa pme order 4 fftx @nmesh ffty @nmesh fftz @nmesh ntrfq @nsteps !PME
 
+! Stage 6b: ieqfrq with velocity scaling
+@testcheck ?ener -4549.44008 0.0001 ieqfrq_scale_ener
+
+echo omm_dynamics test failures: @testfail
 
 if @openmm gt 0 then
    omm clear

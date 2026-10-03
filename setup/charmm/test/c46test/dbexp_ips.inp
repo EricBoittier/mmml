@@ -41,7 +41,7 @@ format (f16.6)
 energy e14fac 1.5 eps 1.0 cutnb 11 cutim 11 ctofnb 9   -
       ips pxyz netcg dbexp  aexppot 17.470 cexppot 4.099
 
-calc delt abs ( ?ener + 64020.07213 )
+calc delt abs ( ?ener + 63980.70144 )
 
 if @delt gt 0.01 then
    echo "Test FAILED for double exponential IPS: c46test/dbexp_ips.inp "

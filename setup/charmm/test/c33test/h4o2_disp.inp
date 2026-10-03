@@ -4,11 +4,43 @@
 * Author: Haibo Yu & Qiang Cui, June 2005, UW Madison
 
 if ?SCCDFTB .NE. 1 then
-  echo "Test NOT Performed."
+  echo H4O2_DISP TESTCASE RESULT: SKIP
   STOP
 endif
 
 stream datadir.def
+
+! SCC-DFTB needs SCCDFTB_DATA set to a directory holding the DFTB parameter
+! file sccdftb_ONCH.dat (not in the repo; contact Marcus Elstner).  genv aborts
+! hard when SCCDFTB_DATA is unset, so guard it and self-skip house-style when
+! the data is not provisioned.
+set sccdftbdir UNSET_SCCDFTB_DATA
+set oldbomlev ?bomlev
+bomlev -5
+genv sccdftbdir SCCDFTB_DATA
+bomlev @oldbomlev
+if @sccdftbdir eq UNSET_SCCDFTB_DATA then
+   echo H4O2_DISP TESTCASE RESULT: SKIP
+   stop
+endif
+! The Slater-Kirkwood dispersion parameters ship with the test data.  They
+! are one line per element, in the order the parameter file declares them --
+! O, N, C, H here, matching sccdftb_ONCH.dat -- so they are read by position
+! and a mismatched order would silently give an element the wrong
+! polarizability.  The file is data/dispersion.inp: lower case, like the
+! other 549 files in that directory, because the parser upcases an unquoted
+! path and CHARMM recovers by retrying the whole name in lower case.
+strc dispdat @0 "dispersion.inp"
+
+strc sccdat @sccdftbdir "/sccdftb_ONCH.dat"
+bomlev -5
+open unit 98 read form name @sccdat
+if ?iostat .ne. 1 then
+   echo H4O2_DISP TESTCASE RESULT: SKIP
+   stop
+endif
+close unit 98
+bomlev @oldbomlev
 
 OPEN UNIT 21 NAME @0top_all22_prot.inp READ FORM
 READ RTF card UNIT 21
@@ -41,13 +73,16 @@ scalar WMAIN set 3.0 sele (all) .and. type C*  SHOW end
 scalar WMAIN set 4.0 sele (all) .and. type H*  SHOW end
 
 ! ...... A standard calculation ...... 
-SCCDFTB remove CHRG 0 SELE all END TEMP 0.00 SCFT 0.00000001 
+SCCDFTB remove CHRG 0 SELE all END TEMP 0.00 SCFT 0.00000001 DATF @sccdat
 
 energy
 
-! ...... Add dispersion (not very large here) ...... 
-! ...... Require the external file DISPERSION.INP ...... 
-SCCDFTB remove CHRG 0 SELE all END TEMP 0.00 SCFT 0.00000001 DISP 
+! ...... Add dispersion (not very large here) ......
+! ...... DSPF names that file; without it the code looks for ......
+! ...... DISPERSION.INP in the working directory, which is not where ......
+! ...... the test data lives ......
+SCCDFTB remove CHRG 0 SELE all END TEMP 0.00 SCFT 0.00000001 DISP -
+        DATF @sccdat DSPF @dispdat
 
 energy
 

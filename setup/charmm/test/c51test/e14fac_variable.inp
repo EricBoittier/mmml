@@ -1,0 +1,108 @@
+* Variable per-atom e14fac (MR!260) validation test
+* Confirms the OpenMM energy engine honours the per-atom 1-4 electrostatic
+* scale factor set through SCALAR E14F / NBONDS E14F.  In this tree only
+* OpenMM consumes the per-atom e14ff array (the CPU path uses the single
+* scalar E14FAC; BLaDE support is not wired), so the test is OpenMM-only.
+* Capture-free -- no hard-coded reference energies:
+*   Part 1: the energy CHANGE from e14fac 1.0->0.5 (delta cancels the
+*           systematic CPU-vs-OpenMM PME offset) must agree between the
+*           CPU reference and OpenMM.
+*   Part 2: a uniform per-atom array (SCALAR E14F SET 0.5 on ALL atoms)
+*           must give the SAME OpenMM energy as the scalar path
+*           (NBONDS E14F 0.5) -- proves the array path is wired.
+*   Part 3: a per-atom array on the protein only must change the OpenMM
+*           energy vs the uniform baseline -- proves it is truly per-atom.
+*
+
+if ?openmm .ne. 1 then
+   echo "Test NOT performed - OpenMM not available."
+   stop
+endif
+if ?numnode .ne. 1 then
+   echo "Test NOT performed in parallel."
+   stop
+endif
+
+stream datadir.def
+
+! ---- solvated DHFR (same fixtures the other BLaDE c51 tests use) ----
+open unit 1 read form name @{0}top_all22_prot.inp
+read rtf card unit 1
+close unit 1
+open unit 1 read form name @{0}par_all22_prot.inp
+read param card unit 1
+close unit 1
+open unit 1 read form name @{0}5dfr_minimized.crd
+read sequ coor unit 1
+close unit 1
+generate 5dfr setup first nter last cter
+read sequ tip3 7023
+generate wat setup noangl nodihe
+read coor pdb resi name @{0}5dfr_solv-cube_equil.pdb
+
+set size 62.23
+crystal define cubic @size @size @size 90.0 90.0 90.0
+crystal build cutoff 11 noper 0
+image byseg xcen 0.0 ycen 0.0 zcen 0.0 select segid 5dfr end
+image byres xcen 0.0 ycen 0.0 zcen 0.0 select segid wat end
+
+set nbopt = eps 1.0 cutnb 11 cutim 11 ctofnb 9 ctonnb 7.5 vswitch -
+   Ewald kappa 0.320 pmEwald order 4 fftx 64 ffty 64 fftz 64
+set tol = -0.05     ! negative = ABSOLUTE bound (kcal/mol) in test.str
+
+echo ============================================================
+echo      Variable per-atom e14fac (MR!260) validation
+echo ============================================================
+
+! ================= PART 1 : uniform e14fac, CPU vs OpenMM =========
+nbonds @nbopt e14f 1.0
+energy
+set c10 = ?ener
+energy omm
+set o10 = ?ener
+
+nbonds @nbopt e14f 0.5
+energy
+set c05 = ?ener
+energy omm
+set o05 = ?ener
+
+calc dcpu = @c10 - @c05
+calc domm = @o10 - @o05
+echo   delta E(1.0->0.5):  CPU = @dcpu  OpenMM = @domm
+@testcheck @domm @dcpu @tol E14FAC_UNIFORM_DELTA_CPU_VS_OMM
+
+! ============ PART 2 : per-atom array (uniform) == scalar path ====
+! scalar path baseline at 0.5
+nbonds @nbopt e14f 0.5
+energy omm
+set oscal = ?ener
+! per-atom array, all atoms = 0.5
+nbonds @nbopt e14f 1.0
+scalar e14f set 0.5 select all end
+energy omm
+set oarr = ?ener
+echo   uniform-array vs scalar (both 0.5):  array = @oarr  scalar = @oscal
+@testcheck @oarr @oscal @tol E14FAC_ARRAY_EQUALS_SCALAR
+
+! ============ PART 3 : per-atom array actually varies =============
+nbonds @nbopt e14f 1.0
+energy omm
+set oref = ?ener
+scalar e14f set 0.5 select segid 5dfr end
+energy omm
+set ovar = ?ener
+calc dvar = abs ( @ovar - @oref )
+echo   per-atom(protein 0.5) vs uniform 1.0:  ref = @oref  var = @ovar  |d| = @dvar
+if @dvar .gt. 0.05 then
+   set teststat pass
+else
+   set teststat fail
+   incr testfail by 1
+endif
+echo E14FAC_VARIABLE_CHANGES_ENERGY testcase result: @teststat
+
+echo ============================================================
+echo   Variable e14fac test complete : @testfail failure(s)
+echo ============================================================
+stop

@@ -90,7 +90,7 @@ module inbnd
   LOGICAL QETEN,QETSR
   LOGICAL QGRF ! Wei Chen 2015
   LOGICAL LOMMRXN, LOMMSWI, LOMMGB, qgbsw_omm, qgbmv_omm  !note lommgb is set in omm_cntrl
-  LOGICAL qmses_omm ! AN EXAMPLE OF OPENMM PLUGIN 
+  LOGICAL qmses_omm ! AN EXAMPLE OF OPENMM PLUGIN
 
   ! THE NONBOND REAL VALUES:
   !
@@ -150,9 +150,10 @@ module inbnd
   !     (5) = NNG14    Total number of group-group exclusions
   !     (6-10) =          unused
 
+  logical qe14ff ! Logical regarding whether e14ff taken from scalar array
   INTEGER       NNNB,NNNBG,NBXMOD,NNB14,NNG14 !
 
-  real(chm_real),save,allocatable,dimension(:) :: ATSX, ATSY, ATSZ
+  real(chm_real),save,allocatable,dimension(:) :: ATSX, ATSY, ATSZ, E14FF
 
 contains
   subroutine inbnd_init()
@@ -160,27 +161,54 @@ contains
     nbscal = one
     QETEN=.FALSE.
     QETSR=.FALSE.
+    qe14ff = .false.
     return
   end subroutine inbnd_init
 
   subroutine allocate_inbnd(natom)
     use memory
+    use stream, only: OUTU, PRNLEV
+!#if KEY_OPENMM==1
+!    use omm_main, only: teardown_openmm
+!#endif
+!#if KEY_BLADE==1
+!    use blade_main, only: system_dirty
+!#endif
     integer,intent(in):: natom
     integer i
     character(len=*),parameter :: routine_name="allocate_inbnd"
     integer ilen
 
     if(allocated(atsx)) then
-       if( natom > size(atsx) ) call deallocate_inbnd()
+       if (prnlev .ge. 6) then
+          write(outu, '(a,i8,a,i8)') &
+               'atsx already allocated: size=', size(atsx), &
+               ' natom=', natom
+       end if
+       if( natom /= size(atsx) ) then
+          if (prnlev .ge. 6) write(outu, '(a)') 'Deallocating atsx'
+
+          call deallocate_inbnd()
+          qe14ff = .false.
+       endif
     endif
     if(.not.allocated(atsx)) then
+       if (prnlev .ge. 6) write(outu, '(a)') 'Allocating atsx,y,z'
+
        call chmalloc(file_name,routine_name,'atsx ',natom,crl=atsx)
        call chmalloc(file_name,routine_name,'atsy ',natom,crl=atsy)
        call chmalloc(file_name,routine_name,'atsz ',natom,crl=atsz)
-       ! call chmalloc(file_name,routine_name,'e14ff',natom,crl=E14FF)
     endif
-    !write(*,*)'inbnd_ltm: setting e14ff elements to ',e14fac
-    !e14ff(1:natom) = e14fac
+    if(.not.allocated(e14ff)) then
+       if (prnlev .ge. 6) write(outu, '(a)') 'Allocating e14ff'
+
+       call chmalloc(file_name,routine_name,'e14ff',natom,crl=E14FF)
+    endif
+    if (.not. qe14ff) then
+       e14ff(1:natom) = e14fac
+       if (prnlev .ge. 6) write(outu,'(a,f8.3)') &
+            'inbnd_ltm: setting e14ff elements to ',e14fac
+    endif
     return
   end subroutine allocate_inbnd
 
@@ -193,6 +221,7 @@ contains
        call chmdealloc(file_name,routine_name,'atsx ',ilen,crl=atsx)
        call chmdealloc(file_name,routine_name,'atsy ',ilen,crl=atsy)
        call chmdealloc(file_name,routine_name,'atsz ',ilen,crl=atsz)
+       call chmdealloc(file_name,routine_name,'e14ff',ilen,crl=e14ff)
     endif
 
     return

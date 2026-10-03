@@ -1061,7 +1061,7 @@ if (.not. use_elec .and. nbopts%use_soft_omm) iend = 4
     use bases_fcm, only : bnbnd
     use psf, only: NATOM, CG, IAC, MAXATC
     use param, only: NATC, ITC, VDWR, EFF, NBFIXR
-    use inbnd, only: E14FAC
+    use inbnd, only: E14FAC, E14FF
     use omm_block, only : blockscale_nbpair
     use omm_nonbond, only : nbfix_scan, nbfix_index, charge_scale
     use omm_util
@@ -1097,7 +1097,8 @@ if (.not. use_elec .and. nbopts%use_soft_omm) iend = 4
              if(zero_charge) then
                 charge_prod = ZERO
              else
-                charge_prod = charge_scale() * E14FAC * CG(iatom) * CG(jatom)
+                charge_prod = charge_scale() * sqrt(e14ff(iatom)*e14ff(jatom)) &
+                     * CG(iatom) * CG(jatom)
              endif
              ikind = IAC(iatom)
              jkind = IAC(jatom)
@@ -1180,7 +1181,6 @@ if (.not. use_elec .and. nbopts%use_soft_omm) iend = 4
      integer :: ibl, jbl, kk
      integer :: istrt, iend, ipair, ijunk
      logical :: Is14orExcl, doPair
-     logical :: zero_vdw, zero_charge
      logical :: nbfix_exists(NATC)
 
 #if KEY_BLOCK==1
@@ -1225,9 +1225,10 @@ if (.not. use_elec .and. nbopts%use_soft_omm) iend = 4
                        sigma = ZERO
                        well_depth = ZERO
                     else
+                       sigma = ( VDWR(itc_i) + VDWR(itc_j) ) / TWO
                        sigma = ( OpenMM_SigmaPerVdwRadius * &
-                            ( VDWR(itc_i) + VDWR(itc_j) ) &
-                            / OpenMM_AngstromsPerNm ) / TWO
+                            ( sigma ) &
+                            / OpenMM_AngstromsPerNm )
                        well_depth =  OpenMM_KJPerKcal * &
                             sqrt( EFF(itc_i) * EFF(itc_j) )
                     endif

@@ -506,6 +506,7 @@ SUBROUTINE INIPERT
   call chmalloc('pert.src','INIPERT','PRICCS',NCSPHI,intg=PRICCS)
   call chmalloc('pert.src','INIPERT','PRCCSD',NCSPHI,intg=PRCCSD)
   call chmalloc('pert.src','INIPERT','PRTYPEH',NUMHSETS,intg=PRTYPEH)
+  call chmalloc('pert.src','INIPERT','PRPARHSET',NUMHSETS,intg=PRPARHSET)
   call chmalloc('pert.src','INIPERT','PRIHSET',NATOM,intg=PRIHSET)
   call chmalloc('pert.src','INIPERT','PRKCNST',NATOM,crl=PRKCNST)
   call chmalloc('pert.src','INIPERT','PRREFX',NATOM,crl=PRREFX)
@@ -693,6 +694,8 @@ SUBROUTINE CLEARPERT
        call chmdealloc('pert.src','clearpert','PRCCSD',siz1=SIZE(PRCCSD),intg=PRCCSD)
   if(allocated(PRTYPEH))   &
        call chmdealloc('pert.src','clearpert','PRTYPEH',siz1=SIZE(PRTYPEH),intg=PRTYPEH)
+  if(allocated(PRPARHSET))   &
+       call chmdealloc('pert.src','clearpert','PRPARHSET',siz1=SIZE(PRPARHSET),intg=PRPARHSET)
   if(allocated(PRIHSET))   &
        call chmdealloc('pert.src','clearpert','PRIHSET',siz1=SIZE(PRIHSET),intg=PRIHSET)
   if(allocated(PRKCNST))   &
@@ -933,6 +936,7 @@ SUBROUTINE PERTS2(IPERT,IGPERT)
      prpcaz(1:numpcap,1:natom) = pcaz(1:numpca,1:natom)
   endif
   PRTYPEH(1:NUMHSETS) = TYPHSET(1:NUMHSETS)
+  PRPARHSET(1:NUMHSETS) = PARHSET(1:NUMHSETS)
   PRKCEXP(1:NUMHSETS) = KCEXPN (1:NUMHSETS)
   prxhscal(1:numhsets) = XHSCALE(1:NUMHSETS)
   pryhscal(1:numhsets) = YHSCALE(1:NUMHSETS)
@@ -996,6 +1000,7 @@ SUBROUTINE PERTS2(IPERT,IGPERT)
            call chmdealloc('pert.src','PERTS2','PNGEO',PMXGEO,intg=PNGEO)
            call chmdealloc('pert.src','PERTS2','PIGEO',PMXGEO,intg=PIGEO)
            call chmdealloc('pert.src','PERTS2','PJGEO',PMXGEO,intg=PJGEO)
+           call chmdealloc('pert.src','PERTS2','PBLGEO',PMXGEO,intg=PBLGEO)
            call chmdealloc('pert.src','PERTS2','PXRGEO',PMXGEO,crl=PXRGEO)
            call chmdealloc('pert.src','PERTS2','PYRGEO',PMXGEO,crl=PYRGEO)
            call chmdealloc('pert.src','PERTS2','PZRGEO',PMXGEO,crl=PZRGEO)
@@ -1015,6 +1020,7 @@ SUBROUTINE PERTS2(IPERT,IGPERT)
         call chmalloc('pert.src','PERTS2','PNGEO',PMXGEO,intg=PNGEO)
         call chmalloc('pert.src','PERTS2','PIGEO',PMXGEO,intg=PIGEO)
         call chmalloc('pert.src','PERTS2','PJGEO',PMXGEO,intg=PJGEO)
+        call chmalloc('pert.src','PERTS2','PBLGEO',PMXGEO,intg=PBLGEO)
         call chmalloc('pert.src','PERTS2','PXRGEO',PMXGEO,crl=PXRGEO)
         call chmalloc('pert.src','PERTS2','PYRGEO',PMXGEO,crl=PYRGEO)
         call chmalloc('pert.src','PERTS2','PZRGEO',PMXGEO,crl=PZRGEO)
@@ -1040,6 +1046,7 @@ SUBROUTINE PERTS2(IPERT,IGPERT)
         PNGEO (1:PMXGEO) = NGEO  (1:PMXGEO)
         PIGEO (1:PMXGEO) = IGEO  (1:PMXGEO)
         PJGEO (1:PMXGEO) = JGEO  (1:PMXGEO)
+        PBLGEO (1:PMXGEO) = BLGEO(1:PMXGEO)
 
         pxrgeo(1:pmxgeo) = XRGEO(1:PMXGEO)
         pyrgeo(1:pmxgeo) = YRGEO(1:PMXGEO)
@@ -1163,10 +1170,11 @@ SUBROUTINE PERTPS(COMLYN,COMLEN,QRESET)
   LOGICAL QRESET
   !
   INTEGER I,NINC,IINC
-  real(chm_real) RMARK
+  real(chm_real) RMARK,TESTLAMB
   real(chm_real) FACT1,FACT2,FACT3,FACT4
   !
   RMARK=-9999.0
+  TESTLAMB=RMARK
   !
   ! Check limit values for recurring usage, or for the END command.
   PTERMN=.FALSE.
@@ -1241,82 +1249,174 @@ SUBROUTINE PERTPS(COMLYN,COMLEN,QRESET)
   LAMSTOP=GTRMF(COMLYN,COMLEN,'LSTO',LAMSTOP)
   !
   LAMDA=LAMDAP
-  LAMDAP=GTRMF(COMLYN,COMLEN,'LAMB',RMARK)
+  !
+  ! SB: We try to detect settings intended for the old automode (<=c48)
+  !
+  IF (LAMINC == ZERO .AND. LAMEXP == 0 .and. nlamexp == 0 ) THEN
+     ! my current best check that auto mode is NOT intended:
+     ! => parse for lambda
+     LAMDAP=GTRMF(COMLYN,COMLEN,'LAMB',RMARK)
+!!$     write(6,*) '======================'
+!!$     write(6,*) lamsta, lamstop,lamda,lamdap
+!!$     write(6,*) lamdaf
+!!$     write(6,*) '======================'
+  else
+     ! it seems that auto mode is intended/active; let's check for
+     ! conflicting options from the old automode approach
+     TESTLAMB=GTRMF(COMLYN,COMLEN,'LAMB',RMARK)
+     IF (TESTLAMB /= RMARK) THEN
+        ! Explicit lambda is undesired in the new automode (>= c49) approach
+        ! Let's attempt to guess the user's intentions
+        if ((lamsta == zero .and. laminc > zero) .or. &
+             (lamsta == one .and. laminc < 0)) then
+           IF(WRNLEV >= 2 .and. prnlev > 2) THEN
+              ! This is the branch where the user's intentions seem clear
+              ! We'll bomb, but this can be overridden by bomlev -1
+              ! If the user overrides us
+              WRITE(OUTU,'(a,a,f7.5,8(/,a))') ' PERTPS> ::WARNING::', &
+                   ' You explicitly set LAMBDA to ', &
+                   testlamb, &
+                   ' PERTPS> ::WARNING:: This is undesirable for the new auto mode', &
+                   ' PERTPS> ::WARNING:: Proceed at your own peril by setting bomlev to -1', &
+                   ' PERTPS> ::WARNING:: If you force me to continue, I will reset your LSTA/LSTO values', &
+                   ' PERTPS> ::WARNING:: to 0.0 and 1.0 or 1.0 and 0.0, depending on the sign of LINC', &
+                   ' PERTPS> ::WARNING:: Check that your calculation still does what you intend to do', &
+                   ' PERTPS> ::WARNING:: If you intended to use automode for an interval other than 0 to 1 or 1 to 0,', &
+                   ' PERTPS> ::WARNING:: you WILL get WRONG results!', &
+                   ' PERTPS> ::WARNING:: Consider modifying your input for the new automode (see pert.doc)!'
+           endif
+           CALL WRNDIE(0,'<PERTPS>','Explict LAMBDA value should not be set!')
+           ! so, if we survived, let's try to reset stuff to sensible defaults
+           ! for the new auto mode handling. We tried to warn the user
+           if (lamsta == zero .and. laminc > zero) then
+              lamstop = one
+              IF(WRNLEV >= 2 .and. prnlev > 2) THEN
+                 WRITE(OUTU,'(A,A,f4.2,a,f4.2,a)') ' PERTPS> ::WARNING::', &
+                      ' LAMBDA value ignored, LSTA and LSTOP set to ', &
+                      lamsta,' and ',lamstop,', respectively'
+              endif
+           else if (lamsta == one .and. laminc < 0) then
+              lamstop = zero
+              IF(WRNLEV >= 2 .and. prnlev > 2) THEN
+                 WRITE(OUTU,'(A,A,f4.2,a,f4.2,a)') ' PERTPS> ::WARNING::', &
+                      ' LAMBDA value ignored, LSTA and LSTOP set to ', &
+                      lamsta,' and ',lamstop,', respectively'
+              endif
+           endif
+           LAMDAP=RMARK ! enforce that we get in the LAMBDAP==RMARK branch below
+        else
+           WRITE(OUTU,'(2(a))') ' PERTPS> ::WARNING::', &
+                ' Please rewrite your input to work with the new auto mode (see pert.doc)!'
+           CALL WRNDIE(-2,'<PERTPS>','Inconsistent auto mode settings')
+        ENDIF
+     else
+        lamdap=testlamb ! testlamb=rmark; i.e., all seems OK
+     endif
+  endif
+  !
+!!$     write(6,*) '======================'
+!!$     write(6,*) lamsta, lamstop,lamda,lamdap
+!!$     write(6,*) lamdaf
+!!$     write(6,*) '======================'
   IF(LAMDAP /= RMARK) QPAVER=.FALSE.
   IF(INDXA(COMLYN,COMLEN,'LAVE') /= 0) QPAVER=.TRUE.
-  IF(LAMDAP == RMARK) THEN
-    IF(LAMEXP==ZERO)THEN
-     IF(NLAMEXP==0)THEN
-          IF(LAMINC/=ZERO)THEN
-               NLAMEXP=ABS(NINT((LAMSTOP-LAMSTA)/LAMINC))
-          ELSE
-               NLAMEXP=1
-          ENDIF
-          ILAMEXP=0
-          LAMDAF=LAMSTA
-     ENDIF     
-     IF(ILAMEXP==0)THEN
-       LAMDAI=LAMSTA
-       LAMDAP=LAMSTA
-       LAMDAF=LAMSTA+HALF*(LAMSTOP-LAMSTA-(NLAMEXP-1)*LAMINC)
-     ELSE IF(ILAMEXP.LT.NLAMEXP)THEN
-       LAMDAI=LAMDAF
-       LAMDAF=LAMDAF+LAMINC
-       LAMDAP=HALF*(LAMDAI+LAMDAF)
+  IF (qpwind .and. (LAMDAP == RMARK)) THEN
+     IF(LAMEXP==ZERO)THEN
+        IF(NLAMEXP==0)THEN
+           IF(LAMINC/=ZERO)THEN
+              NLAMEXP=ABS(NINT((LAMSTOP-LAMSTA)/LAMINC))
+           ELSE
+              NLAMEXP=1
+           ENDIF
+           ILAMEXP=0
+           LAMDAF=LAMSTA
+!!$           write(6,*) '====================== nlamexp==0'
+!!$           write(6,*) lamsta, lamstop,lamda,lamdap
+!!$           write(6,*) lamdaf
+!!$           write(6,*) '======================'
+        ENDIF
+        IF(ILAMEXP==0)THEN
+           LAMDAI=LAMSTA
+           LAMDAP=LAMSTA
+           LAMDAF=LAMSTA+HALF*(LAMSTOP-LAMSTA-(NLAMEXP-1)*LAMINC)
+!!$           write(6,*) '====================== ilamexp==0'
+!!$           write(6,*) lamsta, lamstop,lamda,lamdap
+!!$           write(6,*) lamdaf
+!!$           write(6,*) '======================'
+        ELSE IF(ILAMEXP.LT.NLAMEXP)THEN
+           LAMDAI=LAMDAF
+           LAMDAF=LAMDAF+LAMINC
+           LAMDAP=HALF*(LAMDAI+LAMDAF)
+!!$           write(6,*) '====================== ilam < nlamexp'
+!!$           write(6,*) lamsta, lamstop,lamda,lamdap
+!!$           write(6,*) lamdaf
+!!$           write(6,*) '======================'
+        ELSE
+           LAMDAI=LAMDAF
+           LAMDAP=LAMSTOP
+           LAMDAF=LAMSTOP
+!!$           write(6,*) '====================== else'
+!!$           write(6,*) lamsta, lamstop,lamda,lamdap
+!!$           write(6,*) lamdaf
+!!$           write(6,*) '======================'
+        ENDIF
+        ILAMEXP=ILAMEXP+1
+        IF(QPAVER) LAMDAP=HALF*(LAMDAI+LAMDAF)
+        IF(.NOT.QPWIND) LAMDAP=LAMDAI
+        IF(LAMDAP == RMARK) LAMDAP=LAMDA
+        IF(LAMINC>ZERO.AND.LAMDAF>LAMSTOP)LAMDAF=LAMSTOP
+        IF(LAMINC>ZERO.AND.LAMDAP>LAMSTOP)LAMDAP=LAMSTOP
+        IF(LAMINC<ZERO.AND.LAMDAF<LAMSTOP)LAMDAF=LAMSTOP
+        IF(LAMINC<ZERO.AND.LAMDAP<LAMSTOP)LAMDAP=LAMSTOP
      ELSE
-       LAMDAI=LAMDAF
-       LAMDAP=LAMSTOP
-       LAMDAF=LAMSTOP
+        IF(NLAMEXP==0)THEN
+           IF(LAMINC/=ZERO)THEN
+              NLAMEXP=ABS(NINT((LAMSTOP-LAMSTA)/LAMINC))
+           ELSE
+              NLAMEXP=1
+           ENDIF
+           ILAMEXP=0
+           LAMDAF=LAMSTA
+        ENDIF
+        IF(LAMEXP>ZERO)THEN
+           FACT1=ONE-EXP(-LAMEXP*LAMEXP)
+           FACT2=LAMEXP*ILAMEXP/NLAMEXP
+           FACT3=(ONE-EXP(-FACT2*FACT2))/FACT1
+           IF(ILAMEXP<NLAMEXP)FACT2=LAMEXP*(ILAMEXP+1)/NLAMEXP
+           FACT4=HALF*(FACT3+(ONE-EXP(-FACT2*FACT2))/FACT1)
+        ELSE
+           FACT1=ONE-EXP(-LAMEXP*LAMEXP)
+           FACT2=LAMEXP*(NLAMEXP-ILAMEXP)/NLAMEXP
+           FACT3=(EXP(-FACT2*FACT2)+FACT1-ONE)/FACT1
+           IF(ILAMEXP<NLAMEXP)FACT2=LAMEXP*(NLAMEXP-ILAMEXP-1)/NLAMEXP
+           FACT4=HALF*(FACT3+(EXP(-FACT2*FACT2)+FACT1-ONE)/FACT1)
+        ENDIF
+        LAMDAI=LAMDAF
+        !LAMDAP=LAMSTA+FACT3*(LAMSTOP-LAMSTA)
+        LAMDAF=LAMSTA+FACT4*(LAMSTOP-LAMSTA)
+        LAMDAP=HALF*(LAMDAI+LAMDAF)
+        IF(ILAMEXP==0)LAMDAP=LAMDAI
+        IF(ILAMEXP==NLAMEXP)LAMDAP=LAMDAF
+        IF(.NOT.QPWIND) LAMDAP=LAMDAI
+        ILAMEXP=ILAMEXP+1
      ENDIF
-     ILAMEXP=ILAMEXP+1
-     IF(QPAVER) LAMDAP=HALF*(LAMDAI+LAMDAF)
-     IF(.NOT.QPWIND) LAMDAP=LAMDAI
-     IF(LAMDAP == RMARK) LAMDAP=LAMDA
-     IF(LAMINC>ZERO.AND.LAMDAF>LAMSTOP)LAMDAF=LAMSTOP
-     IF(LAMINC>ZERO.AND.LAMDAP>LAMSTOP)LAMDAP=LAMSTOP
-     IF(LAMINC<ZERO.AND.LAMDAF<LAMSTOP)LAMDAF=LAMSTOP
-     IF(LAMINC<ZERO.AND.LAMDAP<LAMSTOP)LAMDAP=LAMSTOP
-    ELSE
-     IF(NLAMEXP==0)THEN
-       IF(LAMINC/=ZERO)THEN
-          NLAMEXP=ABS(NINT((LAMSTOP-LAMSTA)/LAMINC))
-       ELSE
-          NLAMEXP=1
-       ENDIF
-       ILAMEXP=0
-       LAMDAF=LAMSTA
-     ENDIF
-     IF(LAMEXP>ZERO)THEN
-       FACT1=ONE-EXP(-LAMEXP*LAMEXP)
-       FACT2=LAMEXP*ILAMEXP/NLAMEXP
-       FACT3=(ONE-EXP(-FACT2*FACT2))/FACT1
-       IF(ILAMEXP<NLAMEXP)FACT2=LAMEXP*(ILAMEXP+1)/NLAMEXP
-       FACT4=HALF*(FACT3+(ONE-EXP(-FACT2*FACT2))/FACT1)
-     ELSE
-       FACT1=ONE-EXP(-LAMEXP*LAMEXP)
-       FACT2=LAMEXP*(NLAMEXP-ILAMEXP)/NLAMEXP
-       FACT3=(EXP(-FACT2*FACT2)+FACT1-ONE)/FACT1
-       IF(ILAMEXP<NLAMEXP)FACT2=LAMEXP*(NLAMEXP-ILAMEXP-1)/NLAMEXP
-       FACT4=HALF*(FACT3+(EXP(-FACT2*FACT2)+FACT1-ONE)/FACT1)
-     ENDIF
-     LAMDAI=LAMDAF
-     !LAMDAP=LAMSTA+FACT3*(LAMSTOP-LAMSTA)
-     LAMDAF=LAMSTA+FACT4*(LAMSTOP-LAMSTA)
-     LAMDAP=HALF*(LAMDAI+LAMDAF)
-     IF(ILAMEXP==0)LAMDAP=LAMDAI
-     IF(ILAMEXP==NLAMEXP)LAMDAP=LAMDAF
-     IF(.NOT.QPWIND) LAMDAP=LAMDAI
-     ILAMEXP=ILAMEXP+1
-    ENDIF 
   ELSE
+     ! csb: according to 'my logic', slow-growth jobs should land here
+     ! csb debug
+     !!$     write(6,*) 'in pslow branch'
+     IF (LAMEXP /= 0 .or. nlamexp /= 0 ) THEN
+        ! I don't know whether the double exp features are supported in Slow-Growth,
+        ! so bomb hard
+        CALL WRNDIE(0,'<PERTPS>','PSLOw and double exponentials not supported!')
+     endif
      LAMDAI=LAMSTA
-  !
+     !
      IF(ABS(LAMDAI-LAMDAF) > TENM5) THEN
-          IF(WRNLEV >= 2 .and. prnlev > 2) WRITE(OUTU,222) LAMDAI,LAMDAF
-222  FORMAT(' PERTPS> ::WARNING:: The current LSTART value',F10.5, &
-               '  does not match the previous LSTOP value',F10.5)
-       ENDIF
-     
+        IF(WRNLEV >= 2 .and. prnlev > 2) WRITE(OUTU,222) LAMDAI,LAMDAF
+222     FORMAT(' PERTPS> ::WARNING:: The current LSTART value',F10.5, &
+             '  does not match the previous LSTOP value',F10.5)
+     ENDIF
+
      LAMDAF=LAMSTOP
   ENDIF
   IF(QPWIND) THEN
@@ -1822,6 +1922,7 @@ subroutine pert_off
      call chmdealloc('pert.src','PERTS','PNGEO',PMXGEO,intg=PNGEO)
      call chmdealloc('pert.src','PERTS','PIGEO',PMXGEO,intg=PIGEO)
      call chmdealloc('pert.src','PERTS','PJGEO',PMXGEO,intg=PJGEO)
+     call chmdealloc('pert.src','PERTS','PBLGEO',PMXGEO,intg=PBLGEO)
      call chmdealloc('pert.src','PERTS','PXRGEO',PMXGEO, crl=PXRGEO)
      call chmdealloc('pert.src','PERTS','PYRGEO',PMXGEO, crl=PYRGEO)
      call chmdealloc('pert.src','PERTS','PZRGEO',PMXGEO, crl=PZRGEO)

@@ -12,6 +12,14 @@ and versioning process.
 
 ### Changed
 
+- **Vendored CHARMM is c52a1** (15 August 2026), up from c49b1. ML/MM C API
+  patches (MLpot virial, sticky `READ PARAM APPEND`, `dynamics_run_kw`,
+  `crystal_free`, image-exclusion growth, direct `eval_charmm_script`) are
+  replayed on that tree. `pycharmm.lib.charmm` still names the shared library;
+  c52a1 loads it from `pycharmm.loader`. Rebuild before any live PyCHARMM run:
+  `bash scripts/rebuild_charmm_mlpot.sh`.
+
+
 - **PyCHARMM hybrid ML/MM MD on ETOH:181 (26 Å, RTX 5090) went from 199.8 ms/step
   mean to 74.8 ms (median 164 → 60, p95 119).** One measured A/B on gpu09
   (19 Sep 2026): the tree before #226 versus the integration of #226–#228 plus

@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Full Kernel Module</title>
+<link rel="stylesheet" href="charmmdoc.css">
+</head>
+<body>
+<div class="page-header">
+<h1>Full Kernel Module</h1>
+<div class="nav"><a href="index.html">Index</a><a href="charmm.html">CHARMM Home</a><a href="commands.html">Commands</a></div>
+</div>
+<pre>
+<a id="Top"></a>
+<div class="charmmdoc">
+		Full Kernel Module
+
+VERSON 1  06.07.2020 	
+by 
+Marco Pezzella 
+Debasish Koner 
+Markus Meuwly
+
+FULLKERN provides a way to flexibly implement RKHS based potentials for small molecules
+inside CHARMM. At the moment the interactions between atoms are set to zero, with the 
+aim  of automatically setting to zero internally the intramolecular interactions.The 
+PSF remains unchanged.The new interactions are not explicitly added to the PSF file and 
+only exist for the duration of a CHARMM run. FULLKERN is called via the FLMK keyword.
+
+References: 
+[1] D. Koner and M. Meuwly arXiv prepint https://arxiv.org/abs/2005.04667v2
+
+
+* <a href="#Syntax">Syntax</a> | Syntax of the FULLKERN module.
+* <a href="#Description">Description</a> | A brief description of the module and how it works.
+* <a href="#Generationofthepotential">Generation of the potential</a> | How to generate the new potential.
+* <a href="#Runningwithyourpotential">Running with your potential</a> | How to compile charmm with the desired
+                                 potential and run it.
+* <a href="#Generatingthecoefficients">Generating the coefficients</a> | Brief description of how to store the coefficients.
+* <a href="#Example">Example</a> | Description of the example: Acetone.
+* <a href="#Neededimprovements">Needed improvements</a> | Known gaps in the current implementation.
+
+</div>
+<a id="Syntax"></a>
+<div class="charmmdoc">
+<a href="#Top">Top</a>
+                                    Syntax
+
+
+FLMK  { READ {UNIT (integer) NATOMS (integer) DIMSYS (integer) DIMKERN (integer)  
+        NCOEFF (integer) ATOM1 (integer) ATOMN  (integer)  DATAFILE (char)} }
+
+READ option will activate the module, reading all the parameters needed for 
+storing and usage of the module. 
+
+UNIT: units needed for reading the data file;
+NATOMS: number of atoms treated with the kernels;
+DIMSYS: number of interatomic distances in the system;
+DIMKERN: number of 1D kernel basis functions; 
+NCOEFF: number of the coefficients in datafile;
+ATOM1: index of the first atom treated by kernels;
+ATOMN: index of the last atom treated by kernels;
+DATAFILEe: name of the data file containing the coefficients.
+
+</div>
+<a id="Description"></a>
+<div class="charmmdoc">
+<a href="#Top">Top</a>
+                                 Description
+
+
+FULLKERN is invoked by the FLMK command. At first the module reads the parameters for
+ the molecules and the atoms involved. These information will be considered only for 
+the present run of CHARMM, no modifications will be applied to the PSF file.
+
+Under the current implementation, force field parameters need to be set to zero. 
+
+No compatibility issues with other modules in CHARMM are registered.
+
+</div>
+<a id="Generationofthepotential"></a>
+<div class="charmmdoc">
+<a href="#Top">Top</a>
+                         Generation of the potential
+
+
+The fortran code for the RKHS potential and calculation of the coefficients are
+generated using a python script which takes care of the permutationally invariant
+symmetry of the molecule. Information regrading this will be made available in github.
+
+</div>
+<a id="Runningwithyourpotential"></a>
+<div class="charmmdoc">
+<a href="#Top">Top</a>
+                         Running with your potential
+
+
+TOOO (NEED TO BE DISCUSSED)
+
+</div>
+<a id="Generatingthecoefficients"></a>
+<div class="charmmdoc">
+<a href="#Top">Top</a>
+                         Generating the coefficients
+
+
+Calculate ab initio energies and cartesian gradients of the system for sample structures
+using normal mode sampling (randomly displacing the cordinates along the normal mode
+vectors). The coordinates, energy and gradients are then used to calculate the coefficients
+for the kernal polynomial using a least square fit. Corresponding codes for this will be
+made available in github
+
+</div>
+<a id="Example"></a>
+<div class="charmmdoc">
+<a href="#Top">Top</a>
+                                   Example
+
+
+Acetone dynamics.
+
+
+
+
+
+</div>
+<a id="Neededimprovements"></a>
+<div class="charmmdoc">
+<a href="#Top">Top</a>
+                             Needed improvements
+
+
+1- Remove properly the intratomic interactions inside the subroutine.
+2- Include the keywords for better recognition  of the variable and make the code more general.
+3- Make a flexible implementation?
+
+I would say that for point 1 and point 4 we can ask advise to Joshua.
+
+1- Optional flag for the installation of FULLKERN, via the  "-a FLMK".
+2- Make the module verbose.
+3- Insert the deallocation module.
+
+
+                                                                                                                                                 
+
+
+
+
+
+</div>
+</pre>
+</body>
+</html>

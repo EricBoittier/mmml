@@ -9,6 +9,7 @@
       module ftsm_var
 #if (KEY_STRINGM==1) /*  automatically protect all code */
       use chm_kinds
+      use mpi_f08, only: MPI_Datatype
       use chm_types
       use number
       use ivector
@@ -171,7 +172,7 @@
      & qdperpf_angstrom=.false.
 !
        integer, parameter, public :: num_sets=23 ! num of parameters above
-       integer*4, save :: MPI_RTMD_TYPE, MPI_RTMD_TYPE_
+       TYPE(MPI_Datatype), save :: MPI_RTMD_TYPE, MPI_RTMD_TYPE_
 !
        character(len=8), parameter, public :: real_format='(E23.15)'
        character(len=5), parameter, public :: int_format='(I10)'

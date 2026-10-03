@@ -74,7 +74,7 @@ RXNC       The value of the constraned order parameter.
 
 PLAG       Flag to active the output of the lagrange multipliers that are
            requires to satisfy the constraint during a dynamic simulation
-           (dynamc.src).
+           (dynamc.F90).
            In addition, the Z and G factors as defined in Sprik M, Ciccotti G
            "Free energy from constrained molecular dynamics" 
            JOURNAL OF CHEMICAL PHYSICS 109 (18): 7737-7744 NOV 8 1998

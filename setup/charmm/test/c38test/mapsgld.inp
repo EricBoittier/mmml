@@ -25,7 +25,14 @@ close unit 12
 
 
 prnlev 5 node 0
-wrnlev 2
+! `wrnlev' needs a node qualifier for the same reason `prnlev' has one:
+! non-master ranks start with WRNLEV=-5 so that only the master narrates,
+! and a bare `wrnlev' is applied on every rank, which would emit each
+! WRNDIE warning once per rank in a nondeterministic order.  This test
+! raises none today, so the qualifier is precautionary.  Use @pnode
+! rather than a literal `node 0': datadir.def leaves it empty in a serial
+! build, where NODE is not parsed and would be reported as extraneous.
+wrnlev 2 @pnode
 
 !Read in PSF and COR files of thermosome in closed-state
 

@@ -1,0 +1,164 @@
+* Restraint/engine probe.  Applies one restraint (@rtype) and evaluates the
+* energy through one engine (@engine), then reports the restraint term and
+* the total in a form the driver can parse.
+*
+
+! Driven by run_matrix.py; not meant to be run by hand, though it can be:
+!   charmm -prevclcg rtype=geo eterm=GEO engine=domdec -i probe.inp
+! A bare '*' ends the title block, so the rest of this note is in comments.
+
+stream datadir.def
+
+! ---------------- system: DHFR in a cubic box, 23,558 atoms ----------------
+
+open unit 1 read form name @0/top_all22_prot.inp
+read rtf card unit 1
+close unit 1
+
+open unit 1 read form name @0/par_all22_prot.inp
+read param card unit 1
+close unit 1
+
+open unit 1 read form name @0/5dfr_minimized.crd
+read sequ coor unit 1
+close unit 1
+
+generate 5dfr setup first nter last cter
+
+read sequ tip3 7023
+generate wat setup noangl nodihe
+
+open unit 1 read form name @0/5dfr_solv.crd
+read coor card unit 1
+close unit 1
+
+faster on
+
+Crystal define cubic 62.23 62.23 62.23 90.0 90.0 90.0
+crystal build cutoff 11 noper 0
+
+image byseg xcen 0.0 ycen 0.0 zcen 0.0 select segid 5dfr end
+image byres xcen 0.0 ycen 0.0 zcen 0.0 select segid wat end
+
+ioform exte
+format (f16.6)
+
+! ---------------- skip if this engine is not in the build ----------------
+
+set have = 1
+if @engine eq domdec       if ?domdec .ne. 1 set have = 0
+if @engine eq domdecnosplit if ?domdec .ne. 1 set have = 0
+if @engine eq domdecgpu    if ?domdec .ne. 1 set have = 0
+if @engine eq openmm       if ?openmm .ne. 1 set have = 0
+if @engine eq blade        if ?blade  .ne. 1 set have = 0
+
+if @have eq 0 then
+   echo PROBE @rtype @engine SKIP engine-not-built
+   stop
+endif
+
+! ---------------- the restraint under test ----------------
+
+if @rtype eq consharm then
+   coor copy comp
+   cons harm absolute force 5.0 select segid 5dfr .and. type CA end comp
+endif
+
+if @rtype eq consdihe then
+   cons dihe bynu 1 5 7 8 min 30.0 width 10.0 force 1.0 period 1
+endif
+
+if @rtype eq noe then
+   noe
+      assign kmin 10.0 rmin 3.0 kmax 10.0 rmax 4.0 fmax 100.0 -
+         select segid 5dfr .and. resid 10 .and. type CA end -
+         select segid 5dfr .and. resid 20 .and. type CA end
+   end
+endif
+
+if @rtype eq resd then
+   RESDistance  KVAL 1000.0  RVAL 0.25 -
+           1.0   WAT 1 OH2  WAT 1 H1  -
+          -1.0   WAT 1 OH2  WAT 1 H2
+endif
+
+if @rtype eq hmcm then
+   cons hmcm force 10.0 weig refx 12.421279 refy -1.546860 refz -5.295595 -
+        sele bynu 1000:1010 end
+endif
+
+if @rtype eq geo then
+   mmfp
+      geo sphere harmonic symmetric -
+          xref 0.0 yref 0.0 zref 0.0 force 10.0 droff 12.0 -
+          select segid 5dfr .and. type CA end
+   end
+endif
+
+if @rtype eq geocom then
+   mmfp
+      geo sphere rcm harmonic symmetric -
+          xref 0.0 yref 0.0 zref 0.0 force 10.0 droff 5.0 -
+          select segid 5dfr .and. resid 10 end
+   end
+endif
+
+if @rtype eq mdip then
+   mmfp
+      mdip xdir 1.0 dip0 0.0 force 100.0 power 1 -
+           select segid wat .and. resid 1 end
+   end
+endif
+
+if @rtype eq pull then
+   pull force 5.0 xdir 1.0 select segid 5dfr .and. type CA end
+endif
+
+if @rtype eq rgy then
+   rgyr force 5.0 refe 12.0 select segid 5dfr .and. type CA end
+endif
+
+if @rtype eq cdro then
+   cons drop force 0.000001 expo 4
+endif
+
+if @rtype eq none then
+   echo PROBE no restraint applied
+endif
+
+! ---------------- evaluate through the requested engine ----------------
+
+set nb = e14fac 1.5 eps 1.0 cutnb 11 cutim 11 ctofnb 9 ctonnb 7.5 vswi -
+     Ewald kappa 0.320 pmEwald order 4 fftx 64 ffty 64 fftz 64
+
+if @engine eq cpu then
+   energy @nb
+endif
+
+if @engine eq domdec then
+   energy @nb domdec dlb off split on
+endif
+
+if @engine eq domdecnosplit then
+   energy @nb domdec dlb off split off
+endif
+
+if @engine eq domdecgpu then
+   energy @nb domdec dlb off gpu on
+endif
+
+if @engine eq openmm then
+   omm on
+   energy @nb omm
+endif
+
+if @engine eq blade then
+   blade on
+   energy @nb
+endif
+
+! ---------------- report ----------------
+
+echo PROBE @rtype @engine TERM ?@eterm TOTAL ?ener
+
+stop

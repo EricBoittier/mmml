@@ -395,7 +395,7 @@ output is used unless a UNIT number is given (that unit is not closed by
 the NMR module). The keywords LIST (write out all the list of all properties,
 mostly used for debugging), COOR (mostly to have access to the coordinates 
 constructed by the BUILD option), and the NMR properties (CSA, DQS and RTIM).
-The level of printout detail is controlled by PRNLEV (see (doc/misc.info)).
+The level of printout detail is controlled by PRNLEV (see (doc/miscom.info)).
 This will change in future versions and the printout level will be controlled 
 by direct keywords.  The present levels of printout are:
 

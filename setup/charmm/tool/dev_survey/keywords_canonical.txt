@@ -1,0 +1,176 @@
+# CHARMM canonical compile-time keywords
+#
+# Source of truth: tool/cmake/prefx_keywords.cmake (the only place the build
+# turns tokens into -DKEY_<NAME>=1 compile definitions; see CMakeLists.txt
+# lines 1295-1314 and 1755-1760).
+#
+# This is the UNION of every token that any list(APPEND keywords ...) block
+# can add, across all configuration branches. The "[cond]" tag notes the
+# enclosing if() guard; tokens with no tag are always present (base list).
+#
+# NOTE on REMOVE_ITEM: NODISPLAY and NOGRAPHICS appear only as REMOVE_ITEM
+# targets (lines 247). NOGRAPHICS IS in the base list (line 6). NODISPLAY is
+# never APPENDed anywhere -> it is NOT a canonical keyword (the REMOVE_ITEM of
+# NODISPLAY is a no-op). See keywords_junk.md.
+#
+# QUANTUM/QCHEM/MOLVIB/MMFF are REMOVE_ITEM'd in gamess/nwchem branches but are
+# legitimately APPENDed elsewhere, so they remain canonical.
+#
+# pref.dat (tool/profiling/pref.dat) is the LEGACY prefx keyword file used only
+# by the old profiling tool; it contains stale tokens (EM64T, I4BINARY, HUGE,
+# FEWMFC, NEWTIMER, GNU/UNIX/EXPAND/PUTFCM) and is NOT authoritative for the
+# CMake build. Not merged into this list.
+#
+# source/util/keywords.F90 / keywords.inc.in are GENERATED from the cmake list
+# at configure time (configure_file), so they add nothing new.
+#
+# Total canonical tokens: 147
+#
+# token                  [condition]
+ACE
+ADUMB                    # [NOT lite]
+AFM                      # [NOT lite]
+APPLE                    # [if(APPLE)]
+ASPENER                  # [NOT lite]
+ASPMEMB                  # [NOT lite]
+AXD                      # [NOT lite]
+BLADE                    # [if(blade)]
+BLOCK                    # [NOT lite]
+CFF                      # [NOT lite]
+CGENFF                   # [NOT lite]
+CHEMPERT                 # [NOT lite]
+CHEQ                     # [NOT lite]
+CMAP                     # [NOT lite]
+COLFFT                   # [colfft AND (MKL OR FFTW)]
+COLFFT_NOSP              # [colfft AND FFTW AND NOT FFTWF]
+COMP2                    # [NOT lite]
+CONFIGURE
+CONSHELIX                # [NOT lite]
+CPATH                    # [NOT lite]
+CUDA                     # [if(cuda)]
+DENBIAS                  # [NOT lite]
+DFTBMKL                  # [sccdftb AND MKL]
+DHDGB                    # [NOT lite]
+DIMB                     # [NOT lite]
+DMCONS                   # [NOT lite] also [tsri]
+DOCK                     # [NOT lite]
+DOMDEC                   # [if(domdec)]
+DOMDEC_GPU               # [if(domdec_gpu)]
+DYNVV2                   # [NOT lite]
+EABF                     # [if(eabf)]
+EMAP                     # [NOT lite]
+ENSEMBLE                 # [ensemble OR abpo]
+EPMF                     # [NOT lite]
+ESTATS                   # [NOT lite]
+EXPAND
+FACTS                    # [NOT lite]
+FASTEW                   # [NOT lite]
+FFTDOCK                  # [if(fftdock)]
+FFTW                     # [FFTW_FOUND AND NOT MKL]
+FITCHG                   # [NOT lite]
+FLEXPARM                 # [NOT lite]
+FLUCQ                    # [NOT lite]
+FMA                      # [NOT lite]
+FOURD                    # [NOT lite]
+FSSHK                    # [NOT lite]
+G09                      # [if(g09)]
+GAMESS                   # [if(gamess)]
+GAMUS                    # [if(gamus)]
+GBFIXAT                  # [NOT lite]
+GBINLINE                 # [NOT lite] also [tsri]
+GCMC                     # [NOT lite]
+GENCOMM                  # [if(repdstr)]
+GENETIC                  # [NOT lite]
+GNN                      # [NOT lite]
+GNU
+GRAPE                    # [EXAFMM_FOUND]
+GRID                     # [NOT lite]
+GSBP                     # [NOT lite]
+HDGBVDW                  # [NOT lite]
+HFB                      # [NOT lite]
+HMCOM                    # [NOT lite]
+HQBM                     # [NOT lite]
+IMCUBES                  # [NOT lite] also [tsri]
+LARMORD                  # [NOT lite]
+LIBGRAPE                 # [EXAFMM_FOUND]
+LJPME                    # [if(ljpme)]
+LONEPAIR                 # [NOT lite]
+LONGLINE                 # [if(nih)]
+LOOKUP                   # [NOT lite]
+LRVDW                    # [NOT lite]
+MC                       # [NOT lite]
+MEHMC                    # [NOT lite]
+METAL                    # [if(metal)]
+MKL                      # [MKL_FOUND]
+MMFF                     # [NOT lite]
+MMPT                     # [NOT lite]
+MNDO97                   # [if(mndo97)]
+MOLVIB                   # [NOT lite]
+MPI                      # [MPI_Fortran_FOUND]
+MRMD                     # [NOT lite]
+MSMMPT                   # [NOT lite]
+MTPL                     # [NOT lite]
+MULTCAN                  # [NOT lite]
+MULTICOM                 # [if(stringm)]
+NBIPS                    # [NOT lite]
+NEWBESTFIT               # [if(stringm)]
+NIH                      # [if(nih)]
+NOGRAPHICS               # base; REMOVE_ITEM'd if X11_FOUND
+NWCHEM                   # [if(nwchem)]
+OLDDYN                   # [NOT lite]
+OMMTORCH                 # [OpenMMTorch_FOUND]
+OPENCL                   # [opencl AND OpenCL_FOUND]
+OPENMM                   # [OPENMM_FOUND]
+OPLS                     # [NOT lite]
+OVERLAP                  # [NOT lite]
+PARAFULL                 # [MPI_Fortran_FOUND]
+PARALLEL                 # [MPI_Fortran_FOUND]
+PATHINT                  # [NOT lite]
+PBEQ                     # [NOT lite]
+PBOUND                   # [NOT lite]
+PERT                     # [NOT lite]
+PHMD                     # [NOT lite]
+PIPF                     # [if(pipf)]
+PM1                      # [NOT lite]
+PMEPLSMA                 # [NOT lite] also [tsri]
+PNOE                     # [NOT lite]
+PRIMO                    # [NOT lite]
+PRIMSH                   # [NOT lite]
+PROTO                    # [NOT lite]
+QCHEM                    # [if(qchem)]
+QMMMSEMI                 # [if(qmmmsemi)]
+QTURBO                   # [if(qturbo)]
+QUANTUM                  # [if(quantum)]
+RDC                      # [NOT lite]
+RDFSOL                   # [NOT lite]
+REPDSTR                  # [if(repdstr)]
+REPLICA                  # [NOT lite]
+RGYCONS                  # [NOT lite] also [tsri]
+RMD                      # [NOT lite]
+RPATH                    # [NOT lite]
+RXNCONS                  # [NOT lite]
+RXNCOR                   # [NOT lite]
+SASAE                    # [NOT lite]
+SAVEFCM                  # [if(nih)]
+SCCDFTB                  # [if(sccdftb)]
+SCPISM                   # [NOT lite]
+SGLD                     # [NOT lite] also [nih]
+SHAPES                   # [NOT lite] also [nih]
+SHELL                    # [NOT lite]
+SMBP                     # [NOT lite]
+SMD                      # [NOT lite]
+SOFTVDW                  # [NOT lite]
+SQUANTM                  # [if(squantm)]
+SSNMR                    # [NOT lite]
+STATIC                   # [if(static)]
+STRINGM                  # [if(stringm)]
+TAMD                     # [NOT lite]; REMOVE_ITEM'd if MPI_Fortran_FOUND
+TNPACK                   # [NOT lite]
+TPS                      # [NOT lite]
+TRAVEL                   # [NOT lite]
+TSALLIS                  # [NOT lite]
+TSM                      # [NOT lite]
+UNIX
+VALBOND                  # [NOT lite]
+WCA                      # [NOT lite]
+XDISPLAY                 # [X11_FOUND]

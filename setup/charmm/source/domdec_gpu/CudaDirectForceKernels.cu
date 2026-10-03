@@ -38,6 +38,8 @@ void setBlockParamTexRefBound(const bool val) {blockParamTexRefBound=val;}
 
 static __constant__ const float ccelec = 332.0716f;
 const int tilesize = 32;
+// nthread14 (the 1-4 kernels' block size and __launch_bounds__) is provided by
+// CudaDirectForceParams.h, included via CudaDirectForce14_util.h below.
 
 /*
 //

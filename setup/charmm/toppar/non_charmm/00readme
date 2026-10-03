@@ -24,6 +24,13 @@ par_amber_98.inp
 
 parm14sb_all.rtf, parm14sb_all.prm: added July 2015
 
+All-hydrogen protein force field converted from AMBER ff19SB (parm19sb),
+including the phi/psi CMAP correction and OPC water with K+, Na+ and Cl-
+ions. Built by C. L. Brooks III (May 2026) by converting the tleap-generated
+prmtop files for capped ACE-AA1-AA2-NME and N-/C-terminal amino acids.
+
+parm19sb_prot.rtf, parm19sb_prot.prm: added August 2026
+
 Additional versions of CHARMM compatible AMBER files may be obtained
 from Jeff Klauda's website:
 

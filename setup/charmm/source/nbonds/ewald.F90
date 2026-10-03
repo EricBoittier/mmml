@@ -4273,7 +4273,7 @@ contains
 #endif
 #if KEY_MNDO97==1
     use mndo97
-    use qm1_info, only : qm_main_r,mm_main_r
+    use qm1_info, only : qm_main_c,mm_main_c
     use qmmmewald_module, only : getgrdq
 #endif
 #if KEY_SQUANTM==1 || KEY_QTURBO==1 || KEY_G09==1
@@ -4331,10 +4331,15 @@ contains
     CGTOTT = CGTOT
     IF(LQMEWD) CGTOT = CHAGTOT
 #elif KEY_MNDO97==1
-    KHARGE = qm_main_r%qmcharge   ! REAL(IN2(65))
+    if(associated(qm_main_c)) then
+       KHARGE = qm_main_c%qmcharge   ! REAL(IN2(65))
+    else
+       KHARGE = zero                 ! in case of not using qm/mm
+    end if
     CGTOTT = CGTOT
     IF(LQMEWD) CGTOT = CGMM+KHARGE
-    !!if(lqmewd .and. mm_main_r%PMEwald) then
+    !!if(lqmewd .and. .not.associated(mm_main_c)) call wrndie(-5,'<KSPACE>','No qm/mm is setup')
+    !!if(lqmewd .and. mm_main_c%PMEwald) then
     !!   q_qmmm_pme_do=.true.  !
     !!else
        q_qmmm_pme_do=.false.
@@ -4451,8 +4456,8 @@ contains
 #endif
 #if KEY_MNDO97==1
     use mndo97
-    use qm1_info, only : qm_main_r,mm_main_r
-    use qmmmewald_module, only : qmmm_ewald_r,getgrdq
+    use qm1_info, only : qm_main_c,mm_main_c
+    !!use qmmmewald_module, only : qmmm_ewald_c,getgrdq
 #endif
 !!#if KEY_SQUANTM==1 || KEY_QCHEM==1 || KEY_QTURBO==1 || KEY_G09==1
 !!    use squantm
@@ -4466,9 +4471,9 @@ contains
     character(len=9) :: routine = "kspace"
     real(chm_real)  EKSUM,LESELF,EQCOR,EUTIL
     LOGICAL QEKSUM,QESELF,QEQCOR,QEUTIL
-    real(chm_real)  X(*),Y(*),Z(*),DXYZ(3,natom)
-    real(chm_real)  CG(*),CGTOT
-    real(chm_real),allocatable,dimension(:) :: dx,dy,dz
+    real(chm_real)  X(natom),Y(natom),Z(natom),DXYZ(3,natom)
+    real(chm_real)  CG(natom),CGTOT
+    real(chm_real),allocatable,dimension(:) :: dxi,dyi,dzi
     INTEGER NATOM
 #if KEY_FLUCQ==1
     LOGICAL QFLUC
@@ -4491,23 +4496,28 @@ contains
     ! begin
     !
     IF (NATOM <= 0) RETURN
-    allocate(dx(natom),dy(natom),dz(natom))
+    allocate(dxi(natom),dyi(natom),dzi(natom))
     !
     ! namkh 08/08/04
     ! QM/MM-Ewald : Apply QM charge into total MM charge
 #if KEY_QUANTUM==1 || KEY_MNDO97==1 || KEY_SQUANTM==1 || KEY_GAMESS==1 || \
     KEY_GAMESSUK==1 || KEY_QCHEM==1 || KEY_QTURBO==1 || KEY_G09==1 /*qmewald*/
 #if KEY_MNDO97==1
-    KHARGE = qm_main_r%qmcharge
+    if(associated(qm_main_c)) then
+       KHARGE = qm_main_c%qmcharge
+    else
+       KHARGE = zero                 ! in case not using qm/mm.
+    end if
     CGTOTT = CGTOT
     IF(LQMEWD) CGTOT = CGMM+KHARGE
-    if(lqmewd .and. mm_main_r%PMEwald) then
+    if(lqmewd .and. .not. associated(mm_main_c)) call WRNDIE(-5,'<KSPACE_qmmm_prep>','no qm/mm is setup')
+    if(lqmewd .and. mm_main_c%PMEwald) then
        q_qmmm_pme_do=.true.  !
        ! initialization here: d_ewald_mm contains all forces from PME routines.
        do i=1,natom
-          dx(i) = zero  ! qmmm_ewald_r%d_ewald_mm(1:3,i)=zero
-          dy(i) = zero
-          dz(i) = zero
+          dxi(i) = zero  ! qmmm_ewald_c%d_ewald_mm(1:3,i)=zero
+          dyi(i) = zero
+          dzi(i) = zero
        end do
     else
        q_qmmm_pme_do=.false.
@@ -4517,19 +4527,19 @@ contains
 !!    ! now take care of gradient from MNDO
 !!    ! virial portion: already added into EWVIRIAL.
 !!#if KEY_MNDO97==1
-!!    IF(LQMEWD) CALL GETGRDQ(NATOM,DX,DY,DZ)
+!!    IF(LQMEWD) CALL GETGRDQ(NATOM,DXi,DYi,DZi)
 !!#endif
 #endif   /*qmewald*/
     !
     ! Call scalar/parallel version
     IF(QPME) THEN
 #if KEY_FLUCQ==1
-       IF (QFLUC) CALL WRNDIE(-4,'<KSPACE>','No FlucQ implementation for PME')
+       IF (QFLUC) CALL WRNDIE(-4,'<KSPACE_qmmm_prep>','No FlucQ implementation for PME')
 #endif
        IF(PRNLEV > 6) WRITE(OUTU,125) 'PME'
        CALL PME(EKSUM,LESELF,EQCOR,EUTIL, &
             QEKSUM,QESELF,QEQCOR,QEUTIL, &
-            X,Y,Z,DX,DY,DZ,NATOM,CG,CGTOT, &
+            X,Y,Z,DXi,DYi,DZi,NATOM,CG,CGTOT, &
 #if KEY_LJPME == 1
           (/ 0.0_chm_real /), &
 #endif
@@ -4546,11 +4556,11 @@ contains
 
     ! copy back and deallocate memory
     do i=1,natom
-       dxyz(1,i) = dx(i)
-       dxyz(2,i) = dy(i)
-       dxyz(3,i) = dz(i)
+       dxyz(1,i) = dxi(i)
+       dxyz(2,i) = dyi(i)
+       dxyz(3,i) = dzi(i)
     end do
-    deallocate(dx,dy,dz)
+    deallocate(dxi,dyi,dzi)
     !
     ! namkh 08/08/04
     ! QM/MM-Ewald : Recover original CGTOT
@@ -4579,7 +4589,7 @@ contains
 #endif
 
   integer        :: natom
-  real(chm_real) :: DX(*),DY(*),DZ(*)
+  real(chm_real) :: DX(natom),DY(natom),DZ(natom)
 
 #if KEY_MNDO97==1
   real(chm_real) :: ewvirialax(9)

@@ -145,7 +145,7 @@ contains
    subroutine nb_set_exclusions(nonbond, INB14, IBLO14)
       use psf, only: NATOM, CG, IAC, MAXATC
       use param, only: NATC, ITC, VDWR, EFF, NBFIXR
-      use inbnd, only: E14FAC
+      use inbnd, only: E14FAC, e14ff
       use omm_block, only : blockscale_nbpair
 
       type(OpenMM_NonbondedForce), intent(inout) :: nonbond
@@ -174,7 +174,9 @@ contains
                if(zero_charge .or. .not. use_omm_elec ) then
                   charge_prod = ZERO
                else 
-                  charge_prod = charge_scale() * E14FAC * CG(iatom) * CG(jatom)
+                  !charge_prod = charge_scale() * E14FAC * CG(iatom) * CG(jatom)
+                  charge_prod = charge_scale() * sqrt(e14ff(iatom)*e14ff(jatom)) &
+                       * CG(iatom) * CG(jatom)
                endif
                if (zero_vdw .or. .not. use_omm_vdw) then
                   sigma = ZERO
@@ -1140,9 +1142,10 @@ contains
                        sigma = ZERO
                        well_depth = ZERO
                     else
+                       sigma = ( VDWR(itc_i) + VDWR(itc_j) ) / two
                        sigma = ( OpenMM_SigmaPerVdwRadius * &
-                            ( VDWR(itc_i) + VDWR(itc_j) ) &
-                            / OpenMM_AngstromsPerNm ) / TWO
+                            ( sigma ) &
+                            / OpenMM_AngstromsPerNm )
                        well_depth =  OpenMM_KJPerKcal * &
                             sqrt( EFF(itc_i) * EFF(itc_j) )
                     endif

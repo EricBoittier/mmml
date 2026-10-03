@@ -504,7 +504,7 @@ contains
   !
   !> @param[in] old_end the last index in the old internal coord table
   !> @return integer error code, success == 1
-  integer function ic_update(old_end) bind(c)
+  integer(c_int) function ic_update(old_end) bind(c)
     use intcor_module, only: icr_struct
     use stream, only: outu, prnlev, wrnlev
     use intcor2, only: writic
@@ -513,7 +513,7 @@ contains
     implicit none
 
     ! args
-    integer, intent(in) :: old_end
+    integer(c_int), intent(in) :: old_end
 
     ! local vars
     character(len = 128) :: atom_str1, atom_str2 ! the 128 needs to be updated to the real max

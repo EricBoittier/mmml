@@ -20,10 +20,11 @@ contains
         use memory
         use comand  
         use string
-        INCLUDE  'mpif.h'
+        use mpi_f08
 
-        integer(chm_int4) :: myid, ierr,NUMPROC,MPIVER,MPISUBVER,IERROR,NEWRANK,orig_group
-        integer(chm_int4) :: headgrp,mylocrank,mylocsize,headnsz,orig_size,STATUS,basegrp
+        integer(chm_int4) :: myid, ierr,NUMPROC,MPIVER,MPISUBVER,IERROR,NEWRANK
+        TYPE(MPI_Group) :: orig_group,headgrp,basegrp
+        integer(chm_int4) :: mylocrank,mylocsize,headnsz,orig_size,STATUS
         integer(chm_int4),allocatable,dimension(:) :: baserank
 !        integer(chm_int4),dimension(4) :: headrank
         real(chm_real) :: RATIO,RNUMPROC,RNUMHOOD,RMYID
@@ -300,7 +301,7 @@ contains
         ENDDO
 !broadcast
         DATAR =0
-        CALL MPI_BCAST(DATAS,DATAR,MPI_DOUBLE_PRECISION,0,HOODCOM,STATUS)
+        CALL MPI_BCAST(DATAS,DATASIZE,MPI_DOUBLE_PRECISION,0,HOODCOM,STATUS)
         DO JJ = 1,DATASIZE
           WRITE(6,*) 'MYNODP ',MYNODP,' JJ ',JJ,' DATAR-BCAST ',DATAR(JJ)
         ENDDO
@@ -377,18 +378,18 @@ contains
 !                                                 --RJP
 !   use cpustruc
    use memory
+   use mpi_f08
    implicit none
    real(chm_real),intent(in),dimension(:) :: SENDAR
-   real(chm_real),intent(in),dimension(:) :: RECVAR
+   real(chm_real),intent(inout),dimension(:) :: RECVAR
    integer,intent(in) :: SENDSZ
 ! these are local variables in this context:
-   integer(chm_int4),intent(in) :: HOODCOM !communicator within a neighborhood
-   integer(chm_int4),intent(in) :: HEADCOM !communicator between head nodes of neighborhoods
+   TYPE(MPI_Comm),intent(in) :: HOODCOM !communicator within a neighborhood
+   TYPE(MPI_Comm),intent(in) :: HEADCOM !communicator between head nodes of neighborhoods
    integer,intent(in) :: NUMNODH  !number of nodes in a neighborhood
    integer,intent(in) :: NUMNOD  !number of nodes in all neighborhoods
    integer,intent(in) :: IMYKEYP !rank within neighborhood communicator
 !
-   include 'mpif.h'
 
  !locals
    real(chm_real),allocatable,dimension(:) :: RECVARH
@@ -418,19 +419,18 @@ contains
 !-------------------------------------------------------------------------------------------------
    subroutine po_comm_i(SENDAR,SENDSZ,RECVAR,HOODCOM,NUMNODH,IMYKEYP,HEADCOM,NUMNOD)
 !post office algorithm for integers
-!   use cpustruc 
+!   use cpustruc
+   use mpi_f08
    implicit none
    integer,intent(in),dimension(:) :: SENDAR
-   integer,intent(in),dimension(:) :: RECVAR
-   integer,intent(in) :: SENDSZ 
+   integer,intent(inout),dimension(:) :: RECVAR
+   integer,intent(in) :: SENDSZ
 ! the following are local variables here:
-   integer(chm_int4),intent(in) :: HOODCOM !communicator within a neighborhood
-   integer(chm_int4),intent(in) :: HEADCOM !communicator between head nodes of neighborhoods
+   TYPE(MPI_Comm),intent(in) :: HOODCOM !communicator within a neighborhood
+   TYPE(MPI_Comm),intent(in) :: HEADCOM !communicator between head nodes of neighborhoods
    integer,intent(in) :: NUMNODH  !number of nodes in a neighborhood
    integer,intent(in) :: NUMNOD  !number of nodes in all neighborhoods
    integer,intent(in) :: IMYKEYP !rank within neighborhood communicator
-
-   include 'mpif.h'
 
  !locals
    integer,allocatable,dimension(:) :: RECVARH

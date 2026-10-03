@@ -11,6 +11,7 @@
 #include "system/potential.h"
 
 #include "main/real3.h"
+#include "main/gpu_check.h"
 
 
 
@@ -63,7 +64,7 @@ void getforce_ewaldself(System *system,bool calcEnergy)
   real_e *pEnergy=NULL;
   real prefactor=-system->run->betaEwald*(kELECTRIC/sqrt(M_PI));
 
-  if (r->usePME==false) return;
+  if (r->elecMethod!=epme) return;
   if (r->calcTermFlag[eenbrecipself]==false) return;
 
   if (calcEnergy) {
@@ -72,6 +73,7 @@ void getforce_ewaldself(System *system,bool calcEnergy)
   }
 
   getforce_ewaldself_kernel<<<(N+BLNB-1)/BLNB,BLNB,shMem,r->nbrecipStream>>>(N,p->charge_d,prefactor,m->atomBlock_d,s->lambda_fd,s->lambdaForce_d,pEnergy);
+  gpuCheck(cudaGetLastError());
 }
 
 
@@ -476,9 +478,6 @@ __global__ void getforce_ewald_gather_kernel(
     } else {
       lEnergy=0;
     }
-    // if (!isfinite(lEnergy)) { // code to look for causes of nan in lEnergy
-    //   printf("Error: lEnergy is not finite for atom %d\n",iAtom);
-    // }
     // note, had to use reduction without shared memory here for a while to avoid errors. That seems to have passed.
     real_sum_reduce(lEnergy,sEnergy,energy);
     // real_sum_reduce(lEnergy,energy);
@@ -496,7 +495,7 @@ void getforce_ewaldTT(System *system,box_type kbox,bool calcEnergy)
   int shMem=0;
   real_e *pEnergy=NULL;
 
-  if (r->usePME==false) return;
+  if (r->elecMethod!=epme) return;
   if (r->calcTermFlag[eenbrecip]==false) return;
 
   if (calcEnergy) {
@@ -504,13 +503,14 @@ void getforce_ewaldTT(System *system,box_type kbox,bool calcEnergy)
     pEnergy=s->energy_d+eenbrecip;
   }
 
-  cudaMemsetAsync(p->chargeGridPME_d,0,p->gridDimPME[0]*p->gridDimPME[1]*p->gridDimPME[2]*sizeof(myCufftReal),r->nbrecipStream);
+  gpuCheck(cudaMemsetAsync(p->chargeGridPME_d,0,p->gridDimPME[0]*p->gridDimPME[1]*p->gridDimPME[2]*sizeof(myCufftReal),r->nbrecipStream));
 
   // Setup for spread and gather
   int spreadGatherBlocks=(N + BLNB/8 - 1)/(BLNB/8);
 
   // Spread kernel
   getforce_ewald_spread_kernel<flagBox,order><<<spreadGatherBlocks,BLNB,0,r->nbrecipStream>>>(N,p->charge_d,m->atomBlock_d,(real3*)s->position_fd,kbox,s->lambda_fd,((int3*)p->gridDimPME)[0],p->chargeGridPME_d);
+  gpuCheck(cudaGetLastError());
 
   myCufftExecR2C(p->planFFTPME,p->chargeGridPME_d,p->fourierGridPME_d);
 
@@ -518,6 +518,7 @@ void getforce_ewaldTT(System *system,box_type kbox,bool calcEnergy)
   dim3 blockCount((p->gridDimPME[0]+8-1)/8,(p->gridDimPME[1]+8-1)/8,(p->gridDimPME[2]/2+1+8-1)/8);
   dim3 blockSize(8,8,8);
   getforce_ewald_convolution_kernel<flagBox><<<blockCount,blockSize,0,r->nbrecipStream>>>(((int3*)p->gridDimPME)[0],p->fourierGridPME_d,p->bGridPME_d,system->run->betaEwald,kbox);
+  gpuCheck(cudaGetLastError());
 
   myCufftExecC2R(p->planIFFTPME,p->fourierGridPME_d,p->potentialGridPME_d);
 
@@ -529,6 +530,7 @@ void getforce_ewaldTT(System *system,box_type kbox,bool calcEnergy)
     p->potentialGridPME_d,
 #endif
     (real3*)s->position_fd,(real3_f*)s->force_d,kbox,s->lambda_fd,s->lambdaForce_d,pEnergy);
+  gpuCheck(cudaGetLastError());
 }
 
 template <bool flagBox,typename box_type>

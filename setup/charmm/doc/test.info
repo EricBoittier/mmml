@@ -9,12 +9,12 @@ File: Test, Node: Top, Up: (doc/commands.info)
 Syntax of the TEST commands:
 
 TEST FIRSt [TOL real] [STEP real] [UNIT int] [MASS int] [atom-selection]
-              (0.005)    (0.0001)        (6)        (0)
+              (0.0001)   (0.005)         (6)        (0)
 
                   [ CRYStal  [ HOMOgeneous ] ]
 
 TEST SECOnd  [TOL real] [STEP real] [UNIT int] [2xatom-selection]
-               (0.005)    (0.0001)  (OUTU (6)) 
+               (0.0001)   (0.005)   (OUTU (6)) 
 
 TEST COORdinates  [COMP]
 

@@ -31,6 +31,16 @@ Structure::Structure() {
   noeList.clear();
   harmCount=0;
   harmList.clear();
+  boRestCount=0;
+  boRestList.clear();
+  anRestCount=0;
+  anRestList.clear();
+  diRestCount=0;
+  diRestList.clear();
+  resdCount=0;      // eeresd
+  resdList.clear(); // eeresd
+  MLPModelCount=0;  // eemlp
+  MLPList.clear();  // eemlp
 
   setup_parse_structure();
 }
@@ -55,6 +65,20 @@ void Structure::setup_parse_structure()
   helpStructure["noe"]="?structure noe [selection] [selection] [rmin] [kmin] [rmax] [kmax] [rpeak] [rswitch] [nswitch]> Apply a CHARMM-style NOE restraint between a pair of atoms\n";
   parseStructure["harmonic"]=&Structure::parse_harmonic;
   helpStructure["harmonic"]="?structure harmonic [selection] [mass|none] [k real] [n real]> Apply harmonic restraints of k*(x-x0)^n to each atom in selection. x0 is taken from the current coordinates read in by coordinates. For none, k has units of kcal/mol/A^n, for mass, k is multiplied by the mass, and has units of kcal/mol/A^n/amu. structure harmonic reset clears all restraints\n";
+  parseStructure["dihedral"]=&Structure::parse_dihedral;
+  helpStructure["dihedral"]="[selection] [selection] [selection] [selection] [kconst] [angle0] [periodicity]\n";
+  parseStructure["boRest"]=&Structure::parse_boRest;
+  helpStructure["boRest"]="[selection] [selection] [kconst] [r0] [block]> Apply quadratic harmonic potential on the rij between two selected atoms, scaled by the block's lambda.\n";
+  parseStructure["anRest"]=&Structure::parse_anRest;
+  helpStructure["anRest"]="[selection] [selection] [selection] [kconst] [angle0] [block]> Apply quadratic harmonic potential on the angle formed by three selected atoms, scaled by the block's lambda.\n";
+  parseStructure["diRest"]=&Structure::parse_diRest;
+  helpStructure["diRest"]="[selection] [selection] [selection] [selection] [kconst] [angle0] [block]> Apply quadratic harmonic potential on the dihedral angle form by four selected atoms, scaled by the block's lambda.\n";
+  parseStructure["resd"]=&Structure::parse_resd; //eeresd
+  helpStructure["resd"]="?structure resd [selection_dist1_atom1] [selection_dist1_atom2] [selection_dist2_atom1] [selection_dist2_atom2] [dist1_coefficient] [dist2_coefficient] [ref_dist_diff] [k_dist_diff]> Apply a CHARMM-style RESD restraint with linear combination of two distances (dist1 and dist2)\n"; // eeresd
+#ifdef WITH_TORCH
+  parseStructure["mlp"]=&Structure::parse_mlp; //eemlp
+  helpStructure["mlp"]="?structure mlp [atom selection] [tani] [TorchScript .pt filename] > Apply Torch-derived forces to selected atoms based on the given model TYPE (eg. tani) and TorchScript FILE \n"; // eemlp
+#endif
   parseStructure["print"]=&Structure::dump;
   helpStructure["print"]="?structure print> This prints selected contents of the structure data structure to standard out\n";
   parseStructure["help"]=&Structure::help;
@@ -85,13 +109,13 @@ void Structure::help(char *line,char *token,System *system)
   char name[MAXLENGTHSTRING];
   io_nexta(line,name);
   if (name=="") {
-    fprintf(stdout,"?structure > Available directives are:\n");
+    printlog("?structure > Available directives are:\n");
     for (std::map<std::string,std::string>::iterator ii=helpStructure.begin(); ii!=helpStructure.end(); ii++) {
-      fprintf(stdout," %s",ii->first.c_str());
+      printlog(" %s",ii->first.c_str());
     }
-    fprintf(stdout,"\n");
+    printlog("\n");
   } else if (helpStructure.count(name)==1) {
-    fprintf(stdout,helpStructure[name].c_str());
+    printlog(helpStructure[name].c_str());
   } else {
     error(line,name,system);
   }
@@ -221,9 +245,322 @@ void Structure::parse_harmonic(char *line,char *token,System *system)
   harmCount=harmList.size();
 }
 
+void Structure::parse_dihedral(char *line,char *token,System *system)
+{
+  io_nexta(line,token);
+  if (strcmp(token,"reset")==0) {
+    diRestList.clear();
+  } else {
+    std::string iselection=token;
+    std::string jselection=io_nexts(line);
+    std::string kselection=io_nexts(line);
+    std::string lselection=io_nexts(line); 
+    int is,ns,i,j,k,l;
+    if (system->selections->selectionMap.count(iselection)!=1) {
+      fatal(__FILE__,__LINE__,"Unrecognized first selection name %s for dihedral restraints\n",token);
+    }
+    ns=0;
+    for (is=0; is<system->selections->selectionMap[iselection].boolCount; is++) {
+      if (system->selections->selectionMap[iselection].boolSelection[is]) {
+        i=is;
+        ns++;
+      }
+    }
+    if (ns!=1) fatal(__FILE__,__LINE__,"Expected 1 atom in first selection, found %d\n",ns);
+    if (system->selections->selectionMap.count(jselection)!=1) {
+      fatal(__FILE__,__LINE__,"Unrecognized second selection name %s for dihedral restraints\n",token);
+    }
+    ns=0;
+    for (is=0; is<system->selections->selectionMap[jselection].boolCount; is++) {
+      if (system->selections->selectionMap[jselection].boolSelection[is]) {
+        j=is;
+        ns++;
+      }
+    }
+    if (ns!=1) fatal(__FILE__,__LINE__,"Expected 1 atom in second selection, found %d\n",ns);
+    if (system->selections->selectionMap.count(kselection)!=1){
+      fatal(__FILE__,__LINE__,"Unrecognized third selection name %s for dihedral restraints\n",token);
+    }
+    ns=0;
+    for (is=0; is<system->selections->selectionMap[kselection].boolCount; is++) {
+       if (system->selections->selectionMap[kselection].boolSelection[is]) {
+        k=is;
+        ns++;
+      }
+    }
+    if (ns!=1) fatal(__FILE__,__LINE__,"Expected 1 atom in third selection, found %d\n",ns);
+    if (system->selections->selectionMap.count(lselection)!=1){
+      fatal(__FILE__,__LINE__,"Unrecognized fourth selection name %s for dihedral restraints\n",token);
+    }
+    ns=0;
+    for (is=0; is<system->selections->selectionMap[lselection].boolCount; is++) {
+       if (system->selections->selectionMap[lselection].boolSelection[is]) {
+        l=is;
+        ns++;
+      }
+    }
+    if (ns!=1) fatal(__FILE__,__LINE__,"Expected 1 atom in fourth selection, found %d\n",ns);
+    struct DiRestPotential dr;
+    dr.idx[0]=i;
+    dr.idx[1]=j;
+    dr.idx[2]=k;
+    dr.idx[3]=l;
+    dr.kphi=io_nextf(line)*KCAL_MOL;
+    dr.phi0=io_nextf(line)*DEGREES;
+    dr.nphi=io_nexti(line);
+#warning "Need to set width"
+    dr.width=0;
+    dr.block=0; // Assume dihedral restraint is not scaled by lambda
+    diRestList.push_back(dr);
+    }
+  diRestCount=diRestList.size();
+}
+
+void Structure::parse_boRest(char *line, char *token, System *system){
+  io_nexta(line,token);
+  if (strcmp(token,"reset")==0) {
+    boRestList.clear();
+  } else {
+    std::string iselection=token;
+    std::string jselection=io_nexts(line);
+    int is,ns,i,j;
+    if (system->selections->selectionMap.count(iselection)!=1) {
+      fatal(__FILE__,__LINE__,"Unrecognized first selection name %s for bond restraints\n",token);
+    }
+    ns=0;
+    for (is=0; is<system->selections->selectionMap[iselection].boolCount; is++) {
+      if (system->selections->selectionMap[iselection].boolSelection[is]) {
+        i=is;
+        ns++;
+      }
+    }
+    if (ns!=1) fatal(__FILE__,__LINE__,"Expected 1 atom in first selection, found %d\n",ns);
+    if (system->selections->selectionMap.count(jselection)!=1) {
+      fatal(__FILE__,__LINE__,"Unrecognized second selection name %s for dihedral restraints\n",token);
+    }
+    ns=0;
+    for (is=0; is<system->selections->selectionMap[jselection].boolCount; is++) {
+      if (system->selections->selectionMap[jselection].boolSelection[is]) {
+        j=is;
+        ns++;
+      }
+    }
+    if (ns!=1) fatal(__FILE__,__LINE__,"Expected 1 atom in second selection, found %d\n",ns);
+    struct BoRestPotential br;
+    br.idx[0]=i;
+    br.idx[1]=j;
+    br.kr=io_nextf(line)*(KCAL_MOL/ANGSTROM/ANGSTROM);
+    br.r0=io_nextf(line)*ANGSTROM;
+    br.block=io_nexti(line); 
+    boRestList.push_back(br);
+  }
+  boRestCount=boRestList.size();
+}
+
+void Structure::parse_anRest(char *line, char *token, System *system){
+  io_nexta(line,token);
+  if (strcmp(token,"reset")==0) {
+    anRestList.clear();
+  } else {
+    std::string iselection=token;
+    std::string jselection=io_nexts(line);
+    std::string kselection=io_nexts(line);
+    int is,ns,i,j,k;
+    if (system->selections->selectionMap.count(iselection)!=1) {
+      fatal(__FILE__,__LINE__,"Unrecognized first selection name %s for dihedral restraints\n",token);
+    }
+    ns=0;
+    for (is=0; is<system->selections->selectionMap[iselection].boolCount; is++) {
+      if (system->selections->selectionMap[iselection].boolSelection[is]) {
+        i=is;
+        ns++;
+      }
+    }
+    if (ns!=1) fatal(__FILE__,__LINE__,"Expected 1 atom in first selection, found %d\n",ns);
+    if (system->selections->selectionMap.count(jselection)!=1) {
+      fatal(__FILE__,__LINE__,"Unrecognized second selection name %s for dihedral restraints\n",token);
+    }
+    ns=0;
+    for (is=0; is<system->selections->selectionMap[jselection].boolCount; is++) {
+      if (system->selections->selectionMap[jselection].boolSelection[is]) {
+        j=is;
+        ns++;
+      }
+    }
+    if (ns!=1) fatal(__FILE__,__LINE__,"Expected 1 atom in second selection, found %d\n",ns);
+    if (system->selections->selectionMap.count(kselection)!=1){
+      fatal(__FILE__,__LINE__,"Unrecognized third selection name %s for dihedral restraints\n",token);
+    }
+    ns=0;
+    for (is=0; is<system->selections->selectionMap[kselection].boolCount; is++) {
+       if (system->selections->selectionMap[kselection].boolSelection[is]) {
+        k=is;
+        ns++;
+      }
+    }
+    if (ns!=1) fatal(__FILE__,__LINE__,"Expected 1 atom in third selection, found %d\n",ns);
+    struct AnRestPotential br;
+    br.idx[0]=i;
+    br.idx[1]=j;
+    br.idx[2]=k;
+    br.kt=io_nextf(line)*KCAL_MOL;
+    br.t0=io_nextf(line)*DEGREES;
+    br.block=io_nexti(line); // Assume dihedral restraint is not scaled by lambda
+    anRestList.push_back(br);
+  }
+  anRestCount=anRestList.size();
+}
+
+// Multiplicity = 0
+void Structure::parse_diRest(char *line,char *token,System *system){
+  io_nexta(line,token);
+  if (strcmp(token,"reset")==0) {
+    diRestList.clear();
+  } else {
+    std::string iselection=token;
+    std::string jselection=io_nexts(line);
+    std::string kselection=io_nexts(line);
+    std::string lselection=io_nexts(line); 
+    int is,ns,i,j,k,l;
+    if (system->selections->selectionMap.count(iselection)!=1) {
+      fatal(__FILE__,__LINE__,"Unrecognized first selection name %s for dihedral restraints\n",token);
+    }
+    ns=0;
+    for (is=0; is<system->selections->selectionMap[iselection].boolCount; is++) {
+      if (system->selections->selectionMap[iselection].boolSelection[is]) {
+        i=is;
+        ns++;
+      }
+    }
+    if (ns!=1) fatal(__FILE__,__LINE__,"Expected 1 atom in first selection, found %d\n",ns);
+    if (system->selections->selectionMap.count(jselection)!=1) {
+      fatal(__FILE__,__LINE__,"Unrecognized second selection name %s for dihedral restraints\n",token);
+    }
+    ns=0;
+    for (is=0; is<system->selections->selectionMap[jselection].boolCount; is++) {
+      if (system->selections->selectionMap[jselection].boolSelection[is]) {
+        j=is;
+        ns++;
+      }
+    }
+    if (ns!=1) fatal(__FILE__,__LINE__,"Expected 1 atom in second selection, found %d\n",ns);
+    if (system->selections->selectionMap.count(kselection)!=1){
+      fatal(__FILE__,__LINE__,"Unrecognized third selection name %s for dihedral restraints\n",token);
+    }
+    ns=0;
+    for (is=0; is<system->selections->selectionMap[kselection].boolCount; is++) {
+       if (system->selections->selectionMap[kselection].boolSelection[is]) {
+        k=is;
+        ns++;
+      }
+    }
+    if (ns!=1) fatal(__FILE__,__LINE__,"Expected 1 atom in third selection, found %d\n",ns);
+    if (system->selections->selectionMap.count(lselection)!=1){
+      fatal(__FILE__,__LINE__,"Unrecognized fourth selection name %s for dihedral restraints\n",token);
+    }
+    ns=0;
+    for (is=0; is<system->selections->selectionMap[lselection].boolCount; is++) {
+       if (system->selections->selectionMap[lselection].boolSelection[is]) {
+        l=is;
+        ns++;
+      }
+    }
+    if (ns!=1) fatal(__FILE__,__LINE__,"Expected 1 atom in fourth selection, found %d\n",ns);
+    struct DiRestPotential dr;
+    dr.idx[0]=i;
+    dr.idx[1]=j;
+    dr.idx[2]=k;
+    dr.idx[3]=l;
+    dr.kphi=io_nextf(line)*KCAL_MOL;
+    dr.phi0=io_nextf(line)*DEGREES;
+    dr.nphi=0; // harmonic restraint
+    dr.width=0;
+    dr.block=io_nexti(line);
+    diRestList.push_back(dr);
+  }
+  diRestCount=diRestList.size();
+}
+
+// eeresd-begin
+void Structure::parse_resd(char *line,char *token,System *system)
+{
+  io_nexta(line,token);
+  if (strcmp(token,"reset")==0) {
+    resdList.clear();
+  } else {
+    std::string i1selection=token;
+    std::string i2selection=io_nexts(line);
+    std::string j1selection=io_nexts(line);
+    std::string j2selection=io_nexts(line);
+
+
+    int is,ns,i1,i2,j1,j2;
+    // sel 1 //distance1 atom1
+    if (system->selections->selectionMap.count(i1selection)!=1) {
+      fatal(__FILE__,__LINE__,"Unrecognized atom1_for_distance1 selection name %s for resd restraints\n",token);
+    }
+    ns=0;
+    for (is=0; is<system->selections->selectionMap[i1selection].boolCount; is++) {
+      if (system->selections->selectionMap[i1selection].boolSelection[is]) {
+        i1=is;
+        ns++;
+      }
+    }
+    if (ns!=1) fatal(__FILE__,__LINE__,"Expected 1 atom in atom1_for_distance1 selection, found %d\n",ns);
+    // sel 2 //distance1 atom2
+    if (system->selections->selectionMap.count(i2selection)!=1) {
+      fatal(__FILE__,__LINE__,"Unrecognized atom2_for_distance1 selection name %s for resd restraints\n",token);
+    }
+    ns=0;
+    for (is=0; is<system->selections->selectionMap[i2selection].boolCount; is++) {
+      if (system->selections->selectionMap[i2selection].boolSelection[is]) {
+        i2=is;
+        ns++;
+      }
+    }
+    if (ns!=1) fatal(__FILE__,__LINE__,"Expected 1 atom in atom2_for_distance1 selection, found %d\n",ns);
+    // sel 3 //distance2 atom1
+        if (system->selections->selectionMap.count(j1selection)!=1) {
+      fatal(__FILE__,__LINE__,"Unrecognized atom1_for_distance2 selection name %s for resd restraints\n",token);
+    }
+    ns=0;
+    for (is=0; is<system->selections->selectionMap[j1selection].boolCount; is++) {
+      if (system->selections->selectionMap[j1selection].boolSelection[is]) {
+        j1=is;
+        ns++;
+      }
+    }
+    if (ns!=1) fatal(__FILE__,__LINE__,"Expected 1 atom in atom1_for_distance2 selection, found %d\n",ns);
+    // sel 4 //distance2 atom2
+        if (system->selections->selectionMap.count(j2selection)!=1) {
+      fatal(__FILE__,__LINE__,"Unrecognized atom2_for_distance2 selection name %s for resd restraints\n",token);
+    }
+    ns=0;
+    for (is=0; is<system->selections->selectionMap[j2selection].boolCount; is++) {
+      if (system->selections->selectionMap[j2selection].boolSelection[is]) {
+        j2=is;
+        ns++;
+      }
+    }
+    if (ns!=1) fatal(__FILE__,__LINE__,"Expected 1 atom in atom2_for_distance2 selection, found %d\n",ns);
+    //
+    struct ResdPotential resd;
+    resd.i1=i1;
+    resd.i2=i2;
+    resd.j1=j1;
+    resd.j2=j2;
+    resd.ci=io_nextf(line);
+    resd.cj=io_nextf(line);
+    resd.rdist=io_nextf(line)*ANGSTROM;
+    resd.kdist=io_nextf(line)*KCAL_MOL/(ANGSTROM*ANGSTROM);
+    resdList.push_back(resd);
+  }
+  resdCount=resdList.size();
+} // eeresd-end
+
 void Structure::dump(char *line,char *token,System *system)
 {
-  fprintf(stdout,"%s:%d IMPLEMENT Structure::dump function.\n",__FILE__,__LINE__);
+  printlog("%s:%d IMPLEMENT Structure::dump function.\n",__FILE__,__LINE__);
 }
 
 void Structure::add_structure_psf_file(FILE *fp)
@@ -241,14 +578,14 @@ void Structure::add_structure_psf_file(FILE *fp)
     fatal(__FILE__,__LINE__,"First line of PSF must start with PSF\n");
   }
   for (token=io_nexts(line); strcmp(token.c_str(),"")!=0; token=io_nexts(line)) {
-    fprintf(stdout,"Reading PSF, found header string: '%s'\n",token.c_str());
+    printlog("Reading PSF, found header string: '%s'\n",token.c_str());
     headerInfo.insert(token);
   }
 
   // "Read" title
   fgets(line, MAXLENGTHSTRING, fp);
   j=io_nexti(line,fp,"psf number of title lines");
-  fprintf(stdout,"Reading PSF, expect !NTITLE: got %s",line);
+  printlog("Reading PSF, expect !NTITLE: got %s",line);
   for (i=0; i<j; i++) {
     fgets(line, MAXLENGTHSTRING, fp);
   }
@@ -256,7 +593,7 @@ void Structure::add_structure_psf_file(FILE *fp)
   // Read atoms
   fgets(line, MAXLENGTHSTRING, fp);
   atomCount=io_nexti(line,fp,"psf number of atoms");
-  fprintf(stdout,"Reading PSF, expect !NATOM: got %s",line);
+  printlog("Reading PSF, expect !NATOM: got %s",line);
   atomList.clear();
   atomList.reserve(atomCount);
   for (i=0; i<atomCount; i++) {
@@ -279,7 +616,7 @@ void Structure::add_structure_psf_file(FILE *fp)
   // Read bonds
   fgets(line, MAXLENGTHSTRING, fp);
   bondCount=io_nexti(line,fp,"psf number of bonds");
-  fprintf(stdout,"Reading PSF, expect !NBOND: bonds: got %s",line);
+  printlog("Reading PSF, expect !NBOND: bonds: got %s",line);
   bondList.clear();
   bondList.reserve(bondCount);
   fgets(line, MAXLENGTHSTRING, fp);
@@ -298,7 +635,7 @@ void Structure::add_structure_psf_file(FILE *fp)
   // Read angles
   fgets(line, MAXLENGTHSTRING, fp);
   angleCount=io_nexti(line,fp,"psf number of angles");
-  fprintf(stdout,"Reading PSF, expect !NTHETA: angles: got %s",line);
+  printlog("Reading PSF, expect !NTHETA: angles: got %s",line);
   angleList.clear();
   angleList.reserve(angleCount);
   fgets(line, MAXLENGTHSTRING, fp);
@@ -317,7 +654,7 @@ void Structure::add_structure_psf_file(FILE *fp)
   // Read dihes
   fgets(line, MAXLENGTHSTRING, fp);
   diheCount=io_nexti(line,fp,"psf number of dihedrals");
-  fprintf(stdout,"Reading PSF, expect !NPHI: dihedrals: got %s",line);
+  printlog("Reading PSF, expect !NPHI: dihedrals: got %s",line);
   diheList.clear();
   diheList.reserve(diheCount);
   fgets(line, MAXLENGTHSTRING, fp);
@@ -336,7 +673,7 @@ void Structure::add_structure_psf_file(FILE *fp)
   // Read imprs
   fgets(line, MAXLENGTHSTRING, fp);
   imprCount=io_nexti(line,fp,"psf number of impropers");
-  fprintf(stdout,"Reading PSF, expect !NIMPHI: impropers: got %s",line);
+  printlog("Reading PSF, expect !NIMPHI: impropers: got %s",line);
   imprList.clear();
   imprList.reserve(imprCount);
   fgets(line, MAXLENGTHSTRING, fp);
@@ -355,7 +692,7 @@ void Structure::add_structure_psf_file(FILE *fp)
   // Ignore donors
   fgets(line, MAXLENGTHSTRING, fp);
   j=io_nexti(line,fp,"psf number of donors");
-  fprintf(stdout,"Reading PSF, expect !NDON: donors: got %s",line);
+  printlog("Reading PSF, expect !NDON: donors: got %s",line);
   for (i=0; i<2*j; i++) {
     io_nexti(line,fp,"psf donor atom");
   }
@@ -363,7 +700,7 @@ void Structure::add_structure_psf_file(FILE *fp)
   // Ignore acceptors
   fgets(line, MAXLENGTHSTRING, fp);
   j=io_nexti(line,fp,"psf number of acceptors");
-  fprintf(stdout,"Reading PSF, expect !NACC: acceptors: got %s",line);
+  printlog("Reading PSF, expect !NACC: acceptors: got %s",line);
   for (i=0; i<2*j; i++) {
     io_nexti(line,fp,"psf acceptor atom");
   }
@@ -371,7 +708,7 @@ void Structure::add_structure_psf_file(FILE *fp)
   // Not even sure what this section is...
   fgets(line, MAXLENGTHSTRING, fp);
   j=io_nexti(line,fp,"psf nnb???");
-  fprintf(stdout,"Reading PSF, expect !NNB: got %s",line);
+  printlog("Reading PSF, expect !NNB: got %s",line);
   for (i=0; i<atomCount; i++) {
     io_nexti(line,fp,"psf nnb???");
   }
@@ -379,7 +716,7 @@ void Structure::add_structure_psf_file(FILE *fp)
   // Or this one...
   fgets(line, MAXLENGTHSTRING, fp);
   j=io_nexti(line,fp,"psf ngrp???");
-  fprintf(stdout,"Reading PSF, expect !NGRP NST2: got %s",line);
+  printlog("Reading PSF, expect !NGRP NST2: got %s",line);
   for (i=0; i<3*j; i++) {
     io_nexti(line,fp,"psf ngrp???");
   }
@@ -388,7 +725,7 @@ void Structure::add_structure_psf_file(FILE *fp)
     // OR this one...
     fgets(line, MAXLENGTHSTRING, fp);
     j=io_nexti(line,fp,"psf molnt???");
-    fprintf(stdout,"Reading PSF, expect !MOLNT: got %s",line);
+    printlog("Reading PSF, expect !MOLNT: got %s",line);
     for (i=0; i<atomCount; i++) {
       io_nexti(line,fp,"psf molnt???");
     }
@@ -398,7 +735,7 @@ void Structure::add_structure_psf_file(FILE *fp)
   fgets(line, MAXLENGTHSTRING, fp);
   i=io_nexti(line,fp,"psf lone pairs");
   j=io_nexti(line,fp,"psf lone pair hosts");
-  fprintf(stdout,"Reading PSF, expect !NUMLP NUMLPH: got %s",line);
+  printlog("Reading PSF, expect !NUMLP NUMLPH: got %s",line);
   if (i!=0 || j!=0) {
     int virtCount;
     int virtHostCount;
@@ -465,7 +802,7 @@ void Structure::add_structure_psf_file(FILE *fp)
   if (headerInfo.count("CMAP")) {
     fgets(line, MAXLENGTHSTRING, fp);
     cmapCount=io_nexti(line,fp,"psf number of cmaps");
-    fprintf(stdout,"Reading PSF, expect !NCRTERM: got %s",line);
+    printlog("Reading PSF, expect !NCRTERM: got %s",line);
     cmapList.clear();
     cmapList.reserve(cmapCount);
     fgets(line, MAXLENGTHSTRING, fp);
@@ -485,6 +822,142 @@ void Structure::add_structure_psf_file(FILE *fp)
     cmapList.clear();
   }
 }
+
+// eemlp-begin
+void Structure::parse_mlp(char *line,char *token,System *system)
+{
+  io_nexta(line,token);
+
+  printlog("[parse_mlp] enter token=%s\n", token ? token : "(null)");
+
+  if (strcmp(token,"reset")==0) {
+    printlog("[parse_mlp] reset MLPList\n");
+    MLPList.clear();
+
+  } else if (system->selections->selectionMap.count(token)==1) {
+    std::string name=token;
+    std::string MLPTypeToken=io_nexts(line);
+    std::string MLPFileToken;
+
+    printlog("[parse_mlp] selection name=%s\n", name.c_str());
+    printlog("[parse_mlp] boolCount=%d atomCount=%d\n",
+            system->selections->selectionMap[name].boolCount,
+            system->structure->atomCount);
+
+    if (MLPTypeToken=="tani") {
+      MLPFileToken=io_nexts(line);
+      printlog("[parse_mlp] MLPTypeToken=%s MLPFileToken=%s\n",
+              MLPTypeToken.c_str(), MLPFileToken.c_str());
+    } else {
+      printlog("[parse_mlp] bad MLPTypeToken=%s\n", MLPTypeToken.c_str());
+      fatal(__FILE__,__LINE__,"Unrecognized MLP model type token %s. Currently only tani forces implemented.\n",MLPTypeToken.c_str());
+    }
+
+    struct MLPotential mlp;
+    int i,nsel;
+    std::vector<real> mlMassidx;
+
+    if (MLPTypeToken=="tani") { mlp.is_tani=1; }
+
+    mlp.ptname    = MLPFileToken;
+    mlp.mlnatoms  = system->structure->atomCount;
+
+    printlog("[parse_mlp] before resize mlnatoms=%d boolCount=%d\n",
+            mlp.mlnatoms,
+            system->selections->selectionMap[name].boolCount);
+
+    mlp.mlatomidx.resize(system->selections->selectionMap[name].boolCount);
+    mlMassidx.resize(system->selections->selectionMap[name].boolCount);
+    mlp.mlZidx.resize(system->selections->selectionMap[name].boolCount);
+    mlp.mlmaskid.resize(system->selections->selectionMap[name].boolCount);
+
+    printlog("[parse_mlp] after resize mlatomidx=%zu mlMassidx=%zu mlZidx=%zu mlmaskid=%zu\n",
+            mlp.mlatomidx.size(), mlMassidx.size(), mlp.mlZidx.size(), mlp.mlmaskid.size());
+
+    nsel=0;
+    for (i=0; i<system->selections->selectionMap[name].boolCount; i++) {
+
+      if (i < 5 || i == system->selections->selectionMap[name].boolCount-1) {
+        printlog("[parse_mlp] scan i=%d selected=%d\n",
+                i,
+                (int)system->selections->selectionMap[name].boolSelection[i]);
+      }
+
+      if (system->selections->selectionMap[name].boolSelection[i]) {
+        printlog("[parse_mlp] selected i=%d nsel=%d\n", i, nsel);
+
+        mlp.mlmaskid[i]=1;
+        mlp.mlatomidx[nsel]=i;
+
+        printlog("[parse_mlp] reading atomList[%d]\n", i);
+        mlMassidx[nsel]=system->structure->atomList[i].mass;
+
+        printlog("[parse_mlp] atom %d mass=%f atomTypeName[0]=%c atomTypeName[1]=%c\n",
+                i,
+                (double)mlMassidx[nsel],
+                system->structure->atomList[i].atomTypeName[0],
+                system->structure->atomList[i].atomTypeName[1]);
+
+        if (mlp.is_tani == 1) {
+          const double m = (double)mlMassidx[nsel];
+          const char t0 = system->structure->atomList[i].atomTypeName[0];
+          const char t1 = system->structure->atomList[i].atomTypeName[1];
+                
+          int z = 0;
+                
+          if (m < 0.0) {fatal(__FILE__, __LINE__,"Negative atomic mass %f for tani MLP.\n", mlMassidx[nsel]);} 
+          else if (m <   3.5) {if (t0 == 'H' || (t0 == 'Q' && t1 == 'Q') ) z = 1;}    // H / link-H region
+          else if (m >= 11.5 && m < 13.5) {if (t0 == 'C')  z = 6;}    // Carbon
+          else if (m >= 13.5 && m < 15.5) {if (t0 == 'N')  z = 7;}    // Nitrogen 
+          else if (m >= 15.5 && m < 18.5) {if (t0 == 'O')  z = 8;}    // Oxygen
+          else if (m >= 18.5 && m < 19.5) {if (t0 == 'F')  z = 9;}    // Fluorine
+          else if (m >= 31.5 && m < 34.5) {if (t0 == 'S')  z = 16;}   // Sulfur 
+          else if (m >= 34.5 && m < 38.5) {if (t0 == 'C')  z = 17;}   // Chlorine  // optional stricter CHARMM-style check:  // if (t0 == 'C' && t1 == 'L') z = 17; //might not needed
+          else {z = 0;}
+        
+          if (z == 0) {
+            printlog("[parse_mlp] unsupported element i=%d nsel=%d mass=%f type0=%c type1=%c\n", i, nsel, m, t0, t1);
+            fatal(__FILE__,__LINE__,"Unsupported element with mass %f for tani MLP. Only H, C, N, O, F, S, Cl supported.\n",m);
+          }
+          mlp.mlZidx[nsel] = z;
+        }
+
+        printlog("[parse_mlp] assigned Z=%d for i=%d nsel=%d\n",
+                mlp.mlZidx[nsel], i, nsel);
+
+        nsel++;
+      } else {
+        mlp.mlmaskid[i]=0;
+      }
+    }
+
+    printlog("[parse_mlp] loop done nsel=%d\n", nsel);
+
+    mlp.ptnml=nsel;
+
+    printlog("[parse_mlp] before compact resize ptnml=%d current mlatomidx=%zu mlMassidx=%zu mlZidx=%zu\n",
+            mlp.ptnml,
+            mlp.mlatomidx.size(), mlMassidx.size(), mlp.mlZidx.size());
+
+    mlp.mlatomidx.resize(mlp.ptnml);
+    mlMassidx.resize(mlp.ptnml);
+    mlp.mlZidx.resize(mlp.ptnml);
+
+    printlog("[parse_mlp] after compact resize mlatomidx=%zu mlMassidx=%zu mlZidx=%zu\n",
+            mlp.mlatomidx.size(), mlMassidx.size(), mlp.mlZidx.size());
+
+    printlog("[parse_mlp] before push_back MLPList.size=%zu\n", MLPList.size());
+    MLPList.push_back(mlp);
+    printlog("[parse_mlp] after push_back MLPList.size=%zu\n", MLPList.size());
+
+  } else {
+    printlog("[parse_mlp] unknown selection token=%s\n", token ? token : "(null)");
+    fatal(__FILE__,__LINE__,"Unrecognized selection name %s for mlp\n",token);
+  }
+
+  MLPModelCount=MLPList.size();
+  printlog("[parse_mlp] exit MLPModelCount=%d\n", MLPModelCount);
+} // eemlp-end
 
 void blade_init_structure(System *system)
 {
@@ -617,9 +1090,19 @@ void blade_add_shake(System *system,int shakeHbond)
   system->structure->shakeHbond=shakeHbond;
 }
 
-void blade_add_noe(System *system,int i,int j,double rmin,double kmin,double rmax,double kmax,double rpeak,double rswitch,double nswitch)
+void blade_add_noe(System *system,int i,int j,double rmin,double kmin,double rmax,double kmax,double rpeak,double rswitch,double nswitch,double c0x,double c0y,double c0z,bool is_pnoe)
 {
   system+=omp_get_thread_num();
+
+  // Input validation
+  int atomCount = system->structure->atomCount;
+  if (i < 1 || i > atomCount) {
+    fatal(__FILE__,__LINE__,"BLaDE NOE: invalid atom index i=%d (atomCount=%d)\n", i, atomCount);
+  }
+  if (!is_pnoe && (j < 1 || j > atomCount)) {
+    fatal(__FILE__,__LINE__,"BLaDE NOE: invalid atom index j=%d (atomCount=%d)\n", j, atomCount);
+  }
+
   struct NoePotential noe;
   noe.i=i-1;
   noe.j=j-1;
@@ -630,6 +1113,11 @@ void blade_add_noe(System *system,int i,int j,double rmin,double kmin,double rma
   noe.rpeak=rpeak*ANGSTROM;
   noe.rswitch=rswitch*ANGSTROM;
   noe.nswitch=nswitch;
+#warning "Absolute noe position restraints untested with Monte Carlo barostat and non-orthogonal boxes"
+  noe.c0x=c0x*ANGSTROM;
+  noe.c0y=c0y*ANGSTROM;
+  noe.c0z=c0z*ANGSTROM;
+  noe.is_pnoe=is_pnoe;
   system->structure->noeList.push_back(noe);
   system->structure->noeCount=system->structure->noeList.size();
 }
@@ -647,3 +1135,91 @@ void blade_add_harmonic(System *system,int i,double k,double x0,double y0,double
   system->structure->harmList.push_back(h);
   system->structure->harmCount=system->structure->harmList.size();
 }
+
+void blade_add_borest(System *system,int i,int j,double kr,double r0,int lambdaBlock)
+{
+  system+=omp_get_thread_num();
+  struct BoRestPotential br;
+  br.idx[0]=i-1;
+  br.idx[1]=j-1;
+  br.kr=kr*(KCAL_MOL/ANGSTROM/ANGSTROM);
+  br.r0=r0*ANGSTROM;
+  br.block=lambdaBlock-1;
+  system->structure->boRestList.push_back(br);
+  system->structure->boRestCount=system->structure->boRestList.size();
+}
+
+void blade_add_anrest(System *system,int i,int j,int k,double kt,double t0,int lambdaBlock)
+{
+  system+=omp_get_thread_num();
+  struct AnRestPotential ar;
+  ar.idx[0]=i-1;
+  ar.idx[1]=j-1;
+  ar.idx[2]=k-1;
+  ar.kt=kt*KCAL_MOL;
+  ar.t0=t0*DEGREES;
+  ar.block=lambdaBlock-1;
+  system->structure->anRestList.push_back(ar);
+  system->structure->anRestCount=system->structure->anRestList.size();
+}
+
+void blade_add_direst(System *system,int i,int j,int k,int l,double kphi,int nphi,double phi0,double width,int lambdaBlock)
+{
+  system+=omp_get_thread_num();
+  struct DiRestPotential dr;
+  dr.idx[0]=i-1;
+  dr.idx[1]=j-1;
+  dr.idx[2]=k-1;
+  dr.idx[3]=l-1;
+  dr.kphi=kphi*KCAL_MOL;
+  dr.phi0=phi0*DEGREES;
+  dr.width=width*DEGREES;  // flat-bottom half-width in radians (default 0)
+  dr.nphi = nphi;
+  dr.block=lambdaBlock-1;
+  system->structure->diRestList.push_back(dr);
+  system->structure->diRestCount=system->structure->diRestList.size();
+}
+
+// eeresd-begin
+void blade_add_resd(System *system, int i1, int i2, int j1, int j2, double ci, double cj, double rdist, double kdist)
+{
+  system+=omp_get_thread_num();
+  struct ResdPotential resd;
+  resd.i1=i1-1;
+  resd.i2=i2-1;
+  resd.j1=j1-1;
+  resd.j2=j2-1;
+  resd.ci=ci;
+  resd.cj=cj;
+  resd.rdist=rdist*ANGSTROM;
+  resd.kdist=kdist*KCAL_MOL/(ANGSTROM*ANGSTROM);
+  system->structure->resdList.push_back(resd);
+  system->structure->resdCount=system->structure->resdList.size();
+}  // eeresd-end
+
+// eemlp-begin
+void blade_tani_internal_setup(System *system, const int is_tani, const char *ptname, const int ptnml, 
+                      const int *mlatomidx, const int *mlZidx,const int *mlmaskid, const int mlnatoms)
+{
+  system += omp_get_thread_num();
+  struct MLPotential mlp;
+  mlp.ptname    = ptname ? std::string(ptname) : std::string();
+  mlp.is_tani   = is_tani;    // 1 for TorchANI, -1 NOT TorchANI
+  mlp.ptnml     = ptnml;      // number of QM/ML atoms (mlnm2_c)
+  mlp.mlnatoms  = mlnatoms;   // natom_mlmm_c
+  mlp.mlatomidx.resize(ptnml);
+  mlp.mlZidx.resize(ptnml);
+  for (int i = 0; i < ptnml; ++i) {
+    // Fortran indices are 1-based → convert to 0-based for C++
+    mlp.mlatomidx[i]  = mlatomidx[i] - 1;
+    mlp.mlZidx[i] = mlZidx[i];
+  }
+  mlp.mlmaskid.resize(mlnatoms);
+  for (int i = 0; i < mlnatoms; ++i) {
+    mlp.mlmaskid[i] = mlmaskid[i];
+  }
+  system->structure->MLPList.clear();
+  system->structure->MLPList.push_back(mlp);
+  system->structure->MLPModelCount=system->structure->MLPList.size();
+} // eemlp-end
+

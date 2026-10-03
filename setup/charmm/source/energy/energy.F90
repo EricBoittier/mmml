@@ -37,6 +37,7 @@ SUBROUTINE old_ENERGY(X, Y, Z, DX, DY, DZ, BNBND, BIMAG, &
 #if KEY_ZEROM==1
   use zdata_mod,only: QZMOD
 #endif
+  use ecnstr_mod, only: ecnstr
 #if KEY_EPMF==1
   use epmf,only: totepmf
 #endif
@@ -161,7 +162,7 @@ SUBROUTINE old_ENERGY(X, Y, Z, DX, DY, DZ, BNBND, BIMAG, &
 #if KEY_CPATH==1
        pathn, &
 #endif
-       qcnstr,qhnort,qhnotr,refx,refy,refz,kcnstr,typhset,xhscale,yhscale,zhscale,kcexpn,&
+       qcnstr,qhnort,qhnotr,refx,refy,refz,kcnstr,typhset,parhset,xhscale,yhscale,zhscale,kcexpn,&
        qqcnst, numpca, pcax, pcay, pcaz
 !  use cstran_mod
   use code
@@ -183,6 +184,7 @@ SUBROUTINE old_ENERGY(X, Y, Z, DX, DY, DZ, BNBND, BIMAG, &
   use energym
   use energy_util,only:set_mtsflags, calc_adumb_potential, calc_dmcons, write_dmcons, &
        calc_umbrella_potential, calc_dihe_restraints, calc_noe_restraints, calc_redcns, &
+       calc_cats, &
        calc_dbias, calc_hmcm, zero_energy_terms
   use euler
   use eutil
@@ -219,6 +221,9 @@ SUBROUTINE old_ENERGY(X, Y, Z, DX, DY, DZ, BNBND, BIMAG, &
 #endif
 #if KEY_MNDO97==1
   use mndo97
+#if KEY_MTS==1
+  use mmbonded_mod,only : q_mts_mmbond,Energy_mmbond
+#endif
 #endif
   use nbips
   use param
@@ -269,6 +274,9 @@ SUBROUTINE old_ENERGY(X, Y, Z, DX, DY, DZ, BNBND, BIMAG, &
   use nbthole
 #if KEY_SSNMR==1
   use ssnmr
+#endif
+#if KEY_MODELLER==1
+  use modeller
 #endif
 #if KEY_RDC==1
   use rdc, only: RDC1,QRDC
@@ -355,7 +363,7 @@ SUBROUTINE old_ENERGY(X, Y, Z, DX, DY, DZ, BNBND, BIMAG, &
 #endif
 #endif
 #if KEY_ALLMPI==1
-  use mpi
+  use mpi_f08
 #endif
 #if KEY_LARMORD==1
   use larmord, only : qlarmord, ener_larmord
@@ -375,20 +383,29 @@ SUBROUTINE old_ENERGY(X, Y, Z, DX, DY, DZ, BNBND, BIMAG, &
   use pnm, only : pnm_ene
 #endif
 #if KEY_MNDO97==1
-  use qmmmewald_module, only: qmmm_ewald_r
+  use qmmmewald_module, only: qmmm_ewald_c
 #endif
 #if KEY_DHDGB==1
 !AP/MF
   use dhdgb,only:totals,qfhdgb
 #endif
-! #if KEY_MOBHY==1
-  use mobhy_mod, only: ENMOBHY,LMOBHY
-! #endif
-use extbond 
+use mobhy_mod, only: ENMOBHY,LMOBHY
+use extbond
 use triakern ! Pezzella 10.12.2019
-use fullkern ! Pezzella 11.07.2020 
+use fullkern ! Pezzella 11.07.2020
+use kernn ! Kaeser July 2024
 
 use api_func, only: func_call, func_is_set, mlpot_call, mlpot_is_set, mlpot_take_virial
+
+#if KEY_EABF==1
+  use eabfsrc
+#endif
+
+#if KEY_MLMM==1
+use mlps_ini, only: mlps_use, with_pol_op_1, ml_pol_energy  !eemlp
+use mlps_ene, only: calc_mlps_force       !eemlp
+use mlps_pol_ene, only: calc_mlps_pol_force ! eemlp
+#endif
 
 !
   implicit none
@@ -507,7 +524,6 @@ use api_func, only: func_call, func_is_set, mlpot_call, mlpot_is_set, mlpot_take
 #if KEY_MNDO97==1
   logical :: q_ewald_all
 #endif
-  real(chm_real),dimension(:),allocatable :: dx_a,dy_a,dz_a
 #if KEY_LJPME==1
   integer :: atom, ljptr
   real(chm_real) :: ljvdwr, ljeff
@@ -517,23 +533,22 @@ use api_func, only: func_call, func_is_set, mlpot_call, mlpot_is_set, mlpot_take
   call timer_start(T_energy)
   call timer_start( T_inte)
 
-
   ! These update function of the EXTBOND and TRIAKERN module, respectively,
   ! deactivate the potential energy and force contribution of bonds and angles
-  ! wich are handled by a custom potential. 
+  ! wich are handled by a custom potential.
   ! It sets the respective element in the ICB and ICT array to zero, which
-  ! would point to the proper force constant in the respective parameter 
+  ! would point to the proper force constant in the respective parameter
   ! arrays. If zero, there bond and angle potential contribution is skipped.
   ! More convenient would be the addition of these function to the
   ! CODES subroutine in UPDATE.F90, which handle the generation of the ICB and
   ! ICT arrays and would just need a one-time execution.
-  ! Doing so, however, lead to the deletion of the bonds (and angle, untested) 
-  ! in the psf file and thus to further issues, such as non-bonding 
-  ! contributions. 
+  ! Doing so, however, lead to the deletion of the bonds (and angle, untested)
+  ! in the psf file and thus to further issues, such as non-bonding
+  ! contributions.
   ! Kai Toepfer - DEC 2023
   if(qxtbd) call ext_bond_update()
   if(qkern) call tria_kern_update()
-  
+
 #if KEY_DMCONS==1
   ! these must be initialized or test first
   ! returns bad first derivatives in parallel runs
@@ -990,28 +1005,17 @@ use api_func, only: func_call, func_is_set, mlpot_call, mlpot_is_set, mlpot_take
   !     There is another user routine called at the end of the energy
   !     calculation (USRACM) for post processing and statistics...
   !
-#if KEY_LIBRARY == 1
   if (qeterm(user) .and. func_is_set()) then
      call func_call(eterm(user) &
           , natom &
           , x, y, z &
           , dx, dy, dz)
   end if
-  ! Addition Kai Toepfer May 2022
-  if (qeterm(user) .and. mlpot_is_set()) then
-    call mlpot_call(&
-        eterm(user), &
-        natom, ntrans, natim, &
-        x, y, z, &
-        dx, dy, dz, &
-        bnbnd%jnb, bnbnd%inblo, &
-        bimag%imattr, bimag%imjnb, bimag%imblo)
-  end if
-#else /* KEY_LIBRARY */
+
 #if KEY_PARALLEL==1
   IF(MYNOD.EQ.0) THEN
 #endif
-     IF (QETERM(USER)) THEN
+     IF (QETERM(USER) .and. .not. func_is_set()) THEN
         !.ab. Normally, empty routine...
 #if KEY_BLOCK==1
         !            IF (QHYBH) CALL WRNDIE(-5,'<ENERGY>',
@@ -1021,13 +1025,12 @@ use api_func, only: func_call, func_is_set, mlpot_call, mlpot_is_set, mlpot_take
         CALL USERE(ETERM(USER),X,Y,Z,DX,DY,DZ,QECONT,ECONT,NATOM)
         IF (TIMER.GT.1) CALL WRTTIM('User energy times:')
      ENDIF
-! #if KEY_MOBHY==1
+
      IF (LMOBHY) CALL ENMOBHY(ETERM(ASP),X,Y,Z,DX,DY,DZ,QECONT,ECONT,NATOM)
-! #endif
+
 #if KEY_PARALLEL==1
   ENDIF
 #endif
-#endif /* KEY_LIBRARY */
 
   !---------------------CROSS----------------------------------------
 #if KEY_RMD==1
@@ -1076,17 +1079,17 @@ use api_func, only: func_call, func_is_set, mlpot_call, mlpot_is_set, mlpot_take
 #if KEY_PARALLEL==1
     ENDIF
 #endif
-#endif 
+#endif
 !----------------------MSMMPT------------------------------------------
 #if KEY_MSMMPT==1
 #if KEY_PARALLEL==1
-    IF(MYNOD.EQ.0) THEN   
+    IF(MYNOD.EQ.0) THEN
 #endif
       IF(QETERM(MSMMPT)) THEN
         CALL EMSMMPT(ETERM(MSMMPT),X,Y,Z,DX,DY,DZ,NATOM)
       ENDIF
 #if KEY_PARALLEL==1
-    ENDIF                 
+    ENDIF
 #endif
 #endif
 !----------------------VALBOND-----------------------------------------
@@ -1103,12 +1106,9 @@ use api_func, only: func_call, func_is_set, mlpot_call, mlpot_is_set, mlpot_take
 #if KEY_PNM==1 /*pnm*/
   ! plastic network energy, 0504PJ07
      IF (QETERM(PNME)) THEN
-        !.ab.
-#if KEY_BLOCK==1
-        IF (QHYBH) CALL WRNDIE(-5,'<ENERGY>', &
-             'HYBH and PNMENE currently incompatible.')
-#endif
-        !.ab.
+        ! The HYBH/PNMENE incompatibility check lives inside PNM_ENE, past
+        ! its num_enm>0 gate, so it fires only when a plastic-network model
+        ! is actually loaded -- QETERM(PNME) is on by default for every run.
         CALL PNM_ENE(ETERM(PNME),X,Y,Z,DX,DY,DZ,QECONT,ECONT,NATOM)
         IF (TIMER.GT.1) CALL WRTTIM('User energy times:')
      ENDIF
@@ -1444,18 +1444,10 @@ use api_func, only: func_call, func_is_set, mlpot_call, mlpot_is_set, mlpot_take
         endif
 #endif
 
-        ! memory allocation
-        allocate(dx_a(natom))
-        allocate(dy_a(natom))
-        allocate(dz_a(natom))
         ! step1.
         ! fist preparation step: needed for kspace term evaluations.
-        IF (QETERM(QMEL)) CALL MNDENE_STEP1(X,Y,Z)
+        IF (QETERM(QMEL)) CALL MNDENE_prep(X(1:natom),Y(1:natom),Z(1:natom))
 
-! P. Ojeda 2016 Hybrid QM/MM implementation
-!$omp parallel NUM_THREADS(2)
-!$omp sections
-!$omp section
         ! K_space term done here.. for qm/mm
 #if KEY_DOMDEC==1
         if (.not.q_domdec .or. (q_domdec .and. .not.q_split)) then
@@ -1480,18 +1472,25 @@ use api_func, only: func_call, func_is_set, mlpot_call, mlpot_is_set, mlpot_take
 #endif
               ! for kspace call control.
               q_ewald_all =.false.
-              !do i=1,natom
-              !   qmmm_ewald_r%d_ewald_mm(1:3,i)=zero
-              !end do
+              !if(associated(qmmm_ewald_c)) then
+              !   do i=1,natom
+              !      qmmm_ewald_c%d_ewald_mm(1:3,i)=zero
+              !   end do
+              !end if
 
               ! domdec has yet been supported..
-              CALL KSPACE_qmmm_prep(ETERM(EWKSUM),ETERM(EWSELF),ETERM(EWQCOR),ETERM(EWUTIL),&
-                      QETERM(EWKSUM),QETERM(EWSELF),QETERM(EWQCOR),QETERM(EWUTIL), &
-                      X,Y,Z,qmmm_ewald_r%d_ewald_mm(1:3,1:natom),NATOM,CG,CGTOT &
+              if(associated(qmmm_ewald_c)) then
+                 call KSPACE_qmmm_prep(ETERM(EWKSUM),ETERM(EWSELF),ETERM(EWQCOR),ETERM(EWUTIL),     &
+                                       QETERM(EWKSUM),QETERM(EWSELF),QETERM(EWQCOR),QETERM(EWUTIL), &
+                                       X(1:natom),Y(1:natom),Z(1:natom),                            &
+                                       qmmm_ewald_c%d_ewald_mm(1:3,1:natom),NATOM,CG(1:natom),CGTOT &
 #if KEY_FLUCQ==1
-                      ,QFLUC,FQCFOR     &
+                                      ,QFLUC,FQCFOR     &
 #endif
-                      )
+                                      )
+              else
+                 call wrndie(-5,'<ENERGY>','QM/MM-ewald is not setup')
+              end if
 #if KEY_BLOCK==1
               IF (QHYBH) QBLOCK=.TRUE.
 #endif
@@ -1512,100 +1511,21 @@ use api_func, only: func_call, func_is_set, mlpot_call, mlpot_is_set, mlpot_take
 #if KEY_DOMDEC==1
         end if
 #endif
-#if KEY_PARALLEL==1
-        ! (see below..)
-        if(numnod>num_cpus .and. QETERM(QMEL)) CALL MNDENE_STEP2(X,Y,Z)
+
+        ! 2) Step 2: compute energy and gradients.
+        IF (QETERM(QMEL)) CALL MNDENE_main(ETERM(QMEL),X(1:natom),Y(1:natom),Z(1:natom),DX(1:natom),DY(1:natom),DZ(1:natom))
+
+#if KEY_MTS==1
+        IF (QTBMTS.and.q_mts_mmbond) THEN
+           ! In the large cycle, the MM-bonded energy should be substracted from
+           ! the total QM/MM energy.
+           call Energy_mmbond(natom,ETERM(QMEL),minone, X(1:natom), Y(1:natom), Z(1:natom), &
+                                                       DX(1:natom),DY(1:natom),DZ(1:natom))
+        END IF
 #endif
-        !------------------------END SECTION 1----------------------------!
 
-!$omp section
-#if KEY_PARALLEL==1
-        if(numnod>num_cpus) then
-           ! all nonbonded energies are evaluated here.
-           call nonbonded_energy()
-        else
-#endif
-           ! for mm-mm image/bonded terms.
-           call bonded_energy()
-           call nonbonded_image_energy()
-
-           ! probably here... so no need to do the sum below.
-           IF (NATOM.GT.NUMAT .AND. QETERM(QMVDW)) &
-                   CALL EVDWQM(ETERM(QMVDW),X,Y,Z,DX,DY,DZ)
-
-           ! 2) Step 2.
-           IF (QETERM(QMEL)) CALL MNDENE_STEP2(X,Y,Z)
-#if KEY_PARALLEL==1
-        end if
-#endif
-        !-------------------------END SECTION 2---------------------------!
-!$omp end sections
-!$omp end parallel
-        !======================END OPENMP PARALLEL========================!
-
-        ! now compute energy (and gradients).
-        IF (QETERM(QMEL)) CALL MNDENE_STEP3(ETERM(QMEL),X,Y,Z,DX,DY,DZ)
-
-        ! gradients computation.
-!$omp parallel  NUM_THREADS(2)
-!$omp sections
-!$omp section
-        !
-        do i=1,natom
-           dx_a(i)=zero
-           dy_a(i)=zero
-           dz_a(i)=zero
-        end do
-
-        ! gradients computation and gho/leps energies/gradients..
-#if KEY_PARALLEL==1
-        if(numnod>num_cpus) then
-           IF (QETERM(QMEL)) CALL MNDENE_STEP4_1(x,y,z,dx_a,dy_a,dz_a)
-        else
-#endif
-           IF (QETERM(QMEL)) CALL MNDENE_STEP4(ETERM(QMEL),x,y,z,dx_a,dy_a,dz_a)
-#if KEY_PARALLEL==1
-        end if
-#endif
-        !------------------------END SECTION 1----------------------------!
-
-!$omp section
-        !
-#if KEY_PARALLEL==1
-        if(numnod>num_cpus) then
-           IF (QETERM(QMEL)) CALL MNDENE_STEP4_2(ETERM(QMEL),x,y,z,dx,dy,dz)
-
-           ! probably here... so no need to do the sum below.
-           IF (NATOM.GT.NUMAT .AND. QETERM(QMVDW)) &
-                   CALL EVDWQM(ETERM(QMVDW),X,Y,Z,DX,DY,DZ)
-
-           ! for mm-mm image/bonded terms.
-           call bonded_energy()
-           call nonbonded_image_energy()
-        else
-#endif
-           ! see here... that all nonbonded energies are evaluated here.
-           call nonbonded_energy()
-#if KEY_PARALLEL==1
-        end if
-#endif
-        !-------------------------END SECTION 2---------------------------!
-!$omp end sections
-
-        ! This is done here as dx/dy/dz are split into dx_a/dy_a/dz_a for nonbonded_energy terms.
-        ! add forces into the main force array.
-!$omp do
-        do i=1,natom
-           dx(i) = dx(i) + dx_a(i)
-           dy(i) = dy(i) + dy_a(i)
-           dz(i) = dz(i) + dz_a(i)
-        end do
-!$omp end do
-!$omp end parallel
-        ! memory deallocation.
-        if(allocated(dx_a)) deallocate(dx_a)
-        if(allocated(dy_a)) deallocate(dy_a)
-        if(allocated(dz_a)) deallocate(dz_a)
+        ! QM/MM vdw energy/gradients
+        IF (NATOM.GT.NUMAT .AND. QETERM(QMVDW)) CALL EVDWQM(ETERM(QMVDW),X,Y,Z,DX,DY,DZ)
 
 #if KEY_PARALLEL==1
         IF(MYNOD.EQ.0) THEN
@@ -1615,6 +1535,13 @@ use api_func, only: func_call, func_is_set, mlpot_call, mlpot_is_set, mlpot_take
         ENDIF
 #endif
 #if KEY_MTS==1
+     ENDIF
+     IF(ENE1) THEN
+        IF (QTBMTS.and.q_mts_mmbond) THEN
+           ! This is the energy to be added.
+           call Energy_mmbond(natom,ETERM(QMEL),one, X(1:natom), Y(1:natom), Z(1:natom), &
+                                                    DX(1:natom),DY(1:natom),DZ(1:natom))
+        ENDIF
      ENDIF
 #endif
   ENDIF
@@ -1902,6 +1829,37 @@ use api_func, only: func_call, func_is_set, mlpot_call, mlpot_is_set, mlpot_take
       ENDIF
 #endif
 #endif
+#if KEY_MODELLER==1
+    ! MODELLER restraints (Jinhyuk Lee and Wonpil Im)
+#if KEY_PARALLEL==1
+      IF(MYNOD.EQ.0) THEN
+#endif
+          IF((MDNUM.GT.0) .AND. QETERM(EMD)) THEN
+           CALL MDCNS(ETERM(EMD),DX,DY,DZ,X,Y,Z, &
+                     FORMd,mdnum,mdIPT,mdjpt, &
+                     mdinm,mdjnm,mdlis, &
+                     lanamd,stoagmd,numcatmd, &
+                     iunijmd, &
+                     tnmin,mdmin,mdsig, &
+                     lperiod,ulsig,lmhar, &
+                     lgmha,loqua, &
+                     lsgar,lsper,lsgaa,ldspa, &
+                     rsm,knem,expm,pucm, &
+                     ldspline,laspline, &
+                     lrotspline, &
+                     mdpos,tnpos,smdpos, &
+                     lder,hder,lval,hval,inte, &
+                     sxmin,sxmax,symin,symax, &
+                     sxint,syint,ytwo,ytwo2, &
+                     lfbsp, &
+                     ccl,lcubi,md2cd)
+            IF (TIMER.GT.1) CALL WRTTIM('CS constraint energy times:')
+            ENDIF
+#if KEY_PARALLEL==1
+          ENDIF
+#endif
+#endif
+
 #if KEY_RDC==1
    ! RDC restraints.
 #if KEY_PARALLEL==1
@@ -1958,16 +1916,8 @@ use api_func, only: func_call, func_is_set, mlpot_call, mlpot_is_set, mlpot_take
   else
 #endif
      ! Traditional CHARMM order:
-#if KEY_MNDO97==0  /* MNDO97 related */
      call bonded_energy()
      call nonbonded_energy()
-#else              /* MNDO97 related */
-     if(numat<=0) then
-        ! No qm/mm is setup. So, pure MM calc.
-        call bonded_energy()
-        call nonbonded_energy()
-     end if
-#endif             /* MNDO97 related */
 #if KEY_DOMDEC_GPU==1
   endif
 #endif
@@ -2026,9 +1976,12 @@ use api_func, only: func_call, func_is_set, mlpot_call, mlpot_is_set, mlpot_take
   if(qkern.and.qeterm(bond).and.(nkern>0))then
     call tria_kern_ener(eterm(bond),x,y,z,dx,dy,dz)
   endif
- if(qflmk) then !Pezzella 11.07.2020 
+  if(qkernn.and.qeterm(bond)) then !Kaeser July 2024
+    call kernn_ener(eterm(bond),x,y,z,dx,dy,dz)
+  endif
+ if(qflmk) then !Pezzella 11.07.2020
     call fullkern_ener(eterm(bond),x,y,z,dx,dy,dz)
- endif 
+ endif
 #if KEY_MTS==1
   ENDIF
 #endif
@@ -2109,6 +2062,11 @@ use api_func, only: func_call, func_is_set, mlpot_call, mlpot_is_set, mlpot_take
 !!$  ENDIF
 !!$#endif
   !-----------------------------------------------------------------------
+  ! BLOCK Lambda Dynamics CATS restraints
+#if KEY_BLOCK==1
+  call calc_cats(eterm(cats), x, y, z, dx, dy, dz)
+#endif
+  !-----------------------------------------------------------------------
   ! . General distance restraints.
   call calc_redcns(eterm(resd), x, y, z, dx, dy, dz, dd1, iupt, qsecd)
 !!$#if KEY_MTS==1
@@ -2133,6 +2091,18 @@ use api_func, only: func_call, func_is_set, mlpot_call, mlpot_is_set, mlpot_take
 !!$#if KEY_MTS==1
 !!$  ENDIF
 !!$#endif
+#if KEY_MLMM==1
+        ! . ML potential
+        if (mlps_use .and. qeterm(mlps)) then
+           call calc_mlps_force(eterm(mlps), x, y, z, dx, dy, dz) ! eemlp
+           if (with_pol_op_1 == 1) then
+              ml_pol_energy = 0.0_chm_real
+              call calc_mlps_pol_force(ml_pol_energy, x, y, z, dx, dy, dz) ! eemlp
+              eterm(mlps) = eterm(mlps) + ml_pol_energy
+           end if
+        end if
+#endif   
+
 #endif /* (nomisc2)*/
   !
   !-----------------------------------------------------------------------
@@ -2165,17 +2135,42 @@ use api_func, only: func_call, func_is_set, mlpot_call, mlpot_is_set, mlpot_take
   ENDIF
 #endif
 #endif /* (4defour)*/
+
+  ! MLPot: Kai Toepfer Jan 2025
+  !
+  ! MLpot reports into its own energy terms, MLPO (internal ML atom potential)
+  ! and MLEL (ML-charge/MM-charge electrostatics), rather than borrowing USER
+  ! and ELEC as it did previously.  Borrowing those bins made the ML
+  ! contributions inseparable from a genuine user energy term and from ordinary
+  ! MM electrostatics in the energy table and in any analysis keyed on them.
+  !
+  ! CETERM is assigned here, lazily, instead of in ENERIN: MLpot is always
+  ! compiled (there is no KEY_MLPOT) and is only active once a model has been
+  ! registered, so naming the terms on first use keeps a run that never uses
+  ! MLpot from advertising MLPO/MLEL in the SKIPE listing or printing them in
+  ! the energy table.  This mirrors how the OpenMM custom-force buckets are
+  ! named on demand (see eutil.F90/ENERIN and omm_ecomp::bucket_group_for).
+  !
+  ! Note: the gate is now qeterm(mlpo)/qeterm(mlel), not qeterm(user), so
+  ! "SKIP USER" no longer disables MLpot -- use "SKIP MLPO MLEL" instead.
+  if ((qeterm(mlpo) .or. qeterm(mlel)) .and. mlpot_is_set()) then
+    ceterm(mlpo) = 'MLPO'
+    ceterm(mlel) = 'MLEL'
+    call mlpot_call( &
+        eterm(mlpo), &
+        eterm(mlel), &
+        natom, ntrans, natim, &
+        x, y, z, &
+        dx, dy, dz, &
+        bnbnd%jnb, bnbnd%inblo, &
+        bimag%imattr, bimag%imjnb, bimag%imblo)
+  end if
+
   !
   call timer_stop(  T_restr)
   call timer_stpstrt( T_inte,T_nonbon)
   !================= IMAGE ENERGY TERMS ==================================
-#if KEY_MNDO97==0  /* MNDO97 related */
-    ! when MNDO97 is not used.
-    call nonbonded_image_energy()
-#else             /* MNDO97 related */
-    ! pure MM case.
-    if(numat<=0) call nonbonded_image_energy()
-#endif             /* MNDO97 related */
+  call nonbonded_image_energy()
   call timer_stop( T_nonbon)
   !-----------------------------------------------------------------------
   !
@@ -2232,10 +2227,10 @@ use api_func, only: func_call, func_is_set, mlpot_call, mlpot_is_set, mlpot_take
 #endif
         CALL ECNSTR(ECHARMBF,QCNSTR,REFX,REFY,REFZ,KCNSTR,NATOM, &
              KCEXPN,XHSCALE,YHSCALE,ZHSCALE,-1, &
-             NUMHSETS,TYPHSET,IHSET,QHNORT,QHNOTR, &
+             NUMHSETS,TYPHSET,PARHSET,IHSET,QHNORT,QHNOTR, &
              X,Y,Z,DX,DY,DZ, &
              QECONT,ECONT,DD1,IUPT,QSECD &
-             ,(/0/),(/0,0/),(/0,0/),(/0,0/) &
+             ,numpca,pcax,pcay,pcaz &
              )
 
         IF (TIMER.GT.1) &
@@ -2505,6 +2500,20 @@ use api_func, only: func_call, func_is_set, mlpot_call, mlpot_is_set, mlpot_take
   if (q_gpu) call range_start('Reciprocal energy')
 #endif
 
+#if KEY_EABF==1
+#if KEY_PARALLEL==1
+        if(mynod==0)then
+#endif
+IF(eabf_control .EQ. 1)then
+   IF(MDSTEP .GE. 0)THEN
+      call EABF_CYCLE(ICALL)
+   ENDIF
+ENDIF
+#if KEY_PARALLEL==1
+        endif
+#endif
+#endif
+
   !
   !  IMPORTANT NOTE TO DEVELOPERS:
   !     Above this call to VIRIAL should only appear energy terms which
@@ -2770,10 +2779,10 @@ use api_func, only: func_call, func_is_set, mlpot_call, mlpot_is_set, mlpot_take
 #endif
         CALL ECNSTR(ETERM(CHARM),QCNSTR,REFX,REFY,REFZ,KCNSTR,NATOM, &
                 KCEXPN,XHSCALE,YHSCALE,ZHSCALE,1, &
-                NUMHSETS,TYPHSET,IHSET,QHNORT,QHNOTR, &
+                NUMHSETS,TYPHSET,PARHSET,IHSET,QHNORT,QHNOTR, &
                 X,Y,Z,DX,DY,DZ, &
                 QECONT,ECONT,DD1,IUPT,QSECD &
-                ,(/0/),(/0,0/),(/0,0/),(/0,0/) &
+                ,numpca,pcax,pcay,pcaz &
                 )
         IF (TIMER.GT.1) &
              CALL WRTTIM('Harmonic constraint energy times:')
@@ -2798,7 +2807,7 @@ use api_func, only: func_call, func_is_set, mlpot_call, mlpot_is_set, mlpot_take
 #endif
         CALL ECNSTR(ETERM(PCHARM),QCNSTR,REFX,REFY,REFZ,KCNSTR,NATOM, &
                 KCEXPN,XHSCALE,YHSCALE,ZHSCALE,2, &
-                NUMHSETS,TYPHSET,IHSET,QHNORT,QHNOTR, &
+                NUMHSETS,TYPHSET,PARHSET,IHSET,QHNORT,QHNOTR, &
                 X,Y,Z,DX,DY,DZ, &
                 QECONT,ECONT,DD1,IUPT,QSECD &
                 ,numpca,pcax,pcay,pcaz &
@@ -2826,10 +2835,10 @@ use api_func, only: func_call, func_is_set, mlpot_call, mlpot_is_set, mlpot_take
 #endif
         CALL ECNSTR(ETERM(EHARM),QEHARM,RXHARM,RYHARM, &
              RZHARM,KEHARM,NATOM, (/ 2 /), &
-             (/ ONE /), (/ ONE /), (/ ONE /), 1, 1, (/ 0 /), IHHARM, (/ .false. /), (/ .false. /), &
+             (/ ONE /), (/ ONE /), (/ ONE /), 1, 1, (/ 0 /), (/ 0 /), IHHARM, (/ .false. /), (/ .false. /), &
              X,Y,Z,DX,DY,DZ,QECONT,ECONT,DD1, &
              IUPT,QSECD &
-             ,(/0/),(/0,0/),(/0,0/),(/0,0/) &
+             ,numpca,pcax,pcay,pcaz &
              )
         IF (TIMER.GT.1) &
              CALL WRTTIM('Harmonic restraint energy times:')
@@ -3006,7 +3015,7 @@ use api_func, only: func_call, func_is_set, mlpot_call, mlpot_is_set, mlpot_take
            !.ab.
            CALL GEO2(ETERM(GEO),NATOM,X,Y,Z,DX,DY,DZ, &
                 LSTGEO,NGEO,NTGEO, &
-                IGEO,JGEO,AMASS, &
+                IGEO,JGEO,BLGEO,AMASS, &
                 XRGEO,YRGEO,ZRGEO,TRGEO, &
                 XDGEO,YDGEO,ZDGEO,DRGEO, &
                 DTGEO,FCGEO,P1GEO,P2GEO, &
@@ -4064,8 +4073,8 @@ endif
      ENDIF
 #endif
      !.ab.
-! Changed by Lazaridis in May23. Only EPRESS(1:VIZZ) are calculated here.
-!    DO I=1,LENENV
+     ! Changed by Lazaridis in May23. Only EPRESS(1:VIZZ) are calculated here.
+     !    DO I=1,LENENV
      DO I=1,VIZZ
         IPT=IPT+1
         ALLWRK(IPT)=EPRESS(I)
@@ -4122,8 +4131,8 @@ endif
      ENDIF
 #endif
      !.ab.
-!see above, Lazaridis, May23
-!    DO I=1,LENENV
+     ! Changed by Lazaridis in May23. Only EPRESS(1:VIZZ) are calculated here.
+     ! DO I=1,LENENV
      DO I=1,VIZZ
         IPT=IPT+1
         EPRESS(I)=ALLWRK(IPT)
@@ -4202,6 +4211,9 @@ endif
 #if KEY_MTS==1
   IF (.NOT. QTBMTS) THEN
 #endif
+#if KEY_BLOCK==1
+     if (qmld) call msld_add_potentialenergy(nblock,bixlam,eterm(ldbv),eterm(thbv),eterm(cgbv))
+#endif
      ! . Add all the terms to get the total energy.
      ECSUM = ZERO
      DO I = 1,LENENT
@@ -4222,11 +4234,6 @@ endif
      ENDIF
 #endif
      !---------------------------------------------------------------
-#if KEY_BLOCK==1
-     if (qmld) call msld_add_potentialenergy(nblock,bixlam,ecsum)
-        !/*ldm GG adds potential energy of Gbias and kbias into ECSUM*/
-     if (qmld) call msld_add_restraints(nblock,x,y,z,dx,dy,dz,ecsum)
-#endif
      EPROP(EPOT) = ECSUM
      !
 #if KEY_MTS==1
@@ -4862,7 +4869,7 @@ contains
         CALL timer_start(T_ipsex)
         CALL  EIPSSYS(EIPSVDW,EIPSELE,ATFRST,ATLAST,NATOM,NATC,  &
              QETERM(VDW),QETERM(ELEC),LVIPS,LEIPS,LCONS,LDBEXP,  &
-             BNBND%INB14,BNBND%IBLO14,     &
+             BNBND%INB14,BNBND%IBLO14, &
              CG,RSCLF,CNBA,CNBB,IAC,ITC,MAXCN,EPS,E14FAC,    &
              EPROP(VOLUME),CGSUM,CG2SUM,A2SUM,C2SUM,AIJSUM,CIJSUM,  &
              DX,DY,DZ,X,Y,Z,QECONT,ECONT,DD1,IUPT,QSECD,ICALL)
@@ -4907,7 +4914,7 @@ contains
              ,LSOFTCORE0,SCCUTR0,WCA  &
 #endif
 #if KEY_LJPME==1
-             ,QETERM(LJEXC), ETERM(LJEXC)  & 
+             ,QETERM(LJEXC), ETERM(LJEXC)  &
 #endif
              )
 
@@ -4929,7 +4936,7 @@ contains
                    ,LSOFTCORE0,SCCUTR0,WCA  &
 #endif
 #if KEY_LJPME==1
-                   ,QETERM(LJEXC), ETERM(LJEXC)  & 
+                   ,QETERM(LJEXC), ETERM(LJEXC)  &
 #endif
                    )
 
@@ -4962,7 +4969,7 @@ contains
                       ,LSOFTCORE0,SCCUTR0,WCA  &
 #endif
 #if KEY_LJPME==1
-                      ,QETERM(LJEXC), ETERM(LJEXC)  & 
+                      ,QETERM(LJEXC), ETERM(LJEXC)  &
 #endif
                       )
                  IF (TIMER.GT.1) CALL WRTTIM('Non-bond energy times:')
@@ -5233,7 +5240,7 @@ contains
                       ,WCA          &
 #endif
 #if KEY_LJPME==1
-                      ,QETERM(LJEXC), ETERM(LJEXC)  & 
+                      ,QETERM(LJEXC), ETERM(LJEXC)  &
 #endif
                       )
                  SLFG1=.FALSE.
@@ -5255,7 +5262,7 @@ contains
                             ,WCA          &
 #endif
 #if KEY_LJPME==1
-                            ,QETERM(LJEXC), ETERM(LJEXC)  & 
+                            ,QETERM(LJEXC), ETERM(LJEXC)  &
 #endif
                             )
                        SLFG2=.FALSE.
@@ -5283,7 +5290,7 @@ contains
                             ,WCA          &
 #endif
 #if KEY_LJPME==1
-                            ,QETERM(LJEXC), ETERM(LJEXC)  & 
+                            ,QETERM(LJEXC), ETERM(LJEXC)  &
 #endif
                             )
 

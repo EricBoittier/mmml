@@ -2043,6 +2043,10 @@ SUBROUTINE FILSKY(COMLYN,COMLEN,LUSED,QSEL,ISEL)
   !
   LUSED=.TRUE.
   NUMP=NUMSKY+1
+  ! Ensure room for the scratch/new slot NUMP before it is written to
+  ! (the definition name is parsed into NAMSKY(NUMP) below, ahead of the
+  ! duplicate-name check); the table grows on demand instead of overflowing.
+  call select_ensure_cap(NUMP)
   call chmalloc('selcta.src','FILSKY','IPTR',NATOM,intgp=IPTR)
   IF(QSEL)THEN
      IPTR=ISEL(1:NATOM)
@@ -2065,10 +2069,6 @@ SUBROUTINE FILSKY(COMLYN,COMLEN,LUSED,QSEL,ISEL)
      ENDIF
   ENDDO
   !
-  IF(NUMP >= MAXSKY) THEN
-     CALL WRNDIE(0,'<FILSKY>','Overflow in number of definitions.')
-     RETURN
-  ENDIF
   !
   NUMSKY=NUMP
   LENSKY(NUMP)=NATOM

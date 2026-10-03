@@ -134,23 +134,23 @@
 !===========================================================
        recursive subroutine ftsm_voronoi_update(bcast_orient_)
        use multicom_aux;
-       use mpi
+       use mpi_f08
        use parallel, only: psnd4, psnd8
 #if (KEY_PARALLEL==1)
 #if (KEY_SINGLE==1)
- integer :: mpifloat=MPI_REAL 
+ TYPE(MPI_Datatype) :: mpifloat=MPI_REAL 
 #endif
 #if (KEY_SINGLE==0)
- integer :: mpifloat=MPI_REAL8 
+ TYPE(MPI_Datatype) :: mpifloat=MPI_REAL8 
 #endif
 #if (KEY_INTEGER8==0)
- integer :: mpiint=MPI_INTEGER 
+ TYPE(MPI_Datatype) :: mpiint=MPI_INTEGER 
 #endif
 #if (KEY_INTEGER8==1)
- integer :: mpiint=MPI_INTEGER8 
+ TYPE(MPI_Datatype) :: mpiint=MPI_INTEGER8 
 #endif
- integer :: mpichar=MPI_CHARACTER
- integer :: mpibool=MPI_LOGICAL
+ TYPE(MPI_Datatype) :: mpichar=MPI_CHARACTER
+ TYPE(MPI_Datatype) :: mpibool=MPI_LOGICAL
 #endif
 !
        logical, optional, intent(in) :: bcast_orient_ ! whether orientation coordinates should be broadcast (usually not b/c they only evolve via forced coords)
@@ -194,24 +194,24 @@
 ! just does a regular update and exits
        use multicom_aux;
        use number
-       use mpi
+       use mpi_f08
        use parallel, only: psnd4, psnd8
 ! vars
 #if (KEY_PARALLEL==1)
 #if (KEY_SINGLE==1)
- integer :: mpifloat=MPI_REAL 
+ TYPE(MPI_Datatype) :: mpifloat=MPI_REAL 
 #endif
 #if (KEY_SINGLE==0)
- integer :: mpifloat=MPI_REAL8 
+ TYPE(MPI_Datatype) :: mpifloat=MPI_REAL8 
 #endif
 #if (KEY_INTEGER8==0)
- integer :: mpiint=MPI_INTEGER 
+ TYPE(MPI_Datatype) :: mpiint=MPI_INTEGER 
 #endif
 #if (KEY_INTEGER8==1)
- integer :: mpiint=MPI_INTEGER8 
+ TYPE(MPI_Datatype) :: mpiint=MPI_INTEGER8 
 #endif
- integer :: mpichar=MPI_CHARACTER
- integer :: mpibool=MPI_LOGICAL
+ TYPE(MPI_Datatype) :: mpichar=MPI_CHARACTER
+ TYPE(MPI_Datatype) :: mpibool=MPI_LOGICAL
 #endif
 !
        real(chm_real), dimension(:) :: x, y, z, xold, yold, zold
@@ -225,6 +225,7 @@
        real(chm_real) :: d
 !
        logical :: correct_cell_me, correct_cell
+       integer :: i_land, i_landg ! integer mirror for a portable logical-AND reduction
        integer :: iter, max_iter
        integer, parameter :: default_iter=15
        integer :: i, j, k, ierror, me, ind
@@ -394,9 +395,13 @@
 !
           correct_cell_me=(me.eq.ftsm_voronoi_compute(rfi_old, roi_old, rall_f, rall_o))
         endif ! .not. correct_cell_me
-! pool all results
-        if (qroot) call MPI_ALLREDUCE(correct_cell_me, correct_cell, 1, &
-     & mpibool, MPI_LAND, MPI_COMM_STRNG, ierror)
+! pool all results (MPI_MIN over 0/1 == logical AND; portable on strict MPIs)
+        if (qroot) then
+         i_land=0; if (correct_cell_me) i_land=1
+         call MPI_ALLREDUCE(i_land, i_landg, 1, &
+     & MPI_INTEGER, MPI_MIN, MPI_COMM_STRNG, ierror)
+         correct_cell=(i_landg.eq.1)
+        endif
 ! broadcast to slaves
         if (qgrp) then ; call mpi_bcast(correct_cell,1,mpibool,0,MPI_COMM_LOCAL,ierror) ; endif
 !
@@ -418,9 +423,13 @@
           do
 ! check if the new set is consistent
            correct_cell_me=(me.eq.ftsm_voronoi_compute(rfi_old, roi_old, rall_temp_f, rall_temp_o))
-! pool all results
-           if (qroot) call MPI_ALLREDUCE(correct_cell_me, correct_cell, 1, &
-     & mpibool, MPI_LAND, MPI_COMM_STRNG, ierror)
+! pool all results (MPI_MIN over 0/1 == logical AND; portable on strict MPIs)
+           if (qroot) then
+            i_land=0; if (correct_cell_me) i_land=1
+            call MPI_ALLREDUCE(i_land, i_landg, 1, &
+     & MPI_INTEGER, MPI_MIN, MPI_COMM_STRNG, ierror)
+            correct_cell=(i_landg.eq.1)
+           endif
 ! broadcast to slaves
            if (qgrp) then
 !#ifdef 1
@@ -465,24 +474,24 @@
       use stream
       use multicom_aux;
       use number
-      use mpi
+      use mpi_f08
       use parallel, only: psnd4, psnd8
       use bestfit, only : eig3s, RMSBestFit, rmsd, norm3, veccross3
 #if (KEY_PARALLEL==1)
 #if (KEY_SINGLE==1)
- integer :: mpifloat=MPI_REAL 
+ TYPE(MPI_Datatype) :: mpifloat=MPI_REAL 
 #endif
 #if (KEY_SINGLE==0)
- integer :: mpifloat=MPI_REAL8 
+ TYPE(MPI_Datatype) :: mpifloat=MPI_REAL8 
 #endif
 #if (KEY_INTEGER8==0)
- integer :: mpiint=MPI_INTEGER 
+ TYPE(MPI_Datatype) :: mpiint=MPI_INTEGER 
 #endif
 #if (KEY_INTEGER8==1)
- integer :: mpiint=MPI_INTEGER8 
+ TYPE(MPI_Datatype) :: mpiint=MPI_INTEGER8 
 #endif
- integer :: mpichar=MPI_CHARACTER
- integer :: mpibool=MPI_LOGICAL
+ TYPE(MPI_Datatype) :: mpichar=MPI_CHARACTER
+ TYPE(MPI_Datatype) :: mpibool=MPI_LOGICAL
 #endif
 ! variables
        integer :: ftsm_voronoi_compute ! index of Voronoi cell that the system is in
@@ -763,14 +772,15 @@
 ! NOTE that this is a global print!
        use stream
        use multicom_aux;
-       use mpi
+       use mpi_f08
 !
        integer iunit
 ! locals
        character(len=80) :: fmt
        integer :: j
        integer :: voro_data_all(nstring,2*nstring+1)
-       integer :: ierror, type
+       integer :: ierror
+       TYPE(MPI_Datatype) :: type
 ! do work
 ! gather all data on root
 #if (KEY_INTEGER8==0)
@@ -812,7 +822,7 @@
        subroutine ftsm_voronoi_read_data(iunit)
 ! assume that unit is prepared
        use multicom_aux;
-       use mpi
+       use mpi_f08
        use parallel, only: psnd4, psnd8
 !
        integer iunit
@@ -822,19 +832,19 @@
        integer :: ierror
 #if (KEY_PARALLEL==1)
 #if (KEY_SINGLE==1)
- integer :: mpifloat=MPI_REAL 
+ TYPE(MPI_Datatype) :: mpifloat=MPI_REAL 
 #endif
 #if (KEY_SINGLE==0)
- integer :: mpifloat=MPI_REAL8 
+ TYPE(MPI_Datatype) :: mpifloat=MPI_REAL8 
 #endif
 #if (KEY_INTEGER8==0)
- integer :: mpiint=MPI_INTEGER 
+ TYPE(MPI_Datatype) :: mpiint=MPI_INTEGER 
 #endif
 #if (KEY_INTEGER8==1)
- integer :: mpiint=MPI_INTEGER8 
+ TYPE(MPI_Datatype) :: mpiint=MPI_INTEGER8 
 #endif
- integer :: mpichar=MPI_CHARACTER
- integer :: mpibool=MPI_LOGICAL
+ TYPE(MPI_Datatype) :: mpichar=MPI_CHARACTER
+ TYPE(MPI_Datatype) :: mpibool=MPI_LOGICAL
 #endif
 ! do work
 ! gather all data on root
@@ -876,7 +886,7 @@
 ! NOTE that this is a global print!
 ! this routine is redundant with ftsm_voronoi_print_hist
        use multicom_aux;
-       use mpi
+       use mpi_f08
 !
        integer iunit
 ! locals
@@ -889,19 +899,19 @@
        integer :: ierror
 #if (KEY_PARALLEL==1)
 #if (KEY_SINGLE==1)
- integer :: mpifloat=MPI_REAL 
+ TYPE(MPI_Datatype) :: mpifloat=MPI_REAL 
 #endif
 #if (KEY_SINGLE==0)
- integer :: mpifloat=MPI_REAL8 
+ TYPE(MPI_Datatype) :: mpifloat=MPI_REAL8 
 #endif
 #if (KEY_INTEGER8==0)
- integer :: mpiint=MPI_INTEGER 
+ TYPE(MPI_Datatype) :: mpiint=MPI_INTEGER 
 #endif
 #if (KEY_INTEGER8==1)
- integer :: mpiint=MPI_INTEGER8 
+ TYPE(MPI_Datatype) :: mpiint=MPI_INTEGER8 
 #endif
- integer :: mpichar=MPI_CHARACTER
- integer :: mpibool=MPI_LOGICAL
+ TYPE(MPI_Datatype) :: mpichar=MPI_CHARACTER
+ TYPE(MPI_Datatype) :: mpibool=MPI_LOGICAL
 #endif
 ! do work
 ! gather all data on root
@@ -947,26 +957,26 @@
       use lu ! for computing FE
       use stream
       use multicom_aux;
-      use mpi
+      use mpi_f08
       use clcg_mod, only: random; use reawri, only: iseed
       use number
       use parallel, only: psnd4, psnd8
 !
 #if (KEY_PARALLEL==1)
 #if (KEY_SINGLE==1)
- integer :: mpifloat=MPI_REAL 
+ TYPE(MPI_Datatype) :: mpifloat=MPI_REAL 
 #endif
 #if (KEY_SINGLE==0)
- integer :: mpifloat=MPI_REAL8 
+ TYPE(MPI_Datatype) :: mpifloat=MPI_REAL8 
 #endif
 #if (KEY_INTEGER8==0)
- integer :: mpiint=MPI_INTEGER 
+ TYPE(MPI_Datatype) :: mpiint=MPI_INTEGER 
 #endif
 #if (KEY_INTEGER8==1)
- integer :: mpiint=MPI_INTEGER8 
+ TYPE(MPI_Datatype) :: mpiint=MPI_INTEGER8 
 #endif
- integer :: mpichar=MPI_CHARACTER
- integer :: mpibool=MPI_LOGICAL
+ TYPE(MPI_Datatype) :: mpichar=MPI_CHARACTER
+ TYPE(MPI_Datatype) :: mpibool=MPI_LOGICAL
 #endif
 !
       real(chm_real) :: x(:), y(:), z(:)
@@ -978,11 +988,11 @@
       integer :: i, j, k, l, m, which, me, ind
       integer*4 :: ierror, m_
       integer*4 :: length(nstring-1)
-      integer*4 :: request(nstring-1)
+      TYPE(MPI_Request) :: request(nstring-1)
       logical :: ftsm_voronoi_check ! returns false if the algorithm tells to revert momenta
 !
       integer, pointer :: vtemp(:), vtemp2(:) ! for gathering Voronoi stats; this is an upper bound
-      integer*4 :: stat(MPI_STATUS_SIZE)
+      TYPE(MPI_Status) :: stat
       logical :: voronoi_update
       logical :: success, qgrp, qstring, ready(nstring-1), ok
       real(chm_real) :: P_accept_cross, d
@@ -1308,7 +1318,7 @@
        subroutine ftsm_voronoi_print_map(iunit,fmt)
        use stream
        use multicom_aux;
-       use mpi
+       use mpi_f08
        integer :: iunit
 ! integer :: ierr
        character(len=*), optional :: fmt
@@ -1342,24 +1352,24 @@
        subroutine ftsm_voronoi_read_map(iunit)
        use stream
        use multicom_aux;
-       use mpi
+       use mpi_f08
        use parallel, only: psnd4, psnd8
 !
 #if (KEY_PARALLEL==1)
 #if (KEY_SINGLE==1)
- integer :: mpifloat=MPI_REAL 
+ TYPE(MPI_Datatype) :: mpifloat=MPI_REAL 
 #endif
 #if (KEY_SINGLE==0)
- integer :: mpifloat=MPI_REAL8 
+ TYPE(MPI_Datatype) :: mpifloat=MPI_REAL8 
 #endif
 #if (KEY_INTEGER8==0)
- integer :: mpiint=MPI_INTEGER 
+ TYPE(MPI_Datatype) :: mpiint=MPI_INTEGER 
 #endif
 #if (KEY_INTEGER8==1)
- integer :: mpiint=MPI_INTEGER8 
+ TYPE(MPI_Datatype) :: mpiint=MPI_INTEGER8 
 #endif
- integer :: mpichar=MPI_CHARACTER
- integer :: mpibool=MPI_LOGICAL
+ TYPE(MPI_Datatype) :: mpichar=MPI_CHARACTER
+ TYPE(MPI_Datatype) :: mpibool=MPI_LOGICAL
 #endif
 !
        integer :: iunit, ierror

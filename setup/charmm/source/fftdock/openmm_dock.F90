@@ -5,7 +5,11 @@ module openmm_dock
 #if KEY_FFTDOCK == 1 && KEY_OPENMM ==1
   !! objects used by OpenMM
   type(OpenMM_System), save :: system
+#if OMM_VER < 82
   type(OpenMM_LangevinIntegrator), save :: langevin_integrator
+#else
+  type(OpenMM_LangevinMiddleIntegrator), save :: langevin_integrator
+#endif /* OMM_VER */
   type(OpenMM_VerletIntegrator), save :: verlet_integrator
   type(OpenMM_Platform), save :: platform
   type(OpenMM_Context), save :: context

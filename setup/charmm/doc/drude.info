@@ -829,7 +829,7 @@ DYNAMICS vv2    start  nstep  @nstep timestp @timestep -
      iuncrd   13   nsavcrd  2000
 
 Details of the command to perform molecular dynamics for the polarizable Drude mdoel is explained in
-*note vv2:(doc/vv2.info).
+*note vv2:(doc/tpcntrl.info).
 
 
 

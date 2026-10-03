@@ -73,6 +73,12 @@ RngCPU::~RngCPU()
   free_mtstate(mtState);
 }
 
+void RngCPU::seed(unsigned long s)
+{
+  init_genrand(s,mtState->mt,&(mtState->mti));
+  mtState->bNextReal=false;
+}
+
 
 
 /* initializes mt[N] with a seed */
@@ -212,4 +218,3 @@ void RngCPU::free_mtstate(struct MTState* mts)
   free(mts->mt);
   free(mts);
 }
-

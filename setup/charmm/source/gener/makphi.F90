@@ -856,12 +856,12 @@ use param
 !
 !  Now sort the new dihedral list
 !
-    IF(LPHI) CALL SORT(NPHI,EXCH5,ORDER5,IP,JP,KP,LP,0,0,0,4)
+    IF(LPHI) CALL SORT(NPHI,EXCH5,ORDER5,IP,JP,KP,LP,(/0/),(/0/),(/0/),4)
 
      ! Now remove any duplicate angles and dihedrals
 
        IF(LANGLE .and. NTHETA.GT.1) THEN
-         CALL SORT(NTHETA,EXCH5,ORDER5,IT,JT,KT,0,0,0,0,3)
+         CALL SORT(NTHETA,EXCH5,ORDER5,IT,JT,KT,(/0/),(/0/),(/0/),(/0/),3)
 
          IPT=1
          JPT=1

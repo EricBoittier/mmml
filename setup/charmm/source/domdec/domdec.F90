@@ -545,7 +545,7 @@ contains
     use domdec_shake,only:init_shake, build_shaketbl, q_shake
     use fstshk,only:nsh1, nsh2, nsh3, bshkgp, nstwat, numwater, hmassi, hmassj, ammi
     use shake,only:qfshake, qshake, shkapr, constr
-    use mpi,only:mpi_logical, mpi_lor, mpi_success
+    use mpi_f08,only:mpi_logical, mpi_lor, mpi_success
     use parallel,only:comm_charmm
     implicit none
     integer ierror
@@ -870,7 +870,7 @@ contains
     use psf,only:natom
     use image,only:xtlabc
     use groupxfast,only:ngroup, calc_groupbox, group, group_out, groupcenter
-    use mpi
+    use mpi_f08
     use inbnd,only:cutnb
     use domdec_grouped,only:q_grouped, rcut_grouped, calc_rcut_grouped
     use domdec_bonded,only:check_home_box

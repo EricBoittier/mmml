@@ -14,16 +14,17 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-"""Finds and loads the CHARMM shared library
+"""Compatibility facade for the CHARMM shared library.
 
-On importing pycharmm, this module looks for an environment variable named
-`CHARMM_HOME` to find path to CHARMM shared library. 
-The extension for the library is set
-depending on the output of platform.system
+c52a1 loads the library from :mod:`pycharmm.loader` (``lib.symbol``).
+MMML call sites still use ``import pycharmm.lib as lib`` and
+``lib.charmm.symbol``. ``charmm`` is that same lazy library object.
+
+Path helpers below are what ``tests/unit/test_pycharmm_lib_loader.py`` execs.
+They are defined above the loader import so that test can run them without
+initializing CHARMM.
 """
 
-
-import ctypes
 import os
 import os.path
 import platform
@@ -31,7 +32,7 @@ import platform
 
 # CHARMM shared-library basenames, in preference order. Both the ``lib``-prefixed
 # and bare forms are accepted so either build layout resolves.
-_CHARMM_LIB_BASENAMES = ('libcharmm', 'charmm')
+_CHARMM_LIB_BASENAMES = ('libcharmm', 'charmm', 'libchmm')
 
 
 def charmm_lib_suffix(sys_name=None):
@@ -85,41 +86,4 @@ def resolve_charmm_lib_path(charmm_lib_dir=''):
     return _discover_repo_charmm_lib(suffix) or ('libcharmm' + suffix)
 
 
-class CharmmLib:
-    def __init__(self, charmm_lib_dir=''):
-        self.charmm_lib_name = resolve_charmm_lib_path(charmm_lib_dir)
-
-        self.lib = None
-        self.init_charmm()
-
-        self.dlclose = ctypes.CDLL(None).dlclose  # does not work
-        self.dlclose.argtypes = [ctypes.c_void_p]
-
-    def __del__(self):
-        self.del_charmm()
-
-
-    def init_charmm(self):
-        try:
-            self.lib = ctypes.CDLL(self.charmm_lib_name)
-        except OSError as exc:
-            suffix = charmm_lib_suffix()
-            raise OSError(
-                f"Could not load the CHARMM shared library ({self.charmm_lib_name!r}).\n"
-                f"Platform {platform.system()!r} expects a {suffix!r} library.\n"
-                "Set CHARMM_LIB_DIR to the directory containing "
-                f"libcharmm{suffix}, or place it under <repo>/setup/charmm.\n"
-                f"Original error: {exc}"
-            ) from exc
-        self.lib.init_charmm()
-
-    def del_charmm(self):
-        if self.lib is None:
-            return
-        self.lib.del_charmm()  # initiates 'normal stop'
-        # does not work
-        # self.lib.dlclose(self.lib)
-
-
-charmm_lib = CharmmLib(os.environ.get('CHARMM_LIB_DIR', ''))
-charmm = charmm_lib.lib
+from pycharmm.loader import lib as charmm  # noqa: E402

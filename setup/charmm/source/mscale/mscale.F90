@@ -3,6 +3,9 @@ MODULE MSCALEMOD
   use chm_kinds
   use chm_types
   use bases_fcm
+#if KEY_PARALLEL==1
+  use mpi_f08, only: MPI_Comm
+#endif
   implicit none
 
 #if KEY_MSCALE==1  /* mscale_data */
@@ -33,7 +36,11 @@ MODULE MSCALEMOD
   integer, allocatable, dimension(:),save,public :: nsubsat,msclpr, &
        msclproc,msclfproc,msclinp,msclout
   logical, save, public :: qmscale, qatomsub, qcrysub, qchrgsub
+#if KEY_PARALLEL==1
+  type(MPI_Comm),allocatable,dimension(:),save,public :: intercomm
+#else
   integer(chm_int4),allocatable,dimension(:),save,public :: intercomm
+#endif
   logical, allocatable, dimension(:),save,public :: qmsclam, &
        qmscmlam, qatom, qcryst, qfchrg
   REAL(CHM_REAL), allocatable, dimension(:), save, public :: FMSCL
@@ -48,7 +55,11 @@ MODULE MSCALEMOD
   logical, allocatable, dimension(:), save :: qtorquea  
   integer, save                            :: upen     ! write subsys PE to this file
   logical, save                            :: qredupen
+#if KEY_PARALLEL==1
+  type(MPI_Comm),allocatable,dimension(:,:) :: repdcomm
+#else
   integer(chm_int4),allocatable,dimension(:,:) :: repdcomm
+#endif
   integer,allocatable,dimension(:) :: repdnsubs
   !
 #endif /* mscale_data */
@@ -109,7 +120,7 @@ CONTAINS
     !
 #if KEY_PARALLEL==1
     use parallel
-    use mpi      
+    use mpi_f08      
 #endif
 
     implicit none
@@ -135,11 +146,10 @@ CONTAINS
     !     but no need for #INTEGER8 here :-)
     INTEGER(chm_int4), allocatable, dimension(:) :: ARRINFO, MAXPROCS
     INTEGER(chm_int4), allocatable, dimension(:) :: ARRERR
-    INTEGER(chm_int4) NPROC,MPIINFO4,MPICOMM4,ME4,MPISELF,MPIERRS(1)
-    INTEGER(chm_int4) ME,NP,MPIDP,MEROOT,IONE,IERR,MCG,INTERCOMG
-    INTEGER(chm_int4) myrepsiz,repdgrp,repdcom,reprank,myrep
-    INTEGER(chm_int4) repdnp,mpicomm4l
-    INTEGER(chm_int4), allocatable, dimension(:) :: myrepgrp
+    TYPE(MPI_Info) :: MPIINFO4
+    TYPE(MPI_Comm) :: MPICOMM4, MPISELF
+    INTEGER(chm_int4) NPROC,ME4
+    INTEGER(chm_int4) ME,NP,MEROOT,IONE,IERR
     !
     real(chm_real) RR
     !
@@ -382,8 +392,6 @@ CONTAINS
   !
   MPIINFO4=MPI_INFO_NULL
   !
-  !     Here we could have one error per process for checking. Ignore for now!
-  MPIERRS(1)=MPI_ERRCODES_IGNORE(1)
   MPISELF=MPI_COMM_SELF
   MPICOMM4=COMM_CHARMM
   ME4=0
@@ -417,28 +425,9 @@ CONTAINS
   !  programs, inputs, outputs, etc...
   !
 #if KEY_REPDSTR==1
-  if(qrepdstr)then
-     mpicomm4l=mpicomm4  ! Localize this variable, just in case it is needed later...
-     ! --------------------------
-     ! create a new group
-     ! these are global ranks!
-     myrepsiz=numnodg/nrepdstr
-     call chmalloc('mscale.src','MSCALE','MYREPGRP',myrepsiz,intg=myrepgrp)
-     do i=1,myrepsiz
-        myrepgrp(i) = irepdstr*myrepsiz+i-1
-     enddo
-     call mpi_comm_group(mpicomm4l,mcg,ierr)
-     call mpi_group_incl(mcg,myrepsiz,myrepgrp,repdgrp,ierr)
-     ! create repdcom to be used in subsequent calls regarding
-     ! this replica/group
-     call mpi_comm_create(mpicomm4l,repdgrp,repdcom,ierr)
-     call mpi_comm_rank(repdcom,reprank,ierr)
-     ! do these need to be the same???
-!     write(outu,*)'mynod,reprank,repdcom=',mynod,reprank,repdcom  ! are they the same
-     ! in the case of repd we use group communicator
-     mpicomm4=repdcom
-     !=================================================
-  endif
+  ! COMM_CHARMM is already the per-replica communicator (set up by
+  ! setup_repd_comms via MPI_COMM_SPLIT), so MPICOMM4 is already correct
+  ! for spawning subsystem processes within each replica.
 #endif
 
   !     We need more ifs for non-specified parameters !!!
@@ -502,7 +491,7 @@ CONTAINS
      !         write(*,*)'MSCALE>nproc=',nproc
 
      CALL MPI_COMM_SPAWN(COMNDS(I),SARRARG,MAXPROCS(I), &
-          MPIINFO4,ME4,MPICOMM4,INTERCOMM(I),MPIERRS,IERR)
+          MPIINFO4,ME4,MPICOMM4,INTERCOMM(I),MPI_ERRCODES_IGNORE,IERR)
      !
   ENDDO
   !
@@ -566,14 +555,13 @@ SUBROUTINE LOOPENE(NCALLS)
   use heurist,only:updeci
   !
 #if KEY_PARALLEL==1
-  use mpi  
+  use mpi_f08  
   use parallel
 #endif
   !
   LOGICAL QSECD
   INTEGER NCALLS,NAT3,N6
   !
-  INTEGER(chm_int4) COMPARENT,COMWORLD,ME,NP,IERR,MPIDP,MEROOT,IONE
   real(chm_real) RR
   REAL(CHM_REAL), allocatable, dimension(:) :: DDX
   !
@@ -658,19 +646,20 @@ END SUBROUTINE LOOPENE
     !
 #if KEY_PARALLEL==1
     use parallel
-    use mpi    
+    use mpi_f08    
 #endif
     !
     !
     INTEGER I,J,IPT,NS,ALL_STAT
-    INTEGER(chm_int4) MEROOT,MPIDP,N,IERR,MPIINT,IONE,INTCOMM,NCONTROL
+    TYPE(MPI_Datatype) :: MPIINT
+    TYPE(MPI_Comm) :: INTCOMM
+    INTEGER(chm_int4) :: MEROOT,N,IERR,IONE,NCONTROL
     !
     IF(MYNOD.EQ.0)THEN
        MEROOT=MPI_ROOT
     ELSE
        MEROOT=MPI_PROC_NULL
     ENDIF
-    MPIDP=MPI_DOUBLE_PRECISION
     MPIINT=MPI_INTEGER
     IONE=1
     !
@@ -681,6 +670,8 @@ END SUBROUTINE LOOPENE
        ! We want to finish now...
        NCONTROL=-1
        CALL MPI_BCAST(NCONTROL,IONE,MPIINT,MEROOT,INTCOMM,IERR)
+       ! Disconnect the intercommunicator so MPI_FINALIZE won't segfault
+       CALL MPI_COMM_DISCONNECT(INTERCOMM(I),IERR)
     ENDDO
     RETURN
   END SUBROUTINE MSCALEFIN
@@ -703,7 +694,7 @@ SUBROUTINE MAINBROADCAST(NATOMX,X,Y,Z,QSECD)
   use parallel
   !
 #if KEY_PARALLEL==1
-  use mpi      
+  use mpi_f08      
 #endif
   !
   LOGICAL QSECD
@@ -711,7 +702,8 @@ SUBROUTINE MAINBROADCAST(NATOMX,X,Y,Z,QSECD)
   real(chm_real) X(*),Y(*),Z(*)
   !
   INTEGER I,J,K,L,IPT,NS,ALL_STAT,NCONTROL
-  INTEGER(CHM_INT4) MEROOT,MPIDP,N,IERR,MPIINT,IONE,M,ISIX,MPILOG
+  TYPE(MPI_Datatype) :: MPIDP, MPIINT, MPILOG
+  INTEGER(chm_int4) :: MEROOT, N, IERR, IONE, M, ISIX
   REAL(CHM_REAL), allocatable, dimension(:) :: XS,YS,ZS,CGS,AN
   CHARACTER(LEN=6) :: ELE ! the same as ATCT
   !
@@ -838,7 +830,7 @@ SUBROUTINE MAINRECEIVE(INIT,NATOM,LENENT,DX,DY,DZ,ETERM,EPRESS,EPROP,QSECD,DD1,Q
   !
 #if KEY_PARALLEL==1
   use parallel
-  use mpi          
+  use mpi_f08          
 #endif
   !
   LOGICAL QSECD,QDYNCALL
@@ -846,7 +838,8 @@ SUBROUTINE MAINRECEIVE(INIT,NATOM,LENENT,DX,DY,DZ,ETERM,EPRESS,EPROP,QSECD,DD1,Q
   real(chm_real) DX(*),DY(*),DZ(*),ETERM(*),EPRESS(*),EPROP(*),DD1(*)
   !
   INTEGER I,J,IPT,IST,NAT3,IAT,JPT,KPT,JJ,II
-  INTEGER(chm_int4) MEROOT,MPIDP,COMPARENT,IERR,N,N6
+  TYPE(MPI_Datatype) :: MPIDP
+  INTEGER(chm_int4) :: MEROOT, IERR, N, N6
   real(chm_real) FACTSYS
   REAL(CHM_REAL), allocatable, dimension(:) :: XSUB,YSUB,ZSUB, &
        ESUB,DDX2
@@ -1280,14 +1273,16 @@ SUBROUTINE SERVERBROADCAST(NATOM,LENENT,DX,DY,DZ,ETERM,EPRESS,EPROP,QSECD,DDX)
   !
 #if KEY_PARALLEL==1
   use parallel
-  use mpi       
+  use mpi_f08       
 #endif
   !
   LOGICAL QSECD
   INTEGER NATOM,LENENT,NAT3,I,II
   real(chm_real) DX(*),DY(*),DZ(*),ETERM(*),EPRESS(*),EPROP(*),DDX(*)
   !
-  INTEGER(chm_int4) MEROOT,MPIDP,COMPARENT,IERR,N,N6,LEN4
+  TYPE(MPI_Datatype) :: MPIDP
+  TYPE(MPI_Comm) :: COMPARENT
+  INTEGER(chm_int4) :: MEROOT, IERR, N, N6, LEN4
   !
   LEN4=LENENT
   N=NATOM
@@ -1363,7 +1358,7 @@ SUBROUTINE SERVERRECEIVE(X,Y,Z,QSECD)
   use memory
   !
 #if KEY_PARALLEL==1
-  use mpi   
+  use mpi_f08   
 #endif
   !
   LOGICAL QSECD
@@ -1371,8 +1366,9 @@ SUBROUTINE SERVERRECEIVE(X,Y,Z,QSECD)
   !
   REAL(CHM_REAL), allocatable, dimension(:) :: AN
   INTEGER :: ALL_STAT,NCONTROL
-  INTEGER(chm_int4) :: IONE,NX,N,MEROOT,MPIDP,COMPARENT,MPIINT,IERR,MX
-  INTEGER(chm_int4) :: ISIX,MPILOG,I
+  TYPE(MPI_Datatype) :: MPIDP, MPIINT, MPILOG
+  TYPE(MPI_Comm) :: COMPARENT
+  INTEGER(chm_int4) :: IONE, NX, N, MEROOT, IERR, MX, ISIX, I
   CHARACTER(len=4) :: MPTYP
   real(chm_real),allocatable,dimension(:,:,:) :: TRANSF
   !
@@ -1390,6 +1386,7 @@ SUBROUTINE SERVERRECEIVE(X,Y,Z,QSECD)
   ! MAIN broadcasts a stop flag
   CALL MPI_BCAST(NCONTROL,IONE,MPIINT,MEROOT,COMPARENT,IERR)
   IF(NCONTROL < 0) THEN
+     CALL MPI_COMM_DISCONNECT(COMPARENT,IERR)
      CALL STOPCH('NORMAL STOP (MSCALE SLAVE)')
   ENDIF
   !

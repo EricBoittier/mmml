@@ -44,7 +44,7 @@
   use coordc
   use deriv
 #ifdef KEY_PARALLEL
-  use mpi
+  use mpi_f08
 #endif  
 #endif  
   !
@@ -2214,11 +2214,11 @@ END SUBROUTINE PSFWRT
 #ifdef KEY_RESIZE  
 SUBROUTINE SEQRDR(COMLYN,COMLEN,IUNIT,TITLE,NTITL,MAXTIT, &
      MODE,ISTART,CHAIN,SEGIDX,NCHAIN,NSKIP,SKIP,NALI,ALIAS, &
-     LATOM,LHETATM,LSEQRES,IFIRST)
+     LATOM,LHETATM,LSEQRES,IFIRST,USE_LABEL)
 #else        
 SUBROUTINE SEQRDR(COMLYN,COMLEN,MXCMSZ,IUNIT,TITLE,NTITL,MAXTIT, &
      RES,NRES,RESID,MODE,ISTART,CHAIN,SEGIDX,NCHAIN,NSKIP,SKIP,NALI,ALIAS, &
-     LATOM,LHETATM,LSEQRES,IFIRST)
+     LATOM,LHETATM,LSEQRES,IFIRST,USE_LABEL)
 #endif
   !
   !     Reads the sequence for a piece of chain from IUNIT.
@@ -2227,6 +2227,7 @@ SUBROUTINE SEQRDR(COMLYN,COMLEN,MXCMSZ,IUNIT,TITLE,NTITL,MAXTIT, &
   !     3  Read sequence and resid's from coordinate file
   !     4  as 3 for Brookhaven coordinate files
   !     5  QUANTA interface
+  !     6  as 4 for mmCIF/PDBx files
   !     Authors: Robert Bruccoleri
   !     David States
   !     and others
@@ -2235,6 +2236,7 @@ SUBROUTINE SEQRDR(COMLYN,COMLEN,MXCMSZ,IUNIT,TITLE,NTITL,MAXTIT, &
   use exfunc
   use stream
   use string, only:decodi,encodi,nexti,indxa,nextwd,nexta4,filspc,cnvtuc,trima
+  use mmcifio_mod, only: mmcif_read_sequence
 #if KEY_STRINGM==1 /*   VO string method */
   use machio, only: ifreeu
   use multicom_aux
@@ -2256,10 +2258,10 @@ SUBROUTINE SEQRDR(COMLYN,COMLEN,MXCMSZ,IUNIT,TITLE,NTITL,MAXTIT, &
   INTEGER NRES,MXCMSZ
 #endif
   CHARACTER(len=*) SEGIDX
-  CHARACTER(len=1) CHAIN
+  CHARACTER(len=*) CHAIN
   INTEGER MODE,ISTART,NCHAIN,NSKIP,NALI,IFIRST
   CHARACTER(len=8) ALIAS(2,NALI),SKIP(NSKIP)
-  LOGICAL LATOM,LHETATM,LSEQRES
+  LOGICAL LATOM,LHETATM,LSEQRES,USE_LABEL
 
   INTEGER WDLEN
   INTEGER, PARAMETER :: WDMAX=20
@@ -2283,6 +2285,7 @@ SUBROUTINE SEQRDR(COMLYN,COMLEN,MXCMSZ,IUNIT,TITLE,NTITL,MAXTIT, &
   CHARACTER(len=1) ICODE
   real(chm_real) XIN, YIN, ZIN, WIN
   LOGICAL QATOM, lextfmt, QSEARCH,QTER
+  integer nr0
   !
 #if KEY_STRINGM==1 /*  VO stringm v */
   integer :: oldiol
@@ -2297,8 +2300,9 @@ SUBROUTINE SEQRDR(COMLYN,COMLEN,MXCMSZ,IUNIT,TITLE,NTITL,MAXTIT, &
 #endif /* VO stringm */
   !
 #if KEY_RESIZE
-  integer nr0
   nr0=nres ! temporary counter for resizing
+#else
+  nr0=0
 #endif
   IF(IOLEV > 0) THEN
      ERRCNT=0
@@ -2713,6 +2717,17 @@ SUBROUTINE SEQRDR(COMLYN,COMLEN,MXCMSZ,IUNIT,TITLE,NTITL,MAXTIT, &
         IF (reallow) THEN  
            REWIND IUNIT
         ENDIF              
+     ELSEIF (MODE == 6) THEN
+#ifdef KEY_RESIZE
+        CALL MMCIF_READ_SEQUENCE(IUNIT,ISTART,CHAIN,SEGIDX, &
+#else
+        CALL MMCIF_READ_SEQUENCE(IUNIT,RES,NRES,RESID,ISTART,CHAIN,SEGIDX, &
+#endif
+             NCHAIN,NSKIP,SKIP,NALI,ALIAS,LATOM,LHETATM,LSEQRES,IFIRST, &
+             NR0,SQSEGID,USE_LABEL)
+        IF (reallow) THEN
+           REWIND IUNIT
+        ENDIF
      ELSE 
         IF(WRNLEV >= 2) WRITE(OUTU,2131)
 2131    FORMAT(' *****  FATAL  ***** SEQRDR illegal mode.')
@@ -2720,7 +2735,7 @@ SUBROUTINE SEQRDR(COMLYN,COMLEN,MXCMSZ,IUNIT,TITLE,NTITL,MAXTIT, &
         GOTO 900
         !
      ENDIF
-     IF(MODE == 4) THEN
+     IF(MODE == 4 .OR. MODE == 6) THEN
        ! Process ALIAS
        IF(NALI >0) THEN
          DO I=START,NRES
@@ -2815,6 +2830,20 @@ SUBROUTINE SEQRDR(COMLYN,COMLEN,MXCMSZ,IUNIT,TITLE,NTITL,MAXTIT, &
   CALL PSND4(CNTRES,1)
   CALL PSND4(NRES,1)
   CALL PSNDC(SQSEGID,1)
+#if KEY_RESIZE==1
+  !
+  ! Grow RES/RESID on the receiver side before broadcasting the data.
+  ! Under RESIZE, the master grows RES, RESID, ibase as it reads the
+  ! sequence (via resize_psf 'NRES' calls in the read loop above).  The
+  ! non-master ranks never run the read loop, so their RES/RESID stay at
+  ! their initial size (typically 1, set in allocate_psf_ltm).  Without
+  ! this resize, PSNDC writes NRES*8 bytes into an 8-byte buffer ->
+  ! heap-buffer-overflow caught by AddressSanitizer at psfres.F90:2818.
+  ! Detected via the "corrupted size vs. prev_size" malloc abort that
+  ! masquerades as a generic crash in 165 tests of the -a resize build.
+  !
+  call resize_psf('psfres.F90','SEQRDR','NRES',NRES, .true.)
+#endif
   CALL PSNDC(RES,NRES)
   CALL PSNDC(RESID,NRES)
 !-- ##ELSE
@@ -2824,7 +2853,7 @@ SUBROUTINE SEQRDR(COMLYN,COMLEN,MXCMSZ,IUNIT,TITLE,NTITL,MAXTIT, &
 !--   CALL PSNDC_WORLD(RES,NRES)
 !--   CALL PSNDC_WORLD(RESID,NRES)
 !-- ##ENDIF
-#endif 
+#endif
      CALL set_param('SQNRES',CNTRES)
      CALL set_param('SQSEGID', SQSEGID)
   !
@@ -2906,4 +2935,3 @@ subroutine readint8(iunit,iarray,n)
   read(iunit)(iarray(i),i=1,n)
   return
 end subroutine readint8
-

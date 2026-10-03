@@ -1,0 +1,73 @@
+* Test case to ensure that OpenMM dynamics writes
+* kunit file beginning at first nsavc occurance
+*
+
+if ?openmm .ne. 1 then
+   echo "Test NOT performed."
+   stop
+endif
+
+if ?numnode .ne. 1 then
+ echo "Test NOT performed in parallel."
+ stop
+endif
+
+stream datadir.def
+
+read rtf card name @0/top_all36_prot.rtf
+read param card name @0/par_all36_prot.prm
+
+read sequ ala 1
+
+generate ala setup
+ic seed 1 n 1 ca 1 c
+ic param
+ic build
+
+mini sd nstep 100
+
+shake bonh
+
+scalar fbeta set 5
+
+open unit 1 write card name @9/eu1.dat
+open unit 2 write form name @9/r.res
+dynamics verl lang start nstep 100 timestep 0.002 -
+          vswit swit -
+          firstt 300 finalt 300 tbath 300 tstruct 300 -
+	  iunwri 2 kunit 1 inbfrq -1 nsavc 0 nsavv 0 isvfrq 10 iprfrq 20 -
+	  nprint 10 -
+	  ilbfrq 0 ihbfrq 0 ntrfrq 0 iasors 0 iasvel 1 ichecw 0 iscale 0 -
+	  echeck -1 omm gamma 5  ! Add a comment in front of  omm and this will
+	                         ! disable OpenMM usage.
+
+system "head --lines 6 scratch/eu1.dat | tail -1 | awk '{print "set v " $1}' > scratch/test.str"
+stream @9/test.str
+
+if @v eq 10 then
+   echo passed test 1
+else
+   echo failed test 2
+endif
+close unit 1
+close unit 2
+open unit 1 write card name @9/eu2.dat
+open unit 2 write form name @9/r.res
+dynamics verl lang restart nstep 100 timestep 0.002 -
+          vswit swit -
+          firstt 300 finalt 300 tbath 300 tstruct 300 -
+	  iunwri 2 iunrea 2 kunit 1 inbfrq -1 nsavc 0 nsavv 0 isvfrq 10 iprfrq 20 -
+	  nprint 10 -
+	  ilbfrq 0 ihbfrq 0 ntrfrq 0 iasors 0 iasvel 1 ichecw 0 iscale 0 -
+	  echeck -1 omm gamma 5  ! Add a comment in front of  omm and this will
+	                         ! disable OpenMM usage.
+
+system "head --lines 6 scratch/eu2.dat | tail -1 | awk '{print "set v " $1}' > scratch/test.str"
+stream @9/test.str
+
+if @v eq 110 then
+   echo passed test 2
+else
+   echo failed test 2
+endif
+stop

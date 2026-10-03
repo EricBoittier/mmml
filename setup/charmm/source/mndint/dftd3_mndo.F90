@@ -54,31 +54,31 @@ module dftd3_mndo
                                autoev  = 27.21138505d0
     real(chm_real),parameter:: r_autoang =1.0d0/autoang   ! A to Bohr.
 
-    integer :: version   ! DFT-D version
-    integer :: n         ! No. of atoms.
+    integer,save :: version   ! DFT-D version
+    integer,save :: n         ! No. of atoms.
 
     integer,allocatable,save :: iz(:) ! cardinal numbers of elements 
 
-    real(chm_real) :: r0ab(max_elem,max_elem)             ! cut-off radii for all element pairs
-    real(chm_real) :: c6ab(3,max_elem,max_elem,maxc,maxc) ! C6 for all element pairs
-    integer        :: mxc(max_elem)                       ! No. of different C6 for one element
-    real(chm_real) :: c6,c8,c10                           ! C6, C8, C10 values.
+    real(chm_real),save :: r0ab(max_elem,max_elem)             ! cut-off radii for all element pairs
+    real(chm_real),save :: c6ab(3,max_elem,max_elem,maxc,maxc) ! C6 for all element pairs
+    integer       ,save :: mxc(max_elem)                       ! No. of different C6 for one element
+    real(chm_real),save :: c6,c8,c10                           ! C6, C8, C10 values.
     real(chm_real),allocatable,save :: cn(:)              ! Coordination No. of each atom.
 
     real(chm_real) :: e6, e8, e10, e12, disp, e6abc ! energies
-    logical :: echo,    &  ! printout option
-               noabc       ! 3rd order term?
+    logical,save   :: echo,    &  ! printout option
+                      noabc       ! 3rd order term?
     !
-    real(chm_real) :: rthr,rthr2    ! R^2 distance neglect threshold
-                                    ! (important for speed in case of large systems)
-    real(chm_real) :: cn_thr        ! R^2 distance to cutoff for CN_calculation
+    real(chm_real),save :: rthr,rthr2    ! R^2 distance neglect threshold
+                                         ! (important for speed in case of large systems)
+    real(chm_real),save :: cn_thr        ! R^2 distance to cutoff for CN_calculation
 
     ! THE PARAMETERS OF THE METHOD (not all a "free")
-    real(chm_real) :: rs6, rs8, rs10, s6, s18, alp6, alp8, alp10, s42, rs18, alp
+    real(chm_real),save :: rs6, rs8, rs10, s6, s18, alp6, alp8, alp10, s42, rs18, alp
 
     ! Integer for assigning only max/min cn C6 (0=normal, 1=min, 2=max)
-    character*80   :: func
-    logical        :: minc6list(max_elem),maxc6list(max_elem),minc6,maxc6
+    !character(len=80),save :: func
+    logical          ,save :: minc6list(max_elem),maxc6list(max_elem),minc6,maxc6
 
     ! k1-k3 ad hoc parameters
     real(chm_real), parameter :: k1=16.0d0,       &
@@ -105,7 +105,7 @@ module dftd3_mndo
     !  the large number of digits is just to keep the results consistent
     !  with older versions. They should not imply any higher accuracy than
     !  the old values
-    real(chm_real) :: r2r4(max_elem)      ! atomic <r^2>/<r^4> values
+    real(chm_real),save :: r2r4(max_elem)      ! atomic <r^2>/<r^4> values
     data r2r4 / &
         2.00734898d0,  1.56637132d0,  5.01986934d0,  3.85379032d0,  3.64446594d0, &
         3.10492822d0,  2.71175247d0,  2.59361680d0,  2.38825250d0,  2.21522516d0, &
@@ -130,7 +130,7 @@ module dftd3_mndo
 
     ! these new data are scaled with k2=4./3.  and converted a_0 via
     ! autoang=0.52917726d0
-    real(chm_real) :: rcov(max_elem)      ! covalent radii
+    real(chm_real),save :: rcov(max_elem)      ! covalent radii
     data rcov/ &
         0.80628308d0, 1.15903197d0, 3.02356173d0, 2.36845659d0, 1.94011865d0, &
         1.88972601d0, 1.78894056d0, 1.58736983d0, 1.61256616d0, 1.68815527d0, &
@@ -158,23 +158,24 @@ contains
 
     subroutine init_dftd3(iz_in,n_in,q_d3bj,three_body,q_d3bj_read,COMLYN,COMLEN)
        use chm_kinds
-       use string
+       use string, only : gtrmf
        use stream, only : outu,prnlev
-       use qm1_info, only : qm_control_r
+       use qm1_info, only : qm_control_c
        !
        implicit none
-       integer, intent(in) :: n_in                    ! No of QM atoms.
-       integer, intent(in) :: iz_in(n_in)             ! List of nuclear charges passed in.
+       integer, intent(in):: n_in                    ! No of QM atoms.
+       integer, intent(in):: iz_in(n_in)             ! List of nuclear charges passed in.
 
-       logical, intent(in) :: q_d3bj
-       logical, intent(in) :: three_body
+       logical, intent(in):: q_d3bj
+       logical, intent(in):: three_body
 
        CHARACTER(len=*):: COMLYN
        INTEGER         :: COMLEN
       
-       integer :: i,nqmtheory
-       real(chm_real) :: c6conv
-       logical :: q_d3bj_read
+       integer         :: i,nqmtheory
+       real(chm_real)  :: c6conv
+       logical         :: q_d3bj_read
+       character(len=80) :: func
 
        ! init
        ! Cutoff r^2 thresholds for the gradient in bohr^2.
@@ -202,7 +203,7 @@ contains
        endif
 
        ! which qm theory is used.
-       nqmtheory = qm_control_r%iqm_mode
+       nqmtheory = qm_control_c%iqm_mode
 
        version  = 4     ! D3BJ option.
        minc6    =.false.
@@ -211,7 +212,7 @@ contains
        maxc6list=.false.
 
        call copyc6(mxc)
-       cn_thr=rthr2
+       cn_thr   = rthr2
 
        ! Read charges and coordinates from input:
        if(n_in < 1)     call wrndie(-5,'<init_dftd3>','no atoms')
@@ -222,7 +223,7 @@ contains
        !
        n = n_in
        do i = 1, n
-          iz(i) = iz_in(i) ! this is qm_main_r%nat(i)
+          iz(i) = iz_in(i) ! this is qm_main_c%nat(i)
           if(iz(i)==85) then
              iz(i) = 6     ! gho atom, use C atom
           else if(iz(i)==86) then
@@ -265,8 +266,8 @@ contains
              write(outu,'('' a2       :'',f10.4)' ) rs18          
              write(outu,'('' k1-k3    :'',3f10.4)') k1,k2,k3     
           endif
-          write(outu,'('' Cutoff   :'',f10.4,'' a.u.'')') sqrt(rthr) !*autoang
-          write(outu,'('' CN-Cutoff:'',f10.4,'' a.u.'')') sqrt(cn_thr)!*autoang
+          write(outu,'('' Cutoff   :'',f10.4,'' a.u.'')') sqrt(rthr)   !*autoang
+          write(outu,'('' CN-Cutoff:'',f10.4,'' a.u.'')') sqrt(cn_thr) !*autoang
        end if
 
        return
@@ -275,7 +276,7 @@ contains
        subroutine setfuncpar(func_local)
           use chm_kinds
           implicit none
-          character*(*),intent(inout) :: func_local
+          character(len=*),intent(inout) :: func_local
           !
 
           ! double hybrid values revised according to procedure in the GMTKN30 paper
@@ -348,7 +349,7 @@ contains
        implicit none
        real(chm_real), intent(inout) :: e_dftd3_inout ! The total dispersion energy.
        integer, intent(in)           :: natomin       ! Number of QM atoms.
-       real(chm_real), intent(in) :: xyz(3,natomin)   !  Coordinate set in CHARMM formatting (unit is Bohr)
+       real(chm_real), intent(in)    :: xyz(3,natomin)!  Coordinate set in CHARMM formatting (unit is Bohr)
 
        e_dftd3_inout = zero
        ! write (*,*) "ASC - fast edisp called here"
@@ -1181,7 +1182,7 @@ contains
 
 !!!    subroutine setfuncpar(func_local)
 !!!       use chm_kinds
-!!!       use qm1_info, only : qm_control_r
+!!!       use qm1_info, only : qm_control_c
 !!!       implicit none  
 !!!       character*(*)  :: func_local
 !!!       !
@@ -1192,7 +1193,7 @@ contains
 !!!       else if(func_local == "dftb3") then
 !!!          nqmtheory = 11
 !!!       else
-!!!          nqmtheory = qm_control_r%iqm_mode
+!!!          nqmtheory = qm_control_c%iqm_mode
 !!!       end if
 !!!       
 !!!       ! double hybrid values revised according to procedure in the GMTKN30 paper
@@ -1270,16 +1271,16 @@ contains
        use chm_kinds
        use number
 #if KEY_PARALLEL==1
-       use parallel
+       use parallel, only : mynod,numnod
 #endif
          
        implicit none
 
        real(chm_real) :: xyz(3,*),e63
        integer        :: iat,jat,kat
-       real(chm_real) :: r,r2,r6,r8,tmp,alp,dx,dy,dz,c6,c8,c10,ang,rav,r_r
-       real(chm_real) :: damp6,damp8,damp10,rr,thr,c9,r42,c12,r10,c14,rthr,cn_thr
-       real(chm_real) :: cn(n)                             
+       real(chm_real) :: r,r2,r6,r8,tmp,dx,dy,dz,ang,rav,r_r ! ,alp,c6,c8,c10
+       real(chm_real) :: damp6,damp8,damp10,rr,thr,c9,r42,c12,r10,c14 ! ,rthr,cn_thr
+       !!real(chm_real) :: cn(n)                             
        real(chm_real) :: r2ab(n*n),cc6ab(n*n),dmp(n*n),d2(3),t1,t2,t3,a1,a2,tmp2
        real(chm_real) :: abcthr
        integer*2      :: icomp(n*n)
@@ -1428,7 +1429,7 @@ contains
        use number
        use stream, only : outu,prnlev
 #if KEY_PARALLEL==1
-       use parallel
+       use parallel,only: mynod,numnod,gcomb
 #endif
 
        implicit none
@@ -1688,7 +1689,7 @@ contains
        use chm_kinds
        use number, only : zero,one
 #if KEY_PARALLEL==1
-       use parallel
+       use parallel,only: mynod,numnod,gcomb
 #endif
 
        implicit none
@@ -1898,7 +1899,7 @@ contains
        !local variables
        integer        :: iat,jat,i,iadr,jadr,nn,kk
        logical        :: special
-       real(chm_real),pointer:: pars(:)=>Null()  ! pars( 161925)
+       real(chm_real),allocatable:: pars(:)  ! pars( 161925)
        integer,parameter :: nlines=  32385
 
        allocate(pars(161925))

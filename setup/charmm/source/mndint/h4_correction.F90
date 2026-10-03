@@ -3,8 +3,8 @@ module H4_mndo
    use chm_kinds
    use number
 #if KEY_MNDO97==1 /*mndo97*/
-   use mndo97  , only    : NUMAT
-   use qm1_info, only    : qm_main_r
+   !use mndo97  , only    : NUMAT
+   !use qm1_info, only    : qm_main_c
    use qm1_constant, only: HALFPI
 #endif /* (mndo97)*/
 
@@ -13,18 +13,18 @@ module H4_mndo
    ! ======================================
    ! Parameters
    ! H4 correction
-   real(chm_real) :: para_oh_o 
-   real(chm_real) :: para_oh_n 
-   real(chm_real) :: para_nh_o 
-   real(chm_real) :: para_nh_n 
-   real(chm_real) :: multiplier_wh_o
-   real(chm_real) :: multiplier_nh4
-   real(chm_real) :: multiplier_coo
+   real(chm_real),save :: para_oh_o 
+   real(chm_real),save :: para_oh_n 
+   real(chm_real),save :: para_nh_o 
+   real(chm_real),save :: para_nh_n 
+   real(chm_real),save :: multiplier_wh_o
+   real(chm_real),save :: multiplier_nh4
+   real(chm_real),save :: multiplier_coo
    !
    ! H repulsion
-   real(chm_real) :: hh_rep_k
-   real(chm_real) :: hh_rep_e 
-   real(chm_real) :: hh_rep_r0
+   real(chm_real),save :: hh_rep_k
+   real(chm_real),save :: hh_rep_e 
+   real(chm_real),save :: hh_rep_r0
 
    ! ======================================
    ! Default parameters
@@ -75,19 +75,29 @@ module H4_mndo
 
    ! miscellanea
    real(chm_real),parameter :: r_HALFPI = one/HALFPI
-   logical :: q_h4corr   =.false.                    ! logical flag to use H4 term.
-   logical :: q_gradient = .true.                    ! calculate/not calculate the gradient (T/F)
-   integer, save             :: ij_indx_size = 0, &  ! size for ij_indx index
-                                hh_indx_size = 0     ! size for hh_indx index
-   integer, allocatable,save :: ij_indx(:,:)  ! index for the heavy atom i,j loop in the main routine
-   integer, allocatable,save :: hh_indx(:,:)  ! index for the H     atom i,j loop in the main routine
-   real(chm_real),allocatable,save :: dist_ij_d(:), &! distance for donor to all other atoms. 
-                                      dist_ij_a(:), &! distance for acceptor to all other atoms.
-                                      dist_ij_c(:), &
-                                      dist_ij_o(:)
+   !logical,save :: q_h4corr   =.false.                    ! logical flag to use H4 term.
+   !logical,save :: q_gradient = .true.                    ! calculate/not calculate the gradient (T/F)
+
+   !----- pair related array ------------
+   type,public :: dist_array
+      logical                :: q_setup=.false.      ! logical array for setup
+      integer                :: ij_indx_size=0,   &  ! size for ij_indx index
+                                hh_indx_size =0      ! size for hh_indx index
+      integer, allocatable   :: ij_indx(:,:)         ! index for the heavy atom i,j loop in the main routine
+      integer, allocatable   :: hh_indx(:,:)         ! index for the H     atom i,j loop in the main routine
+      real(chm_real),allocatable :: dist_ij_d(:), &  ! distance for donor to all other atoms. 
+                                    dist_ij_a(:), &  ! distance for acceptor to all other atoms.
+                                    dist_ij_c(:), &
+                                    dist_ij_o(:)
+   end type dist_array
+   type(dist_array),target, allocatable,save :: dist_r(:)
+   type(dist_array),pointer,            save :: dist_c =>null()
+   
 
    !----- gradients array ----------------
-   type deriv_array                                ! template array to store derivatives
+   type,public :: deriv_array                      ! template array to store derivatives
+      logical                :: q_gradient=.true.  ! logical flag to calculate/not calculate the gradient (T/F)
+                                                   ! default: .true. (to calculate)
       real(chm_real), allocatable    :: d_radial_d(:,:),  &
                                         d_radial_a(:,:),  &
                                         d_angular_d(:,:), &
@@ -97,19 +107,48 @@ module H4_mndo
                                         d_bs_a(:,:),      &
                                         d_bs_h(:,:) 
    endtype deriv_array
-   type (deriv_array),save :: grad
+   type(deriv_array),target, allocatable,save :: grad_r(:)
+   type(deriv_array),pointer,            save :: grad_c =>null()
 
    !
    contains
 
+   !=====================================================================
+   subroutine h4_memory_init(nrepl,qallocate)
+   ! allocate type arrays
    !
+   !!use H4_mndo, only : dist_r,dist_c,grad_r,grad_c
+   implicit none
+   integer :: nrepl
+   logical :: qallocate
+
+   ! first pointers, nullify
+   if(associated(dist_c))           nullify(dist_c)
+   if(associated(grad_c))           nullify(grad_c)
+
+   ! deallocate memories
+   if(allocated(dist_r))           deallocate(dist_r)
+   if(allocated(grad_r))           deallocate(grad_r)
+
+   ! allocagte memories
+   allocate(dist_r(nrepl))
+   allocate(grad_r(nrepl))
+
+   ! pointers, as a default, num_qm_system=1, i.e., a single system
+   dist_c          =>dist_r(1)
+   grad_c          =>grad_r(1)
+
+   return
+   end subroutine h4_memory_init
+
+   !=====================================================================
    subroutine h4_correction_setup(COMLYN,COMLEN)
       use chm_kinds
       use dimens_fcm
       use number
       use string
       use stream
-      use qm1_info, only : qm_control_r,qm_main_r
+      use qm1_info, only : qm_control_c,qm_main_c
 
       implicit none
       CHARACTER(len=*):: COMLYN
@@ -123,26 +162,31 @@ module H4_mndo
       call get_h4_param(q_read)
 
       !
-      q_gradient = .true. ! default
-      natom_qm   = qm_main_r%numat
-      ndim2      = natom_qm*(natom_qm-1)/2
+      grad_c%q_gradient   = .true.   ! default, do the calculation.
+      natom_qm            = qm_main_c%numat
+      ndim2               = natom_qm*(natom_qm-1)/2
+
+      ! initialization
+      dist_c%q_setup      = .false.  ! check if the array has been setup
+      dist_c%ij_indx_size = 0
+      dist_c%hh_indx_size = 0
 
       ! allocate memory
-      allocate(ij_indx(2,ndim2))
-      allocate(hh_indx(2,ndim2))
-      allocate(dist_ij_d(natom_qm))
-      allocate(dist_ij_a(natom_qm))
-      allocate(dist_ij_c(natom_qm))
-      allocate(dist_ij_o(natom_qm))
+      allocate(dist_c%ij_indx(2,ndim2))
+      allocate(dist_c%hh_indx(2,ndim2))
+      allocate(dist_c%dist_ij_d(natom_qm))
+      allocate(dist_c%dist_ij_a(natom_qm))
+      allocate(dist_c%dist_ij_c(natom_qm))
+      allocate(dist_c%dist_ij_o(natom_qm))
 
-      allocate(grad%d_radial_d(3,natom_qm))
-      allocate(grad%d_radial_a(3,natom_qm))
-      allocate(grad%d_angular_d(3,natom_qm))
-      allocate(grad%d_angular_a(3,natom_qm))
-      allocate(grad%d_angular_h(3,natom_qm))
-      allocate(grad%d_bs_d(3,natom_qm))
-      allocate(grad%d_bs_a(3,natom_qm))
-      allocate(grad%d_bs_h(3,natom_qm))
+      allocate(grad_c%d_radial_d(3,natom_qm))
+      allocate(grad_c%d_radial_a(3,natom_qm))
+      allocate(grad_c%d_angular_d(3,natom_qm))
+      allocate(grad_c%d_angular_a(3,natom_qm))
+      allocate(grad_c%d_angular_h(3,natom_qm))
+      allocate(grad_c%d_bs_d(3,natom_qm))
+      allocate(grad_c%d_bs_a(3,natom_qm))
+      allocate(grad_c%d_bs_h(3,natom_qm))
 
       if(prnlev >= 2) then
          write(outu,'(10x,'' H4 parameters'')')
@@ -167,7 +211,7 @@ module H4_mndo
          integer :: nqmtheory
 
          !
-         nqmtheory = qm_control_r%iqm_mode
+         nqmtheory = qm_control_c%iqm_mode
          ! load default parameters
          ! MNDO  : nqmtheory == 1
          ! AM1   : nqmtheory == 2
@@ -202,15 +246,16 @@ module H4_mndo
       end subroutine get_h4_param
    end subroutine h4_correction_setup
 
+   !=====================================================================
    subroutine h4_correction(EH4_corr,natom,dx,dy,dz)
       use chm_kinds
       use dimens_fcm
       use number
       use string
       use stream
-      use qm1_info, only : qm_control_r,qm_main_r
+      use qm1_info, only : qm_control_c,qm_main_c
 #if KEY_PARALLEL==1
-      use parallel,only: mynod, numnod, gcomb
+      use parallel,only: mynod,numnod,gcomb
 #endif
 
       implicit none
@@ -254,82 +299,79 @@ module H4_mndo
       integer       :: m_cnt
 #endif
 
-      !
-      logical, save :: q_first=.true.  
-
       ! do some checking and filling in arrays.
-      if(q_first) then
+      if(.not. dist_c%q_setup) then
          ! 1) loop for heavy O and N atoms
          icnt = 0
 #if KEY_PARALLEL==1
          m_cnt = 0
 #endif
-         do i = 1, qm_main_r%numat
-            if(qm_main_r%nat(i) == 7 .or. qm_main_r%nat(i) == 8) then
+         do i = 1, qm_main_c%numat
+            if(qm_main_c%nat(i) == 7 .or. qm_main_c%nat(i) == 8) then
                do j = 1, i-1
-                  if (qm_main_r%nat(j) == 7 .or. qm_main_r%nat(j) == 8) then
+                  if (qm_main_c%nat(j) == 7 .or. qm_main_c%nat(j) == 8) then
 #if KEY_PARALLEL==1
                      m_cnt = m_cnt + 1
                      if(mynod /= mod(m_cnt,numnod)) cycle 
 #endif
                      icnt = icnt + 1
-                     ij_indx(1,icnt) = i
-                     ij_indx(2,icnt) = j
+                     dist_c%ij_indx(1,icnt) = i
+                     dist_c%ij_indx(2,icnt) = j
                   end if      ! j atom N or O
                end do         ! loop over j atoms
             end if            ! i atom N or O
          end do               ! loop over i atoms
-         ij_indx_size = icnt  ! save the total number of terms.
+         dist_c%ij_indx_size = icnt  ! save the total number of terms.
 
          ! 2) loop for H atoms
          icnt = 0
 #if KEY_PARALLEL==1
          m_cnt = 0
 #endif
-         do i = 1, qm_main_r%numat
-            if(qm_main_r%nat(i) == 1) then
+         do i = 1, qm_main_c%numat
+            if(qm_main_c%nat(i) == 1) then
                do j = 1, i-1
-                  if (qm_main_r%nat(j) == 1) then
+                  if (qm_main_c%nat(j) == 1) then
 #if KEY_PARALLEL==1
                      m_cnt = m_cnt + 1
                      if(mynod /= mod(m_cnt,numnod)) cycle  
 #endif
                      icnt = icnt + 1
-                     hh_indx(1,icnt) = i
-                     hh_indx(2,icnt) = j
+                     dist_c%hh_indx(1,icnt) = i
+                     dist_c%hh_indx(2,icnt) = j
                   end if
                end do
             end if
          end do
-         hh_indx_size = icnt  ! save the total number of terms
+         dist_c%hh_indx_size = icnt  ! save the total number of terms
 
-         q_first =.false.
+         dist_c%q_setup = .true.
       end if
 
       ! initializations
       EH4_corr      = zero
       e_corr_sum    = zero
       e_corr_sum_hh = zero
-      do i= 1, qm_main_r%numat
+      do i= 1, qm_main_c%numat
          do k = 1, 3
-            qm_main_r%qm_grads(k,i) = zero
-            grad%d_radial_d(k,i)    = zero
-            grad%d_radial_a(k,i)    = zero
-            grad%d_angular_d(k,i)   = zero
-            grad%d_angular_a(k,i)   = zero
-            grad%d_angular_h(k,i)   = zero
-            grad%d_bs_d(k,i)        = zero
-            grad%d_bs_a(k,i)        = zero
-            grad%d_bs_h(k,i)        = zero
+            qm_main_c%qm_grads(k,i)   = zero
+            grad_c%d_radial_d(k,i)    = zero
+            grad_c%d_radial_a(k,i)    = zero
+            grad_c%d_angular_d(k,i)   = zero
+            grad_c%d_angular_a(k,i)   = zero
+            grad_c%d_angular_h(k,i)   = zero
+            grad_c%d_bs_d(k,i)        = zero
+            grad_c%d_bs_a(k,i)        = zero
+            grad_c%d_bs_h(k,i)        = zero
          end do
       end do
 
       ! Iterate over donor-acceptor pairs; no duplicates
-      loopij: do icnt = 1, ij_indx_size
-         i = ij_indx(1,icnt) 
-         j = ij_indx(2,icnt) 
-         xyz_i(1:3) = qm_main_r%qm_coord(1:3,i)
-         xyz_j(1:3) = qm_main_r%qm_coord(1:3,j)
+      loopij: do icnt = 1, dist_c%ij_indx_size
+         i = dist_c%ij_indx(1,icnt) 
+         j = dist_c%ij_indx(2,icnt) 
+         xyz_i(1:3) = qm_main_c%qm_coord(1:3,i)
+         xyz_j(1:3) = qm_main_c%qm_coord(1:3,j)
 
          ! donor-acceptor distance
          rda = distance(xyz_i,xyz_j)
@@ -339,17 +381,17 @@ module H4_mndo
          if ( rda <= hb_r_0 .or. rda >= hb_r_cutoff) cycle loopij
 
          ! Iterate over hydrogens
-         loophi: do h_i = 1, qm_main_r%numat
-            if (qm_main_r%nat(h_i) /= 1) cycle loophi  
+         loophi: do h_i = 1, qm_main_c%numat
+            if (qm_main_c%nat(h_i) /= 1) cycle loophi  
           
-            xyz_h(1:3) = qm_main_r%qm_coord(1:3,h_i)
+            xyz_h(1:3) = qm_main_c%qm_coord(1:3,h_i)
 
             ! Calculate donor/acceptor distances to hydrogen
             rih = distance(xyz_i,xyz_h)
             rjh = distance(xyz_j,xyz_h)
 
             ! check donor/acceptor-H-acceptor/donor angle
-            angle = 2*HALFPI - atomangle(xyz_i,xyz_h,xyz_j)
+            angle = two*HALFPI - atomangle(xyz_i,xyz_h,xyz_j)
 
             ! Check for H-bond directionality (here: i-h_i-j angle must be larger that 90deg)
             if (angle >= HALFPI) cycle loophi
@@ -372,49 +414,49 @@ module H4_mndo
             end if  ! identify donor/acceptor atoms
 
             ! compute distance from donor to all other qm atoms
-            do k=1,qm_main_r%numat
-               dist_ij_d(k) = zero
-               dist_ij_a(k) = zero
+            do k=1,qm_main_c%numat
+               dist_c%dist_ij_d(k) = zero
+               dist_c%dist_ij_a(k) = zero
             end do
-            if( (qm_main_r%nat(d_i) == 8 .and. qm_main_r%nat(a_i) == 8) .or.  &  ! water scaling
-                (qm_main_r%nat(d_i) == 7)                               .or.  &  ! NR4+  scaling
-                (qm_main_r%nat(a_i) == 8) ) then                                 ! COO-  scaling
-                if(qm_main_r%nat(a_i) == 8) then
-                   do k=1,qm_main_r%numat
-                      dist_ij_d(k) = sqrt( (xyz_d(1)-qm_main_r%qm_coord(1,k))**2 + &
-                                           (xyz_d(2)-qm_main_r%qm_coord(2,k))**2 + &
-                                           (xyz_d(3)-qm_main_r%qm_coord(3,k))**2 ) 
-                      dist_ij_a(k) = sqrt( (xyz_a(1)-qm_main_r%qm_coord(1,k))**2 + &
-                                           (xyz_a(2)-qm_main_r%qm_coord(2,k))**2 + &
-                                           (xyz_a(3)-qm_main_r%qm_coord(3,k))**2 )
+            if( (qm_main_c%nat(d_i) == 8 .and. qm_main_c%nat(a_i) == 8) .or.  &  ! water scaling
+                (qm_main_c%nat(d_i) == 7)                               .or.  &  ! NR4+  scaling
+                (qm_main_c%nat(a_i) == 8) ) then                                 ! COO-  scaling
+                if(qm_main_c%nat(a_i) == 8) then
+                   do k=1,qm_main_c%numat
+                      dist_c%dist_ij_d(k) = sqrt( (xyz_d(1)-qm_main_c%qm_coord(1,k))**2 + &
+                                                  (xyz_d(2)-qm_main_c%qm_coord(2,k))**2 + &
+                                                  (xyz_d(3)-qm_main_c%qm_coord(3,k))**2 ) 
+                      dist_c%dist_ij_a(k) = sqrt( (xyz_a(1)-qm_main_c%qm_coord(1,k))**2 + &
+                                                  (xyz_a(2)-qm_main_c%qm_coord(2,k))**2 + &
+                                                  (xyz_a(3)-qm_main_c%qm_coord(3,k))**2 )
                    end do
                 else
-                   do k=1,qm_main_r%numat
-                      dist_ij_d(k) = sqrt( (xyz_d(1)-qm_main_r%qm_coord(1,k))**2 + &
-                                           (xyz_d(2)-qm_main_r%qm_coord(2,k))**2 + &
-                                           (xyz_d(3)-qm_main_r%qm_coord(3,k))**2 )
+                   do k=1,qm_main_c%numat
+                      dist_c%dist_ij_d(k) = sqrt( (xyz_d(1)-qm_main_c%qm_coord(1,k))**2 + &
+                                                  (xyz_d(2)-qm_main_c%qm_coord(2,k))**2 + &
+                                                  (xyz_d(3)-qm_main_c%qm_coord(3,k))**2 )
                    end do
                 end if
             end if
 
             ! (1) Radial term
             !     get radial energy and gradient
-            e_radial = E_Radial_FN(rda,d_radial,q_gradient)
+            e_radial = E_Radial_FN(rda,d_radial)
 
-            if (q_gradient) then
+            if (grad_c%q_gradient) then
                 ! Cartesian gradients on donor/acceptor atoms
                 r_rda = one/rda
                 do kk=1,3
-                   grad%d_radial_d(kk,d_i) = (xyz_d(kk) - xyz_a(kk))*r_rda*d_radial
-                   grad%d_radial_a(kk,a_i) =-grad%d_radial_d(kk,d_i)
+                   grad_c%d_radial_d(kk,d_i) = (xyz_d(kk) - xyz_a(kk))*r_rda*d_radial
+                   grad_c%d_radial_a(kk,a_i) =-grad_c%d_radial_d(kk,d_i)
                 end do
             end if  ! radial gradiant (if requested)
 
             ! (2) Angular term
-            a = angle * r_HALFPI
-            e_angular = E_Angular_FN(a,d_angular,q_gradient)
+            a         = angle * r_HALFPI
+            e_angular = E_Angular_FN(a,d_angular)
 
-            if (q_gradient) then
+            if (grad_c%q_gradient) then
                 xyz_dh(1:3) = xyz_d(1:3)-xyz_h(1:3)
                 xyz_ah(1:3) = xyz_a(1:3)-xyz_h(1:3)
 
@@ -429,23 +471,23 @@ module H4_mndo
 
                 ! Cartesian gradients on:
                 do k=1,3
-                   grad%d_angular_d(k,d_i) =-x*( xyz_ah(k)*r_tmp1  - xyz_dh(k)*r_tmp2 )       ! donors
-                   grad%d_angular_a(k,a_i) =-x*( xyz_dh(k)*r_tmp1  - xyz_ah(k)*r_tmp3 )       ! acceptors
-                   grad%d_angular_h(k,h_i) =-grad%d_angular_d(k,d_i)- grad%d_angular_a(k,a_i) ! hydrogen
+                   grad_c%d_angular_d(k,d_i) =-x*( xyz_ah(k)*r_tmp1 - xyz_dh(k)*r_tmp2 )       ! donors
+                   grad_c%d_angular_a(k,a_i) =-x*( xyz_dh(k)*r_tmp1 - xyz_ah(k)*r_tmp3 )       ! acceptors
+                   grad_c%d_angular_h(k,h_i) =-grad_c%d_angular_d(k,d_i) - grad_c%d_angular_a(k,a_i) ! hydrogen
                 end do
             end if  ! angular gradient (if requested)
 
             ! Energy coefficients
-            if(qm_main_r%nat(d_i) == 8 .and. qm_main_r%nat(a_i) == 8) then
+            if(qm_main_c%nat(d_i) == 8 .and. qm_main_c%nat(a_i) == 8) then
                ! O-H---O pair
                e_para = para_oh_o
-            else if(qm_main_r%nat(d_i) == 8 .and. qm_main_r%nat(a_i) == 7) then
+            else if(qm_main_c%nat(d_i) == 8 .and. qm_main_c%nat(a_i) == 7) then
                ! O-H---N pair
                e_para = para_oh_n
-            else if(qm_main_r%nat(d_i) == 7 .and. qm_main_r%nat(a_i) == 8) then
+            else if(qm_main_c%nat(d_i) == 7 .and. qm_main_c%nat(a_i) == 8) then
                ! N-H---O pair
                e_para = para_nh_o
-            else if(qm_main_r%nat(d_i) == 7 .and. qm_main_r%nat(a_i) == 7) then
+            else if(qm_main_c%nat(d_i) == 7 .and. qm_main_c%nat(a_i) == 7) then
                ! N-H---N pair
                e_para = para_nh_n
             end if
@@ -455,44 +497,44 @@ module H4_mndo
                rdhs  = rdh - max_xh_bond
                ravgs = half*(rdh + rah) - max_xh_bond
                x     = rdhs / ravgs
-               e_bond_switch = BOND_switch_FN(x,d_bs,q_gradient)
-               if (q_gradient) then
+               e_bond_switch = BOND_switch_FN(x,d_bs)
+               if (grad_c%q_gradient) then
                     xd  = d_bs/ravgs       ! d_bs from BOND_switch_FN
                     xd2 =-half*d_bs*x/ravgs
                     r_tmp1 = one/rdh
                     r_tmp2 = one/rah
                     do k=1,3
-                       xyz_dh(k)          = xyz_d(k)-xyz_h(k)
-                       xyz_ah(k)          = xyz_a(k)-xyz_h(k)
-                       grad%d_bs_d(k,d_i) = xyz_dh(k)*r_tmp1*xd + xyz_dh(k)*r_tmp1*xd2
-                       grad%d_bs_a(k,a_i) = xyz_ah(k)*r_tmp2*xd2
-                       grad%d_bs_h(k,h_i) =-grad%d_bs_d(k,d_i) - grad%d_bs_a(k,a_i)
+                       xyz_dh(k)            = xyz_d(k)-xyz_h(k)
+                       xyz_ah(k)            = xyz_a(k)-xyz_h(k)
+                       grad_c%d_bs_d(k,d_i) = xyz_dh(k)*r_tmp1*xd + xyz_dh(k)*r_tmp1*xd2
+                       grad_c%d_bs_a(k,a_i) = xyz_ah(k)*r_tmp2*xd2
+                       grad_c%d_bs_h(k,h_i) =-grad_c%d_bs_d(k,d_i) - grad_c%d_bs_a(k,a_i)
                     end do
                end if ! bond switching gradient
             else ! no switching, no gradient:
                e_bond_switch = one
-               if (q_gradient) then
+               if (grad_c%q_gradient) then
                     do k=1,3
-                       grad%d_bs_d(k,d_i) = zero
-                       grad%d_bs_a(k,a_i) = zero
-                       grad%d_bs_h(k,h_i) = zero
+                       grad_c%d_bs_d(k,d_i) = zero
+                       grad_c%d_bs_a(k,a_i) = zero
+                       grad_c%d_bs_h(k,h_i) = zero
                     end do
                end if
             end if  ! bond switching
 
             ! (4) Water scaling: O-H ---- O pair?
             e_scale_w = one
-            if(qm_main_r%nat(d_i) == 8 .and. qm_main_r%nat(a_i) == 8) then
+            if(qm_main_c%nat(d_i) == 8 .and. qm_main_c%nat(a_i) == 8) then
                ! count hydrogens and other atoms in the vicinity
                hydro  = zero
                others = zero
 
                ! look for hydrogen atoms around O ... O
-               do k = 1, qm_main_r%numat
-                  if(qm_main_r%nat(k) == 1) then
-                     hydro  = hydro  + cvalence_contribution(d_i,k,dist_ij_d(k))
+               do k = 1, qm_main_c%numat
+                  if(qm_main_c%nat(k) == 1) then
+                     hydro  = hydro  + cvalence_contribution(d_i,k,dist_c%dist_ij_d(k))
                   else
-                     others = others + cvalence_contribution(d_i,k,dist_ij_d(k))
+                     others = others + cvalence_contribution(d_i,k,dist_c%dist_ij_d(k))
                   end if
                end do
 
@@ -523,11 +565,11 @@ module H4_mndo
             e_scale_cha = one
 
             ! (5-1) Scaled groups: NR4+
-            if (qm_main_r%nat(d_i) == 7) then
+            if (qm_main_c%nat(d_i) == 7) then
                slope = multiplier_nh4 - one
                v     = zero
-               do k = 1, qm_main_r%numat
-                  v  = v + cvalence_contribution(d_i,k,dist_ij_d(k))
+               do k = 1, qm_main_c%numat
+                  v  = v + cvalence_contribution(d_i,k,dist_c%dist_ij_d(k))
                end do
 
                if (v > three) then
@@ -546,18 +588,18 @@ module H4_mndo
             o1   = a_i
             o2   =-1
             cc   =-1
-            if (qm_main_r%nat(a_i) == 8) then
+            if (qm_main_c%nat(a_i) == 8) then
                slope = multiplier_coo - one
 
                ! Search for the closest C atom
                cdist = 9.9d9
                cv_o1 = zero  ! 01 valence
 
-               do k = 1, qm_main_r%numat
-                  dd         = dist_ij_a(k)             ! distance(xyz_a,qm_main_r%qm_coord(1:3,k))
-                  v          = cvalence_contribution(o1,k,dist_ij_a(k))
+               do k = 1, qm_main_c%numat
+                  dd         = dist_c%dist_ij_a(k)             ! distance(xyz_a,qm_main_c%qm_coord(1:3,k))
+                  v          = cvalence_contribution(o1,k,dd)  ! (o1,k,dist_c%dist_ij_a(k))
                   cv_o1      = cv_o1 + v  ! sum 01 Valence
-                  if (v > zero .and. qm_main_r%nat(k) == 6 .and. dd < cdist) then
+                  if (v > zero .and. qm_main_c%nat(k) == 6 .and. dd < cdist) then
                      cdist = dd
                      cc = k
                   end if
@@ -568,14 +610,14 @@ module H4_mndo
                   odist = 9.9d9
                   cv_cc = zero
 
-                  xyz_c(1:3) = qm_main_r%qm_coord(1:3,cc)
-                  do k = 1, qm_main_r%numat
-                     xyz_k(1:3)   = qm_main_r%qm_coord(1:3,k)
-                     dd           = distance(xyz_c,xyz_k)
-                     v            = cvalence_contribution(cc,k,dd)
-                     cv_cc        = cv_cc + v
-                     dist_ij_c(k) = dd          ! save for later
-                     if (v > zero .and. k /= o1 .and. qm_main_r%nat(k) == 8 .and. dd < odist) then
+                  xyz_c(1:3) = qm_main_c%qm_coord(1:3,cc)
+                  do k = 1, qm_main_c%numat
+                     xyz_k(1:3)         = qm_main_c%qm_coord(1:3,k)
+                     dd                 = distance(xyz_c,xyz_k)
+                     v                  = cvalence_contribution(cc,k,dd)
+                     cv_cc              = cv_cc + v
+                     dist_c%dist_ij_c(k)= dd          ! save for later
+                     if (v > zero .and. k /= o1 .and. qm_main_c%nat(k) == 8 .and. dd < odist) then
                         odist = dd 
                         o2 = k
                      end if
@@ -584,14 +626,14 @@ module H4_mndo
 
                ! O1-C-O2 triad
                if (o2 /= -1) then
-                  xyz_o(1:3) = qm_main_r%qm_coord(1:3,o2)
+                  xyz_o(1:3) = qm_main_c%qm_coord(1:3,o2)
                   cv_o2 = zero    ! 02 valence
                                      
-                  do k = 1, qm_main_r%numat
-                     xyz_k(1:3)   = qm_main_r%qm_coord(1:3,k)
+                  do k = 1, qm_main_c%numat
+                     xyz_k(1:3)   = qm_main_c%qm_coord(1:3,k)
                      dd           = distance(xyz_o,xyz_k)
                      cv_o2        = cv_o2 + cvalence_contribution(o2,k,dd)
-                     dist_ij_o(k) = dd          ! save for later
+                     dist_c%dist_ij_o(k) = dd          ! save for later
                   end do
 
                   f_o1 = one - abs(one - cv_o1)
@@ -622,137 +664,137 @@ module H4_mndo
             mult_coo     = e_para * e_radial * e_angular * e_bond_switch * e_scale_w * e_scale_chd      
 
             ! radial, angular, bond switch
-            qm_main_r%qm_grads(1:3,d_i) = qm_main_r%qm_grads(1:3,d_i)            &
-                                         +grad%d_radial_d(1:3,d_i)*mult_radial   &
-                                         +grad%d_angular_d(1:3,d_i)*mult_angular &
-                                         +grad%d_bs_d(1:3,d_i)*mult_bs
-            qm_main_r%qm_grads(1:3,a_i) = qm_main_r%qm_grads(1:3,a_i)            &
-                                         +grad%d_radial_a(1:3,a_i)*mult_radial   &
-                                         +grad%d_angular_a(1:3,a_i)*mult_angular &
-                                         +grad%d_bs_a(1:3,a_i)*mult_bs
-            qm_main_r%qm_grads(1:3,h_i) = qm_main_r%qm_grads(1:3,h_i)            &
-                                         +grad%d_angular_h(1:3,h_i)*mult_angular &
-                                         +grad%d_bs_h(1:3,h_i)*mult_bs
+            qm_main_c%qm_grads(1:3,d_i) = qm_main_c%qm_grads(1:3,d_i)              &
+                                         +grad_c%d_radial_d(1:3,d_i)*mult_radial   &
+                                         +grad_c%d_angular_d(1:3,d_i)*mult_angular &
+                                         +grad_c%d_bs_d(1:3,d_i)*mult_bs
+            qm_main_c%qm_grads(1:3,a_i) = qm_main_c%qm_grads(1:3,a_i)              &
+                                         +grad_c%d_radial_a(1:3,a_i)*mult_radial   &
+                                         +grad_c%d_angular_a(1:3,a_i)*mult_angular &
+                                         +grad_c%d_bs_a(1:3,a_i)*mult_bs
+            qm_main_c%qm_grads(1:3,h_i) = qm_main_c%qm_grads(1:3,h_i)              &
+                                         +grad_c%d_angular_h(1:3,h_i)*mult_angular &
+                                         +grad_c%d_bs_h(1:3,h_i)*mult_bs
 
             ! water scaling
-            if (q_gradient .and. e_scale_w /= one) then
+            if (grad_c%q_gradient .and. e_scale_w /= one) then
                slope       = multiplier_wh_o - one 
                dxyz_i(1:3) = zero
-               xyz_d(1:3)  = qm_main_r%qm_coord(1:3,d_i)
-               do k = 1, qm_main_r%numat
+               xyz_d(1:3)  = qm_main_c%qm_coord(1:3,d_i)
+               do k = 1, qm_main_c%numat
                   if (k == d_i) cycle
 
-                  xyz_k(1:3) = qm_main_r%qm_coord(1:3,k)
-                  x          = dist_ij_d(k)             ! distance(xyz_d,xyz_k)
+                  xyz_k(1:3) = qm_main_c%qm_coord(1:3,k)
+                  x          = dist_c%dist_ij_d(k)             ! distance(xyz_d,xyz_k)
                   xd         = cvalence_contribution_d(d_i,k,x)
-                  if (qm_main_r%nat(k) == 1) then
+                  if (qm_main_c%nat(k) == 1) then
                      r_tmp1 = -xd*sign_wat/x
                      do kk=1,3
                         dxyz_local(kk) = (xyz_d(kk) - xyz_k(kk))*r_tmp1*slope*mult_wh_o
                         dxyz_i(kk)     = dxyz_i(kk) - dxyz_local(kk)
-                        qm_main_r%qm_grads(kk,k) = qm_main_r%qm_grads(kk,k) + dxyz_local(kk)
+                        qm_main_c%qm_grads(kk,k) = qm_main_c%qm_grads(kk,k) + dxyz_local(kk)
                      end do
                   else
                      r_tmp1 = xd/x
                      do kk=1,3
                         dxyz_local(kk) = (xyz_d(kk) - xyz_k(kk))*r_tmp1*slope*mult_wh_o
                         dxyz_i(kk)     = dxyz_i(kk) - dxyz_local(kk)
-                        qm_main_r%qm_grads(kk,k) = qm_main_r%qm_grads(kk,k) + dxyz_local(kk)
+                        qm_main_c%qm_grads(kk,k) = qm_main_c%qm_grads(kk,k) + dxyz_local(kk)
                      end do
                   end if
                end do
-               qm_main_r%qm_grads(1:3,d_i) = qm_main_r%qm_grads(1:3,d_i) + dxyz_i(1:3)
+               qm_main_c%qm_grads(1:3,d_i) = qm_main_c%qm_grads(1:3,d_i) + dxyz_i(1:3)
             end if
 
             ! scaled groups: NR4+
-            if (q_gradient .and. e_scale_chd /= one) then
+            if (grad_c%q_gradient .and. e_scale_chd /= one) then
                slope       = multiplier_nh4 - one
                dxyz_i(1:3) = zero
-               xyz_d(1:3)  = qm_main_r%qm_coord(1:3,d_i)
-               do k = 1, qm_main_r%numat
+               xyz_d(1:3)  = qm_main_c%qm_coord(1:3,d_i)
+               do k = 1, qm_main_c%numat
                   if (k == d_i) cycle
 
-                  xyz_k(1:3) = qm_main_r%qm_coord(1:3,k)
-                  x = dist_ij_d(k)            ! distance(xyz_d,xyz_k)
-                  xd = cvalence_contribution_d(d_i,k,x)
-                  r_tmp1 = -xd/x
+                  xyz_k(1:3) = qm_main_c%qm_coord(1:3,k)
+                  x          = dist_c%dist_ij_d(k)            ! distance(xyz_d,xyz_k)
+                  xd         = cvalence_contribution_d(d_i,k,x)
+                  r_tmp1     =-xd/x
                   do kk=1,3
                      dxyz_local(kk) = (xyz_d(kk) - xyz_k(kk))*r_tmp1*slope*mult_nh4
                      dxyz_i(kk)     = dxyz_i(kk) - dxyz_local(kk)
-                     qm_main_r%qm_grads(kk,k) = qm_main_r%qm_grads(kk,k) + dxyz_local(kk)
+                     qm_main_c%qm_grads(kk,k) = qm_main_c%qm_grads(kk,k) + dxyz_local(kk)
                   end do
                end do
-               qm_main_r%qm_grads(1:3,d_i) = qm_main_r%qm_grads(1:3,d_i) + dxyz_i(1:3)
+               qm_main_c%qm_grads(1:3,d_i) = qm_main_c%qm_grads(1:3,d_i) + dxyz_i(1:3)
             end if
 
             ! scaled groups: COO-
-            if (q_gradient .and. (f_o1*f_o2*f_cc) /= zero) then
-               slope = multiplier_coo - one
+            if (grad_c%q_gradient .and. (f_o1*f_o2*f_cc) /= zero) then
+               slope       = multiplier_coo - one
                dxyz_i(1:3) = zero
                ! atoms around 01
-               do k = 1, qm_main_r%numat
+               do k = 1, qm_main_c%numat
                   if (k == o1) cycle
-                  xyz_k(1:3) = qm_main_r%qm_coord(1:3,k)
-                  x          = dist_ij_a(k)              ! distance(xyz_a,xyz_k)
+                  xyz_k(1:3) = qm_main_c%qm_coord(1:3,k)
+                  x          = dist_c%dist_ij_a(k)              ! distance(xyz_a,xyz_k)
                   xd         = cvalence_contribution_d(o1,k,x)  ! o1 = a_i
                   if (xd /= zero) then
                      if (cv_o1 > one) xd = -one*xd
-                     xd = f_o2 * f_cc * xd
-                     r_tmp1 = -xd/x
+                     xd      = f_o2 * f_cc * xd
+                     r_tmp1  =-xd/x
                      do kk=1,3
                         dxyz_local(kk) = (xyz_a(kk) - xyz_k(kk))*r_tmp1*slope*mult_coo
-                        dxyz_i(kk)     = dxyz_i(kk)     - dxyz_local(kk)
-                        qm_main_r%qm_grads(kk,k) = qm_main_r%qm_grads(kk,k) + dxyz_local(kk)
+                        dxyz_i(kk)     = dxyz_i(kk) - dxyz_local(kk)
+                        qm_main_c%qm_grads(kk,k) = qm_main_c%qm_grads(kk,k) + dxyz_local(kk)
                      end do
                   end if
                end do
-               qm_main_r%qm_grads(1:3,o1) = qm_main_r%qm_grads(1:3,o1) + dxyz_i(1:3)
+               qm_main_c%qm_grads(1:3,o1) = qm_main_c%qm_grads(1:3,o1) + dxyz_i(1:3)
 
                dxyz_i(1:3) = zero
-               xyz_o(1:3)  = qm_main_r%qm_coord(1:3,o2)
+               xyz_o(1:3)  = qm_main_c%qm_coord(1:3,o2)
                ! atoms around 02
-               do k = 1, qm_main_r%numat
+               do k = 1, qm_main_c%numat
                   if (k == o2) cycle
-                  xyz_k(1:3) = qm_main_r%qm_coord(1:3,k)
+                  xyz_k(1:3) = qm_main_c%qm_coord(1:3,k)
                   x          = distance(xyz_o,xyz_k)   ! dist_ij_o(k)    ! distance(xyz_o,xyz_k)
                   xd         = cvalence_contribution_d(o2,k,x)
                   if (xd /= zero) then
                      if (cv_o2 > one) then
-                        xd = -one * xd
-                        xd = f_o1 * f_cc * xd
+                        xd     = -one * xd
+                        xd     = f_o1 * f_cc * xd
                         r_tmp1 = -xd/x
                         do kk=1,3
                            dxyz_local(kk) = (xyz_o(kk) - xyz_k(kk))*r_tmp1*slope*mult_coo
-                           dxyz_i(kk)     = dxyz_i(kk)     - dxyz_local(kk)
-                           qm_main_r%qm_grads(kk,k) = qm_main_r%qm_grads(kk,k) + dxyz_local(kk)
+                           dxyz_i(kk)     = dxyz_i(kk) - dxyz_local(kk)
+                           qm_main_c%qm_grads(kk,k) = qm_main_c%qm_grads(kk,k) + dxyz_local(kk)
                         end do
                      end if
                   end if
                end do
-               qm_main_r%qm_grads(1:3,o2) = qm_main_r%qm_grads(1:3,o2) + dxyz_i(1:3)
+               qm_main_c%qm_grads(1:3,o2) = qm_main_c%qm_grads(1:3,o2) + dxyz_i(1:3)
 
                dxyz_i(1:3) = zero
-               xyz_c(1:3) = qm_main_r%qm_coord(1:3,cc)
+               xyz_c(1:3)  = qm_main_c%qm_coord(1:3,cc)
                ! Think of a label
-               do k = 1, qm_main_r%numat
+               do k = 1, qm_main_c%numat
                   if (k == cc) cycle
-                  xyz_k(1:3) = qm_main_r%qm_coord(1:3,k)
+                  xyz_k(1:3) = qm_main_c%qm_coord(1:3,k)
                   x          = distance(xyz_c,xyz_k)  ! dist_ij_c(k)  ! distance(xyz_c,xyz_k)
                   xd         = cvalence_contribution_d(cc,k,x)
                   if (xd /= zero) then
                      if (cv_cc > three) then
-                        xd = -one * xd
-                        xd = f_o1 * f_o2 * xd
+                        xd     = -one * xd
+                        xd     = f_o1 * f_o2 * xd
                         r_tmp1 = -xd/x
                         do kk=1,3
                            dxyz_local(kk) = (xyz_c(kk) - xyz_k(kk))*r_tmp1*slope*mult_coo
-                           dxyz_i(kk)     = dxyz_i(kk)     - dxyz_local(kk)
-                           qm_main_r%qm_grads(kk,k) = qm_main_r%qm_grads(kk,k) + dxyz_local(kk)
+                           dxyz_i(kk)     = dxyz_i(kk) - dxyz_local(kk)
+                           qm_main_c%qm_grads(kk,k) = qm_main_c%qm_grads(kk,k) + dxyz_local(kk)
                         end do
                      end if
                   end if
                end do
-               qm_main_r%qm_grads(1:3,cc) = qm_main_r%qm_grads(1:3,cc) + dxyz_i(1:3)
+               qm_main_c%qm_grads(1:3,cc) = qm_main_c%qm_grads(1:3,cc) + dxyz_i(1:3)
             end if  ! COO- scaling
 
          end do loophi       ! iterate over hydrogens within the cutoff
@@ -761,16 +803,16 @@ module H4_mndo
       ! ---------------------------------------------! H-H repulsion calculation
       ! Iterate over H atoms twice
       r_tmp1 = one/hh_rep_r0
-      loophh: do icnt = 1, hh_indx_size
-         i          = hh_indx(1,icnt)
-         j          = hh_indx(2,icnt)
-         xyz_i(1:3) = qm_main_r%qm_coord(1:3,i)
-         xyz_j(1:3) = qm_main_r%qm_coord(1:3,j)
+      loophh: do icnt = 1, dist_c%hh_indx_size
+         i          = dist_c%hh_indx(1,icnt)
+         j          = dist_c%hh_indx(2,icnt)
+         xyz_i(1:3) = qm_main_c%qm_coord(1:3,i)
+         xyz_j(1:3) = qm_main_c%qm_coord(1:3,j)
          r          = distance(xyz_i,xyz_j)
          r_tmp2     = exp(-hh_rep_e*(r*r_tmp1-one))   ! one/hh_rep_r0
          e_corr_sum_hh = e_corr_sum_hh + hh_rep_k*(one-one/(one+r_tmp2))
 
-         if (q_gradient) then
+         if (grad_c%q_gradient) then
             ! gradient in the internal coordinates
             d_rad = (hh_rep_e*r_tmp1*hh_rep_k*r_tmp2/((one + r_tmp2)**2))/r
 
@@ -778,8 +820,8 @@ module H4_mndo
             dxyz_local(1:3) = (xyz_i(1:3)-xyz_j(1:3))*d_rad
 
             ! Add pair contribution to the global gradient
-            qm_main_r%qm_grads(1:3,i) = qm_main_r%qm_grads(1:3,i) - dxyz_local(1:3)
-            qm_main_r%qm_grads(1:3,j) = qm_main_r%qm_grads(1:3,j) + dxyz_local(1:3)
+            qm_main_c%qm_grads(1:3,i) = qm_main_c%qm_grads(1:3,i) - dxyz_local(1:3)
+            qm_main_c%qm_grads(1:3,j) = qm_main_c%qm_grads(1:3,j) + dxyz_local(1:3)
          end if ! gradient calaculation if requested
       end do loophh
 
@@ -790,219 +832,204 @@ module H4_mndo
 #endif
 
       ! gradients
-      do i= 1, qm_main_r%numat
-         n=qm_control_r%qminb(i)
-         dx(n)=dx(n)+qm_main_r%qm_grads(1,i)
-         dy(n)=dy(n)+qm_main_r%qm_grads(2,i)
-         dz(n)=dz(n)+qm_main_r%qm_grads(3,i)
+      do i= 1, qm_main_c%numat
+         n    =qm_control_c%qminb(i)
+         dx(n)=dx(n)+qm_main_c%qm_grads(1,i)
+         dy(n)=dy(n)+qm_main_c%qm_grads(2,i)
+         dz(n)=dz(n)+qm_main_c%qm_grads(3,i)
          ! debug
-         !write(6,'(I4,3F15.8)') i,qm_main_r%qm_grads(1,i),qm_main_r%qm_grads(2,i),qm_main_r%qm_grads(3,i)
+         !write(6,'(I4,3F15.8)') i,qm_main_c%qm_grads(1,i),qm_main_c%qm_grads(2,i),qm_main_c%qm_grads(3,i)
       end do
 
       return
-   end subroutine h4_correction
 
-   real(chm_real) function E_Radial_FN(rx,grad_radi,q_grad)
-      ! compute radial energy and gradient
-      use number, only : zero
-      implicit none
-      logical        :: q_grad
-      real(chm_real) :: rx,grad_radi
-      real(chm_real) :: e_local,grad_local,rx2,rx3,rx6
-
-      rx2 = rx *rx
-      rx3 = rx *rx2
-      rx6 = rx3*rx3
-      e_local = -0.00303407407407313510d0 * rx  * rx6 &  ! rda ** 7
-               + 0.07357629629627092382d0 * rx6       &  ! rda ** 6
-               - 0.70087111111082800452d0 * rx2 * rx3 &  ! rda ** 5
-               + 3.25309629629461749545d0 * rx2 * rx2 &  ! rda ** 4
-               - 7.20687407406838786983d0 * rx3       &  ! rda ** 3
-               + 5.31754666665572184314d0 * rx2       &  ! rda ** 2 
-               + 3.40736000001102778967d0 * rx        &  ! rda
-               - 4.68512000000450434811d0
-
-      if(q_grad) then
-         grad_radi = -0.02123851851851194655d0 * rx6        & ! rda ** 6
-                    + 0.44145777777762551519d0 * rx2 * rx3  & ! rda ** 5
-                    - 3.50435555555413991158d0 * rx2 * rx2  & ! rda ** 4
-                    +13.01238518517846998179d0 * rx3        & ! rda ** 3
-                    -21.62062222220516360949d0 * rx2        & ! rda ** 2
-                    +10.63509333331144368628d0 * rx         & ! rda
-                    + 3.40736000001102778967d0
-      else
-         grad_radi = zero
-      end if
-
-      E_Radial_FN = e_local
-      return
-   end function E_Radial_FN
-
-   real(chm_real) function E_Angular_FN(rx,grad_angl,q_grad)
-      ! polynomial switching function for angle
-      use number, only : zero,one,two
-      implicit none
-      logical :: q_grad
-      real(chm_real) :: rx,grad_angl
-      real(chm_real) :: rx2,rx3,x,xd
-
-      rx2 = rx *rx
-      rx3 = rx *rx2
-      x   =(-20.0d0*rx3 + 70.0d0*rx2 - 84.0d0*rx + 35.0d0)*rx2*rx2
-
-      if(q_grad) then
-         xd        =(-140.0d0*rx3 + 420.0d0*rx2 - 420.0d0*rx + 140.0d0)*rx3*r_HALFPI
-         grad_angl =- two * xd * x           
-      else
-         grad_angl = zero
-      end if
-
-      E_Angular_FN = one - x*x
-      return
-   end function E_Angular_FN
-
-   real(chm_real) function BOND_switch_FN(rx,grad_radi,q_grad)
-      ! bond switching energy and grad
-      use number, only : zero
-      implicit none
-      logical        :: q_grad
-      real(chm_real) :: rx,grad_radi
-      real(chm_real) :: e_local,rx2,rx3,rx4,rx6
-
-      rx2 = rx *rx
-      rx3 = rx *rx2
-      e_local = 1.0d0 + (20.0d0*rx3 - 70.0d0*rx2 + 84.0d0*rx - 35.0d0)*rx2*rx2
-
-      if(q_grad) then
-         grad_radi = (140.0d0*rx3 - 420.0d0*rx2 + 420.0d0*rx - 140.0d0)*rx3
-      else
-         grad_radi = zero
-      end if
-
-      BOND_switch_FN = e_local
-      return
-   end function BOND_switch_FN
-
-   ! --------------------------------------
-   ! Continuous valence contribution of a pair of atoms
-   real(chm_real) function cvalence_contribution(c,d,r)
-      use qm1_info, only : qm_main_r
-      use number,   only : one,zero
-      implicit none
-      integer, intent(in) :: c, d  ! c=donor(d_i), d=hydrogen/other(k)
-      integer             :: i
-      real(chm_real)      :: r, ri, rj, r0, r1, x,x2,x3
-
-      ! identify the donor and hydrogen and fetch the radius
-      if(qm_main_r%nat(c) == 1 .or. qm_main_r%nat(c) == 6 .or. qm_main_r%nat(c) == 7 .or. qm_main_r%nat(c) == 8) then
-         ri = radius(qm_main_r%nat(c)) ! donor
-      else
-         ri = zero
-      end if
-      if(qm_main_r%nat(d) == 1 .or. qm_main_r%nat(d) == 6 .or. qm_main_r%nat(d) == 7 .or. qm_main_r%nat(d) == 8) then
-         rj = radius(qm_main_r%nat(d)) ! h or other atoms.
-      else
-         rj = zero
-      end if
-
-      r0 = ri + rj
-      r1 = r0 * 1.6d0
-      if (r > r0 .and. r < r1) then
-          x = (r - r0) / (r1 - r0)
-          x2= x*x
-          x3= x2*x
-          cvalence_contribution = one + (20.0d0*x3 - 70.0d0*x2 + 84.0d0*x - 35.0d0)*x2*x2
-      else if(r <= r0 .and. r > zero) then
-          cvalence_contribution = one
-      else
-          cvalence_contribution = zero
-      end if
-      return
-   end function cvalence_contribution
-
-   ! --------------------------------------
-   ! Continuous valence contribution of a pair of atoms - derivative
-   ! in the internal coordinates
-   real(chm_real) function cvalence_contribution_d(c,d,r)
-      use qm1_info, only : qm_main_r
-      use number,  only : one,zero
-      implicit none
-      integer, intent(in) :: c, d  ! c=donor(d_i), d=hydrogen/other(k)
-      integer             :: i
-      real(chm_real)      :: r, ri, rj, r0, r1, x,x2,x3,r_tmpx
-
-      ! identify the donor and hydrogen and fetch the radius
-      if(qm_main_r%nat(c) == 1 .or. qm_main_r%nat(c) == 6 .or. qm_main_r%nat(c) == 7 .or. qm_main_r%nat(c) == 8) then
-         ri = radius(qm_main_r%nat(c)) ! donor
-      else
-         ri = zero
-      end if
-      if(qm_main_r%nat(d) == 1 .or. qm_main_r%nat(d) == 6 .or. qm_main_r%nat(d) == 7 .or. qm_main_r%nat(d) == 8) then
-         rj = radius(qm_main_r%nat(d)) ! h or other atoms.
-      else
-         rj = zero
-      end if
-
-      r0 = ri + rj
-      r1 = r0 * 1.6d0
-      if (r > r0 .and. r < r1) then
-         r_tmpx = one/(r1 - r0)
-         x = (r - r0)/(r1 - r0)
-         x2= x*x
-         x3= x2*x
-         cvalence_contribution_d = (140.0d0*x3 - 420.0d0*x2 + 420.0d0*x - 140.0d0)*x3*r_tmpx
-      else
-         cvalence_contribution_d = zero
-      end if
-      return
-   end function cvalence_contribution_d
-
-   ! --------------------------------------
-   ! Distance between two atoms
-   real(chm_real) function distance(xyz_1,xyz_2)
-      implicit none
-      real(chm_real) :: xyz_1(3),xyz_2(3)
-
-      distance = sqrt( (xyz_1(1)-xyz_2(1))**2 + (xyz_1(2)-xyz_2(2))**2 + (xyz_1(3)-xyz_2(3))**2 )
-      return
-   end function distance
-
-   ! --------------------------------------
-   ! Angle between three atoms a, b, c ???? b has to be the hydrogen ????
-   real(chm_real) function atomangle(xyz_1,xyz_h1,xyz_2)
-      use number, only : one
-      implicit none
-      real(chm_real) :: xyz_1(3),xyz_2(3),xyz_h1(3)
-      real(chm_real) :: abs1, abs2, dot, cs ! atomangle
-
-      ! two vectors
-      real(chm_real) :: ux, uy, uz, vx, vy, vz
-
-      ux = xyz_1(1) - xyz_h1(1) ! geom%xyz(1,a) - geom%xyz(1,b)
-      uy = xyz_1(2) - xyz_h1(2) ! geom%xyz(2,a) - geom%xyz(2,b)
-      uz = xyz_1(3) - xyz_h1(3) ! geom%xyz(3,a) - geom%xyz(3,b)
-      vx = xyz_2(1) - xyz_h1(1) ! geom%xyz(1,c) - geom%xyz(1,b)
-      vy = xyz_2(2) - xyz_h1(2) ! geom%xyz(2,c) - geom%xyz(2,b)
-      vz = xyz_2(3) - xyz_h1(3) ! geom%xyz(3,c) - geom%xyz(3,b)
-
-      abs1 = sqrt(ux*ux + uy*uy + uz*uz)  ! vector u is the donor/acceptor-H distance
-      abs2 = sqrt(vx*vx + vy*vy + vz*vz)  ! vector v is the acceptor/donor-H distance
-
-      dot = ux*vx + uy*vy + uz*vz
-      cs = dot/(abs1*abs2)
-
-      ! Numerical issue: can be close to 1 but out of the valid interval for the Gauchy-Schwarz inequality
-      if (cs < -one) then
-          cs = -one
-      end if
-      if (cs > one) then
-          cs = one
-      end if
-
-      atomangle = acos(cs)
       !
-      return
-   end function atomangle
+      contains
+      ! --------------------------------------
+      ! Distance between two atoms
+      real(chm_real) function distance(xyz_1,xyz_2)
+         implicit none
+         real(chm_real):: xyz_1(3),xyz_2(3)
+
+         distance = sqrt( (xyz_1(1)-xyz_2(1))**2 + (xyz_1(2)-xyz_2(2))**2 + (xyz_1(3)-xyz_2(3))**2 )
+         return
+      end function distance
+
+      ! --------------------------------------
+      ! Angle between three atoms a, b, c ???? b has to be the hydrogen ????
+      real(chm_real) function atomangle(xyz_1,xyz_h1,xyz_2)
+         implicit none
+         real(chm_real) :: xyz_1(3),xyz_2(3),xyz_h1(3)
+         real(chm_real) :: abs1, abs2, cs_val ! atomangle
+
+         ! two vectors
+         real(chm_real) :: ux(3), vx(3)
+
+         ! vector ux is the donor/acceptor-H distance and
+         ! vector vx is the acceptor/donor-H distance
+         ux(1:3) = xyz_1(1:3) - xyz_h1(1:3) ! geom%xyz(1:3,a) - geom%xyz(1:3,b)
+         vx(1:3) = xyz_2(1:3) - xyz_h1(1:3) ! geom%xyz(1:3,c) - geom%xyz(1:3,b)
+         abs1    = sqrt(ux(1)*ux(1)+ux(2)*ux(2)+ux(3)*ux(3))
+         abs2    = sqrt(vx(1)*vx(1)+vx(2)*vx(2)+vx(3)*vx(3))
+
+         cs_val  =(ux(1)*vx(1) + ux(2)*vx(2) + ux(3)*vx(3))/(abs1*abs2)
+
+         ! Numerical issue: can be close to 1 but out of the valid interval for the Gauchy-Schwarz inequality
+         if (cs_val <-one) cs_val =-one
+         if (cs_val > one) cs_val = one
+
+         atomangle = acos(cs_val)
+         !
+         return
+      end function atomangle
+
+      ! --------------------------------------
+      ! Compute radial energy and gradient
+      real(chm_real) function E_Radial_FN(rx,grad_radi)
+         implicit none
+         real(chm_real) :: rx,grad_radi
+         real(chm_real) :: e_local,grad_local,rx2,rx3,rx6
+
+         rx2 = rx *rx
+         rx3 = rx *rx2
+         rx6 = rx3*rx3
+         e_local = -0.00303407407407313510d0 * rx  * rx6 &  ! rda ** 7
+                  + 0.07357629629627092382d0 * rx6       &  ! rda ** 6
+                  - 0.70087111111082800452d0 * rx2 * rx3 &  ! rda ** 5
+                  + 3.25309629629461749545d0 * rx2 * rx2 &  ! rda ** 4
+                  - 7.20687407406838786983d0 * rx3       &  ! rda ** 3
+                  + 5.31754666665572184314d0 * rx2       &  ! rda ** 2 
+                  + 3.40736000001102778967d0 * rx        &  ! rda
+                  - 4.68512000000450434811d0
+
+         if(grad_c%q_gradient) then
+            grad_radi = -0.02123851851851194655d0 * rx6        & ! rda ** 6
+                       + 0.44145777777762551519d0 * rx2 * rx3  & ! rda ** 5
+                       - 3.50435555555413991158d0 * rx2 * rx2  & ! rda ** 4
+                       +13.01238518517846998179d0 * rx3        & ! rda ** 3
+                       -21.62062222220516360949d0 * rx2        & ! rda ** 2
+                       +10.63509333331144368628d0 * rx         & ! rda
+                       + 3.40736000001102778967d0
+         else
+            grad_radi = zero
+         end if
+
+         E_Radial_FN = e_local
+         return
+      end function E_Radial_FN
+
+      ! --------------------------------------
+      ! Polynomial switching function for angle
+      real(chm_real) function E_Angular_FN(rx,grad_angl)
+         implicit none
+         real(chm_real) :: rx,grad_angl
+         real(chm_real) :: rx2,rx3,xi,xdi
+
+         rx2 = rx *rx
+         rx3 = rx *rx2
+         xi  =(-20.0d0*rx3 + 70.0d0*rx2 - 84.0d0*rx + 35.0d0)*rx2*rx2
+
+         if(grad_c%q_gradient) then
+            xdi       =(-140.0d0*rx3 + 420.0d0*rx2 - 420.0d0*rx + 140.0d0)*rx3*r_HALFPI
+            grad_angl =- two * xdi * xi
+         else
+            grad_angl = zero
+         end if
+
+         E_Angular_FN = one - xi*xi
+         return
+      end function E_Angular_FN
+
+      ! --------------------------------------
+      ! Bond switching energy and grad
+      real(chm_real) function BOND_switch_FN(rx,grad_radi)
+         implicit none
+         real(chm_real) :: rx,grad_radi
+         real(chm_real) :: e_local,rx2,rx3,rx4,rx6
+
+         rx2 = rx *rx
+         rx3 = rx *rx2
+         e_local = 1.0d0 + (20.0d0*rx3 - 70.0d0*rx2 + 84.0d0*rx - 35.0d0)*rx2*rx2
+
+         if(grad_c%q_gradient) then
+            grad_radi = (140.0d0*rx3 - 420.0d0*rx2 + 420.0d0*rx - 140.0d0)*rx3
+         else
+            grad_radi = zero
+         end if
+   
+         BOND_switch_FN = e_local
+         return
+      end function BOND_switch_FN
+
+      ! --------------------------------------
+      ! Continuous valence contribution of a pair of atoms
+      real(chm_real) function cvalence_contribution(ic,id,rx)
+         implicit none
+         integer, intent(in) :: ic, id  ! c=donor(d_i), d=hydrogen/other(k)
+         real(chm_real)      :: rx, ri, rj, r0, r1, x_val,x2_val,x3_val
+
+         ! identify the donor and hydrogen and fetch the radius
+         if(qm_main_c%nat(ic)==1 .or. qm_main_c%nat(ic)==6 .or. qm_main_c%nat(ic)==7 .or. qm_main_c%nat(ic)==8) then
+            ri = radius(qm_main_c%nat(ic)) ! donor
+         else
+            ri = zero
+         end if
+         if(qm_main_c%nat(id)==1 .or. qm_main_c%nat(id)==6 .or. qm_main_c%nat(id)==7 .or. qm_main_c%nat(id)==8) then
+            rj = radius(qm_main_c%nat(id)) ! h or other atoms.
+         else
+            rj = zero
+         end if
+
+         r0 = ri + rj
+         r1 = r0 * 1.6d0
+         if (rx > r0 .and. rx < r1) then
+             x_val = (rx - r0) / (r1 - r0)
+             x2_val= x_val*x_val
+             x3_val= x2_val*x_val
+             cvalence_contribution = one+(20.0d0*x3_val-70.0d0*x2_val+84.0d0*x_val-35.0d0)*x2_val*x2_val
+         else if(rx <= r0 .and. rx > zero) then
+             cvalence_contribution = one
+         else
+             cvalence_contribution = zero
+         end if
+         return
+      end function cvalence_contribution
+
+      ! --------------------------------------
+      ! Continuous valence contribution of a pair of atoms - derivative
+      ! in the internal coordinates
+      real(chm_real) function cvalence_contribution_d(ic,id,rx)
+         implicit none
+         integer, intent(in) :: ic, id  ! c=donor(d_i), d=hydrogen/other(k)
+         real(chm_real)      :: rx, ri, rj, r0, r1, x_val,x2_val,x3_val,r_tmpx
+
+         ! identify the donor and hydrogen and fetch the radius
+         if(qm_main_c%nat(ic)==1 .or. qm_main_c%nat(ic)==6 .or. qm_main_c%nat(ic)==7 .or. qm_main_c%nat(ic)==8) then
+            ri = radius(qm_main_c%nat(ic)) ! donor
+         else
+            ri = zero
+         end if
+         if(qm_main_c%nat(id)==1 .or. qm_main_c%nat(id)==6 .or. qm_main_c%nat(id)==7 .or. qm_main_c%nat(id)==8) then
+            rj = radius(qm_main_c%nat(id)) ! h or other atoms.
+         else
+            rj = zero
+         end if
+
+         r0 = ri + rj
+         r1 = r0 * 1.6d0
+         if (rx > r0 .and. rx < r1) then
+            r_tmpx = one/(r1 - r0)
+            x_val  = (rx - r0)/(r1 - r0)
+            x2_val = x_val*x_val
+            x3_val = x2_Val*x_val
+            cvalence_contribution_d = (140.0d0*x3_val-420.0d0*x2_val+420.0d0*x_val-140.0d0)*x3_val*r_tmpx
+         else
+            cvalence_contribution_d = zero
+         end if
+         return
+      end function cvalence_contribution_d
+      !
+   end subroutine h4_correction
 !
 #endif /* (mndo97)*/
 end module H4_mndo

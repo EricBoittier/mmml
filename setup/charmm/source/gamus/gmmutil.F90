@@ -295,7 +295,7 @@ use chm_kinds
 use parallel
 use memory
 use number
-use mpi
+use mpi_f08
 implicit none
 type(gmm_parameter) param
 integer nodemax,i

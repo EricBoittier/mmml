@@ -130,7 +130,7 @@ goto deadly
 endif
 
 ! (3) Let's run a brief FE simulation 
-
+bomlev -1 ! as old automode is used
 DYNAMICS  nose qref 10. tref 300  start nstep 110  timestp 0.002  -
           ntrfrq 110  iprfrq  110  -
           nprint    1  iseed 1 -

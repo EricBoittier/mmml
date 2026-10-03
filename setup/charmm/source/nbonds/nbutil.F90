@@ -543,6 +543,13 @@ SUBROUTINE GTNBCT(COMLYN,COMLEN,BNBND)
 #if KEY_BLOCK==1
   use block_fcm, only : qblock_excld_upinb
 #endif
+#if KEY_OPENMM==1
+    use omm_main, only: teardown_openmm
+#endif
+#if KEY_BLADE==1
+  use blade_main, only: system_dirty
+  use blade_ctrl_module, only: blade_force_cpu_nblist
+#endif
   use nbexcl,only:upinb
   implicit none
   !
@@ -846,8 +853,15 @@ SUBROUTINE GTNBCT(COMLYN,COMLEN,BNBND)
        )
 #endif /* (nbips)*/
 #if KEY_OPENMM==1
-  qommrxn = (indxa(comlyn,comlen,'OMRF') > 0 )     
-  qommswi = (indxa(comlyn,comlen,'OMSW') > 0 )     
+  qommrxn = (indxa(comlyn,comlen,'OMRF') > 0 )
+  qommswi = (indxa(comlyn,comlen,'OMSW') > 0 )
+#endif
+#if KEY_BLADE==1
+  ! CPUNB keyword forces CPU neighbor list building even when BLaDE is active
+  blade_force_cpu_nblist = (INDXA(COMLYN,COMLEN,'CPUNB') > 0)
+  IF (blade_force_cpu_nblist .AND. PRNLEV >= 2) THEN
+     WRITE(OUTU,'(A)') ' NBONDS> CPUNB specified - forcing CPU neighbor list build'
+  ENDIF
 #endif
   !
   LOOPS=(QELEC.AND.QNOEL).OR.(QVDW.AND.QNOVD).OR.(QGROU.AND.QATOM) &
@@ -1234,7 +1248,17 @@ loops = loops .or. (qommrxn .and. qewald)
   CTEXNB=GTRMF(COMLYN,COMLEN,'CTEXNB',CTEXNB)
   WRNMIN=GTRMF(COMLYN,COMLEN,'WMIN',WRNMIN)
   WRNMXD=GTRMF(COMLYN,COMLEN,'WRNMXD',WRNMXD)
-  E14FAC=GTRMF(COMLYN,COMLEN,'E14F',E14FAC)
+  if (indx(comlyn,comlen,'E14F',4)>0) then
+     E14FAC=GTRMF(COMLYN,COMLEN,'E14F',E14FAC)
+     qe14ff = .false.
+     call allocate_inbnd(natom)
+#if KEY_OPENMM==1
+     call teardown_openmm()
+#endif
+#if KEY_BLADE==1
+     system_dirty = .true.
+#endif
+  endif
   CTVTRN=GTRMF(COMLYN,COMLEN,'CTVT',CTVTRN)
   CGONNB=GTRMF(COMLYN,COMLEN,'CGONNB',CGONNB)
   CGOFNB=GTRMF(COMLYN,COMLEN,'CGOFNB',CGOFNB)

@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>The extended-Adaptive Biasing Force (eABF) method is an enhanced</title>
+<link rel="stylesheet" href="charmmdoc.css">
+</head>
+<body>
+<div class="page-header">
+<h1>The extended-Adaptive Biasing Force (eABF) method is an enhanced</h1>
+<div class="nav"><a href="index.html">Index</a><a href="charmm.html">CHARMM Home</a><a href="commands.html">Commands</a></div>
+</div>
+<pre>
+<a id="Top"></a>
+<div class="charmmdoc">
+     The extended-Adaptive Biasing Force (eABF) method is an enhanced
+sampling method designed to enable robust sampling along prescribed
+collective variables (CV). Implementation by S. L. Austin &amp; H. L. Woodcock, 2024 
+
+
+* <a href="#Syntax">Syntax</a> | Syntax of the eABF commands
+* <a href="#Commands">Commands</a> | Explanation of commands
+* <a href="#Examples">Examples</a> | Description of Input, Output &amp; Restart Files
+</div>
+<a id="Syntax"></a>
+<div class="charmmdoc">
+<a href="#Top">Top</a>
+                Syntax of eABF commands
+
+ABFP [PRNT int] [SCUT int] [SORD int] [REFR int] [REST int] [NUMP int] LBIN [int]
+
+ABFC [DIST | RMSD | DISD | RADG]
+LMIN [real] LMAX [real] LBIN [int] LBND [real] -
+TLAM [real] MLAM [real] KLAM [real] LFRC [real] -
+[atom-selection]
+
+IREF
+SREF [atom-selection]
+
+</div>
+<a id="Commands"></a>
+<div class="charmmdoc">
+<a href="#Top">Top</a>
+eABF is initilized by the ABFP keyword followed by several parameter inputs:
+
+PRNT | Frequency to print eABF dynamics information.
+SCUT | Number of samples to collect in a bin before bias is fully applied. A linear scaling is applied to the bias up to SCUT.
+SORD | Spline order for bias interpolation. SCUT set to 0 applies no spline and directly uses the force estimate in the current bin (0 or 4 recommended values).
+REFR | Frequency for writing eABF restart information. This should match ISVFRQ in DYNA.
+REST | eABF restart flag. Set to 0 on initial run and 1 for restarts.
+NUMP | Number of CVs to be applied.
+LBIN | Maximum number of bins to be used along any CV. LBIN will be specified for each CV again, see below.
+
+Following initilization, eABF Collective Variables to bias along are specified by ABFC calls:
+
+ABFC DIST | Specify a distance CV.
+     RMSD | Specify a root-mean-squared displacement CV.
+     DISD | Specify a distance-difference CV.
+     RADG | Specify a radius of gyration CV.
+
+LMIN | Minimum value of CV to sample.
+LMAX | Maximum value of CV to sample.
+LBIN | Number of bins in CV range.
+LBND | Force constant for harmonic boundary restraint.
+TLAM | Temperture to propagate virtual particle (set this to the system temperature).
+MLAM | Mass of virtual particle.
+KLAM | Force constant for harmonic restraint between the CV and virtual particle.
+LFRC | Friction coefficent for virtual particle Langevin dynamics.
+
+The number of [atom-selection] calls is specific to the employed CV (DIST 2, RMSD 1, DISD 4, RADG 1) and utilizes CHARMM selection syntax.
+
+When employing RMSD, reference coordinate selections are made with the IREF and SREF keywords:
+
+IREF | Initilize eABF reference selections. This keyword is called only once.
+SREF | Select reference coordinates using CHARMM selection syntax. Multiple references can be stored via successive SREF calls.
+
+
+</div>
+<a id="Examples"></a>
+<div class="charmmdoc">
+<a href="#Top">Top</a>
+The following example details setup of eABF with a distance CV defined by two C-alpha atoms.
+
+Read topology, parameters, coordinates, etc..
+...
+
+!Initilize eABF
+ABFP PRNT 100 SCUT 2000 SORD 0 REFR 10000 REST 0 NUMP 1 LBIN 100
+
+ABFC DIST -
+LMIN 11.8 LMAX 33.0 LBIN 100 LBND 5000.0 -
+TLAM 300.0 MLAM 500.0 KLAM 5000.0 LFRC 1.0 -
+!Make DIST Selections
+select segid PROA .and. resid 1 .and. type CA show end -
+select segid PROA .and. resid 10 .and. type CA show end
+
+DYNA
+...
+
+The following example details setup of eABF with an RMSD CV defined by protein backbone heavy atoms.
+
+Read in topology, parameters ...
+
+open read unit 10 card name protein.crd
+read coor unit 10 card
+close unit 10
+
+!Initilize and set RMSD reference
+IREF
+SREF select (type C .OR. type CA .OR. type N .OR. type O) show end
+
+...
+
+ABFC RMSD -
+LMIN 0.0 LMAX 10.0 LBIN 100 LBND 5000.0 -
+TLAM 300.0 MLAM 500.0 KLAM 5000.0 LFRC 1.0 -
+!Make RMSD Selection
+select (type C .OR. type CA .OR. type N .OR. type O) show end
+
+DYNA
+--------------------------------------------------------------------------
+To perform a restart of an eABF simulation, several restart files should be read above the call to ABFP and the REST flag set to 1. To restart the above distance CV for instance:
+
+...
+
+!eABF Restart
+open unit 1339 form read name eabf_dyn.rst
+open unit 1347 form read name eabf_fl.rst
+
+!Initilize eABF
+ABFP PRNT 100 SCUT 2000 SORD 0 REFR 10000 REST 1 NUMP 1 LBIN 100
+
+ABFC DIST -
+LMIN 11.8 LMAX 33.0 LBIN 100 LBND 5000.0 -
+TLAM 300.0 MLAM 500.0 KLAM 5000.0 LFRC 1.0 -
+!Make DIST Selections
+select segid PROA .and. resid 1 .and. type CA show end -
+select segid PROA .and. resid 10 .and. type CA show end
+
+DYNA
+...
+
+--------------------------------------------------------------------------
+eABF will output the following files:
+eabf_dynamics.out | eABF dynamics information is written in the following columns, respectively: Step, Current CV Position, Current Lambda Position, Force on Lambda (from harmonic restraint), Force on Lambda (biasing force), System Potential Energy, eABF energy (from harmonic restraint) 
+eabf_dyn.rst      | Information to restart an eABF simulation
+eabf_fl.dat       | Current free energy profile (kcal/mol) along the CV as estimated by thermodynamic integration of the average force. Information is written in the following columns, respectively: CV index, CV position, free energy, estimated average force in bin, sample count in bin
+eabf_fl.rst       | Information to restart an eABF simulation
+eabf_czar_fl.dat  | Current free energy profile (kcal/mol) along the CV as estimated by CZAR. Information is written in the following columns, respectively: CV index, CV position, free energy
+
+
+Note, CV and Lambda positions are written out in their reduced range between 0 and 1: Current CV position = (CV-LMIN)/(LMAX-LMIN).
+
+</div>
+</pre>
+</body>
+</html>

@@ -1,0 +1,217 @@
+CHARMM Element doc/stap.info $Revision: 1.1.1.1 $
+
+File: STAP, Node: Top, Up: (doc/commands.info), Next: Syntax
+
+
+		 Statistical torsion angle potential (STAP) and
+	    the flat-bottom distance potential energy Forces Module
+
+
+	      Tae-rae Kim, Hyojung Ryu, Young Cho and Jinhyuk Lee
+	Korea Research Institute of Bioscience and Biotechnology, KRIBB
+
+	   Please report problems to Young Cho (yycho@kribb.re.kr) or
+		       Jinhyuk Lee (jinhyuk@kribb.re.kr)
+
+
+   The STAP  module makes the Statistical torsion angle potential energy and
+   the flat-bottom distance potential. The devised functions rapidly improve
+    the quality of model structures. This module proposed guiding functions
+	  that are expected to facilitate protein structure modelings,
+such as protein structure prediction, protein design, and structure refinement.
+
+
+
+References :
+Kim, T. R., Yang, J. S., Shin, S., & Lee, J. (2013). Statistical torsion angle potential
+energy functions for protein structure modeling: a bicubic interpolation approach.
+Proteins: Structure, Function, and Bioinformatics, 81(7), 1156-1165.
+
+Ryu, H., Kim, T. R., Ahn, S., Ji, S., & Lee, J. (2014). Protein NMR structures refined without NOE data.
+PloS one, 9(10), e108888.
+
+
+
+Background
+
+The refinement of low-quality structures is a fundamental challenge in protein structure prediction.
+Many studies have been conducted on protein structure refinement. The potential energy function was derived
+from distance information from given protein structures and prevented structural dislocation during the refinement process.
+
+
+We demonstrate that the combination of two energy potentials, STAP and the flat-bottom distance potential,
+can drive the refinement of protein structure
+
+
+
+* Menu
+
+* Syntax::            Syntax of the STAP commands
+* Description::       Description of the STAP functions
+* Substitution::      Description of substitution values
+* Examples::          Usage example of the STAP commands
+
+
+
+
+
+File: STAP, Node: Syntax, Up: Top, Next: Charmm input, Previous: Top
+
+		      Syntax of STAP commands
+
+[SYNTAX of STAP commands]
+
+MOD
+ROTS
+
+ASSIGN[atom-selection*8]
+[FORC real] [NPOS int]
+[XMIN real] [XMAX real] [XINT real]
+[YMIN real] [YMAX real] [YINT real]
+[POS real*(NPOS*NPOS)]
+
+
+
+
+Command description.
+
+FORC:      Force constant of STAP
+NPOS:      Number of grid points on two-dimensional surfaces, such as Phi/Psi, Phi/Chi1, Psi/Chi1, Chi1/Chi2.
+Phi:       Backbone dihedral angle: (*)C-N-CA-C
+Psi:       Backbone dihedral angle: N-CA-C-N(*)
+Chi1:      Sidechain dihedral angle: N-CA-CB-CG
+Chi2:      Sidechain dihedral angle: CA-CB-CG-CD
+XMIN/YMIN: Minimun position value of X/Y (degree)
+XMAX/YMAX: Maximum position value of X/Y (degree)
+XINT/YINT: Interval parameter of X/Y     (degree)
+RESEt:     Reset the assigned energy potentials
+
+^_
+File: STAP, Node: Charmm input, Up: Top, Next: Example, Previous: Syntax
+
+!----------CHARMM input example--------------------------------------------------
+! generate STAP potential energy function
+
+MOD
+ROTS
+
+ASSIGN sele segid PRO0 .and. resid  58 .and. type C end -
+       sele segid PRO0 .and. resid  59 .and. type N end -
+       sele segid PRO0 .and. resid  59 .and. type CA end -
+       sele segid PRO0 .and. resid  59 .and. type C end -
+       sele segid PRO0 .and. resid  59 .and. type N end -
+       sele segid PRO0 .and. resid  59 .and. type CA end -
+       sele segid PRO0 .and. resid  59 .and. type C end -
+       sele segid PRO0 .and. resid  60 .and. type N end -
+
+! set force constant and Max/Min/Int of position
+FORC 1 NPOS 33 -
+XMIN -240.00000 XMAX 240.00000 XINT 15.000000 -
+YMIN -240.00000 YMAX 240.00000 YINT 15.000000 -
+POS -
+5.8497820  5.8497820  5.8497820  5.8497820  5.8497820  5.8497820 -
+5.8497820  5.8497820  5.8497820  5.8497820  5.8497820  5.8497820 -
+.
+.
+.
+.
+
+end
+return
+
+!--------------------------------------------------------------------------------
+
+
+File: STAP, Node: Example, Up: Top, Next: Top, Previous: Charm input
+
+			Usage Examples and Compatibility
+
+The examples below illustrate some of the uses of STAP and the flat-bottom distance
+     potential energy and Forces Module. See c47test/stap.inp for example.
+
+
+--------------------------------------
+THERE ARE REQUIREMENTS TO RUN STAP
+--------------------------------------
+1)	Create proper stap topology file for target protein model structure
+
+
+!Example 1
+
+! Read topology
+open read card unit 10 name @0/top_all22_prot.rtf
+read rtf  card unit 10
+clos unit 10
+
+! Read parameter
+open read card unit 12 name @0/par_all22_prot.prm
+read para card unit 12
+clos unit 12
+
+! Read in PDB files
+open read card unit 12 name @0/stap.pdb
+read sequ pdb unit 12
+clos unit 12
+
+! generate structure with the sequences
+generate pro0 setup
+
+! Read in PDB file and create resid
+open read card unit 12 name @0/stap.pdb
+read coor pdb  unit 12 resid
+clos unit 12
+
+ic para
+ic build
+hbuild
+
+coor print sele .not. INIT end
+
+
+! STAP setup
+stream @0/stap.str
+ener
+
+! Skip all energies except STAP
+skip all excl emd
+
+! Test first for STAP before minimization
+test first sele resid 58:61 end
+skip excl all
+energy
+
+! STAP energy
+set bmin = ?emd
+
+! Minimization
+mini sd   nstep 500
+mini abnr nstep 1000
+
+ener
+skip all excl emd
+
+
+! Test first for STAP after minimization
+test first sele resid 58:61 end
+
+skip excl all
+set amin = ?emd
+
+write title unit 6
+* STAP energy: before: @bmin after: @amin
+*
+
+! Reset STAP potential
+MOD
+reset
+END
+
+! Get total energy
+energy
+-------------------------------------------------------------------------------
+			  Recommended model validation
+MolProbity: all-atom structure validation for macromolecular crystallography
+-	Clashscore
+-	Ramachandran analysis
+-	Rotamer
+-	MolProbity score

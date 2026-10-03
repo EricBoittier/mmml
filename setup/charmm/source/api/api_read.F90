@@ -57,7 +57,6 @@ contains
   !> @param[in] append integer if .ne. 0 then append contents to prev data
   !> @param[in] flex integer if .ne. 0 then read a flexible parameter file
   !> @return integer error code, success is 1
-#if KEY_LIBRARY == 1
   integer(c_int) function read_param_file(filename, fn_len, append, flex) &
        bind(c)
     use, intrinsic :: iso_c_binding, only: c_int, c_char
@@ -120,7 +119,6 @@ contains
     read_param_file = -1
     return
   end function read_param_file
-#endif
 
   !> @brief read a psf card given a filename
   !
@@ -305,13 +303,22 @@ contains
 
     blank = ' '
     start = nictot(nseg + 1)
+#ifdef KEY_RESIZE
+    call seqrdr('', 0, new_in_unit, &
+         titleb, ntitlb, maxtit, &
+         4, start, blank, blank, &
+         0, 0, skip, &
+         0, alias, &
+         .true., .false., .false., 1, .false.)
+#else
     call seqrdr('', 0, mxcmsz, new_in_unit, &
          titleb, ntitlb, maxtit, &
          res, nres, resid, &
          4, start, blank, blank, &
          0, 0, skip, &
          0, alias, &
-         .true., .false., .false., 1)
+         .true., .false., .false., 1, .false.)
+#endif
 
     call vclose(new_in_unit, 'KEEP', qerr)
     if (qerr) then

@@ -15,6 +15,7 @@
 #if (KEY_STRINGM==1) || (KEY_MULTICOM==1) /* automatically protect all code */
       use ivector ! container for vector of ints
        use stream
+       use mpi_f08
 !
       implicit none
       private
@@ -26,8 +27,8 @@
 ! had to set types below to int4 to work correctly on 64bit gnu
        integer*4 :: me
        integer*4 :: size
-       integer*4 :: comm_id
-       integer*4 :: group_id
+       TYPE(MPI_Comm) :: comm_id
+       TYPE(MPI_Group) :: group_id
        integer*4 :: parent_id ! ID of the parent communicator ( N/A to first entry )
       end type comm_type
 !
@@ -81,7 +82,7 @@
        use multicom_aux
 !
        use string
-       use mpi
+       use mpi_f08
 !
        character*(*), intent(inout) :: comlyn
        integer, intent(inout) :: comlen
@@ -286,9 +287,9 @@
        end subroutine multicom_parinit
 !cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
        subroutine multicom_init()
-       use mpi
+       use mpi_f08
 ! locals
-       integer*4 :: communicator
+       TYPE(MPI_Comm) :: communicator
        integer :: i, j
        integer*4 :: ii, jj
        integer*4 :: bug=0
@@ -352,7 +353,7 @@
 ! additional groups and communicators; in the current implementation, parent_id is 0
 ! for all communicators;
 !
-       use mpi
+       use mpi_f08
 !
        integer, optional :: comm ! omission implies 1st communicator (WORLD)
        integer :: nodes(:)
@@ -458,7 +459,7 @@
 !cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
        subroutine multicom_cleanup()
 ! remove all traces of multicom, but leave MPI_COMM_WORLD intact
-       use mpi
+       use mpi_f08
 !
        integer :: i
        integer*4 :: bug
@@ -496,7 +497,7 @@
 !cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
        subroutine multicom_list()
 ! list currently defined communicators
-! use mpi
+! use mpi_f08
        use stream
 !
        integer :: i
@@ -539,12 +540,13 @@
        use multicom_aux
        use string
        use stream
-       use mpi
+       use mpi_f08
 !
        character(len=*) :: comm_name
 ! local vars
        integer :: s, m, l
-       integer*4 :: c, ierror
+       TYPE(MPI_Comm) :: c
+       integer*4 :: ierror
 !
        character(len=len("MULTICOM_BARRIER>") ),parameter::whoami="MULTICOM_BARRIER>";!macro
 !
@@ -608,7 +610,7 @@
 ! note: all processors are meant to execute this routine
        use multicom_aux;
        use stream
-       use mpi
+       use mpi_f08
 !
        character(len=*) :: comm_name
        integer :: commlist(:)
@@ -616,9 +618,12 @@
        character(len=len("MULTICOM_SET>") ),parameter::whoami="MULTICOM_SET>";!macro
        integer :: llist
        integer :: comm_id, node_id, parent_id
-       integer :: numnodes, c, m, s
-       integer :: itype, bug, lcomm, i, j
-       logical :: found=.false., foundg=.false.
+       integer :: numnodes, m, s
+       TYPE(MPI_Comm) :: c
+       TYPE(MPI_Datatype) :: itype
+       integer :: bug, lcomm, i, j
+       logical :: found=.false.
+       integer :: ifound, ifoundg ! integer mirror of found for a portable reduction
 !
        integer :: flag(0:first_size-1), flagg(0:first_size-1)
 !
@@ -655,9 +660,16 @@
 !
 ! detect if null communicator (unlikely, just bug check)
         found=c.eq.MPI_COMM_NULL
-        call MPI_ALLREDUCE(found, foundg, 1, MPI_LOGICAL, MPI_LAND, &
+! MPI_LAND on MPI_LOGICAL trips an op/datatype assertion in strict MPIs (e.g.
+! MPICH: MPIR_Internal_op_dt_check), which aborts every stringm run on such a
+! stack.  The MPI standard only lists "C integer" and "Logical" for the logical
+! ops, so reduce an integer 0/1 flag with MPI_MIN instead -- MIN over {0,1} is
+! exactly a logical AND across nodes and (Fortran integer + MPI_MIN) is
+! conformant on every MPI.
+        ifound=0; if (found) ifound=1
+        call MPI_ALLREDUCE(ifound, ifoundg, 1, MPI_INTEGER, MPI_MIN, &
      & communicators(1)%comm_id, bug)
-        if (foundg) then
+        if (ifoundg.eq.1) then
          call wrndie(0,whoami,trim(' UNEXPECTED ERROR: COMMUNICATOR HANDLE NULL ON ALL NODES.'))
          return
         endif
@@ -792,7 +804,7 @@
 #if (KEY_STRINGM==1)
        subroutine multicom_permute_string_ranks(ranks)
        use multicom_aux;
-       use mpi
+       use mpi_f08
 ! assume that the string communicator exists (MPI_COMM_STRNG)
 ! loop over all communicators & find the string communicator
 ! create a new communicator using the nodes of the string comm.,
@@ -803,7 +815,7 @@
 !
        integer :: i, j, k, comm, node_id, parent_id
        logical :: found
-       integer :: itype
+       TYPE(MPI_Datatype) :: itype
        integer*4 :: bug
        character(len=len("MULTICOM_PERMUTE_STRING_RANKS>") ),parameter::whoami="MULTICOM_PERMUTE_STRING_RANKS>";!macro
 !
@@ -897,7 +909,7 @@
 !====================================================================
        subroutine multicom_safe_reset()
        use multicom_aux
-       use mpi
+       use mpi_f08
 ! guess reset failsafe communicator values ; called after multicom_cleanup
 ! to avoid problems if multicom finalized in the middle of a program
        MPI_COMM_LOCAL=MPI_COMM_GLOBAL

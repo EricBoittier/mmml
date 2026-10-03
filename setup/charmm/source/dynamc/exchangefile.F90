@@ -18,7 +18,7 @@ module exchangefile
    ! every 100 steps, order(*,1) is valid for steps 1-100,
    ! ... , order(*,10000) is valid for step 999,901-1,000,000.
 
-   ! The orders themselves are a permutation that maps from 
+   ! The orders themselves are a permutation that maps from
    ! replica space to temperature space, e.g. if order(*,N) =
    ! (3,4,1,2), it means that the lowest temperature is in
    ! replica 3, the second lowest in replica 4, and the highest
@@ -53,7 +53,7 @@ contains
       endif
 
       if(prnlev.gt.6) &
-         write(outu,'(a,i9,a,i3a,i3,a,i3)') &
+         write(outu,'(a,i9,a,i3,a,i3,a,i3)') &
          'MAP_TOTEMPSPACE> ISTEP ',istep,' CRITNUM ',critnum,' MAP REP ',iresnum,' TO TEMP ',temprep
 
    end subroutine map_totempspace
@@ -108,7 +108,7 @@ contains
          return
       endif
 
-      if(qinit) then 
+      if(qinit) then
          read(unum,*)
          read(unum,'(a)') line
          linelen=len(line)
@@ -121,12 +121,12 @@ contains
          lastst = 0
 
          ! get all of the temperatures
-         do i=1,ef%nrep 
+         do i=1,ef%nrep
             read(unum,'(I2,x,F12.6,x,F15.6,x,I2,x,F12.6,x,F15.6,x,F5.3,x,F5.3,x,L,x,I2)') &
                  replica,reptemp,repepot,neighbor,nbrtemp,nbrepot,prob,p,qexch,result
             ef%temps(i)=reptemp ! temps in order at step 1
          enddo
-         
+
          rewind(unum)
          read(unum,*)
       endif
@@ -220,4 +220,3 @@ contains
    end subroutine create_exfile
 
 end module exchangefile
-

@@ -25,6 +25,22 @@ thr lys pro arg
 
 generate tuft setup
 
+! scratch/tuftsin.cor isn't created anywhere in this test or its
+! callee csamin.str -- both just read it.  The scratch dir is wiped
+! by test.com between tests, so even a hypothetical earlier creator
+! wouldn't help.  Self-skip when the file is missing rather than
+! aborting at BOMLEV 0 from <OPNLGU>'s "OPEN not possible" warning.
+! Same shape as the c47test/nanomaterial.inp data-file fix.
+! Surfaced by pipeline-dev #29 on the misc2 config.
+bomlev -2
+open unit 98 read form name @9tuftsin.cor
+if ?iostat .ne. 1 then
+   bomlev 0
+   echo "Test NOT performed. scratch/tuftsin.cor not available."
+   stop
+endif
+close unit 98
+bomlev 0
 open read unit 1 card name @9tuftsin.cor
 read coor card unit 1
 

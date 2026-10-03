@@ -55,13 +55,7 @@ module ssbpm
   !      COMMON / QSSBP3 / RMAX, DIECST, DRMAX1, DRMAX2, &
   !                        PRESI, FXCAS, CANG, ACAV, BCAV, DRHA, &
   !                        STENS, EMPI1, EMPI2
-#if KEY_IF==1 || KEY_SAVEFCM==1
-  
-#endif
   !      SAVE / BSSBP1 /
-#if KEY_ENDIF==1
-  
-#endif
   !
 contains
   subroutine ssbpm_init()

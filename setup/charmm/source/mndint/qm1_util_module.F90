@@ -26,69 +26,69 @@
 !  end
 
 
-  integer FUNCTION ISTRT_CHECK(mstop,NCNT)
-  !
-  ! for parallel jobs.
-  ! compute mstart and mstop for each node.
-  !
-  use chm_kinds
-#if KEY_PARALLEL==1
-  use parallel 
-#endif
-
-  implicit none
-  integer:: mstop,ncnt
-  integer:: mstart,ncnt2,icnt
-  !
-#if KEY_PARALLEL==1 /*paramain*/
-  if(QMPI) then                  ! protect for MPI-pi calc.
-     mstart = 1
-     mstop  = ncnt
-  else
-#if KEY_PARAFULL==1 /*parfmain*/
-#if KEY_PARASCAL==1 /*parstest*/
-#error 'Illegal parallel compile options'
-#endif /* (parstest)*/
-
-     if(ncnt.ge.numnod) then 
-        ncnt2 = ncnt/NUMNOD
-        mstart =  mynod*ncnt2 + 1
-        mstop  = (mynod+1)*ncnt2
-        if(MYNOD.EQ.(NUMNOD-1)) mstop =ncnt
-     else
-        ! ncnt < numnod. only do until ncnt = numnod. (each node has a single job to do.)
-        if(mynod+1 .le. ncnt) then
-           mstart = mynod + 1
-           mstop  = mstart
-        else
-           ! this part has a potential to cause segmentation fault.
-           ! mynod+1 > ncnt.. meaning the number of nodes (mynod) is larger tha ncnt.
-     ! show warning message
-     write(6,*)'ISTRT_CHECK> Severe warning that numnod > NCNT. Shoule check the code.'
-           mstart = 0
-           mstop  = 0
-        end if
-     end if
-
-#elif KEY_PARASCAL==1 || KEY_SPACDEC==1 /*parfmain*/
-     mstart = 1
-     mstop  = ncnt
-
-#else /* (parfmain)*/
-#error 'Illegal parallel compile options'
-#endif /* (parfmain)*/
-  end if                         ! protect for MPI-pi calc.
-
-#else /*   (paramain)*/
-
-  mstart = 1
-  mstop  = ncnt
-
-#endif /*  (paramain)*/
-
-  ISTRT_CHECK = mstart
-  RETURN
-  END function ISTRT_CHECK
+!  integer FUNCTION ISTRT_CHECK(mstop,NCNT)
+!  !
+!  ! for parallel jobs.
+!  ! compute mstart and mstop for each node.
+!  !
+!  use chm_kinds
+!#if KEY_PARALLEL==1
+!  use parallel 
+!#endif
+!
+!  implicit none
+!  integer:: mstop,ncnt
+!  integer:: mstart,ncnt2,icnt
+!  !
+!#if KEY_PARALLEL==1 /*paramain*/
+!  if(QMPI) then                  ! protect for MPI-pi calc.
+!     mstart = 1
+!     mstop  = ncnt
+!  else
+!#if KEY_PARAFULL==1 /*parfmain*/
+!#if KEY_PARASCAL==1 /*parstest*/
+!#error 'Illegal parallel compile options'
+!#endif /* (parstest)*/
+!
+!     if(ncnt.ge.numnod) then 
+!        ncnt2 = ncnt/NUMNOD
+!        mstart =  mynod*ncnt2 + 1
+!        mstop  = (mynod+1)*ncnt2
+!        if(MYNOD.EQ.(NUMNOD-1)) mstop =ncnt
+!     else
+!        ! ncnt < numnod. only do until ncnt = numnod. (each node has a single job to do.)
+!        if(mynod+1 .le. ncnt) then
+!           mstart = mynod + 1
+!           mstop  = mstart
+!        else
+!           ! this part has a potential to cause segmentation fault.
+!           ! mynod+1 > ncnt.. meaning the number of nodes (mynod) is larger tha ncnt.
+!     ! show warning message
+!     write(6,*)'ISTRT_CHECK> Severe warning that numnod > NCNT. Shoule check the code.'
+!           mstart = 0
+!           mstop  = 0
+!        end if
+!     end if
+!
+!#elif KEY_PARASCAL==1 || KEY_SPACDEC==1 /*parfmain*/
+!     mstart = 1
+!     mstop  = ncnt
+!
+!#else /* (parfmain)*/
+!#error 'Illegal parallel compile options'
+!#endif /* (parfmain)*/
+!  end if                         ! protect for MPI-pi calc.
+!
+!#else /*   (paramain)*/
+!
+!  mstart = 1
+!  mstop  = ncnt
+!
+!#endif /*  (paramain)*/
+!
+!  ISTRT_CHECK = mstart
+!  RETURN
+!  END function ISTRT_CHECK
 
 
   subroutine upper_triangle(A,B,N,n1,n2)
@@ -360,90 +360,6 @@
 !  return
 !  end subroutine Vdcos
 !--------------------------------------------------------------
-
-  subroutine set_spline_lookup(inpnt,x_gap,r_val,y_val,coef,y_shift)
-     !
-     ! copied from RXNBF
-     !
-     use chm_kinds
-     use number,only: zero,half,two,four,six
-     implicit none
-
-     integer :: inpnt
-     real(chm_real) :: x_gap,r_val(inpnt),y_val(inpnt),coef(4,inpnt),y_shift
-     integer :: i, j, ncount
-     real(chm_real) :: x,y
-     real(chm_real),pointer :: s_val(:)=>Null()
-
-     allocate(s_val(inpnt))
-     !
-     ! initializing spline coefficients.
-     y_shift = y_val(1)
-     do i = 1,inpnt
-        y_val(I) = y_val(I) - y_shift
-     end do
-     call spline_1d_lookup(r_val,y_val,s_val,x_gap,inpnt)
-
-     !
-     ! set spline coefficients.
-     do i = 1,inpnt-1
-        coef(1,i) = (s_val(i+1)-s_val(i))/(six*x_gap)
-        coef(2,i) = half*s_val(i)
-        coef(3,i) = (y_val(i+1)-y_val(i))/x_gap - (two*x_gap*s_val(i)+x_gap*s_val(i+1))/six
-        coef(4,i) = y_val(i)
-     end do
-
-     deallocate(s_val)
-     return
-     !
-     contains
-        subroutine spline_1d_lookup(X,Y,S,x_gap,N)
-        !
-        ! copied from SETSPLN
-        !
-        INTEGER :: N
-        real(chm_real) :: x(*),y(*),s(*),x_gap
-        !
-        real(chm_real) :: DX1,DX2,DY1,DY2,DXN1,DXN2
-        real(chm_real),pointer :: A(:,:)=>Null()
-        integer        :: i,j, NM2, NM1
-
-        allocate(A(4,N))
-        A(1:4,1:N) =zero
-        NM2 = N-2
-        NM1 = N-1
-        DX1 = X(2)-X(1)
-        DY1 =(Y(2)-Y(1))/x_gap*six
-        Do I = 1,NM2
-           DY2    =(Y(I+2)-Y(I+1))/DX1*six
-           A(1,I) = DX1
-           A(2,I) = four*DX1
-           A(3,I) = DX1
-           A(4,I) = DY2 - DY1
-           DY1    = DY2
-        End do
-
-        do I = 2,NM2
-           A(2,I) = A(2,I)-A(1,I)/A(2,I-1)*A(3,I-1)
-           A(4,I) = A(4,I)-A(1,I)/A(2,I-1)*A(4,I-1)
-        end do
-        !
-        A(4,NM2) = A(4,NM2)/A(2,NM2)
-        do I = 2,NM2
-           J      = NM1 - I
-           A(4,J) =(A(4,J) - A(3,J) * A(4,J+1))/A(2,J)
-        end do
-        !
-        do I = 1,NM2
-           S(I+1) = A(4,I)
-        end do
-
-        S(1) = zero
-        S(N) = zero
-        deallocate(A)
-        RETURN
-        end subroutine spline_1d_lookup
-  end subroutine set_spline_lookup
 
 #else /* (mndo97)*/
   subroutine util_dummy_mnd

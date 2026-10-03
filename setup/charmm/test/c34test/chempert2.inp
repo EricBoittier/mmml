@@ -66,13 +66,18 @@ calc lambm1 = 1 - @lamb
 
 ! setup the system (methanol in truncated octahedron of 250 waters)
 
+! `wrnlev' needs the same node qualifier as `prnlev' above: non-master
+! ranks start with WRNLEV=-5 so that only the master narrates, and a bare
+! `wrnlev' is applied on every rank, which puts them back to work.  Every
+! WRNDIE warning was then emitted once per rank and the copies interleaved
+! with the master's output in a different order on every run.
 prnlev 0 @pnode
-wrnlev 0
+wrnlev 0 @pnode
 set pass a
 goto setup
 label from_setup_a
 prnlev 5 @pnode
-wrnlev 2
+wrnlev 2 @pnode
 
 ! I. normal PERT, full system
 !============================
@@ -114,12 +119,12 @@ dele atom sele all end
 ! setup the system (methanol in truncated octahedron of 250 waters)
 
 prnlev 0 @pnode
-wrnlev 0
+wrnlev 0 @pnode
 set pass b
 goto setup
 label from_setup_b
 prnlev 5 @pnode
-wrnlev 2
+wrnlev 2 @pnode
 
 
 !II. CHEM PERT, full system
@@ -162,12 +167,12 @@ dele atom sele all end
 ! setup the system (methanol in truncated octahedron of 250 waters)
 
 prnlev 0 @pnode
-wrnlev 0
+wrnlev 0 @pnode
 set pass c
 goto setup
 label from_setup_c
 prnlev 5 @pnode
-wrnlev 2
+wrnlev 2 @pnode
 
 ! and throw away the waters
 

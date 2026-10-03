@@ -26,7 +26,15 @@ module pipfm
 !     IUMAS           pointer to dipole mass in heap
 !     UMAS            fictitous mass dipoles of selected atoms
 !     NHFLAG          Nose-Hoover dipole heat bath option
-!     TSTAU           initial dipole velocity
+!     TSTAU           temperature (K) for the Maxwell-Boltzmann draw of
+!                     the initial induced-dipole velocities ("tsta"
+!                     keyword).  TSTAU<=0 leaves the dipoles cold.
+!     QPFVST          one-shot flag: initial dipole velocities still need
+!                     to be seeded (armed for a fresh-start run, cleared
+!                     after PFVSEED runs on the first PFDYN step)
+!     IPFVSD          RNG stream number for the dipole-velocity draw
+!                     (captured from the dynamics ISEED)
+!     IPFVGO          Gaussian option for the draw (captured from IASVEL)
 !     QPFBA           flag of whether PFBA keyword has been found
 !     QDYFST          flag of the first dynamic step
 !     IUINDSV         pointer to dipole moment saved in heap 
@@ -64,6 +72,16 @@ module pipfm
 
       LOGICAL QPIPF,QPFDYN,QMINV,QMPOL,QVPOL,PFBASETUP,QPFBA,QDYFST, &
               QUEANG,QPFEX,QFSTDP
+      ! One-shot first-PFDYN-step flag (fresh start only): draw the
+      ! initial induced-dipole velocities from a Maxwell-Boltzmann
+      ! distribution at temperature TSTAU and seed the Verlet history
+      ! UINDO=UIND-VUIND*DELTA (cold, UINDO=UIND, when TSTAU<=0).  See
+      ! PFVSEED/PFDYN.  Defaults .FALSE. so restart runs (which carry
+      ! UINDO from the restart file) are never overridden.
+      LOGICAL :: QPFVST = .FALSE.
+      ! RNG stream number and Gaussian option for the dipole-velocity
+      ! draw, captured from the dynamics ISEED/IASVEL in DCNTRL.
+      INTEGER IPFVSD,IPFVGO
 
       real(chm_real) UMAS,TSTAU
 
