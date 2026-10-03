@@ -293,7 +293,7 @@ def test_rebind_registers_fail_closed_entry(monkeypatch):
     fake_pycharmm = SimpleNamespace(
         lib=SimpleNamespace(
             charmm=SimpleNamespace(
-                mlpot_set_func=lambda fn: bound.setdefault("fn", fn),
+                mlpot_set_func=lambda fn, _elec: bound.setdefault("fn", fn),
                 mlpot_set_properties=lambda *a: None,
             )
         )
