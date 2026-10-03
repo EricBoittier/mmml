@@ -1101,6 +1101,14 @@ def lock_pure_mm_npt_segment_continuation(kw: dict[str, Any]) -> None:
     kw["new"] = False
 
 
+def _segment_cpt_seed(seg_i: int, **cpt_start_kw: Any) -> Path | None:
+    """EQUI/PROD segment 2+ keeps the live CPT piston; segment 1 may seed one."""
+    if seg_i > 0:
+        lock_pure_mm_npt_segment_continuation(cpt_start_kw["kw"])
+        return None
+    return _maybe_configure_cpt_in_memory_overlap_start(**cpt_start_kw)
+
+
 def _configure_equi_dynamics_start(
     kw: dict[str, Any],
     io: CharmmTrajectoryFiles,
@@ -3186,34 +3194,30 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                         mini_registry=mini_registry,
                         cleanup_registry=cleanup_registry,
                     )
-                    overlap_prior_restart = _overlap_extent_prior_restart(paths, prev_restart)
                     stage_overlap = attach_prior_segment_restart(
                         stage_overlap,
                         segment_index=seg_i,
-                        prev_restart=overlap_prior_restart,
+                        prev_restart=_overlap_extent_prior_restart(paths, prev_restart),
                         out_dir=out_dir,
                         restart_prefix="equi",
                         restart_write=seg_io.restart_write,
                     )
-                    if seg_i > 0:
-                        lock_pure_mm_npt_segment_continuation(kw)
-                        cpt_seed = None
-                    else:
-                        cpt_seed = _maybe_configure_cpt_in_memory_overlap_start(
-                            stage="equi",
-                            kw=kw,
-                            io=seg_io,
-                            use_memory=use_memory,
-                            prev_restart_is_current_state=prev_restart_is_current_state,
-                            stage_overlap=stage_overlap,
-                            mlpot_ctx=ctx,
-                            nstep=nstep,
-                            args=args,
-                            timestep_ps=timestep_ps,
-                            use_pbc=charmm_pbc,
-                            temp=temp,
-                            box_side=box_side,
-                        )
+                    cpt_seed = _segment_cpt_seed(
+                        seg_i,
+                        stage="equi",
+                        kw=kw,
+                        io=seg_io,
+                        use_memory=use_memory,
+                        prev_restart_is_current_state=prev_restart_is_current_state,
+                        stage_overlap=stage_overlap,
+                        mlpot_ctx=ctx,
+                        nstep=nstep,
+                        args=args,
+                        timestep_ps=timestep_ps,
+                        use_pbc=charmm_pbc,
+                        temp=temp,
+                        box_side=box_side,
+                    )
                     if cpt_seed is not None:
                         restart_path = cpt_seed
                     elif seg_i == 0:
@@ -3364,34 +3368,30 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                         mini_registry=mini_registry,
                         cleanup_registry=cleanup_registry,
                     )
-                    overlap_prior_restart = _overlap_extent_prior_restart(paths, prev_restart)
                     stage_overlap = attach_prior_segment_restart(
                         stage_overlap,
                         segment_index=seg_i,
-                        prev_restart=overlap_prior_restart,
+                        prev_restart=_overlap_extent_prior_restart(paths, prev_restart),
                         out_dir=out_dir,
                         restart_prefix="prod",
                         restart_write=seg_io.restart_write,
                     )
-                    if seg_i > 0:
-                        lock_pure_mm_npt_segment_continuation(kw)
-                        cpt_seed = None
-                    else:
-                        cpt_seed = _maybe_configure_cpt_in_memory_overlap_start(
-                            stage="prod",
-                            kw=kw,
-                            io=seg_io,
-                            use_memory=use_memory,
-                            prev_restart_is_current_state=prev_restart_is_current_state,
-                            stage_overlap=stage_overlap,
-                            mlpot_ctx=ctx,
-                            nstep=nstep,
-                            args=args,
-                            timestep_ps=timestep_ps,
-                            use_pbc=charmm_pbc,
-                            temp=temp,
-                            box_side=box_side,
-                        )
+                    cpt_seed = _segment_cpt_seed(
+                        seg_i,
+                        stage="prod",
+                        kw=kw,
+                        io=seg_io,
+                        use_memory=use_memory,
+                        prev_restart_is_current_state=prev_restart_is_current_state,
+                        stage_overlap=stage_overlap,
+                        mlpot_ctx=ctx,
+                        nstep=nstep,
+                        args=args,
+                        timestep_ps=timestep_ps,
+                        use_pbc=charmm_pbc,
+                        temp=temp,
+                        box_side=box_side,
+                    )
                     if cpt_seed is not None:
                         restart_path = cpt_seed
                     dyn_result = run_dynamics_with_io(

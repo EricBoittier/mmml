@@ -458,8 +458,11 @@ def _pycharmm_was_loaded() -> bool:
     """True when libcharmm was actually dlopen'ed during this session."""
     import sys
 
+    # ``pycharmm.dimens`` is imported before libcharmm is dlopen'ed, so a failed
+    # ``import pycharmm`` (no libcharmm) leaves it behind on its own.
     return any(
-        name == "pycharmm" or name.startswith("pycharmm.") for name in sys.modules
+        name == "pycharmm" or (name.startswith("pycharmm.") and name != "pycharmm.dimens")
+        for name in sys.modules
     )
 
 
