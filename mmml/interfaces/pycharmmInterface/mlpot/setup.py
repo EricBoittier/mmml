@@ -224,7 +224,9 @@ class MlpotContext:
             )
 
         pycharmm = _import_pycharmm()
-        pycharmm.lib.charmm.mlpot_set_func(self.mlpot.energy_func)
+        from mmml.interfaces.pycharmmInterface.mlpot.callback_failstop import mlmm_elec_func
+
+        pycharmm.lib.charmm.mlpot_set_func(self.mlpot.energy_func, mlmm_elec_func(self.mlpot))
         ml_indices = np.asarray(self.mlpot.ml_indices, dtype=int)
         ml_z = np.asarray(self.mlpot.ml_Z, dtype=int)
         n_ml = int(self.mlpot.ml_Natoms)

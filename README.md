@@ -48,6 +48,26 @@ make doctor           # mmml doctor — env / CHARMM readiness
 
 Or from a fresh clone: `make install-full` (`uv sync` + native build).
 
+### As a `uv` tool (CLI only, no clone needed)
+
+Installs the `mmml` command into its own isolated environment. Pick one GPU
+extra; JAX's CUDA wheels bring their own CUDA/cuDNN, so only an NVIDIA driver
+is needed on the machine.
+
+```bash
+uv tool install -p 3.13 "mmml[gpu] @ git+https://github.com/EricBoittier/mmml"         # CUDA 13 (SM 7.5+)
+uv tool install -p 3.13 "mmml[gpu-cuda12] @ git+https://github.com/EricBoittier/mmml"  # CUDA 12 (older GPUs/drivers)
+uv tool install -p 3.13 "mmml @ git+https://github.com/EricBoittier/mmml"              # CPU only
+# from a local checkout instead: uv tool install -p 3.13 ".[gpu]"
+```
+
+The `git+` form clones the full repository history (about 2 minutes today).
+Pass `-p 3.13` so uv does not try an incompatible default Python. Add
+`,jax-pme-solver` to the extras for the jax-pme long-range backend. The CUDA 12
+and CUDA 13 extras are mutually exclusive. PyCHARMM still needs the native
+`libcharmm` (see above; point `CHARMM_LIB_DIR` at it); everything else works
+without it.
+
 ### Jupyter kernel (required for the example notebooks)
 
 Register the project venv as its own kernel **once**, and select it in the

@@ -123,19 +123,16 @@ metatomic = [
 # "mic"/ewald path is the default and does not need this; pick_lr_solver() falls
 # back cleanly to mic/nvalchemiops_pme/scafacos when jax-pme isn't installed.
 #
-# Why a git URL rather than a version: PyPI's `jax-pme` is a 0.0.0 placeholder
-# uploaded 2024-11-14, not the current code — the real project publishes nothing
-# there. Note the import name is `jaxpme`, not `jax_pme`.
-#
-# Why the fork rather than lab-cosmo/jax-pme directly: the fork carries no
-# patches (verified identical to upstream main), it exists so the pinned SHA
-# stays reachable if upstream force-pushes or deletes. Re-point at upstream only
-# if you are willing to lose that.
+# PyPI's jax-pme 0.1.0 (lab-cosmo, 2026-09-24) contains the commit previously
+# pinned here by git URL (c5f8272, via the EricBoittier/jax-pme fork) plus two
+# later upstream commits. A PyPI version is required for mmml itself to be
+# publishable: PyPI rejects `@ git+` requirements, even in extras. Note the
+# import name is `jaxpme`, not `jax_pme`.
 #
 # CI installs this extra: 19 test files gate on have_jax_pme_package() and skip
 # silently without it. See .github/workflows/ci.yml.
 jax-pme-solver = [
-    "jax-pme @ git+https://github.com/EricBoittier/jax-pme.git@c5f82726840de0abe29e3074adfaac8c826ffb85",
+    "jax-pme>=0.1.0",
 ]
 
 # CPU MD smoke testing: neighbor-list parity (Vesin), trajectory I/O, no CUDA.
@@ -324,10 +321,22 @@ all-cpu = [
     "mmml[quantum,ml,viz,md,md-cpu,chem,data,notebooks,experiments,plotting]",
 ]
 
-[[tool.uv.index]]
-name = "jax-cuda"
-url = "https://storage.googleapis.com/jax-releases/jax_cuda_releases.html"
-explicit = true
+[tool.uv]
+# CUDA 12 and CUDA 13 extras install different JAX plugins / CuPy wheels that
+# cannot coexist in one environment (JAX loads both plugins and fails). Declare
+# them mutually exclusive so `uv sync --all-extras` errors instead of mixing them.
+conflicts = [
+    [{ extra = "gpu" }, { extra = "gpu-cuda12" }],
+    [{ extra = "nl-gpu" }, { extra = "gpu-cuda12" }],
+    [{ extra = "quantum-gpu" }, { extra = "gpu-cuda12" }],
+    [{ extra = "quantum-gpu" }, { extra = "quantum-gpu-cuda12" }],
+    [{ extra = "gpu" }, { extra = "quantum-gpu-cuda12" }],
+    [{ extra = "all" }, { extra = "all-cuda12" }],
+    [{ extra = "all-cuda13" }, { extra = "all-cuda12" }],
+    [{ extra = "all" }, { extra = "gpu-cuda12" }],
+    [{ extra = "all-cuda13" }, { extra = "gpu-cuda12" }],
+    [{ extra = "all-cuda12" }, { extra = "gpu" }],
+]
 
 [project.scripts]
 mmml = "mmml.cli.__main__:cli"

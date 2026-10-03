@@ -66,7 +66,17 @@ def fetch_charmm_image_nb_stats() -> CharmmImageNbStats | None:
     get_iminb_stats = getattr(charmm_image, "get_iminb_stats", None)
     if get_iminb_stats is None:
         return None
-    raw = get_iminb_stats()
+    try:
+        raw = get_iminb_stats()
+    except (ImportError, OSError):
+        return None
+    except RuntimeError as exc:
+        # c52a1 wraps a missing libcharmm in RuntimeError. That is "no image
+        # API", same as the import-time OSError above, not a probe failure.
+        text = f"{exc} {exc.__cause__ or ''}"
+        if "libcharmm" not in text and "Failed to load CHARMM shared library" not in text:
+            raise
+        return None
     if raw is None:
         return None
     return CharmmImageNbStats(
