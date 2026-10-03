@@ -20,7 +20,9 @@ MODE="${MODE:-big}"
 EPOCHS="${EPOCHS:-100}"
 ENERGY_WEIGHT="${ENERGY_WEIGHT:-0}"
 POLAR_WEIGHT="${POLAR_WEIGHT:-100}"
-RESTART="${RESTART:-$HOME/mmml/ckpts/spice_ef_polar_big/params-best-441a9161-9eca-4563-9957-04c9d2ec5a34.json}"
+# Empty = from scratch. The old spice_ef_polar_big checkpoint never trained
+# (padding NaN), so do not restart from it.
+RESTART="${RESTART:-}"
 CKPT_ROOT="${CKPT_ROOT:-$ROOT/ckpts}"
 SUBMIT="${SUBMIT:-1}"
 

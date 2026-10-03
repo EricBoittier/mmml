@@ -281,6 +281,13 @@ class EFieldPhysNet(nn.Module):
         positions_dst = e3x.ops.gather_dst(positions_flat, dst_idx=dst_idx_flat)
         positions_src = e3x.ops.gather_src(positions_flat, src_idx=src_idx_flat)
         displacements = positions_src - positions_dst  # (B*E, 3)
+        # Padding atoms (Z=0) all sit at the origin, so pad-pad pairs have r_ij = 0
+        # and d|r|/dr = 0/0 is NaN. That NaN reaches the forces, the force loss and
+        # every parameter gradient. Swap in a dummy displacement on pairs that touch
+        # a padding atom (double-where) and drop those edges from the messages, the
+        # Coulomb sum and ZBL below.
+        pair_valid = (atomic_numbers_flat[src_idx_flat] > 0) & (atomic_numbers_flat[dst_idx_flat] > 0)
+        safe_displacements = jnp.where(pair_valid[:, None], displacements, 1.0)
 
         # Build an EF tensor of shape compatible with e3x.nn.Tensor()
         # e3x format is (num_atoms, parity, (lmax+1)^2, features)
@@ -308,12 +315,13 @@ class EFieldPhysNet(nn.Module):
         # Use pre-computed flattened indices (passed from batch dict, computed outside JIT)
         # This avoids creating traced index arrays inside the JIT function
         basis = e3x.nn.basis(
-            displacements,
+            safe_displacements,
             num=self.num_basis_functions,
             max_degree=self.max_degree,
             radial_fn=e3x.nn.reciprocal_bernstein,
             cutoff_fn=functools.partial(e3x.nn.smooth_cutoff, cutoff=self.cutoff)
         )
+        basis = basis * pair_valid.astype(basis.dtype).reshape((-1,) + (1,) * (basis.ndim - 1))
         # Embed atoms (flattened) - atomic_numbers_flat is already ensured to be 1D above
         x = e3x.nn.Embed(num_embeddings=self.max_atomic_number + 1, features=self.features)(atomic_numbers_flat)
 
@@ -341,6 +349,10 @@ class EFieldPhysNet(nn.Module):
         atomic_charges = nn.Dense(1, use_bias=True, kernel_init=jax.nn.initializers.zeros)(x_charge)
         atomic_charges = e3x.nn.silu(atomic_charges)
         atomic_charges = jnp.squeeze(atomic_charges, axis=(-1, -2, -3))  # (B*N,)
+        # Padding atoms (Z=0) carry no charge or dipole: otherwise they leak into
+        # the molecular dipole, the Coulomb energy and the neutrality penalty.
+        real_atom = (atomic_numbers_flat > 0).astype(atomic_charges.dtype)  # (B*N,)
+        atomic_charges = atomic_charges * real_atom
 
         if self.max_degree > 0:
             # if max degree > 0
@@ -358,6 +370,7 @@ class EFieldPhysNet(nn.Module):
             # Extract l=1 components (indices 1-3) and take real part (first parity dimension, index 0)
             # Shape: (B*N, parity, 3, 1) -> take parity=0 (real part) -> (B*N, 3, 1) -> squeeze -> (B*N, 3)
             atomic_dipoles = x_dipole[:, 0, 1:4, 0]  # (B*N, 3) - take first parity (real), l=1 components, squeeze features
+            atomic_dipoles = atomic_dipoles * real_atom[:, None]
             dipoles_batched = atomic_dipoles.reshape(B, N, 3)  # (B, N, 3)
         else:
             dipoles_batched = jnp.zeros((B, N, 3))
@@ -371,7 +384,11 @@ class EFieldPhysNet(nn.Module):
 
         # Center of mass (using atomic masses or uniform weighting)
         # For simplicity, use uniform weighting (geometric center)
-        com = positions_batched.mean(axis=1, keepdims=True)  # (B, 1, 3)
+        # (real atoms only; padding sits at the origin)
+        real_batched = real_atom.reshape(B, N, 1)
+        com = jnp.sum(positions_batched * real_batched, axis=1, keepdims=True) / jnp.maximum(
+            jnp.sum(real_batched, axis=1, keepdims=True), 1.0
+        )  # (B, 1, 3)
         positions_centered = positions_batched - com  # (B, N, 3)
         # Charge contribution: Σ(q_i * (r_i - COM))
         charge_dipole = jnp.sum(charges_batched[:, :, None] * positions_centered, axis=1)  # (B, 3)
@@ -397,7 +414,7 @@ class EFieldPhysNet(nn.Module):
 
         # ZBL nuclear repulsion (short-range, prevents atomic overlap)
         if self.zbl:
-            distances = jnp.linalg.norm(displacements, axis=-1)  # (B*E,)
+            distances = jnp.linalg.norm(safe_displacements, axis=-1)  # (B*E,)
             distances = jnp.maximum(distances, 1e-8)
             atom_mask = jnp.ones(B * N, dtype=positions_flat.dtype)
             batch_mask = jnp.ones_like(distances, dtype=positions_flat.dtype)
@@ -422,7 +439,7 @@ class EFieldPhysNet(nn.Module):
         energy = (atomic_energies * valid_atom).reshape(B, N).sum(axis=1)  # (B,)
 
         # E_coul = (1/2) Σ q_i q_j / r_ij in Hartree with r_ij in Bohr; positions here are Å.
-        r_ij_angstrom = jnp.linalg.norm(displacements, axis=-1)  # (B*E,)
+        r_ij_angstrom = jnp.linalg.norm(safe_displacements, axis=-1)  # (B*E,)
         r_ij_bohr = r_ij_angstrom * ANGSTROM_TO_BOHR
         q_src = atomic_charges[src_idx_flat]  # (B*E,)
         q_dst = atomic_charges[dst_idx_flat]  # (B*E,)
@@ -431,6 +448,7 @@ class EFieldPhysNet(nn.Module):
             sigma = jnp.asarray(self.electrostatics_damping_sigma, dtype=r_ij_angstrom.dtype)
             damping = jax.scipy.special.erf(r_ij_angstrom / sigma)
         pair_coulomb_ha = (q_src * q_dst) * damping / (r_ij_bohr + 1e-10)  # (B*E,) [Ha]
+        pair_coulomb_ha = jnp.where(pair_valid, pair_coulomb_ha, 0.0)
         # Neighbor list counts each undirected pair twice → divide by 2
         edge_batch = batch_segments[dst_idx_flat]  # (B*E,) batch index per edge
         coulomb_ha = jax.ops.segment_sum(pair_coulomb_ha, edge_batch, num_segments=B) / 2.0  # (B,)

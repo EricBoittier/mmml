@@ -8,11 +8,8 @@
 #     scripts/spice_alpha/train_efield_polar.sbatch
 # Full DES (pad=22, polar jacrev): B=64 and B=16 both died in XLA autotune.
 #   --export=ALL,MODE=big,BATCH_SIZE=4,SPLITS=...,CKPT=...
-<<<<<<< HEAD
 # Restart a TIMEOUT run (new CKPT dir; do not overlap a RUNNING job):
 #   --export=ALL,MODE=big,BATCH_SIZE=4,RESTART=.../params-best-<uuid>.json,CKPT=..._r2
-=======
->>>>>>> b1d23f655134539f528f5f8257bb30adca59eef9
 #
 # Do not source scripts/scicore_env.sh for this job: it sets JAX_ENABLE_X64=1
 # and EFieldPhysNet.init fails (e3x Embed float32 vs MessagePass float64).

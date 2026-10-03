@@ -95,19 +95,11 @@ def _unwrap_h5_attr(raw: Any) -> Any:
 
 
 def parse_units_attr(raw: Any) -> dict[str, str]:
-<<<<<<< HEAD
-    """Decode an HDF5 ``units_map`` attribute (JSON string or mapping).
-
-    Real SPICE-α files can store an empty string, ``numpy.bytes_``, or other
-    non-JSON scalars. Those are treated as missing (``{}`` / unknown units)
-    instead of raising ``JSONDecodeError``.
-=======
     """Decode an HDF5 ``units_map`` attribute (JSON object or mapping).
 
     Empty / missing values (published DES370K empty strings, empty bytes)
     are missing metadata (``{}``). A non-empty string that is not a JSON
     object is malformed and raises ``ValueError``.
->>>>>>> b1d23f655134539f528f5f8257bb30adca59eef9
     """
     raw = _unwrap_h5_attr(raw)
     if raw is None:
@@ -120,15 +112,10 @@ def parse_units_attr(raw: Any) -> dict[str, str]:
             return {}
         try:
             loaded = json.loads(text)
-<<<<<<< HEAD
-        except json.JSONDecodeError:
-            return {}
-=======
         except json.JSONDecodeError as exc:
             raise ValueError(
                 f"malformed units_map (not JSON): {text[:80]!r}"
             ) from exc
->>>>>>> b1d23f655134539f528f5f8257bb30adca59eef9
         if isinstance(loaded, dict):
             return {str(k): str(v) for k, v in loaded.items()}
         raise ValueError(
@@ -139,26 +126,6 @@ def parse_units_attr(raw: Any) -> dict[str, str]:
     return {}
 
 
-<<<<<<< HEAD
-def read_units_map(h5: Any) -> dict[str, str]:
-    """File-level ``units_map`` if present, else the first non-empty group's.
-
-    A present but empty file-level attribute (published DES370K HDF5) must
-    not trigger a scan of every molecule group — that is minutes of random
-    HDF5 reads on a shared login filesystem.
-    """
-    attrs = getattr(h5, "attrs", None)
-    if attrs is not None and "units_map" in attrs:
-        return parse_units_attr(attrs.get("units_map"))
-    for name in h5.keys():
-        group = h5[name]
-        group_attrs = getattr(group, "attrs", None)
-        if group_attrs is None or "units_map" not in group_attrs:
-            continue
-        parsed = parse_units_attr(group_attrs.get("units_map"))
-        if parsed:
-            return parsed
-=======
 def _first_molecule_units_map(h5: Any) -> dict[str, str]:
     """``units_map`` on the first molecule group only — never a full-file scan."""
     for name in h5.keys():
@@ -172,7 +139,6 @@ def _first_molecule_units_map(h5: Any) -> dict[str, str]:
         if group_attrs is None or "units_map" not in group_attrs:
             return {}
         return parse_units_attr(group_attrs.get("units_map"))
->>>>>>> b1d23f655134539f528f5f8257bb30adca59eef9
     return {}
 
 
