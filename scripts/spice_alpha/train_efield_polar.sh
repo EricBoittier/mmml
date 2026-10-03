@@ -56,6 +56,9 @@ fi
 if [[ -n "${SAVE_EVERY:-}" ]]; then
   EXTRA+=(--save-every "$SAVE_EVERY")
 fi
+if [[ -n "${LEARNING_RATE:-}" ]]; then
+  EXTRA+=(--learning_rate "$LEARNING_RATE")
+fi
 if [[ -n "${RESTART:-}" ]]; then
   EXTRA+=(--restart "$RESTART")
 fi

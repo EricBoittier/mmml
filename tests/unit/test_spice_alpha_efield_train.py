@@ -264,6 +264,79 @@ def test_spice_alpha_efield_train_step_polar_finite(tmp_path):
     assert np.isfinite(float(eval_polar_mae))
 
 
+def test_spice_alpha_efield_train_step_padded_atoms_finite(tmp_path):
+    """Z=0 padding atoms share the origin, so pad-pad pairs have r_ij = 0.
+    The Coulomb norm's gradient there was NaN, which made every padded batch's
+    force loss NaN and train_step skip the update (loss reported as 1e6)."""
+    written = _spice_efield_splits(tmp_path)
+    train = load_ef_npz(written["train"])
+    n_pad = 2
+    n = train["positions"].shape[0]
+    train["atomic_numbers"] = jnp.concatenate(
+        [train["atomic_numbers"], jnp.zeros((n, n_pad), dtype=jnp.int32)], axis=1
+    )
+    zeros = jnp.zeros((n, n_pad, 3), dtype=jnp.float32)
+    train["positions"] = jnp.concatenate([train["positions"], zeros], axis=1)
+    train["forces"] = jnp.concatenate([train["forces"], zeros], axis=1)
+
+    model = _tiny_model()
+    params = _init_params(model, train, jax.random.PRNGKey(1))
+    optimizer = optax.adam(1e-3)
+    transform_state = optax.contrib.reduce_on_plateau().init(params)
+    batch = prepare_batches(
+        jax.random.PRNGKey(2),
+        train,
+        batch_size=BATCH_SIZE,
+        shuffle=False,
+        rot_augment=False,
+    )[0]
+    out = train_step(
+        model_apply=model.apply,
+        optimizer_update=optimizer.update,
+        batch=batch,
+        batch_size=BATCH_SIZE,
+        opt_state=optimizer.init(params),
+        params=params,
+        ema_params=params,
+        transform_state=transform_state,
+        ema_decay=0.5,
+        forces_weight=1.0,
+        polar_weight=1.0,
+    )
+    new_params, _ema, _opt, loss = out[:4]
+    force_loss = out[12]
+    assert np.isfinite(float(force_loss))
+    assert float(loss) != 1e6
+    assert _max_abs_delta(new_params, params) > 0.0
+
+    # Padding must be invisible: same energy and dipole as the unpadded batch.
+    unpadded = load_ef_npz(written["train"])
+    plain = prepare_batches(
+        jax.random.PRNGKey(2),
+        unpadded,
+        batch_size=BATCH_SIZE,
+        shuffle=False,
+        rot_augment=False,
+    )[0]
+
+    def _apply(b):
+        return model.apply(
+            new_params,
+            atomic_numbers=b["atomic_numbers"],
+            positions=b["positions"],
+            Ef=b["electric_field"],
+            dst_idx_flat=b["dst_idx_flat"],
+            src_idx_flat=b["src_idx_flat"],
+            batch_segments=b["batch_segments"],
+            batch_size=BATCH_SIZE,
+        )
+
+    e_pad, mu_pad = _apply(batch)
+    e_plain, mu_plain = _apply(plain)
+    np.testing.assert_allclose(np.asarray(e_pad), np.asarray(e_plain), rtol=1e-5, atol=1e-5)
+    np.testing.assert_allclose(np.asarray(mu_pad), np.asarray(mu_plain), rtol=1e-5, atol=1e-5)
+
+
 def test_spice_alpha_efield_train_model_one_epoch(tmp_path, capsys):
     written = _spice_efield_splits(tmp_path)
     train = load_ef_npz(written["train"])
@@ -295,3 +368,42 @@ def test_spice_alpha_efield_train_model_one_epoch(tmp_path, capsys):
     logged = capsys.readouterr().out
     assert "polar mae" in logged
     assert "polar MSE" in logged
+
+
+def test_polarizability_jacfwd_matches_jacrev(tmp_path):
+    """Forward-mode dμ/dEf (3 JVPs) must equal the old reverse-mode result
+    (3·B VJPs), both for α itself and for the parameter gradient of the loss."""
+    from mmml.models.efield.model_functions import predicted_polarizability_bohr3
+
+    written = _spice_efield_splits(tmp_path)
+    train = load_ef_npz(written["train"])
+    model = _tiny_model()
+    params = _init_params(model, train, jax.random.PRNGKey(3))
+    batch = prepare_batches(
+        jax.random.PRNGKey(4), train, batch_size=BATCH_SIZE, shuffle=False, rot_augment=False
+    )[0]
+    n_atoms = batch["positions"].shape[0] // BATCH_SIZE
+
+    def alpha(params_, mode):
+        return predicted_polarizability_bohr3(
+            model.apply,
+            params_,
+            batch["atomic_numbers"].reshape(BATCH_SIZE, n_atoms),
+            batch["positions"].reshape(BATCH_SIZE, n_atoms, 3),
+            batch["dst_idx_flat"],
+            batch["src_idx_flat"],
+            batch["batch_segments"],
+            BATCH_SIZE,
+            field_scale=0.001,
+            mode=mode,
+        )
+
+    fwd, rev = alpha(params, "fwd"), alpha(params, "rev")
+    assert fwd.shape == (BATCH_SIZE, 3, 3)
+    np.testing.assert_allclose(np.asarray(fwd), np.asarray(rev), rtol=1e-4, atol=1e-5)
+
+    target = jnp.asarray(batch["polar"])
+    g_fwd = jax.grad(lambda p: jnp.mean((alpha(p, "fwd") - target) ** 2))(params)
+    g_rev = jax.grad(lambda p: jnp.mean((alpha(p, "rev") - target) ** 2))(params)
+    for a, b in zip(jax.tree_util.tree_leaves(g_fwd), jax.tree_util.tree_leaves(g_rev)):
+        np.testing.assert_allclose(np.asarray(a), np.asarray(b), rtol=1e-3, atol=1e-6)

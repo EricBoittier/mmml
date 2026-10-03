@@ -48,3 +48,12 @@ BATCH_SIZE=8 FEATURES=16 MAX_DEGREE=1 \
 ```
 
 Equivalent one-liners: `docs/spice-alpha.md`.
+
+## Full SPICE-α (packed batches, H200)
+
+See `docs/spice-alpha.md` § "Full dataset". `convert_full_ragged.sbatch`
+writes ragged shards; `train_full_packed.sbatch OUT_DIR [opts]` trains with
+packed batches and a molecule split. `eval_polar_dipole.py` and
+`relative_errors.py` report errors in MACE-MDP units / relative to the label
+spread. Note the SiLU charge floor (docs § "Charge head") — prefer
+`--charge-activation linear` for dipoles.

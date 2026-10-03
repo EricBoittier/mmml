@@ -181,7 +181,7 @@ def dipole_derivative_field(
 def dipole_derivative_field_batched(
     model_apply, params, atomic_numbers, positions, Ef,
     dst_idx_flat, src_idx_flat, batch_segments, batch_size,
-    dst_idx=None, src_idx=None,
+    dst_idx=None, src_idx=None, mode="fwd",
 ):
     """Batched polarizability:  alpha_ab = d(mu_a)/d(Ef_b) for B geometries.
 
@@ -218,7 +218,14 @@ def dipole_derivative_field_batched(
         )
         return dipole  # (B, 3)
 
-    return jax.jacrev(dipole_fn)(Ef)  # (B, 3, 3)
+    # The input is the 3-vector Ef but the output is (B, 3), so forward mode
+    # needs 3 JVPs while reverse mode needs 3*B VJPs; jacrev's cost and memory
+    # grow ~B^2 (B=16 asked XLA for ~56 GB on a 24 GB card).
+    if mode == "fwd":
+        return jax.jacfwd(dipole_fn)(Ef)  # (B, 3, 3)
+    if mode == "rev":
+        return jax.jacrev(dipole_fn)(Ef)  # (B, 3, 3)
+    raise ValueError(f"mode must be 'fwd' or 'rev', got {mode!r}")
 
 
 def predicted_polarizability_bohr3(
@@ -233,6 +240,7 @@ def predicted_polarizability_bohr3(
     *,
     field_scale: float = 0.001,
     ef_shared=None,
+    mode: str = "fwd",
 ):
     """Physical polarizability in Bohr³ from ``dμ/dEf`` at a shared field.
 
@@ -257,6 +265,7 @@ def predicted_polarizability_bohr3(
         src_idx_flat,
         batch_segments,
         batch_size,
+        mode=mode,
     )
     scale = jnp.asarray(field_scale, dtype=alpha_raw.dtype)
     return alpha_raw / scale * jnp.asarray(ANGSTROM_TO_BOHR, dtype=alpha_raw.dtype)

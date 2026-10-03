@@ -214,6 +214,73 @@ Pass: manifest still eV; force MAE finite; energy MAE not stuck at hundreds
 of eV (forgot atom refs or double-converted). Fail: dipole MAE ~0.3 on e·Å
 targets (Debye left in `D` — should not happen if `scf_dipole` was used).
 
+## Full dataset: packed batches (one H200)
+
+Padding every frame to 110 atoms wastes most of each batch on the 3–50-atom
+PubChem frames. The packed path stores atoms concatenated (ragged) and fills
+each batch with whole frames up to an atom / edge budget, then pads to that
+fixed budget so XLA compiles once. Edges are a CPU neighbour list.
+
+```bash
+# 1. All 12 HDF5 files -> ragged shards (neutral frames, corrupt α dropped);
+#    one CPU array task per file, ~30 s each except amino_acid_ligand (~2 min)
+sbatch scripts/spice_alpha/convert_full_ragged.sbatch        # -> ~/data/spicealpha/ragged
+
+# 2. Train (split by molecule 90/5/5; per-subset RMSE in e·Å / e·Å²/V each epoch)
+sbatch --qos=h200-1week --time=7-00:00:00 scripts/spice_alpha/train_full_packed.sbatch OUT_DIR \
+  --max-molecules 256 --max-atoms 4096 --max-edges 98304 --cutoff 5.0 \
+  --forces-weight 10 --dipole-weight 10 --polar-weight 10 --epochs 60
+#   --coulomb-cutoff inf --max-coulomb-edges 229376   all intra-frame Coulomb pairs
+#   --charge-activation linear                        see "Charge head" below
+#   --features 128 --num-iterations 2                 606k params, ~same speed
+```
+
+1,666,002 neutral frames (of 1,817,194). One H200 runs ~250 frames/s at 4,096
+atoms / 5 Å (77 GB): ~1 h 40 min per epoch. 6 Å needs 130 GB; 8,192 atoms
+does not fit even with `--gradient-checkpoint`. Model sizes on one H200:
+
+| Config | Params | Epoch | Memory |
+|---|---|---|---|
+| 32 features · 2 iterations | 65k | 0.45 h | 39 GB |
+| 64 · 3 (default) | 278k | 1.7 h | 77 GB |
+| 128 · 2 | 606k | 1.8 h | 130 GB |
+| 64 · 4 | 368k | 2.3 h | 130 GB |
+| 64 · 3 · L=3, or 128 · 3 | 457k / 884k | OOM at 4,096 atoms | — |
+
+`tests/unit/test_efield_packed.py` checks that packed batches reproduce the
+padded model (energy, forces, dipole, α), including long-range Coulomb.
+
+## Pitfalls found in practice
+
+### Charge head: SiLU floors atomic charges at −0.278 e
+
+`EFieldPhysNet` predicts atomic charges as `silu(Dense(x))`. SiLU has a
+minimum of −0.278, so **no atom can carry a charge below −0.278 e**. O and N
+in organic molecules carry roughly −0.5 to −0.9 e (MBIS), and the molecular
+dipole is built mostly from these charges (`μ = Σ qᵢ(rᵢ − r̄) + Σ μᵢ`), so the
+dipole fit is capped by construction; only the atomic-dipole head can
+compensate. Symptoms: dipole RMSE stuck far above the polarizability error
+(full SPICE-α, epoch 1: 0.415 e·Å vs MACE-MDP 0.017), worst on the large
+solvated systems (~1 e·Å).
+
+`charge_activation="linear"` (`--charge-activation linear`) removes the
+floor. The default stays `"silu"` so existing checkpoints reproduce. With
+linear charges the neutrality penalty dominates the first ~1,000 steps
+(charges swing freely), then settles below the SiLU run's.
+
+### Other traps
+
+| Trap | Effect | Fix |
+|---|---|---|
+| Corrupt polarizability labels (3 DES monomer, 37 dipeptide frames, \|α\| ≈ 6×10¹¹ Bohr³) | One valid frame dominates the loss; `best_epoch` stays 1 | `filter_polar_outliers.py`; the ragged converter drops \|α\| > 10⁴ Bohr³ |
+| Padding atoms (Z = 0) all at the origin | r = 0 on pad–pad pairs → NaN gradient, every update skipped | Pair masking in `EFieldPhysNet` (now default) |
+| Padded trainer saves only best-validation weights | With best = epoch 1, "final" params are the epoch-1 model | Packed trainer writes `params-last`, `ema-last`, `params-best` every epoch |
+| `split_npz` splits by frame | Conformers of training molecules in validation; optimistic errors | `split_ragged` holds out whole molecules |
+| History `*_polar_mse` is mean(½·err²) | RMSE from it is √2 too small | `relative_errors.py` corrects; `eval_polar_dipole.py` reports MACE-MDP-style RMSE |
+| α via `jax.jacrev` | 3·B backward passes, memory ∝ B² (B=16 asked 56 GB) | `jax.jacfwd` (3 passes), now default; matches to 1e-4 |
+| Weights | Dipole weight 0.1 leaves dipoles at the mean-predictor level; forces 0 makes forces worse than the mean | Forces ≥ 1 (10 for long runs), dipole 10, polar 10 |
+| sciCORE `sgd01` | Every job sees all GPUs with `CUDA_VISIBLE_DEVICES=0` → jobs share one card | `train_efield_polar.sbatch` picks an unclaimed GPU under a per-node lock |
+
 ## Blockers
 
 | Issue | What to do |
@@ -223,7 +290,7 @@ targets (Debye left in `D` — should not happen if `scf_dipole` was used).
 | No interaction labels | Total-E + atom refs, or pair DES monomers |
 | No CGenFF | `prepare-mm-dataset` on dimers only |
 | No PBC | `--no-pbc` |
-| `N` = 3–110 | Pad per subset (22 / 34 / 50 / 110) |
+| `N` = 3–110 | Packed batches (below), or pad per subset (22 / 34 / 50 / 110) |
 | Charged systems | Filter; paper trained neutrals |
 | Polarizability | PhysNet ignores `polar`. Efield-train: `--polar_weight` + `--polar-units bohr3` + `Ef=0` |
 | `JAX_ENABLE_X64=1` | Breaks `EFieldPhysNet.init`. Use the train wrapper / sbatch (`X64=0`) |
