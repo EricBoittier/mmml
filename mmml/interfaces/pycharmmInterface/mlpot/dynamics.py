@@ -4836,6 +4836,17 @@ def run_dynamics(dynamics_kwargs: dict[str, Any]) -> Any:
     if skip_ase_cold:
         init_velocities = None
         needs_init_velocities_handoff = False
+        # Cold-assign suppression skips the inject path, so
+        # ``_drop_unsafe_bussi_init_velocities_for_dcd`` never runs. Writing a
+        # DCD with ``iasvel=0`` still makes this CHARMM build read COMP
+        # coordinates as velocities. Apply that function's iasvel=1 fallback
+        # without touching COMP. CPT Hoover keeps in-memory velocities on purpose.
+        if (
+            _dynamics_writes_dcd(kw)
+            and int(kw.get("iasvel", 0) or 0) == 0
+            and not (bool(kw.get("cpt")) and "hoover reft" in kw)
+        ):
+            _apply_bussi_iasvel_one_at_ramp_target(kw)
     elif required_handoff_velocity_restart is not None:
         init_velocities = _required_handoff_init_velocities(
             required_handoff_velocity_restart,

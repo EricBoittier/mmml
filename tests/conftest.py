@@ -302,6 +302,7 @@ _BLOCKED_IMPORT_SIGNATURE = "blocked by MMML_DISABLE_CHARMM"
 _CHARMM_UNAVAILABLE_SIGNATURES = (
     "libcharmm.so: cannot open shared object",
     "libcharmm.dylib",
+    "Failed to load CHARMM shared library",
     "No module named 'pycharmm.",
     "'pycharmm' is not a package",
     # The MMML_DISABLE_CHARMM blocker above. Without this the flag turns the
@@ -310,6 +311,15 @@ _CHARMM_UNAVAILABLE_SIGNATURES = (
     # CI-reproduction switch is for.
     _BLOCKED_IMPORT_SIGNATURE,
 )
+
+
+def _charmm_unavailable_message(exc: BaseException) -> str:
+    """Text of ``exc`` plus its cause, for the missing-library signatures."""
+    parts = [str(exc)]
+    cause = exc.__cause__
+    if isinstance(cause, BaseException):
+        parts.append(str(cause))
+    return "\n".join(parts)
 
 
 @pytest.hookimpl(hookwrapper=True)
@@ -327,9 +337,12 @@ def pytest_runtest_call(item: pytest.Item):
     if excinfo is None:
         return
     exc = excinfo[1]
-    if not isinstance(exc, (OSError, ImportError)):
+    # c52a1's loader wraps the dlopen OSError in RuntimeError (and MMML's
+    # CharmmLibraryLoadError is both). Treat that the same as a bare OSError
+    # when the library is simply absent.
+    if not isinstance(exc, (OSError, ImportError, RuntimeError)):
         return
-    message = str(exc)
+    message = _charmm_unavailable_message(exc)
     # The MMML_DISABLE_CHARMM blocker is a deliberate harness decision, so it
     # always yields a skip -- unlike the signatures below it does not describe
     # the machine's real CHARMM state, and a test that clears the flag for its
@@ -455,15 +468,23 @@ _FORCED_EXIT_STATUS: dict[str, int] = {}
 
 
 def _pycharmm_was_loaded() -> bool:
-    """True when libcharmm was actually dlopen'ed during this session."""
+    """True when ``init_charmm`` has run in this session.
+
+    A failed ``import pycharmm`` (no ``libcharmm``) still leaves the package and
+    several submodules in ``sys.modules``. The Fortran finalizer that masks
+    pytest's exit status is installed inside ``init_charmm``, which only runs
+    after a successful load.
+    """
     import sys
 
-    # ``pycharmm.dimens`` is imported before libcharmm is dlopen'ed, so a failed
-    # ``import pycharmm`` (no libcharmm) leaves it behind on its own.
-    return any(
-        name == "pycharmm" or (name.startswith("pycharmm.") and name != "pycharmm.dimens")
-        for name in sys.modules
-    )
+    loader = sys.modules.get("pycharmm.loader")
+    is_initialized = getattr(loader, "is_initialized", None)
+    if not callable(is_initialized):
+        return False
+    try:
+        return bool(is_initialized())
+    except Exception:
+        return False
 
 
 def pytest_sessionfinish(session, exitstatus) -> None:  # noqa: ARG001
