@@ -311,6 +311,12 @@ class _LazyLib:
     def __getattr__(self, name):
         if name.startswith('__') and name.endswith('__'):
             raise AttributeError(name)
+        # MMML patch: ``pycharmm.lib`` is this proxy until something imports the
+        # ``pycharmm.lib`` module, which then replaces the package attribute.
+        # MMML calls ``pycharmm.lib.charmm.<symbol>``, so make ``.charmm`` resolve
+        # to the same library either way instead of a missing ``charmm`` symbol.
+        if name == 'charmm':
+            return self
         return getattr(_loader.handle, name)
 
     def __repr__(self):
