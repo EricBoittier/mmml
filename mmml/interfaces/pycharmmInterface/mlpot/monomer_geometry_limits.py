@@ -9,8 +9,8 @@ import numpy as np
 
 from mmml.utils.geometry_checks import (
     build_bond_exclusion_pairs,
+    min_counted_intramonomer_pair,
     monomer_axis_extent,
-    normalize_atom_pair,
 )
 
 # Defaults when auto limits cannot be computed (legacy behaviour).
@@ -101,27 +101,34 @@ def _min_intra_reference_distance(
     """
     pos = np.asarray(positions, dtype=np.float64)
     si, ei = int(offsets[monomer]), int(offsets[monomer + 1])
+    if ei - si < 2:
+        return None, None
     z_arr = (
         np.asarray(atomic_numbers, dtype=int).reshape(-1)
         if atomic_numbers is not None
         else None
     )
-    best_nonbonded = float("inf")
+    local_excluded: set[tuple[int, int]] = set()
     best_geminal_hh = float("inf")
-    for gi in range(si, ei):
-        for gj in range(gi + 1, ei):
-            pair = normalize_atom_pair(gi, gj)
-            dist = float(np.linalg.norm(pos[gj] - pos[gi]))
-            zi = int(z_arr[gi]) if z_arr is not None and gi < z_arr.size else None
-            zj = int(z_arr[gj]) if z_arr is not None and gj < z_arr.size else None
-            geminal_hh = _is_hydrogen(zi) and _is_hydrogen(zj)
-            if pair in excluded_pairs:
-                if geminal_hh and dist < best_geminal_hh:
-                    best_geminal_hh = dist
-                continue
-            if dist < best_nonbonded:
-                best_nonbonded = dist
-    nonbonded = None if not np.isfinite(best_nonbonded) else float(best_nonbonded)
+    for a, b in excluded_pairs:
+        if not (si <= a < ei and si <= b < ei):
+            continue
+        local_excluded.add((a - si, b - si))
+        if z_arr is None:
+            continue
+        if a >= z_arr.size or b >= z_arr.size:
+            continue
+        if _is_hydrogen(int(z_arr[a])) and _is_hydrogen(int(z_arr[b])):
+            dist = float(np.linalg.norm(pos[b] - pos[a]))
+            if dist < best_geminal_hh:
+                best_geminal_hh = dist
+    found = min_counted_intramonomer_pair(
+        pos[si:ei],
+        local_excluded,
+        None,
+        None,
+    )
+    nonbonded = None if found is None else float(found[0])
     geminal = None if not np.isfinite(best_geminal_hh) else float(best_geminal_hh)
     return nonbonded, geminal
 

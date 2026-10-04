@@ -116,6 +116,42 @@ def test_assert_no_intramonomer_close_contact_raises():
         )
 
 
+def test_neighbor_search_matches_brute_and_periodic_minimum():
+    """Solvent-sized monomers must use the neighbor query, including MIC pairs."""
+    grid = np.array(
+        np.meshgrid(
+            np.arange(2.0, 10.0, 2.0),
+            np.arange(2.0, 10.0, 2.0),
+            np.arange(2.0, 10.0, 2.0),
+            indexing="ij",
+        )
+    ).reshape(3, -1).T
+    block = np.vstack([grid, grid + np.array([1.0, 0.0, 0.0])])
+    assert len(block) > _geom._INTRA_BRUTE_MAX_ATOMS
+    side = 12.0
+    block = block.copy()
+    block[0] = [0.2, 6.0, 6.0]
+    block[1] = [side - 0.25, 6.0, 6.0]
+    cell = np.diag([side, side, side])
+    excluded = {(2, 3), (4, 5)}
+    found = _geom.min_counted_intramonomer_pair(block, excluded, cell, None)
+    brute = _geom._min_counted_pair_brute(block, excluded, cell, None)
+    assert found is not None and brute is not None
+    assert found[0] == pytest.approx(brute[0])
+    assert found[0] == pytest.approx(0.45, abs=1.0e-6)
+    assert {found[1], found[2]} == {0, 1}
+
+
+def test_chunked_pair_scan_matches_brute():
+    rng = np.random.default_rng(2)
+    block = rng.normal(size=(40, 3))
+    excluded = {(0, 1), (1, 2)}
+    found = _geom._min_counted_pair_chunked(block, excluded, None, 0.2)
+    brute = _geom._min_counted_pair_brute(block, excluded, None, 0.2)
+    assert found is not None and brute is not None
+    assert found[0] == pytest.approx(brute[0])
+
+
 def test_collapsed_1_3_geminal_hh_still_flagged():
     """Geminal H–H (PSF 1–3) must not hide sub-threshold clashes."""
     pos = np.array(

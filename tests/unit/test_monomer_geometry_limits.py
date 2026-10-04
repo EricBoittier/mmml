@@ -90,6 +90,23 @@ def test_compute_limits_includes_geminal_hh_spacing() -> None:
     assert limits.intra_min_distance_A == pytest.approx(hh * 0.80, abs=0.02)
 
 
+def test_large_monomer_reference_uses_closest_nonbonded_pair() -> None:
+    """A solvent-sized monomer must not scan every atom pair in Python."""
+    n = 200
+    pos = np.zeros((n, 3), dtype=float)
+    pos[:, 0] = np.arange(n, dtype=float) * 1.5
+    pos[50] = pos[150] + np.array([0.4, 0.0, 0.0])
+    bonds = [(i, i + 1) for i in range(n - 1) if i not in {49, 149}]
+    limits = compute_monomer_geometry_limits(
+        pos,
+        np.array([0, n], dtype=int),
+        bond_pairs_12=bonds,
+        excluded_pairs=frozenset(bonds),
+    )
+    assert limits is not None
+    assert limits.reference_intra_min_A == pytest.approx(0.4)
+
+
 def test_compute_limits_two_monomers_use_worst_case() -> None:
     pos = np.array(
         [

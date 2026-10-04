@@ -1164,6 +1164,202 @@ def build_bond_exclusion_pairs(
     return frozenset(excluded)
 
 
+# Brute pair loops are exact and cheap below this size. Above it a neighbor
+# query replaces an O(N^2) Python scan (a 17489-atom solvent box is ~1.5e8 pairs).
+_INTRA_BRUTE_MAX_ATOMS = 96
+_INTRA_NEIGHBOR_K_MAX = 128
+
+
+def _orthorhombic_box_lengths(cell_mat: np.ndarray | None) -> np.ndarray | None:
+    """Side lengths when ``cell_mat`` is diagonal. ``None`` means no periodic tree."""
+    if cell_mat is None:
+        return None
+    off = np.array(cell_mat, dtype=float, copy=True)
+    np.fill_diagonal(off, 0.0)
+    if float(np.max(np.abs(off))) > 1.0e-8:
+        return None
+    lengths = np.diag(np.asarray(cell_mat, dtype=float))
+    if np.any(lengths <= 0.0):
+        return None
+    return lengths
+
+
+def _local_exclusion_set(
+    excluded_pairs: frozenset[tuple[int, int]] | set[tuple[int, int]],
+    si: int,
+    ei: int,
+) -> set[tuple[int, int]]:
+    local: set[tuple[int, int]] = set()
+    for a, b in excluded_pairs:
+        if si <= a < ei and si <= b < ei:
+            local.add((a - si, b - si))
+    return local
+
+
+def _exact_pair_distance(
+    block: np.ndarray,
+    i: int,
+    j: int,
+    cell_mat: np.ndarray | None,
+    inv_cell: np.ndarray | None,
+) -> float:
+    disp = np.asarray(block[j], dtype=float) - np.asarray(block[i], dtype=float)
+    return float(np.linalg.norm(_mic(disp, cell_mat, inv_cell)))
+
+
+def _min_counted_pair_brute(
+    block: np.ndarray,
+    excluded_local: set[tuple[int, int]],
+    cell_mat: np.ndarray | None,
+    clash_floor: float | None,
+) -> tuple[float, int, int] | None:
+    n = int(block.shape[0])
+    inv = None if cell_mat is None else np.linalg.inv(cell_mat)
+    best_d = float("inf")
+    best: tuple[int, int] | None = None
+    for i in range(n):
+        for j in range(i + 1, n):
+            dist = _exact_pair_distance(block, i, j, cell_mat, inv)
+            if (i, j) in excluded_local and (clash_floor is None or dist >= clash_floor):
+                continue
+            if dist < best_d:
+                best_d = dist
+                best = (i, j)
+    if best is None:
+        return None
+    return best_d, best[0], best[1]
+
+
+def _min_counted_pair_neighbors(
+    block: np.ndarray,
+    excluded_local: set[tuple[int, int]],
+    cell_mat: np.ndarray | None,
+    clash_floor: float | None,
+) -> tuple[float, int, int] | None:
+    """Closest counted pair via a neighbor list.
+
+    Returns ``None`` when the list is not deep enough to prove the minimum
+    (the caller then uses a chunked scan). Orthorhombic cells use periodic
+    neighbors; a non-diagonal cell returns ``None`` immediately.
+    """
+    from scipy.spatial import cKDTree
+
+    n = int(block.shape[0])
+    box = _orthorhombic_box_lengths(cell_mat)
+    if cell_mat is not None and box is None:
+        return None
+    coords = block if box is None else np.mod(block, box)
+    tree = cKDTree(coords, boxsize=box) if box is not None else cKDTree(coords)
+    inv = None if cell_mat is None else np.linalg.inv(cell_mat)
+    k = 2
+    while k <= min(n, _INTRA_NEIGHBOR_K_MAX):
+        kk = min(k, n)
+        dists, idxs = tree.query(coords, k=kk)
+        dists = np.atleast_2d(dists)
+        idxs = np.atleast_2d(idxs)
+        best_tree = float("inf")
+        best_exact = float("inf")
+        best: tuple[int, int] | None = None
+        for i in range(n):
+            for t in range(kk):
+                j = int(idxs[i, t])
+                if j == i or j < 0:
+                    continue
+                a, b = (i, j) if i < j else (j, i)
+                exact = _exact_pair_distance(block, a, b, cell_mat, inv)
+                if (a, b) in excluded_local and (
+                    clash_floor is None or exact >= clash_floor
+                ):
+                    continue
+                tree_d = float(dists[i, t])
+                if tree_d < best_tree:
+                    best_tree = tree_d
+                    best_exact = exact
+                    best = (a, b)
+        kth_min = float(np.min(dists[:, -1]))
+        if best is not None and best_tree <= kth_min + 1.0e-8:
+            return best_exact, best[0], best[1]
+        if kk >= n:
+            if best is None:
+                return None
+            return best_exact, best[0], best[1]
+        k *= 2
+    return None
+
+
+def _min_counted_pair_chunked(
+    block: np.ndarray,
+    excluded_local: set[tuple[int, int]],
+    cell_mat: np.ndarray | None,
+    clash_floor: float | None,
+    *,
+    chunk: int = 256,
+) -> tuple[float, int, int] | None:
+    """Vectorized pair scan used when the neighbor list cannot certify the minimum."""
+    n = int(block.shape[0])
+    inv = None if cell_mat is None else np.linalg.inv(cell_mat)
+    partners: list[np.ndarray] = [np.empty(0, dtype=int) for _ in range(n)]
+    buckets: list[list[int]] = [[] for _ in range(n)]
+    for a, b in excluded_local:
+        buckets[a].append(b)
+        buckets[b].append(a)
+    for i, js in enumerate(buckets):
+        if js:
+            partners[i] = np.asarray(js, dtype=int)
+    best_d = float("inf")
+    best: tuple[int, int] | None = None
+    for i0 in range(0, n, chunk):
+        i1 = min(n, i0 + chunk)
+        disp = block[i0:i1, None, :] - block[None, :, :]
+        if cell_mat is not None:
+            disp = _mic(disp.reshape(-1, 3), cell_mat, inv).reshape(i1 - i0, n, 3)
+        dist = np.linalg.norm(disp, axis=-1)
+        for row, gi in enumerate(range(i0, i1)):
+            values = dist[row]
+            values[gi] = np.inf
+            excl = partners[gi]
+            if excl.size:
+                if clash_floor is None:
+                    values[excl] = np.inf
+                else:
+                    keep = values[excl] < clash_floor
+                    drop = excl[~keep]
+                    if drop.size:
+                        values[drop] = np.inf
+            j = int(np.argmin(values))
+            d = float(values[j])
+            if d < best_d:
+                a, b = (gi, j) if gi < j else (j, gi)
+                best_d = d
+                best = (a, b)
+    if best is None or not np.isfinite(best_d):
+        return None
+    return best_d, best[0], best[1]
+
+
+def min_counted_intramonomer_pair(
+    block: np.ndarray,
+    excluded_local: set[tuple[int, int]],
+    cell_mat: np.ndarray | None,
+    clash_floor: float | None,
+) -> tuple[float, int, int] | None:
+    """Closest counted pair inside one monomer block.
+
+    Returns ``(distance, local_i, local_j)`` with ``local_i < local_j``, or
+    ``None`` when every pair is excluded. Excluded pairs count only when
+    ``clash_floor`` is set and the distance is strictly below it.
+    """
+    n = int(block.shape[0])
+    if n < 2:
+        return None
+    if n <= _INTRA_BRUTE_MAX_ATOMS:
+        return _min_counted_pair_brute(block, excluded_local, cell_mat, clash_floor)
+    found = _min_counted_pair_neighbors(block, excluded_local, cell_mat, clash_floor)
+    if found is not None:
+        return found
+    return _min_counted_pair_chunked(block, excluded_local, cell_mat, clash_floor)
+
+
 def find_worst_intramonomer_close_contact(
     positions: np.ndarray,
     monomer_offsets: np.ndarray,
@@ -1195,25 +1391,23 @@ def find_worst_intramonomer_close_contact(
         n_local = ei - si
         if n_local < 2:
             continue
-        block = pos[si:ei]
-        for local_i in range(n_local):
-            for local_j in range(local_i + 1, n_local):
-                gi = si + local_i
-                gj = si + local_j
-                pair = normalize_atom_pair(gi, gj)
-                disp = _mic_displacement(block[local_i], block[local_j], cell_mat)
-                dist = float(np.linalg.norm(disp))
-                if pair in excluded:
-                    if clash_floor is None or dist >= clash_floor:
-                        continue
-                if dist < best_dist:
-                    best_dist = dist
-                    best = IntramonomerCloseContact(
-                        monomer=mi,
-                        atom_i=gi,
-                        atom_j=gj,
-                        distance_A=dist,
-                    )
+        found = min_counted_intramonomer_pair(
+            pos[si:ei],
+            _local_exclusion_set(excluded, si, ei),
+            cell_mat,
+            clash_floor,
+        )
+        if found is None:
+            continue
+        dist, local_i, local_j = found
+        if dist < best_dist:
+            best_dist = dist
+            best = IntramonomerCloseContact(
+                monomer=mi,
+                atom_i=si + local_i,
+                atom_j=si + local_j,
+                distance_A=dist,
+            )
     return best_dist, best
 
 
