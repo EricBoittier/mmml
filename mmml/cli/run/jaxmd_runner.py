@@ -1017,7 +1017,7 @@ def make_npt_energy_fn(
           atomic-virial form alone misses the MIC image term under PBC.
           ``virial="analytic"`` (what the NpT runner uses) takes the chain rule through the
           strained positions and box: ``(-F) . dreal/dp + (dE/dbox) . dbox/dp``,
-          with ``dE/dbox`` at fixed real positions from ``jax.grad`` (the
+          with ``dE/dbox`` at fixed real positions by forward-mode AD (the
           calculator's lattice shifts are ``-stop_gradient(n) @ box``) -- the
           ``-F^T R + G^T h`` that CHARMM CPT gets from ``strain_virial.py``.
           It needs ``energy_of_real`` to be correctly differentiable in the box at
@@ -1100,10 +1100,18 @@ def make_npt_energy_fn(
                     lambda pp: space.transform(apply_perturbation(box, pp, dtype), frac_d), p
                 )
                 (d_pos,) = vjp_real(-F)
-                # Box channel: dE/dbox at fixed real positions pulled back through box(p).
-                G = jax.grad(lambda b: energy_of_real(real_pos, b, neighbor))(box_eff)
-                _, vjp_box = jax.vjp(lambda pp: apply_perturbation(box, pp, dtype), p)
-                (d_box,) = vjp_box(jnp.asarray(G, dtype=dtype))
+                # Box channel: d/dp E(real fixed, box(p)), forward mode (one JVP per
+                # component of p; reverse mode through the hybrid calculator needed
+                # ~9 GB extra on ACO:379 36 A).
+                def e_of_p(pp):
+                    return energy_of_real(real_pos, apply_perturbation(box, pp, dtype), neighbor)
+
+                flat_p = p.reshape(-1)
+                comps_box = []
+                for k in range(flat_p.size):
+                    t_k = jnp.zeros_like(flat_p).at[k].set(1.0).reshape(p.shape)
+                    comps_box.append(jax.jvp(e_of_p, (p,), (t_k,))[1])
+                d_box = jnp.stack(comps_box).reshape(p.shape)
                 analytic = jnp.asarray(d_pos + d_box, dtype=dtype)
                 dE_dp = jax.lax.cond(
                     jnp.all(jnp.isfinite(analytic)), lambda: analytic, fd_dE_dp
