@@ -190,6 +190,25 @@ def resolve_metatomic_electronic_state(args: object | None) -> MetatomicElectron
     """
     if args is None:
         return MetatomicElectronicState(None, None, None, None, "")
+    from mmml.interfaces.pycharmmInterface.ml_cut import ml_cut_spec_from_args
+
+    cut_spec = ml_cut_spec_from_args(args)
+    if cut_spec is not None:
+        charge = int(cut_spec.charge)
+        spin = int(cut_spec.spin_multiplicity)
+        explicit_charge = getattr(args, "charge", None)
+        explicit_spin = getattr(args, "spin_multiplicity", None)
+        if explicit_charge is not None:
+            charge = int(explicit_charge)
+        if explicit_spin is not None:
+            spin = int(explicit_spin)
+        return MetatomicElectronicState(
+            charge,
+            spin,
+            None,
+            None,
+            f"ml_cut {cut_spec.path.name}",
+        )
     from mmml.interfaces.pycharmmInterface.myoglobin import (
         is_myoglobin_args,
         myoglobin_electronic_state,

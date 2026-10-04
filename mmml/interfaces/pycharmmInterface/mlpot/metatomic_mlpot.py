@@ -564,10 +564,19 @@ def build_metatomic_mlpot_model(
     )
 
     electronic = resolve_metatomic_electronic_state(args)
+    from mmml.interfaces.pycharmmInterface.ml_cut import ml_cut_from_args, ml_cut_spec_from_args
+
     mm_region = str(getattr(args, "mm_region", None) or "none").strip().lower() if args else "none"
     link_atoms: tuple[Any, ...] = ()
     ml_indices: np.ndarray | None = None
-    if mm_region == "propionates":
+    file_cut = ml_cut_from_args(args)
+    cut_label = ""
+    if file_cut is not None:
+        ml_indices, link_atoms = file_cut
+        mode = "whole_system"
+        spec = ml_cut_spec_from_args(args)
+        cut_label = spec.path.name if spec is not None else "ml_cut"
+    elif mm_region == "propionates":
         names = getattr(args, "_cluster_atom_names", None)
         if not names or len(names) != int(z.shape[0]):
             raise RuntimeError(
@@ -582,6 +591,7 @@ def build_metatomic_mlpot_model(
 
         ml_indices, link_atoms = his93_cut_from_args(args)
         mode = "whole_system"
+        cut_label = "His93 CB–CG (the Fe–NE2 bond stays real)"
     if electronic.reason:
         print(
             f"Metatomic electronic state: charge={electronic.charge} "
@@ -589,13 +599,11 @@ def build_metatomic_mlpot_model(
             flush=True,
         )
     if link_atoms:
-        if mm_region == "his93":
-            cut = "His93 CB–CG (the Fe–NE2 bond stays real)"
-        else:
-            cut = "the propionate cuts"
+        if not cut_label:
+            cut_label = "the propionate cuts"
         print(
             f"Metatomic ML/MM: {len(ml_indices)} ML atoms, "
-            f"{len(link_atoms)} ghost hydrogen link atoms on {cut}",
+            f"{len(link_atoms)} ghost hydrogen link atoms ({cut_label})",
             flush=True,
         )
     calc = calculator if calculator is not None else load_metatomic_calculator(ckpt)

@@ -109,11 +109,12 @@ TIP3 farthest from the protein with one CLA, and the PSF charge is 0 (17489
 atoms). The coordinate span is about 57 Å on a side (diagonal about 98 Å), so
 the example sets `--dynamics-max-monomer-extent 120`.
 
-Six-coordinate Fe(II)–CO is a singlet. `--mm-region his93` is the PET region:
+Six-coordinate Fe(II)–CO is a singlet. `ml_cut` points at `yaml/his93.yaml`:
 heme, CO, and the His93 imidazole, charge −2, multiplicity 1, one ghost
-hydrogen on CB–CG. The Fe–NE2 bond stays a real CHARMM bond. Without
-`--mm-region`, PET sees the whole system at the PSF charge (+2 for the vacuum
-crystal, 0 for this periodic cube). Keep the protein CHARMM
+hydrogen on CB–CG. The Fe–NE2 bond stays a real CHARMM bond. Another cut is
+another YAML file and another path. Without `ml_cut`, PET sees the whole
+system at the PSF charge (+2 for the vacuum crystal, 0 for this periodic cube).
+Keep the protein CHARMM
 energy: do not pass `--charmm-zero-energy-terms`. `--counterions` is rejected
 for MBCO.
 
@@ -130,7 +131,7 @@ uv run --no-sync mmml md-system --backend pycharmm \
   --residue MBCO --n-molecules 1 \
   --mbco-crd setup/charmm/test/cbenchtest/mbco/mbco4985w.crd \
   --box-size 55.49456 \
-  --mm-region his93 \
+  --ml-cut examples/pet_omol_heme/yaml/his93.yaml \
   --no-include-mm \
   --dynamics-max-monomer-extent 120 \
   --setup free_nve \

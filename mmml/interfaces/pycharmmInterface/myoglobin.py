@@ -272,6 +272,17 @@ def myoglobin_electronic_state(args: object):
     """Charge and spin for PET on MbCO."""
     from mmml.interfaces.pycharmmInterface.heme_electronic import MetatomicElectronicState
 
+    from mmml.interfaces.pycharmmInterface.ml_cut import ml_cut_spec_from_args
+
+    cut_spec = ml_cut_spec_from_args(args)
+    if cut_spec is not None:
+        return MetatomicElectronicState(
+            int(cut_spec.charge),
+            int(cut_spec.spin_multiplicity),
+            None,
+            None,
+            f"ml_cut {cut_spec.path.name}",
+        )
     mm_region = str(getattr(args, "mm_region", None) or "none").strip().lower()
     if mm_region == "propionates":
         raise ValueError(

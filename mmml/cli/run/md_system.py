@@ -1837,6 +1837,15 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--ml-cut",
+        type=str,
+        default=None,
+        help=(
+            "YAML file describing an ML/MM cut: ml_atoms, ghost-hydrogen links, "
+            "charge, and spin_multiplicity. Replaces --mm-region."
+        ),
+    )
+    parser.add_argument(
         "--mbco-crd",
         type=str,
         default=None,
@@ -3579,6 +3588,7 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
     )
     _append_optional(cmd, "--counterions", getattr(args, "counterions", None))
     _append_optional(cmd, "--mm-region", getattr(args, "mm_region", None))
+    _append_optional(cmd, "--ml-cut", getattr(args, "ml_cut", None))
     _append_optional(cmd, "--mbco-crd", getattr(args, "mbco_crd", None))
     _append_optional(
         cmd,

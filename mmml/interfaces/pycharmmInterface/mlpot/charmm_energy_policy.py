@@ -157,6 +157,7 @@ def resolve_charmm_energy_term_policies(
         # that VDW in JAX, so the protein keeps the CHARMM term.
         partial_protein = (
             str(getattr(args, "mm_region", None) or "").strip().lower() == "his93"
+            or bool(str(getattr(args, "ml_cut", None) or "").strip())
         )
         if not partial_protein and "vdw" not in names:
             names.append("vdw")

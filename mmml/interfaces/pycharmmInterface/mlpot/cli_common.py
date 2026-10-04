@@ -5005,6 +5005,15 @@ def add_mlpot_lr_nonbond_args(parser: argparse.ArgumentParser) -> None:
         ),
     )
     group.add_argument(
+        "--ml-cut",
+        type=str,
+        default=None,
+        help=(
+            "YAML cut file (ml_atoms, links, charge, spin_multiplicity). "
+            "Replaces --mm-region. Paths are relative to the working directory."
+        ),
+    )
+    group.add_argument(
         "--mbco-crd",
         type=str,
         default=None,

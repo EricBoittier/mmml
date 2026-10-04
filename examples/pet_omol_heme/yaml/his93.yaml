@@ -1,0 +1,15 @@
+# PET region for sperm-whale MbCO: His93 imidazole + heme + CO.
+# The backbone and CB stay CHARMM. One ghost hydrogen caps CB–CG.
+# The Fe–NE2 bond is not a link: both atoms are in ml_atoms.
+# Charge −2 and multiplicity 1: six-coordinate Fe(II)–CO.
+charge: -2
+spin_multiplicity: 1
+ml_atoms:
+  - resname: HEME
+  - resname: CO
+  - segid: MB
+    resid: 93
+    names: [CG, ND1, HD1, CD2, HD2, CE1, HE1, NE2, HE2]
+links:
+  - qm: {segid: MB, resid: 93, name: CG}
+    mm: {segid: MB, resid: 93, name: CB}

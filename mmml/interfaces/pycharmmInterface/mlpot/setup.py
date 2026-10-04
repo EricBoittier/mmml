@@ -1081,6 +1081,12 @@ def resolve_mlpot_selection_from_args(args: Any | None) -> Any:
     """
     from mmml.md.ml_region import parse_ml_resnames
 
+    from mmml.interfaces.pycharmmInterface.ml_cut import ml_cut_from_args
+
+    file_cut = ml_cut_from_args(args)
+    if file_cut is not None:
+        ml_indices, _links = file_cut
+        return _select_atoms_cls()(atom_nums=[int(i) for i in ml_indices])
     mm_region = (
         str(getattr(args, "mm_region", None) or "").strip().lower() if args is not None else ""
     )
