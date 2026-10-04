@@ -22,6 +22,18 @@ def _argv_requests_help(argv: list[str]) -> bool:
     return argv_requests_help(argv)
 
 
+def _add_nve_require_float64_arg(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--nve-require-float64",
+        action="store_true",
+        default=False,
+        help=(
+            "jaxmd: refuse NVE unless JAX runs float64 (default: float32 NVE runs "
+            "with a warning; the E_tot drift gate guards conservation)."
+        ),
+    )
+
+
 def build_parser() -> argparse.ArgumentParser:
     # Import argparse helpers here (not at module import) so ``mmml md-system -h``
     # does not pull JAX / the large cli_common runtime module.
@@ -628,6 +640,7 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="EV",
         help="jaxmd: abort NVE when |E_tot| drift exceeds this (eV; <=0 disables).",
     )
+    _add_nve_require_float64_arg(parser)
     parser.add_argument(
         "--nve-etot-drift-rescue",
         action=argparse.BooleanOptionalAction,
@@ -3883,6 +3896,8 @@ def build_command(args: argparse.Namespace) -> tuple[str, list[str]]:
             "--nve-etot-drift-abort-eV",
             getattr(args, "nve_etot_drift_abort_eV", None),
         )
+        if getattr(args, "nve_require_float64", False):
+            cmd.append("--nve-require-float64")
         if getattr(args, "nve_etot_drift_rescue", True):
             cmd.append("--nve-etot-drift-rescue")
         else:
