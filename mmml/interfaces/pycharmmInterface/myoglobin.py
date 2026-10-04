@@ -348,12 +348,45 @@ def psf_per_atom_identity() -> tuple[list[str], list[str], list[int], list[str]]
     return names, atom_resnames, atom_resids, atom_segids
 
 
+def crd_coordinate_table(
+    structure: MbcoStructure,
+) -> dict[tuple[str, int, str], tuple[float, float, float]]:
+    """Coordinates keyed by segid, 1-based residue order, and IUPAC name.
+
+    ``generate`` numbers each segment from 1 in sequence order. The WAT resid
+    column in the crystal CRD skips 13 numbers and runs to 213, so that column
+    is not the PSF resid.
+    """
+    table: dict[tuple[str, int, str], tuple[float, float, float]] = {}
+    ordinal = 0
+    previous: tuple[str, int] | None = None
+    current_segid = ""
+    for atom in structure.atoms:
+        key = (atom.segid, atom.resid)
+        if key != previous:
+            if atom.segid != current_segid:
+                ordinal = 1
+                current_segid = atom.segid
+            else:
+                ordinal += 1
+            previous = key
+        lookup = (atom.segid, ordinal, atom.name)
+        if lookup in table:
+            raise ValueError(
+                f"MbCO residue {atom.segid} {ordinal} has two atoms named {atom.name}"
+            )
+        table[lookup] = atom.xyz
+    if len(table) != len(structure.atoms):
+        raise ValueError(
+            f"MbCO coordinate table has {len(table)} atoms, CRD kept {len(structure.atoms)}"
+        )
+    return table
+
+
 def positions_from_crd(structure: MbcoStructure) -> np.ndarray:
-    """PSF-order coordinates looked up by segid, resid, and IUPAC name."""
-    names, resnames, resids, segids = psf_per_atom_identity()
-    table = {
-        (atom.segid, atom.resid, atom.name): atom.xyz for atom in structure.atoms
-    }
+    """PSF-order coordinates. The PSF resid is the residue's place in its segment."""
+    names, _resnames, resids, segids = psf_per_atom_identity()
+    table = crd_coordinate_table(structure)
     rows: list[tuple[float, float, float]] = []
     missing: list[tuple[str, int, str]] = []
     for segid, resid, name in zip(segids, resids, names):

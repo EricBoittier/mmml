@@ -395,7 +395,17 @@ class MetatomicMlpotModel:
             self._ml_atom_indices = np.asarray(ml_atom_indices, dtype=int).reshape(-1)
         numbers = self._atomic_numbers
         if ml_atomic_numbers is not None:
-            numbers = np.asarray(ml_atomic_numbers, dtype=int)
+            incoming = np.asarray(ml_atomic_numbers, dtype=int).reshape(-1)
+            # MLpot passes Z for the selection only. A link atom's MM index
+            # points into the full system, so the calculator keeps that vector.
+            selection_only = (
+                bool(self._link_atoms)
+                and self._ml_atom_indices is not None
+                and incoming.shape[0] == int(self._ml_atom_indices.shape[0])
+                and incoming.shape[0] != int(numbers.shape[0])
+            )
+            if not selection_only:
+                numbers = incoming
         calc = MetatomicMlpotCalculator(
             self._calc,
             atomic_numbers=numbers,

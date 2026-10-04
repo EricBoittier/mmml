@@ -21,6 +21,7 @@ from mmml.interfaces.pycharmmInterface.myoglobin import (
     HIS93_SEGID,
     MBCO_SPIN_MULTIPLICITY,
     PHEM_SITES,
+    crd_coordinate_table,
     his93_partition_columns,
     load_mbco,
 )
@@ -63,6 +64,48 @@ def test_mbco_crd_keeps_the_crystal_protonation_and_drops_sulfate() -> None:
     assert sum(len(segment.resnames) for segment in waters) == 337
     assert all(atom.resname != "SO4" for atom in structure.atoms)
     assert PHEM_SITES == "MB 93 HEM 1"
+    wat_resids = [atom.resid for atom in structure.atoms if atom.segid == "WAT"]
+    assert 79 not in wat_resids
+    assert max(wat_resids) == 213
+
+
+def test_mbco_stays_one_monomer_and_ml_z_matches_the_selection() -> None:
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+        ml_z_aligned_to_selection,
+        reconcile_n_monomers_with_psf,
+    )
+
+    z = np.arange(3547, dtype=int)
+    args = Namespace(
+        residue="MBCO",
+        composition=None,
+        n_molecules=1,
+        _cluster_atoms_per_list=[3547],
+        quiet=True,
+    )
+    n_mol, per = reconcile_n_monomers_with_psf(args, z, 1)
+    assert n_mol == 1
+    assert per == [3547]
+
+    class _Sel:
+        def get_atom_indexes(self):
+            return [2, 0, 5]
+
+    assert ml_z_aligned_to_selection([10, 11, 12, 13, 14, 15], _Sel()) == [12, 10, 15]
+    assert ml_z_aligned_to_selection([12, 10, 15], _Sel()) == [12, 10, 15]
+
+
+def test_water_coordinates_follow_segment_order_not_the_crystal_resid() -> None:
+    structure = load_mbco()
+    table = crd_coordinate_table(structure)
+    assert len(table) == len(structure.atoms)
+    for ordinal in range(1, 201):
+        assert ("WAT", ordinal, "OH2") in table
+        assert ("WAT", ordinal, "H1") in table
+        assert ("WAT", ordinal, "H2") in table
+    assert ("WAT", 213, "OH2") not in table
+    assert ("MB", 93, "NE2") in table
+    assert ("HEM", 1, "FE") in table
 
 
 def test_proximal_histidine_is_his93_and_the_link_caps_the_imidazole() -> None:

@@ -152,7 +152,13 @@ def resolve_charmm_energy_term_policies(
         getattr(args, "charmm_zero_energy_terms", None) if args is not None else None
     )
     if args is not None and not resolve_periodic_charmm_vdw(args):
-        if "vdw" not in names:
+        # jax_mic drops CHARMM VDW because JAX owns every pair. A His93 cut
+        # leaves the protein on CHARMM, and --no-include-mm does not rebuild
+        # that VDW in JAX, so the protein keeps the CHARMM term.
+        partial_protein = (
+            str(getattr(args, "mm_region", None) or "").strip().lower() == "his93"
+        )
+        if not partial_protein and "vdw" not in names:
             names.append("vdw")
     policies: list[CharmmEnergyTermPolicy] = []
     seen: set[str] = set()

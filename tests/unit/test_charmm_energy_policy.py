@@ -56,6 +56,22 @@ def test_resolve_charmm_energy_term_policies_jax_mic_adds_vdw():
     assert [p.name for p in policies] == ["elec", "bonded", "vdw"]
 
 
+def test_his93_keeps_charmm_vdw_for_the_protein():
+    from mmml.interfaces.pycharmmInterface.mlpot.charmm_energy_policy import (
+        resolve_charmm_energy_term_policies,
+    )
+
+    args = argparse.Namespace(
+        mm_nonbond_mode="jax_mic",
+        periodic_charmm_vdw=False,
+        charmm_zero_energy_terms=None,
+        mm_region="his93",
+        residue="MBCO",
+    )
+    policies = resolve_charmm_energy_term_policies(args)
+    assert [p.name for p in policies] == []
+
+
 def test_nonbond_only_prm_text_removes_vdw_sections():
     from mmml.interfaces.pycharmmInterface.charmm_prm_zero import (
         nonbond_only_prm_text,

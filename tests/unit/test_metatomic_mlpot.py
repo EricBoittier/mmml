@@ -130,6 +130,25 @@ def test_build_metatomic_mlpot_model_injected_calculator(tmp_path: Path) -> None
     assert calc._cell == pytest.approx(12.0)
 
 
+def test_link_atom_calculator_keeps_the_full_atomic_numbers() -> None:
+    from mmml.interfaces.calculators.link_atoms import LinkAtom
+
+    model = MetatomicMlpotModel(
+        DummyAseCalculator(),
+        atomic_numbers=np.array([6, 6, 1, 8], dtype=int),
+        atoms_per_monomer=[4],
+        eval_mode="whole_system",
+        link_atoms=(LinkAtom(qm_index=1, mm_index=2),),
+        ml_atom_indices=np.array([0, 1, 3]),
+    )
+    calc = model.get_pycharmm_calculator(
+        ml_atom_indices=[0, 1, 3],
+        ml_atomic_numbers=[6, 6, 8],
+    )
+    np.testing.assert_array_equal(calc.atomic_numbers, [6, 6, 1, 8])
+    np.testing.assert_array_equal(calc._ml_atom_indices, [0, 1, 3])
+
+
 def test_build_decomposed_mlpot_metatomic_early_return(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

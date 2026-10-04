@@ -1430,6 +1430,18 @@ def reconcile_n_monomers_with_psf(
     if n_atoms <= 0:
         return int(n_mol), getattr(args, "_cluster_atoms_per_list", None)
 
+    from mmml.interfaces.pycharmmInterface.myoglobin import is_myoglobin_args
+
+    # MbCO is one protein. PSF residue boundaries are amino acids and waters,
+    # not monomers; splitting them makes every peptide bond an inter-monomer clash.
+    if is_myoglobin_args(args):
+        existing = getattr(args, "_cluster_atoms_per_list", None)
+        if existing is not None:
+            per = [int(x) for x in existing]
+            if sum(per) == n_atoms:
+                return int(n_mol), per
+        return 1, [n_atoms]
+
     try:
         import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
         from mmml.interfaces.pycharmmInterface.mlpot.trimer_scan import (
@@ -1983,6 +1995,25 @@ def load_cluster_from_artifacts(
 def physnet_ml_atomic_numbers(z: Sequence[int]) -> list[int]:
     """PSF/ASE atomic numbers for MLpot (must match ``setup_calculator`` inputs)."""
     return [int(x) for x in z]
+
+
+def ml_z_aligned_to_selection(ml_Z: Sequence[int], ml_selection: Any) -> list[int]:
+    """Atomic numbers in selection order, one per selected atom.
+
+    Callers often pass the full-system ``Z``. ``pycharmm.MLpot`` unpacks ``ml_Z``
+    into an array of length ``ml_Natoms`` and raises ``IndexError`` when the
+    selection is a subset (MbCO His93 is 83 of 3547).
+    """
+    z = physnet_ml_atomic_numbers(ml_Z)
+    idx = [int(i) for i in ml_selection.get_atom_indexes()]
+    if len(z) == len(idx):
+        return z
+    if idx and min(idx) >= 0 and max(idx) < len(z):
+        return [z[i] for i in idx]
+    raise ValueError(
+        f"MLpot ml_Z length {len(z)} does not match the selection "
+        f"({len(idx)} atoms)"
+    )
 
 
 def load_physnet_mlpot_bundle(
@@ -2667,7 +2698,8 @@ def register_mlpot(
     )
 
     pycharmm = _import_pycharmm()
-    z_ml = physnet_ml_atomic_numbers(ml_Z)
+    z_full = physnet_ml_atomic_numbers(ml_Z)
+    z_ml = ml_z_aligned_to_selection(z_full, ml_selection)
     n_ml = len(ml_selection.get_atom_indexes())
     budget_box = None
     if use_pbc:
