@@ -121,6 +121,10 @@ def test_force_gate_relaxation_targets_the_ceiling_without_the_grms_shortcut():
 
     with mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize."
+        "calculator_mini_supported",
+        return_value=True,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize."
         "minimize_hybrid_calculator_fire_before_sd",
         side_effect=_fire,
     ), mock.patch(
@@ -146,6 +150,52 @@ def test_force_gate_relaxation_targets_the_ceiling_without_the_grms_shortcut():
     assert seen["bfgs"].fmax_ev_a == pytest.approx(2.0)
     assert seen["bfgs"].safe_grms_kcalmol_A is None
     assert seen["bfgs"].max_steps == 30
+
+
+def test_force_gate_metatomic_uses_charmm_abnr_for_the_hot_atom():
+    from mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize import (
+        relax_for_pre_dynamics_force_gate,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import MinimizeWithMlpotConfig
+
+    args = argparse.Namespace(calculator_pre_minimize=True, fire_min_steps=80)
+    seen: dict[str, MinimizeWithMlpotConfig] = {}
+
+    def _mini(config):
+        seen["config"] = config
+        return True
+
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize."
+        "calculator_mini_supported",
+        return_value=False,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize."
+        "_report_pre_dynamics_hot_atoms",
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics.minimize_with_mlpot",
+        side_effect=_mini,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.charmm_grms_after_ener_force",
+        return_value=0.7,
+    ):
+        result = relax_for_pre_dynamics_force_gate(
+            mock.Mock(),
+            args,
+            fmax_ceiling_ev_a=2.0,
+            verbose=False,
+        )
+
+    assert result.ran is True
+    assert result.grms == pytest.approx(0.7)
+    cfg = seen["config"]
+    assert cfg.nstep == 0
+    assert cfg.nstep_abnr == 80
+    assert cfg.calculator_pre_minimize is False
+    assert cfg.sd_converged_grms_kcalmol_A == pytest.approx(0.0)
+    from mmml.interfaces.pycharmmInterface.mmml_calculator import ev2kcalmol
+
+    assert cfg.sd_converged_fmax_kcalmol_A == pytest.approx(2.0 * float(ev2kcalmol))
 
 
 def test_mlpot_hybrid_grms_uses_spherical_fn():

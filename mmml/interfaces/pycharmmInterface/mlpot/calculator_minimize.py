@@ -1705,8 +1705,15 @@ def _report_pre_dynamics_hot_atoms(mlpot_ctx: Any, args: Any, *, verbose: bool) 
             box_A=float(box) if box is not None else None,
         )
         if forces_ev is None:
-            return
-        forces = np.asarray(forces_ev, dtype=np.float64) * float(ev2kcalmol)
+            from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+                charmm_grms_after_ener_force,
+                charmm_total_forces_kcalmol_A,
+            )
+
+            charmm_grms_after_ener_force()
+            forces = charmm_total_forces_kcalmol_A()
+        else:
+            forces = np.asarray(forces_ev, dtype=np.float64) * float(ev2kcalmol)
         names = getattr(args, "_cluster_atom_names", None)
         resnames = getattr(args, "_cluster_atom_resnames", None)
         resids = getattr(args, "_cluster_atom_resids", None)
@@ -1729,6 +1736,61 @@ def _report_pre_dynamics_hot_atoms(mlpot_ctx: Any, args: Any, *, verbose: bool) 
             )
     except Exception as exc:  # noqa: BLE001
         print(f"WARN: could not list hottest atoms ({exc})", flush=True)
+
+
+def _relax_force_gate_with_charmm_abnr(
+    mlpot_ctx: Any,
+    args: Any,
+    *,
+    fmax_ceiling_ev_a: float,
+    context_prefix: str,
+    verbose: bool,
+) -> HybridMinimizeResult:
+    """Continue ABNR on the live USER forces until the hottest atom is under the gate.
+
+    Metatomic has no JAX ``spherical_fn``, so FIRE/BFGS cannot run. Steepest
+    descent already stopped on the RMS, which can leave one atom above 2 eV/Å.
+    """
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+        charmm_grms_after_ener_force,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        MinimizeWithMlpotConfig,
+        minimize_with_mlpot,
+    )
+    from mmml.interfaces.pycharmmInterface.mmml_calculator import ev2kcalmol
+
+    nstep = int(getattr(args, "fire_min_steps", 200) or 200)
+    ceiling_kcal = float(fmax_ceiling_ev_a) * float(ev2kcalmol)
+    if verbose:
+        print(
+            f"{context_prefix}: CHARMM ABNR on USER forces "
+            f"({nstep} steps, stop when max |F| <= {ceiling_kcal:.1f} kcal/mol/Å)",
+            flush=True,
+        )
+    minimize_with_mlpot(
+        MinimizeWithMlpotConfig(
+            nstep=0,
+            nstep_abnr=nstep,
+            nprint=max(1, nstep // 8),
+            verbose=verbose,
+            mlpot_ctx=mlpot_ctx,
+            pyCModel=getattr(mlpot_ctx, "pyCModel", None),
+            title="Pre-dynamics force gate",
+            skip_if_crd_exists=False,
+            save=False,
+            show_energy=False,
+            calculator_pre_minimize=False,
+            # GRMS is already under 1 kcal/mol/Å. Keep minimizing for the hot atom.
+            sd_converged_grms_kcalmol_A=0.0,
+            sd_converged_fmax_kcalmol_A=ceiling_kcal,
+            sd_abort_on_grms_increase=False,
+        )
+    )
+    return HybridMinimizeResult(
+        grms=float(charmm_grms_after_ener_force()),
+        ran=True,
+    )
 
 
 def relax_for_pre_dynamics_force_gate(
@@ -1758,6 +1820,14 @@ def relax_for_pre_dynamics_force_gate(
             flush=True,
         )
     _report_pre_dynamics_hot_atoms(mlpot_ctx, args, verbose=verbose)
+    if not calculator_mini_supported(mlpot_ctx):
+        return _relax_force_gate_with_charmm_abnr(
+            mlpot_ctx,
+            args,
+            fmax_ceiling_ev_a=ceiling,
+            context_prefix=context_prefix,
+            verbose=verbose,
+        )
     fire = coerce_hybrid_minimize_result(
         minimize_hybrid_calculator_fire_before_sd(
             mlpot_ctx,

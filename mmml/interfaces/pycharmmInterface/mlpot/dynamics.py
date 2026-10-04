@@ -1112,6 +1112,9 @@ class MinimizeWithMlpotConfig:
     sd_stall_grms_abs_tol: float = 0.1
     # Skip remaining SD/ABNR chunks when hybrid GRMS is at/below this ceiling.
     sd_converged_grms_kcalmol_A: Optional[float] = 1.0
+    # Also stop when the largest atomic force is at or below this (kcal/mol/Å).
+    # ``None`` leaves the GRMS ceiling as the only early stop.
+    sd_converged_fmax_kcalmol_A: Optional[float] = None
     # ASE BFGS on hybrid calculator before MLpot SD (geometry_stress / high GRMS).
     calculator_pre_minimize: bool = True
     calculator_minimize_steps: int = 200
@@ -1505,6 +1508,35 @@ def _resolved_sd_converged_grms(config: MinimizeWithMlpotConfig) -> float:
     if config.sd_converged_grms_kcalmol_A is not None:
         return float(config.sd_converged_grms_kcalmol_A)
     return _DEFAULT_SD_CONVERGED_GRMS_KCALMOL_A
+
+
+def _should_stop_sd_on_converged_fmax(
+    config: MinimizeWithMlpotConfig,
+    *,
+    pass_label: str,
+    step_label: str,
+) -> bool:
+    """True when the largest CHARMM atomic force is under the optional ceiling."""
+    ceiling = getattr(config, "sd_converged_fmax_kcalmol_A", None)
+    if ceiling is None or float(ceiling) <= 0.0:
+        return False
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+        charmm_total_forces_kcalmol_A,
+    )
+    from mmml.interfaces.pycharmmInterface.mlpot.grms_thresholds import (
+        atomic_fmax_kcalmol_A,
+    )
+
+    fmax = atomic_fmax_kcalmol_A(charmm_total_forces_kcalmol_A())
+    if fmax > float(ceiling):
+        return False
+    if config.verbose:
+        print(
+            f"MLpot SD converged ({pass_label}, {step_label}): "
+            f"max |F| {fmax:.1f} <= {float(ceiling):.1f} kcal/mol/Å",
+            flush=True,
+        )
+    return True
 
 
 def _should_stop_sd_on_converged_grms(
@@ -2121,6 +2153,15 @@ def _run_minimize_in_chunks(
                 flush=True,
             )
         return MlpotSdChunkResult(completed=True, last_grms=float(initial_grms))
+    if _should_stop_sd_on_converged_fmax(
+        config,
+        pass_label=pass_label,
+        step_label=f"before {method}",
+    ):
+        return MlpotSdChunkResult(
+            completed=True,
+            last_grms=float(initial_grms) if initial_grms is not None else None,
+        )
 
     last_good_positions: np.ndarray | None = None
     last_good_grms: float | None = None
@@ -2226,6 +2267,12 @@ def _run_minimize_in_chunks(
                     f"hybrid GRMS {grms:.4f} <= {float(converged_grms):.4f} kcal/mol/Å",
                     flush=True,
                 )
+            return MlpotSdChunkResult(completed=True, last_grms=grms)
+        if _should_stop_sd_on_converged_fmax(
+            config,
+            pass_label=pass_label,
+            step_label=f"after chunk {chunk_index}",
+        ):
             return MlpotSdChunkResult(completed=True, last_grms=grms)
         if grms is not None and is_exact_sd_plateau(previous_grms, grms):
             target = _resolved_sd_converged_grms(config)
