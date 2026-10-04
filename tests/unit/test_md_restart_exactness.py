@@ -140,3 +140,48 @@ def test_pre_dynamics_seed_uses_xold_positions(tmp_path):
     ):
         assert _seed_charmm_coords_from_dynamics_restart(res, quiet=True) is True
     np.testing.assert_array_equal(sync.call_args[0][0], _section(STUB, "!XOLD, YOLD, ZOLD")[:60].reshape(20, 3))
+
+
+def _route_args(tmp_path, src, *, setup, stages):
+    import argparse
+
+    return argparse.Namespace(backend="pycharmm", continue_from=src, restart_from=None,
+                              output_dir=tmp_path / "out", md_stage=None, md_stages=stages,
+                              setup=setup, n_equi_segments=1, n_prod_segments=1)
+
+
+def test_continue_from_charmm_dynamics_restart_becomes_in_place_readyn(tmp_path):
+    from mmml.cli.run.md_system import route_pycharmm_continue_from_dynamics_restart
+
+    args = _route_args(tmp_path, STUB, setup="pbc_nve", stages="nve")
+    dst = route_pycharmm_continue_from_dynamics_restart(args)
+    assert dst == tmp_path / "out" / "nve.res" and dst.read_bytes() == STUB.read_bytes()
+    assert args.restart_from == dst and args.continue_from is None
+
+
+def test_continue_from_routing_requires_matching_ensemble_and_single_stage(tmp_path):
+    from mmml.cli.run.md_system import route_pycharmm_continue_from_dynamics_restart
+
+    # plain (non-CPT) restart must not feed a CPT stage: READYN would read no piston
+    assert route_pycharmm_continue_from_dynamics_restart(
+        _route_args(tmp_path, STUB, setup="pbc_npt", stages="equi")) is None
+    assert route_pycharmm_continue_from_dynamics_restart(
+        _route_args(tmp_path, STUB, setup="pbc_nve", stages="heat,nve")) is None
+    npz = tmp_path / "state.npz"
+    npz.write_bytes(b"")
+    assert route_pycharmm_continue_from_dynamics_restart(
+        _route_args(tmp_path, npz, setup="pbc_nve", stages="nve")) is None
+
+
+def test_cpt_restart_is_recognised(tmp_path):
+    from mmml.cli.run.md_system import _charmm_dynamics_restart_kind
+
+    xtl = (" !CRYSTAL PARAMETERS\n"
+           " 0.300000000000000D+02 0.000000000000000D+00 0.300000000000000D+02\n"
+           " 0.000000000000000D+00 0.000000000000000D+00 0.300000000000000D+02\n"
+           "-0.161387886868731D-05 0.000000000000000D+00 0.000000000000000D+00\n\n")
+    text = STUB.read_text()
+    p = tmp_path / "equi.res"
+    p.write_text(text.replace(" !NATOM", xtl + " !NATOM", 1))
+    assert _charmm_dynamics_restart_kind(p) == "cpt"
+    assert _charmm_dynamics_restart_kind(STUB) == "plain"
