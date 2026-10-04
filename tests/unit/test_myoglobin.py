@@ -62,7 +62,7 @@ def test_mbco_crd_keeps_the_crystal_protonation_and_drops_sulfate() -> None:
     ]
     assert sum(len(segment.resnames) for segment in waters) == 337
     assert all(atom.resname != "SO4" for atom in structure.atoms)
-    assert PHEM_SITES == "MB 93, HEM 1"
+    assert PHEM_SITES == "MB 93 HEM 1"
 
 
 def test_proximal_histidine_is_his93_and_the_link_caps_the_imidazole() -> None:

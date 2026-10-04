@@ -94,7 +94,7 @@ The ghost is not an MM particle; its force is split onto the two real atoms.
 `--residue MBCO` builds one protein from CHARMM's crystal CRD
 `setup/charmm/test/data/mbco_au_q0.crd` (153 residues, actual HSD/HSE/HSP
 protonation, 73-atom heme, CO, and 337 TIP3). Sulfate in that file is omitted.
-`PRES PHEM` bonds His93 NE2 to the iron (`MB 93, HEM 1`) with angle and
+`PRES PHEM` bonds His93 NE2 to the iron (`MB 93 HEM 1`) with angle and
 dihedral autogeneration off. The protein segment uses NTER/CTER. Heme and CO
 use `first none last none`.
 
@@ -128,7 +128,7 @@ uv run --no-sync mmml md-system --backend pycharmm \
 ```
 
 `yaml/mbco_nve.yaml` is the same run. Pass: the log contains
-`MbCO: 3547 atoms` and `PHEM MB 93, HEM 1`, then
+`MbCO: 3547 atoms` and `PHEM MB 93 HEM 1`, then
 `Metatomic electronic state: charge=-2 spin_multiplicity=1`, minimization
 finishes, and the short NVE stays finite. Fragment evaluation is rejected.
 

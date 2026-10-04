@@ -28,7 +28,8 @@ from mmml.interfaces.pycharmmInterface.heme_library import heme_toppar_paths
 MBCO_RESIDUE_NAMES = frozenset({"MBCO", "MYOGLOBIN"})
 DEFAULT_MBCO_CRD = Path("setup/charmm/test/data/mbco_au_q0.crd")
 
-PHEM_SITES = "MB 93, HEM 1"
+# CHARMM tokenizes on whitespace, so a comma stays on the resid ("93,").
+PHEM_SITES = "MB 93 HEM 1"
 HIS93_SEGID = "MB"
 HIS93_RESID = 93
 # Six-coordinate Fe(II)–CO. The bare RESI HEME triplet does not apply.
