@@ -977,6 +977,9 @@ def apply_npt_perturbation(box, perturbation, dtype=None):
     return p @ box_m
 
 
+NPT_VIRIAL_ENV = "MMML_NPT_VIRIAL"
+
+
 def _npt_fd_step(dtype) -> float:
     return 1.0e-3 if jnp.dtype(dtype) == jnp.float32 else 1.0e-5
 
@@ -988,6 +991,7 @@ def make_npt_energy_fn(
     dtype=None,
     fd_step: float | None = None,
     apply_perturbation: Callable = None,
+    virial: str | None = None,
 ):
     """Build the fractional-coordinate NpT energy handed to ``npt_nose_hoover``.
 
@@ -1010,12 +1014,31 @@ def make_npt_energy_fn(
         * perturbation: dE/dp for the LINEAR strain box -> box * p. At p = 1
           that is ``-sum_i F_i . r_i`` plus the explicit box dependence of the
           calculator (minimum-image shifts, cutoffs/switching, Ewald/PME). The
-          atomic-virial form alone misses the MIC image term under PBC, so the
-          derivative is taken as a central difference of the real energy along
-          the strain, which includes every channel by construction.
+          atomic-virial form alone misses the MIC image term under PBC.
+          ``virial="analytic"`` (what the NpT runner uses) takes the chain rule through the
+          strained positions and box: ``(-F) . dreal/dp + (dE/dbox) . dbox/dp``,
+          with ``dE/dbox`` at fixed real positions from ``jax.grad`` (the
+          calculator's lattice shifts are ``-stop_gradient(n) @ box``) -- the
+          ``-F^T R + G^T h`` that CHARMM CPT gets from ``strain_virial.py``.
+          It needs ``energy_of_real`` to be correctly differentiable in the box at
+          fixed real positions (true for the hybrid calculator, verified against
+          the strain difference and CHARMM's VIRI in float64; NOT true for an
+          energy that maps real -> fractional through jax-md's custom-JVP
+          ``space.transform``). ``virial="fd"`` (default here, or
+          ``MMML_NPT_VIRIAL=fd`` for the runner) is the central
+          difference of the real energy along the strain. In float32 that
+          difference is dominated by the hybrid energy's rounding noise
+          (0.05-0.3 eV between E(1+h) and E(1-h) on ACO:266 / DCM:308 32 A
+          boxes, i.e. 0.1-2 katm per call at h = 1e-3); the analytic form
+          differences no energies. A non-finite analytic value falls back to
+          the difference.
     """
     dtype = _JAXMD_DTYPE if dtype is None else dtype
     h_default = _npt_fd_step(dtype) if fd_step is None else float(fd_step)
+    if virial is None:
+        virial = os.environ.get(NPT_VIRIAL_ENV, "").strip().lower() or "fd"
+    if virial not in ("analytic", "fd"):
+        raise ValueError(f"virial must be 'analytic' or 'fd', got {virial!r}")
     if apply_perturbation is None:
         apply_perturbation = apply_npt_perturbation
 
@@ -1054,20 +1077,38 @@ def make_npt_energy_fn(
             grad_pert = None
         else:
             p = jnp.asarray(perturbation, dtype=dtype)
-            flat = p.reshape(-1)
-            h = jnp.asarray(h_default, dtype=dtype)
-            comps = []
-            for k in range(flat.size):
-                e_k = jnp.zeros_like(flat).at[k].set(h)
-                e_plus = raw_fn(frac_pos, box=box, neighbor=neighbor,
-                                perturbation=(flat + e_k).reshape(p.shape))
-                e_minus = raw_fn(frac_pos, box=box, neighbor=neighbor,
-                                 perturbation=(flat - e_k).reshape(p.shape))
-                comps.append((e_plus - e_minus) / (2.0 * h))
-            grad_pert = jnp.asarray(
-                jnp.stack(comps).reshape(p.shape) * g,
-                dtype=jnp.asarray(perturbation).dtype,
-            )
+
+            def fd_dE_dp():
+                flat = p.reshape(-1)
+                h = jnp.asarray(h_default, dtype=dtype)
+                comps = []
+                for k in range(flat.size):
+                    e_k = jnp.zeros_like(flat).at[k].set(h)
+                    e_plus = raw_fn(frac_pos, box=box, neighbor=neighbor,
+                                    perturbation=(flat + e_k).reshape(p.shape))
+                    e_minus = raw_fn(frac_pos, box=box, neighbor=neighbor,
+                                     perturbation=(flat - e_k).reshape(p.shape))
+                    comps.append((e_plus - e_minus) / (2.0 * h))
+                return jnp.asarray(jnp.stack(comps).reshape(p.shape), dtype=dtype)
+
+            if virial == "fd":
+                dE_dp = fd_dE_dp()
+            else:
+                frac_d = jnp.asarray(frac_pos, dtype=dtype)
+                # Positions channel: dE/dreal = -F pulled back through real(p).
+                _, vjp_real = jax.vjp(
+                    lambda pp: space.transform(apply_perturbation(box, pp, dtype), frac_d), p
+                )
+                (d_pos,) = vjp_real(-F)
+                # Box channel: dE/dbox at fixed real positions pulled back through box(p).
+                G = jax.grad(lambda b: energy_of_real(real_pos, b, neighbor))(box_eff)
+                _, vjp_box = jax.vjp(lambda pp: apply_perturbation(box, pp, dtype), p)
+                (d_box,) = vjp_box(jnp.asarray(G, dtype=dtype))
+                analytic = jnp.asarray(d_pos + d_box, dtype=dtype)
+                dE_dp = jax.lax.cond(
+                    jnp.all(jnp.isfinite(analytic)), lambda: analytic, fd_dE_dp
+                )
+            grad_pert = jnp.asarray(dE_dp * g, dtype=jnp.asarray(perturbation).dtype)
         return (grad_frac, None, None, grad_pert, None, None)
 
     npt_energy_fn.defvjp(fwd, bwd)
@@ -1819,8 +1860,12 @@ def set_up_nhc_sim_routine(
         # ``perturbation`` is jax-md's LINEAR strain (box -> box * p); see
         # make_npt_energy_fn. It used to be applied as p**(1/3), which made
         # the barostat see P_kin + P_vir/3.
+        # Barostat virial: analytic strain derivative (-F.r + dE/dbox . box), as
+        # CHARMM CPT uses; the float32 energy difference was noise-dominated.
+        # MMML_NPT_VIRIAL=fd restores the central difference.
         _npt_energy_fn_raw, npt_energy_fn = make_npt_energy_fn(
             _npt_energy_of_real, _npt_force_of_real, dtype=_JAXMD_DTYPE,
+            virial=os.environ.get(NPT_VIRIAL_ENV, "").strip().lower() or "analytic",
         )
         npt_energy_fn = jit(npt_energy_fn)
         init_fn, apply_fn = simulate.npt_nose_hoover(
