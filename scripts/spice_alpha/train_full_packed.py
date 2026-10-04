@@ -50,6 +50,14 @@ def parse_args():
     ap.add_argument("--cutoff", type=float, default=6.0)
     ap.add_argument("--gradient-checkpoint", action="store_true")
     ap.add_argument("--charge-activation", choices=("silu", "linear"), default="silu")
+    ap.add_argument("--no-pseudotensors", dest="pseudotensors", action="store_false",
+                    help="even-parity features only (e3x include_pseudotensors=False)")
+    ap.add_argument("--parity-correct", action="store_true",
+                    help="parity-correct field input and atomic-dipole head (see docs/spice-alpha.md)")
+    ap.add_argument("--strict-pseudotensors", action="store_true",
+                    help="pass include_pseudotensors to every e3x layer, not only MessagePass")
+    ap.add_argument("--no-atomic-dipoles", dest="atomic_dipoles", action="store_false",
+                    help="molecular dipole from atomic charges only (no per-atom dipole head)")
     # loss weights (0.5·squared error per component, as the padded trainer)
     ap.add_argument("--energy-weight", type=float, default=0.0)
     ap.add_argument("--forces-weight", type=float, default=1.0)
@@ -103,9 +111,11 @@ def main():
                     coulomb_cutoff=args.coulomb_cutoff, max_coulomb_edges=args.max_coulomb_edges)
     model = EFieldPhysNet(features=args.features, max_degree=args.max_degree,
                           num_iterations=args.num_iterations, num_basis_functions=args.num_basis_functions,
-                          cutoff=args.cutoff, max_atomic_number=55, include_pseudotensors=True,
+                          cutoff=args.cutoff, max_atomic_number=55, include_pseudotensors=args.pseudotensors,
                           field_scale=0.001, zbl=False, electrostatics_damping_sigma=4.0, packed=True,
-                          charge_activation=args.charge_activation)
+                          charge_activation=args.charge_activation, atomic_dipoles=args.atomic_dipoles,
+                          parity_correct_field=args.parity_correct, parity_correct_dipole=args.parity_correct,
+                          strict_pseudotensors=args.strict_pseudotensors)
     M = spec.max_molecules
     first = {k: jnp.asarray(v) for k, v in next(iter_packed_batches(data, train_idx[:M], spec)).items()}
     params = model.init(jax.random.PRNGKey(args.seed), atomic_numbers=first["atomic_numbers"],

@@ -233,6 +233,9 @@ sbatch --qos=h200-1week --time=7-00:00:00 scripts/spice_alpha/train_full_packed.
 #   --coulomb-cutoff inf --max-coulomb-edges 229376   all intra-frame Coulomb pairs
 #   --charge-activation linear                        see "Charge head" below
 #   --features 128 --num-iterations 2                 606k params, ~same speed
+#   --parity-correct                                  mirror-equivariant model; see "Parity" below
+#   --energy-weight 1                                 train energies (per-element references fit on train)
+#   --restart ckpt/analysis/ep09/params.json          start from saved weights (fresh optimizer/schedule)
 ```
 
 1,666,002 neutral frames (of 1,817,194). One H200 runs ~250 frames/s at 4,096
@@ -267,6 +270,50 @@ solvated systems (~1 e·Å).
 floor. The default stays `"silu"` so existing checkpoints reproduce. With
 linear charges the neutrality penalty dominates the first ~1,000 steps
 (charges swing freely), then settles below the SiLU run's.
+
+### Parity: field input and dipole head break mirror symmetry
+
+e3x stores features as `(atoms, parity, (l+1)², features)`; parity index 0
+holds parity-even irreps (scalars, axial vectors), index 1 parity-odd ones
+(pseudoscalars, polar vectors). With `include_pseudotensors=True` (the
+default) two places in `EFieldPhysNet` use the wrong slot:
+
+1. **Field input.** `[1, E]` is broadcast to both parity channels, so a
+   constant lands in the pseudoscalar slot and E in the axial-vector slot.
+   The constant never changes sign under reflection and leaks into every
+   scalar.
+2. **Atomic-dipole head.** Its `TensorDense` (e3x default
+   `include_pseudotensors=True`) returns both parities, and the head reads
+   index 0, l = 1: an axial vector.
+
+The two partly cancel (the constant pseudoscalar turns polar vectors into the
+axial slot), so the trained models fit dipoles, but a molecule and its mirror
+image get different predictions even at zero field. Measured on 108 test
+frames (`scripts/spice_alpha/symmetry_tests.py`): ΔU 73–117 meV, forces
+15–19%, dipoles 21–34%, α 0.5–0.7%; rotations, translations and
+permutations stay at float32 level. The hidden "pseudoscalars" are about 99%
+parity-even, so the model cannot represent handedness consistently. This
+matters for any chirality work and for flexible molecules generally, since
+most 3D conformers are chiral even without a stereocentre.
+
+`--parity-correct` (`parity_correct_field=True`, `parity_correct_dipole=True`)
+places the constant in the scalar slot and E in the polar slot only, and reads
+the dipole from the polar slot. A randomly initialised model is then exactly
+mirror-equivariant (float32 level) and its pseudoscalars flip sign
+(`tests/unit/test_efield_parity.py`). The defaults stay off so existing
+checkpoints reproduce; switching them on for trained weights is not a fix
+(the weights rely on the bugs: dipole mirror error 91%, |Σq| ≈ 3.4 e), so a
+parity-correct model needs training from scratch.
+
+Related: `e3x.nn.Tensor` and `TensorDense` also default to
+`include_pseudotensors=True`; only `MessagePass` receives the model flag, so
+`--no-pseudotensors` alone still creates pseudotensors in those layers. Add
+`--strict-pseudotensors` to pass the flag to every layer.
+
+`scripts/spice_alpha/chiral_survey.py` lists stereocentres per test-split
+molecule (RDKit, from the 3D geometry): 3,512 of 4,525 test molecules have at
+least one, nearly all amino-acid and dipeptide entries, none of the DES
+monomers or dimers.
 
 ### Other traps
 

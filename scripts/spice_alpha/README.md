@@ -57,3 +57,20 @@ packed batches and a molecule split. `eval_polar_dipole.py` and
 `relative_errors.py` report errors in MACE-MDP units / relative to the label
 spread. Note the SiLU charge floor (docs § "Charge head") — prefer
 `--charge-activation linear` for dipoles.
+
+Analysing packed checkpoints (training overwrites `params-best.json` each
+epoch, so copy it to `CKPT/analysis/epNN/params.json` first):
+
+- `eval_full_packed.{py,sbatch} CKPT PARAMS OUT` — whole test/valid splits,
+  RMSE/MAE per subset, per-frame predictions, charge statistics by element.
+- `eval_detail_packed.{py,sbatch} CKPT PARAMS OUT` — per-atom charges,
+  atomic dipoles and forces on a test subsample, plus captured layer
+  features for one example frame per subset.
+- `chiral_survey.py H5_DIR RAGGED_DIR SPLIT OUT` — frame → HDF5 group map and
+  RDKit stereocentres per molecule.
+- `symmetry_tests.{py,sbatch} CKPT PARAMS FRAMES_JSON OUT` — rotation,
+  inversion, mirror, translation and permutation tests at several fields,
+  pseudoscalar parity per layer, conservation and μ vs −∂U/∂E
+  (docs § "Parity").
+
+The `.sbatch` wrappers default to the `l40s` partition.

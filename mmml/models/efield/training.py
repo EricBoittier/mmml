@@ -257,6 +257,24 @@ class EFieldPhysNet(nn.Module):
     # -0.278 e, too shallow for O/N in organic molecules (MBIS ~ -0.5..-0.9 e);
     # "linear" leaves them unbounded.
     charge_activation: str = "silu"
+    # atomic_dipoles=False drops the per-atom dipole head, so the molecular
+    # dipole is the charge term Σ q_i (r_i - c) alone.
+    atomic_dipoles: bool = True
+    # parity_correct_field=True places the field input with its true parity when
+    # pseudotensors are on: the constant 1 only in the scalar slot and E only in
+    # the polar-vector slot. The default (False) broadcasts [1, E] to both parity
+    # channels, which puts a parity-even constant into the pseudoscalar slot and
+    # E into the axial-vector slot, breaking mirror/inversion symmetry. Kept as
+    # the default so existing checkpoints reproduce; see symmetry_tests.py.
+    parity_correct_field: bool = False
+    # parity_correct_dipole=True reads the atomic dipole from the polar-vector
+    # slot. The head's TensorDense (e3x default include_pseudotensors=True)
+    # returns both parities; the default reads parity index 0, the axial vector.
+    parity_correct_dipole: bool = False
+    # e3x.nn.Tensor / TensorDense default to include_pseudotensors=True, so with
+    # include_pseudotensors=False only MessagePass drops pseudotensors.
+    # strict_pseudotensors=True passes the flag to every e3x layer.
+    strict_pseudotensors: bool = False
 
     def setup(self):
         if self.zbl:
@@ -315,6 +333,11 @@ class EFieldPhysNet(nn.Module):
         # Broadcast parity dim to match x (1 if no pseudotensors, 2 if include_pseudotensors)
         parity_dim = 2 if self.include_pseudotensors else 1
         xEF = jnp.broadcast_to(xEF, (A, parity_dim, 4, self.features))
+        if self.include_pseudotensors and self.parity_correct_field:
+            # e3x parity axis: index 0 = parity +1 (scalars, axial vectors),
+            # index 1 = parity -1 (pseudoscalars, polar vectors).
+            keep = jnp.asarray([[1.0, 0.0, 0.0, 0.0], [0.0, 1.0, 1.0, 1.0]], xEF.dtype)
+            xEF = xEF * keep[None, :, :, None]
 
 
         xEF = e3x.nn.change_max_degree_or_type(xEF, max_degree=self.max_degree,
@@ -342,9 +365,10 @@ class EFieldPhysNet(nn.Module):
             x = e3x.nn.add(x, y)
             x = e3x.nn.silu(x)
             # Couple EF - xEF shape matches x on the parity axis
-            xEF = e3x.nn.Tensor()(x, xEF)
+            pt = {"include_pseudotensors": self.include_pseudotensors} if self.strict_pseudotensors else {}
+            xEF = e3x.nn.Tensor(**pt)(x, xEF)
             x = e3x.nn.add(x, xEF)
-            x = e3x.nn.TensorDense(max_degree=self.max_degree)(x)
+            x = e3x.nn.TensorDense(max_degree=self.max_degree, **pt)(x)
             x = e3x.nn.add(x, y)
             
         # Save original x before reduction for dipole prediction
@@ -365,7 +389,7 @@ class EFieldPhysNet(nn.Module):
         real_atom = (atomic_numbers_flat > 0).astype(atomic_charges.dtype)  # (B*N,)
         atomic_charges = atomic_charges * real_atom
 
-        if self.max_degree > 0:
+        if self.max_degree > 0 and self.atomic_dipoles:
             # if max degree > 0
             # Predict atomic dipoles (3D vector per atom)
             # Use original x_orig and change max_degree to 1
@@ -380,7 +404,8 @@ class EFieldPhysNet(nn.Module):
             x_dipole = e3x.nn.silu(x_dipole)
             # Extract l=1 components (indices 1-3) and take real part (first parity dimension, index 0)
             # Shape: (B*N, parity, 3, 1) -> take parity=0 (real part) -> (B*N, 3, 1) -> squeeze -> (B*N, 3)
-            atomic_dipoles = x_dipole[:, 0, 1:4, 0]  # (B*N, 3) - take first parity (real), l=1 components, squeeze features
+            parity_idx = 1 if (self.parity_correct_dipole and x_dipole.shape[1] == 2) else 0
+            atomic_dipoles = x_dipole[:, parity_idx, 1:4, 0]  # (B*N, 3) - take first parity (real), l=1 components, squeeze features
             atomic_dipoles = atomic_dipoles * real_atom[:, None]
         else:
             atomic_dipoles = jnp.zeros((A, 3), dtype=positions_flat.dtype)
