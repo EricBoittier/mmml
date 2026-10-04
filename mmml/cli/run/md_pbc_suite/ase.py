@@ -1463,7 +1463,15 @@ def run_md(
     path_prefix: Path | None = None,
     timings: dict[str, float] | None = None,
     log_lines: list[str] | None = None,
+    initial_velocities: np.ndarray | None = None,
 ) -> dict:
+    """Run one ASE leg.
+
+    ``initial_velocities`` (ASE metal units) continues a handoff exactly; without
+    it velocities are drawn from Maxwell-Boltzmann at the mode's temperature.
+    Integrator-internal state (Nose-Hoover chain, NPT ``eta``/``h`` rates,
+    Langevin RNG) is not part of the handoff and restarts from zero.
+    """
     dt = dt_fs * units.fs
     traj_chunk_frames = int(max(0, traj_chunk_frames))
     traj_paths: list[Path] = []
@@ -1477,15 +1485,19 @@ def run_md(
     rng = np.random.default_rng(seed)
     t_md_entry = _tmark()
 
-    if mode == "nve":
-        MaxwellBoltzmannDistribution(atoms, temperature_K=nve_temp_K, rng=rng)
+    def _init_velocities(temperature_K: float) -> None:
+        if initial_velocities is not None:
+            atoms.set_velocities(np.asarray(initial_velocities, dtype=float))
+            return
+        MaxwellBoltzmannDistribution(atoms, temperature_K=temperature_K, rng=rng)
         Stationary(atoms)
         ZeroRotation(atoms)
+
+    if mode == "nve":
+        _init_velocities(nve_temp_K)
         dyn = VelocityVerlet(atoms, timestep=dt)
     elif mode == "nvt_nhc":
-        MaxwellBoltzmannDistribution(atoms, temperature_K=nvt_temp_K, rng=rng)
-        Stationary(atoms)
-        ZeroRotation(atoms)
+        _init_velocities(nvt_temp_K)
         tdamp = 100.0 * dt
         dyn = NoseHooverChainNVT(
             atoms,
@@ -1496,9 +1508,7 @@ def run_md(
             tloop=1,
         )
     elif mode == "nvt_langevin":
-        MaxwellBoltzmannDistribution(atoms, temperature_K=nvt_temp_K, rng=rng)
-        Stationary(atoms)
-        ZeroRotation(atoms)
+        _init_velocities(nvt_temp_K)
         dyn = Langevin(
             atoms,
             timestep=dt,
@@ -1511,9 +1521,7 @@ def run_md(
         from ase.md.npt import NPT
 
         require_ase_npt_stress(atoms)
-        MaxwellBoltzmannDistribution(atoms, temperature_K=nvt_temp_K, rng=rng)
-        Stationary(atoms)
-        ZeroRotation(atoms)
+        _init_velocities(nvt_temp_K)
         ttime = 25.0 * units.fs
         ptime = 75.0 * units.fs
         bulk_modulus_eV_A3 = 0.6
@@ -2716,7 +2724,28 @@ def main(argv: list[str] | None = None) -> int:
         elif run_local_skip_pre_min:
             fmin = float(np.abs(atoms.get_forces()).max())
 
+        handoff_velocities = None
+        if (
+            handoff_in is not None
+            and handoff_in.velocities is not None
+            and bool(getattr(args, "continue_velocities", True))
+            and run_local_skip_pre_min
+        ):
+            from mmml.cli.run.md_handoff import (
+                ang_ps_velocities_to_jaxmd_metal,
+                handoff_velocities_as_ang_ps,
+                remove_center_of_mass_velocity_ang_ps,
+            )
+
+            v_ang_ps = handoff_velocities_as_ang_ps(handoff_in)
+            if getattr(args, "handoff_velocity_remove_drift", True):
+                v_ang_ps = remove_center_of_mass_velocity_ang_ps(
+                    v_ang_ps, np.asarray(atoms.get_masses(), dtype=float)
+                )
+            handoff_velocities = ang_ps_velocities_to_jaxmd_metal(v_ang_ps)
+            _tlog(f"{key}: continuing handoff velocities ({len(handoff_velocities)} atoms)", timing_log)
         res = run_md(
+            initial_velocities=handoff_velocities,
             name=key,
             atoms=atoms,
             mode=mode,

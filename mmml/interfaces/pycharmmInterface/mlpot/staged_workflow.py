@@ -267,7 +267,7 @@ def _seed_charmm_coords_from_dynamics_restart(
         return False
 
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
-        read_restart_coordinates,
+        read_restart_positions,
     )
     from mmml.interfaces.pycharmmInterface.mlpot.setup import sync_charmm_positions
 
@@ -276,7 +276,10 @@ def _seed_charmm_coords_from_dynamics_restart(
     for candidate in _restart_coord_read_candidates(path):
         if not candidate.is_file():
             continue
-        pos = read_restart_coordinates(candidate)
+        # positions (XOLD), not the leap-frog step displacement in !X, Y, Z:
+        # seeding the displacement collapsed the box before the force gate
+        # (sparse-dimer cap overflow on an in-place --restart-from equi.res).
+        pos = read_restart_positions(candidate)
         if pos is not None:
             used = candidate
             break

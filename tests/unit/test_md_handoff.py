@@ -144,7 +144,8 @@ def test_akma_handoff_conversion_is_angstrom_per_ps_not_per_fs() -> None:
         [[1.5, -2.0, 0.5], [-3.0, 1.0, 2.0], [0.25, -0.5, 1.25]],
         dtype=float,
     )
-    velocities_akma = velocities_ang_ps * np.sqrt(masses)[:, None] * 1000.0
+    # CHARMM !VX, VY, VZ: plain Å per AKMA time unit (TIMFAC ps), not mass-weighted.
+    velocities_akma = velocities_ang_ps * 4.88882129e-02
     handoff = MdHandoffState(
         positions=np.zeros((3, 3)),
         atomic_numbers=z,
@@ -1393,9 +1394,6 @@ def test_res_to_trajectory_akma_velocities_round_trip(tmp_path: Path) -> None:
         res_to_trajectory,
         save_handoff_npz,
     )
-    from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
-        ase_to_charmm_akma_velocities,
-    )
 
     positions = np.array(
         [
@@ -1406,7 +1404,6 @@ def test_res_to_trajectory_akma_velocities_round_trip(tmp_path: Path) -> None:
         dtype=float,
     )
     z = np.array([6, 1, 1], dtype=np.int32)
-    masses = np.array([12.011, 1.008, 1.008], dtype=float)
     v_ase = np.array(
         [
             [0.01, -0.02, 0.03],
@@ -1415,7 +1412,12 @@ def test_res_to_trajectory_akma_velocities_round_trip(tmp_path: Path) -> None:
         ],
         dtype=float,
     )
-    v_akma = ase_to_charmm_akma_velocities(v_ase, masses)
+    # CHARMM restart velocities: Å per AKMA time unit (not mass-weighted).
+    from ase import units as ase_units
+
+    from mmml.cli.run.md_handoff import CHARMM_AKMA_TIME_PS
+
+    v_akma = v_ase * 1000.0 * ase_units.fs * CHARMM_AKMA_TIME_PS
     cell = np.diag([30.0, 30.0, 30.0])
     handoff = MdHandoffState(
         positions=positions,
