@@ -818,6 +818,28 @@ def _model_atomic_numbers(pyCModel: Any) -> np.ndarray | None:
     return np.asarray(raw, dtype=int)
 
 
+def _z_on_ml_atoms(
+    z: np.ndarray,
+    ml_idx: np.ndarray,
+    *,
+    n_ml: int,
+) -> np.ndarray | None:
+    """Selection-length Z, gathering a full-system vector on ``ml_idx`` when needed.
+
+    His93 keeps the full protein Z on the model (a link atom indexes an MM
+    atom) while ``pycharmm.MLpot`` stores only the 83 selected atoms.
+    """
+    arr = np.asarray(z, dtype=int).reshape(-1)
+    if int(arr.shape[0]) == int(n_ml):
+        return arr
+    idx = np.asarray(ml_idx, dtype=int).reshape(-1)
+    if int(idx.shape[0]) != int(n_ml) or idx.size == 0:
+        return None
+    if int(idx.min()) < 0 or int(idx.max()) >= int(arr.shape[0]):
+        return None
+    return arr[idx]
+
+
 def verify_mlpot_charmm_atom_consistency(
     ctx: MlpotContext,
     *,
@@ -855,8 +877,11 @@ def verify_mlpot_charmm_atom_consistency(
         issues.append(f"PSF mass count {masses.shape[0]} != natom {n_psf}")
     if z_psf.shape[0] != n_psf:
         issues.append(f"PSF-derived Z length {z_psf.shape[0]} != natom {n_psf}")
-    if z_ctx.shape[0] != n_ml:
-        issues.append(f"context ml_Z length {z_ctx.shape[0]} != ml_Natoms {n_ml}")
+    if z_ctx.shape[0] not in (n_ml, n_psf):
+        issues.append(
+            f"context ml_Z length {z_ctx.shape[0]} is neither ml_Natoms {n_ml} "
+            f"nor CHARMM natom {n_psf}"
+        )
     if z_mlpot.shape[0] != n_ml:
         issues.append(f"mlpot.ml_Z length {z_mlpot.shape[0]} != ml_Natoms {n_ml}")
     partial_ml = n_ml < n_psf
@@ -865,23 +890,51 @@ def verify_mlpot_charmm_atom_consistency(
     if not partial_ml and n_ml != n_psf:
         issues.append(f"ml_Natoms {n_ml} != CHARMM natom {n_psf}")
 
+    z_ctx_ml = _z_on_ml_atoms(z_ctx, ml_idx, n_ml=n_ml)
+    z_mlpot_ml = _z_on_ml_atoms(z_mlpot, ml_idx, n_ml=n_ml)
+
     if expected_z is not None:
-        z_exp = np.asarray(expected_z, dtype=int)
-        if z_exp.shape != z_ctx.shape or not np.array_equal(z_exp, z_ctx):
+        z_exp = np.asarray(expected_z, dtype=int).reshape(-1)
+        z_exp_ml = _z_on_ml_atoms(z_exp, ml_idx, n_ml=n_ml)
+        same_vector = z_exp.shape == z_ctx.shape and np.array_equal(z_exp, z_ctx)
+        same_region = (
+            z_exp_ml is not None
+            and z_ctx_ml is not None
+            and np.array_equal(z_exp_ml, z_ctx_ml)
+        )
+        if not (same_vector or same_region):
             issues.append(
                 "cluster build Z != MlpotContext.ml_Z "
                 f"(build {z_exp.tolist()[:8]}... vs ctx {z_ctx.tolist()[:8]}...)"
             )
 
     z_psf_ml = z_psf[ml_idx] if partial_ml else z_psf
-    if not np.array_equal(z_psf_ml, z_ctx):
-        mismatch = np.where(z_psf_ml != z_ctx)[0]
+    if (
+        z_ctx_ml is None
+        or z_psf_ml.shape != z_ctx_ml.shape
+        or not np.array_equal(z_psf_ml, z_ctx_ml)
+    ):
+        if (
+            z_ctx_ml is not None
+            and z_psf_ml.shape == z_ctx_ml.shape
+        ):
+            mismatch = np.where(z_psf_ml != z_ctx_ml)[0]
+            where = ", ".join(str(int(i)) for i in mismatch[:12])
+            if mismatch.size > 12:
+                where += "..."
+        else:
+            where = (
+                f"lengths PSF {z_psf_ml.shape[0]} vs context "
+                f"{None if z_ctx_ml is None else z_ctx_ml.shape[0]}"
+            )
         issues.append(
-            "PSF mass-derived Z != MlpotContext.ml_Z at ML indices "
-            + ", ".join(str(int(i)) for i in mismatch[:12])
-            + ("..." if mismatch.size > 12 else "")
+            "PSF mass-derived Z != MlpotContext.ml_Z at ML indices " + where
         )
-    if not np.array_equal(z_ctx, z_mlpot):
+    if (
+        z_ctx_ml is None
+        or z_mlpot_ml is None
+        or not np.array_equal(z_ctx_ml, z_mlpot_ml)
+    ):
         issues.append("MlpotContext.ml_Z != mlpot.ml_Z (registration vs MLpot object)")
 
     if partial_ml:
@@ -900,13 +953,24 @@ def verify_mlpot_charmm_atom_consistency(
     z_calc = _calculator_atomic_numbers(ctx)
     if z_calc is None:
         issues.append("MLpot calculator has no ml_atomic_numbers / atomic_numbers")
-    elif z_calc.shape != z_mlpot.shape or not np.array_equal(z_calc, z_mlpot):
-        issues.append("calculator atomic numbers != mlpot.ml_Z")
+    else:
+        z_calc_ml = _z_on_ml_atoms(z_calc, ml_idx, n_ml=n_ml)
+        if (
+            z_calc_ml is None
+            or z_mlpot_ml is None
+            or not np.array_equal(z_calc_ml, z_mlpot_ml)
+        ):
+            issues.append("calculator atomic numbers != mlpot.ml_Z on the ML atoms")
 
     z_model = _model_atomic_numbers(ctx.pyCModel)
     if z_model is not None:
-        if z_model.shape != z_ctx.shape or not np.array_equal(z_model, z_ctx):
-            issues.append("pyCModel._atomic_numbers != MlpotContext.ml_Z")
+        z_model_ml = _z_on_ml_atoms(z_model, ml_idx, n_ml=n_ml)
+        if (
+            z_model_ml is None
+            or z_ctx_ml is None
+            or not np.array_equal(z_model_ml, z_ctx_ml)
+        ):
+            issues.append("pyCModel._atomic_numbers != MlpotContext.ml_Z on the ML atoms")
 
     issues.extend(_masses_consistent_with_z(masses, z_psf))
 

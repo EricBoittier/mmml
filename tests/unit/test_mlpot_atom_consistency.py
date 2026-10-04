@@ -5,6 +5,7 @@ from __future__ import annotations
 from unittest.mock import MagicMock
 
 import numpy as np
+import pytest
 
 from mmml.interfaces.pycharmmInterface.cutoffs import CutoffParameters
 from mmml.interfaces.pycharmmInterface.mlpot.hybrid_mlpot import (
@@ -147,3 +148,89 @@ def test_verify_mlpot_charmm_atom_consistency_accepts_deferred_calculator(monkey
         context="staged dynamics",
         quiet=True,
     )
+
+
+def _install_fake_psf(monkeypatch, z: np.ndarray) -> None:
+    import sys
+    import types
+
+    import ase.data
+
+    fake_psf = types.ModuleType("pycharmm.psf")
+    fake_psf.get_amass = lambda: ase.data.atomic_masses_common[z]
+    fake_psf.get_atype = lambda: np.array(["X"] * len(z), dtype=str)
+    fake_coor = types.ModuleType("pycharmm.coor")
+    fake_coor.get_natom = lambda: len(z)
+    fake_pycharmm = types.ModuleType("pycharmm")
+    fake_pycharmm.psf = fake_psf
+    fake_pycharmm.coor = fake_coor
+    monkeypatch.setitem(sys.modules, "pycharmm", fake_pycharmm)
+    monkeypatch.setitem(sys.modules, "pycharmm.psf", fake_psf)
+    monkeypatch.setitem(sys.modules, "pycharmm.coor", fake_coor)
+    monkeypatch.setitem(
+        sys.modules,
+        "mmml.interfaces.pycharmmInterface.import_pycharmm",
+        types.ModuleType("mmml.interfaces.pycharmmInterface.import_pycharmm"),
+    )
+    monkeypatch.setattr(
+        "mmml.interfaces.pycharmmInterface.utils.get_Z_from_psf",
+        lambda: np.array(z, dtype=int),
+    )
+
+
+def test_partial_ml_accepts_full_system_z_beside_the_selection(monkeypatch) -> None:
+    """His93: model/context keep every atom; MLpot stores the 83-atom selection."""
+    z_full = np.array([6, 1, 7, 8, 26, 6], dtype=int)
+    ml_idx = np.array([1, 4], dtype=int)
+    z_ml = z_full[ml_idx]
+
+    class _Numbers:
+        def __init__(self, values: np.ndarray) -> None:
+            self.atomic_numbers = values
+            self._atomic_numbers = values
+
+    mlpot = MagicMock()
+    mlpot.calculator = _Numbers(z_full)
+    mlpot.ml_Z = z_ml
+    mlpot.ml_indices = ml_idx
+    mlpot.ml_Natoms = int(ml_idx.size)
+    ctx = MlpotContext(
+        mlpot=mlpot,
+        pyCModel=_Numbers(z_full),
+        params=None,
+        model=None,
+        ml_Z=z_full,
+    )
+    _install_fake_psf(monkeypatch, z_full)
+    verify_mlpot_charmm_atom_consistency(
+        ctx,
+        expected_z=z_full,
+        context="staged dynamics",
+        quiet=True,
+    )
+
+
+def test_partial_ml_mismatch_does_not_broadcast(monkeypatch) -> None:
+    z_full = np.array([6, 1, 7, 8, 26, 6], dtype=int)
+    ml_idx = np.array([1, 4], dtype=int)
+
+    class _Numbers:
+        def __init__(self, values: np.ndarray) -> None:
+            self.atomic_numbers = values
+            self._atomic_numbers = values
+
+    mlpot = MagicMock()
+    mlpot.calculator = _Numbers(z_full)
+    mlpot.ml_Z = np.array([1, 1], dtype=int)
+    mlpot.ml_indices = ml_idx
+    mlpot.ml_Natoms = 2
+    ctx = MlpotContext(
+        mlpot=mlpot,
+        pyCModel=_Numbers(z_full),
+        params=None,
+        model=None,
+        ml_Z=z_full,
+    )
+    _install_fake_psf(monkeypatch, z_full)
+    with pytest.raises(RuntimeError, match="ML atoms"):
+        verify_mlpot_charmm_atom_consistency(ctx, context="staged dynamics", quiet=True)
