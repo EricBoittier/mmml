@@ -24,6 +24,7 @@ Covered by ``tests/unit/test_staged_workflow_helpers.py``.
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
@@ -294,6 +295,90 @@ def _can_seed_stage_from_memory(
         and Path(rread).is_file()
         and _valid_restart_file_lazy(rread) is None
     )
+
+
+def _stage_of_dynamics_restart(path: Path | str | None) -> str | None:
+    """``heat`` / ``nve`` / ``equi`` / ``prod`` for a stage restart filename."""
+    if path is None:
+        return None
+    name = Path(path).name.lower()
+    match = re.fullmatch(r"(heat|nve|equi|prod)(?:\.(\d+))?\.res", name)
+    if match is None:
+        return None
+    return match.group(1)
+
+
+def _latest_valid_stage_restart(out_dir: Path, stage: str) -> Path | None:
+    """Newest valid ``stage.N.res``, otherwise ``stage.res``."""
+    numbered: list[tuple[int, Path]] = []
+    for candidate in Path(out_dir).glob(f"{stage}.*.res"):
+        match = re.fullmatch(rf"{stage}\.(\d+)\.res", candidate.name.lower())
+        if match is not None:
+            numbered.append((int(match.group(1)), candidate))
+    ordered = [path for _, path in sorted(numbered, reverse=True)]
+    from mmml.interfaces.pycharmmInterface.mlpot.artifact_paths import stage_restart
+
+    ordered.append(stage_restart(out_dir, stage))
+    for candidate in ordered:
+        if _valid_restart_file_lazy(candidate) is not None:
+            return Path(candidate)
+    return None
+
+
+def discover_completed_dynamics_restart(out_dir: Path) -> Path | None:
+    """Latest heat/nve/equi/prod restart from a finished staged run.
+
+    ``baseline.res`` is a coordinate snapshot and is never returned.
+    """
+    summary_path = Path(out_dir) / "stage_summary.json"
+    if not summary_path.is_file():
+        return None
+    try:
+        payload = json.loads(summary_path.read_text(encoding="utf-8"))
+        if int(payload.get("exit_code", 1)) != 0:
+            return None
+    except (json.JSONDecodeError, OSError, TypeError, ValueError):
+        return None
+    for stage in ("prod", "equi", "nve", "heat"):
+        found = _latest_valid_stage_restart(Path(out_dir), stage)
+        if found is not None:
+            return found
+    return None
+
+
+def continue_completed_staged_run(
+    args: argparse.Namespace,
+    *,
+    out_dir: Path,
+    stages: list[str],
+) -> list[str]:
+    """Point a re-run at the finished dynamics restart and drop earlier stages.
+
+    A completed ``nve.res`` must not be thrown away by another minimization.
+    The inspected trajectory is renamed aside (``--rescue-old-dcd``) before the
+    next stage writes ``nve.dcd``.
+    """
+    if getattr(args, "restart_from", None):
+        return stages
+    if bool(getattr(args, "rebuild_packmol", False)):
+        return stages
+    found = discover_completed_dynamics_restart(out_dir)
+    if found is None:
+        return stages
+    stage = _stage_of_dynamics_restart(found)
+    if stage is None or stage not in stages:
+        return stages
+    args.restart_from = str(found)
+    if not bool(getattr(args, "rescue_old_dcd", False)):
+        args.rescue_old_dcd = True
+    kept = stages[stages.index(stage) :]
+    if not getattr(args, "quiet", False):
+        print(
+            f"Continuing from {found.name} "
+            f"(stages={','.join(kept)}; prior trajectory rescued)",
+            flush=True,
+        )
+    return kept
 
 
 def should_auto_resume_failed_staged_run(

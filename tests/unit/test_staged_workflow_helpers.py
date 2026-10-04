@@ -432,6 +432,71 @@ def test_a_successful_prior_run_does_not_resume(tmp_path):
     assert not should_auto_resume_failed_staged_run(_args(), out_dir=tmp_path)
 
 
+def test_completed_nve_continues_from_nve_res_not_baseline(tmp_path):
+    from mmml.interfaces.pycharmmInterface.mlpot.staged_restart_policy import (
+        continue_completed_staged_run,
+    )
+
+    _summary(tmp_path, 0)
+    (tmp_path / "baseline.res").write_text("REST\n NATOM 10\n", encoding="ascii")
+    (tmp_path / "nve.res").write_text("REST\n NATOM 10\n", encoding="ascii")
+    args = _args()
+    stages = continue_completed_staged_run(
+        args, out_dir=tmp_path, stages=["mini", "nve"]
+    )
+    assert stages == ["nve"]
+    assert Path(args.restart_from).name == "nve.res"
+    assert args.rescue_old_dcd is True
+
+
+def test_completed_run_prefers_latest_stage_and_skips_earlier(tmp_path):
+    from mmml.interfaces.pycharmmInterface.mlpot.staged_restart_policy import (
+        continue_completed_staged_run,
+    )
+
+    _summary(tmp_path, 0)
+    (tmp_path / "heat.res").write_text("REST\n NATOM 10\n", encoding="ascii")
+    (tmp_path / "nve.res").write_text("REST\n NATOM 10\n", encoding="ascii")
+    (tmp_path / "nve.0.res").write_text("REST\n NATOM 10\n", encoding="ascii")
+    (tmp_path / "nve.2.res").write_text("REST\n NATOM 10\n", encoding="ascii")
+    args = _args()
+    stages = continue_completed_staged_run(
+        args, out_dir=tmp_path, stages=["mini", "heat", "nve"]
+    )
+    assert stages == ["nve"]
+    assert Path(args.restart_from).name == "nve.2.res"
+
+
+def test_failed_run_does_not_continue_from_nve_res(tmp_path):
+    from mmml.interfaces.pycharmmInterface.mlpot.staged_restart_policy import (
+        continue_completed_staged_run,
+    )
+
+    _summary(tmp_path, 2)
+    (tmp_path / "nve.res").write_text("REST\n NATOM 10\n", encoding="ascii")
+    args = _args()
+    stages = continue_completed_staged_run(
+        args, out_dir=tmp_path, stages=["mini", "nve"]
+    )
+    assert stages == ["mini", "nve"]
+    assert args.restart_from is None
+
+
+def test_explicit_restart_wins_over_completed_continuation(tmp_path):
+    from mmml.interfaces.pycharmmInterface.mlpot.staged_restart_policy import (
+        continue_completed_staged_run,
+    )
+
+    _summary(tmp_path, 0)
+    (tmp_path / "nve.res").write_text("REST\n NATOM 10\n", encoding="ascii")
+    args = _args(restart_from="other.res")
+    stages = continue_completed_staged_run(
+        args, out_dir=tmp_path, stages=["mini", "nve"]
+    )
+    assert stages == ["mini", "nve"]
+    assert args.restart_from == "other.res"
+
+
 def test_no_summary_means_no_resume(tmp_path):
     assert not should_auto_resume_failed_staged_run(_args(), out_dir=tmp_path)
 

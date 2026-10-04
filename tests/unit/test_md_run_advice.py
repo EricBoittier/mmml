@@ -331,7 +331,9 @@ def test_is_valid_restart_rejects_flyoff_coords(tmp_path: Path) -> None:
     assert _is_valid_restart(bad) is False
 
 
-def test_build_run_advice_full_success_has_no_resume_command(tmp_path: Path) -> None:
+def test_build_run_advice_full_success_continues_from_dynamics_restart(
+    tmp_path: Path,
+) -> None:
     out = tmp_path / "run"
     out.mkdir()
     (out / "mini.crd").write_text("crd\n", encoding="ascii")
@@ -361,12 +363,16 @@ def test_build_run_advice_full_success_has_no_resume_command(tmp_path: Path) -> 
         repo_root=tmp_path,
     )
     assert advice is not None
-    assert advice.command == ""
-    assert "complete" in advice.headline.lower()
+    assert advice.md_stages == "equi"
+    assert advice.command
+    assert "--restart-from" in advice.command
+    assert "equi.res" in advice.command
+    assert "--no-echeck-heat" not in advice.command
+    assert "continue from" in advice.headline.lower()
     paths = write_run_advice_files(advice, out)
     sh_text = paths["sh"].read_text(encoding="utf-8")
-    assert "no resume" in sh_text.lower() or "staged leg complete" in sh_text.lower()
-    assert advice.command == ""
+    assert "equi.res" in sh_text
+    assert "--no-echeck-heat" not in sh_text
 
 
 def test_build_run_advice_pre_heat_gate(tmp_path: Path) -> None:

@@ -11,6 +11,8 @@
 # The side length is the value in that directory's mbcodyn.inp.
 # box_size turns on the CHARMM crystal and replaces one distant TIP3 with CLA
 # so the PSF charge is 0. setup stays the short mini + NVE.
+# A finished output_dir continues from nve.res (velocities kept). The existing
+# nve.dcd is renamed aside before the next segment writes a new one.
 # See examples/pet_omol_heme/README.md section 4.
 
 residue: MBCO

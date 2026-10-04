@@ -140,7 +140,9 @@ from mmml.interfaces.pycharmmInterface.mlpot.staged_restart_policy import (  # n
     _restart_coord_read_candidates,
     _should_seed_heat_prior_restart,
     _should_skip_pre_dyn_fmax_gate,
+    _stage_of_dynamics_restart,
     _trajectory_outputs,
+    continue_completed_staged_run,
     should_auto_resume_failed_staged_run,
 )
 
@@ -784,7 +786,21 @@ def _configure_nve_dynamics_start(
         return
 
     if restart_from_file and io.restart_read is not None:
-        restart_path = io.restart_read
+        restart_path = Path(io.restart_read)
+        if _stage_of_dynamics_restart(restart_path) == "nve":
+            kw["restart"] = True
+            kw["new"] = False
+            kw["start"] = False
+            kw["iasvel"] = 0
+            for key in ("firstt", "finalt", "tbath", "tstruct"):
+                kw.pop(key, None)
+            if not quiet:
+                print(
+                    f"NVE: reading {restart_path} "
+                    "(restart=True, start=False, iasvel=0; velocities kept)",
+                    flush=True,
+                )
+            return
         kw["restart"] = True
         kw["new"] = False
         kw["start"] = True
@@ -1453,6 +1469,10 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                     f"Resuming staged workflow from {resume_restart.name}",
                     flush=True,
                 )
+    if not getattr(args, "restart_from", None):
+        stages = continue_completed_staged_run(
+            args, out_dir=out_dir, stages=stages
+        )
     mini_registry: MinimizeArtifactRegistry | None = (
         MinimizeArtifactRegistry(out_dir, tag) if save_artifacts else None
     )

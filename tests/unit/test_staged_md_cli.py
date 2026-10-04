@@ -879,6 +879,55 @@ def test_configure_heat_dynamics_start_scale_memory_handoff_single_dyna():
     assert kw["iasors"] == 0
 
 
+def test_configure_nve_continuation_keeps_velocities(tmp_path):
+    """A finished nve.res is READYN with the saved velocities, not a new draw."""
+    res = tmp_path / "nve.res"
+    res.write_text("REST\n NATOM 10\n", encoding="ascii")
+    io = CharmmTrajectoryFiles(restart_read=res, restart_write=res)
+    kw = {"restart": False, "start": True, "iasvel": 1, "firstt": 60.0, "tbath": 60.0}
+
+    _configure_nve_dynamics_start(
+        kw,
+        io,
+        coords_in_memory=False,
+        restart_from_file=True,
+        timestep_ps=0.0005,
+        use_pbc=True,
+        quiet=True,
+        temp=60.0,
+    )
+
+    assert io.restart_read == res
+    assert kw["restart"] is True
+    assert kw["start"] is False
+    assert kw["iasvel"] == 0
+    assert "firstt" not in kw
+    assert "tbath" not in kw
+
+
+def test_configure_nve_from_heat_restart_still_assigns_velocities(tmp_path):
+    res = tmp_path / "heat.res"
+    res.write_text("REST\n NATOM 10\n", encoding="ascii")
+    io = CharmmTrajectoryFiles(restart_read=res, restart_write=tmp_path / "nve.res")
+    kw = {"restart": True, "start": False, "iasvel": 0}
+
+    _configure_nve_dynamics_start(
+        kw,
+        io,
+        coords_in_memory=False,
+        restart_from_file=True,
+        timestep_ps=0.0005,
+        use_pbc=True,
+        quiet=True,
+        temp=60.0,
+    )
+
+    assert kw["restart"] is True
+    assert kw["start"] is True
+    assert kw["iasvel"] == 1
+    assert float(kw["firstt"]) == 60.0
+
+
 def test_configure_nve_dynamics_start_memory_handoff_single_dyna(tmp_path):
     """After mini, NVE uses start=True on the main dyna (no nstep=0 assign)."""
     res = tmp_path / "nve_dcm_5.res"

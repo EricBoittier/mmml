@@ -867,14 +867,41 @@ def build_run_advice(
                 "do not treat this as a full success."
             )
         else:
-            suggest_resume = False
-            restart = None
-            overrides.pop("restart_from", None)
-            headline = "Job succeeded — staged PyCHARMM leg complete"
-            notes.append(
-                "Optional: hand off to JAX-MD with mmml md-system --backend jaxmd "
-                "and --continue-from <handoff.npz>."
+            from mmml.interfaces.pycharmmInterface.mlpot.staged_restart_policy import (
+                _stage_of_dynamics_restart,
             )
+
+            continued = (
+                restart.path
+                if restart is not None and restart.is_restart
+                else None
+            )
+            continued_stage = _stage_of_dynamics_restart(continued)
+            if continued is None or continued_stage is None:
+                suggest_resume = False
+                restart = None
+                overrides.pop("restart_from", None)
+                headline = "Job succeeded — staged PyCHARMM leg complete"
+                notes.append(
+                    "Optional: hand off to JAX-MD with mmml md-system --backend jaxmd "
+                    "and --continue-from <handoff.npz>."
+                )
+            else:
+                suggest_resume = True
+                overrides["restart_from"] = _relative_path(continued, repo_root)
+                if planned and continued_stage in planned:
+                    overrides["md_stages"] = ",".join(
+                        planned[planned.index(continued_stage) :]
+                    )
+                else:
+                    overrides["md_stages"] = continued_stage
+                headline = (
+                    f"Job succeeded — continue from {Path(continued).name}"
+                )
+                notes.append(
+                    "Next run reads this dynamics restart "
+                    "(coordinates and velocities) and skips earlier stages."
+                )
 
     md_stages = str(overrides.get("md_stages") or "") if suggest_resume else ""
 

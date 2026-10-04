@@ -143,4 +143,6 @@ uv run --no-sync mmml md-system --backend pycharmm \
 `MbCO: 17489 atoms, formal charge +0, 1 CLA` and `PHEM MB 93 HEM 1`, then
 `Metatomic electronic state: charge=-2 spin_multiplicity=1`, minimization
 finishes, and the short NVE stays finite. Fragment evaluation is rejected.
+A later launch of the same `--output-dir` reads `nve.res` and continues NVE
+with those velocities; the previous `nve.dcd` is renamed to `nve.rescued.1.dcd`.
 
