@@ -1,4 +1,5 @@
 import os
+import re
 import sys
 from contextlib import contextmanager
 from pathlib import Path
@@ -39,12 +40,80 @@ def _vendored_pycharmm_sys_path_entries() -> list[str]:
     return entries
 
 
+_LIB_VERSION_RE = re.compile(rb"Version c?(\d{2})[ab]\d")
+_SOURCE_VERSION_RE = re.compile(rb"\(c(\d{2})[ab]\d+\)")
+
+
+def _charmm_lib_major(lib_dir: str | os.PathLike | None) -> int | None:
+    """CHARMM major version (49, 52, ...) baked into ``libcharmm`` in ``lib_dir``."""
+    if not lib_dir:
+        return None
+    for name in ("libcharmm.so", "libcharmm.dylib"):
+        lib = Path(lib_dir) / name
+        if not lib.is_file():
+            continue
+        tail = b""
+        try:
+            with open(lib, "rb") as fh:
+                while chunk := fh.read(1 << 22):
+                    m = _LIB_VERSION_RE.search(tail + chunk)
+                    if m:
+                        return int(m.group(1))
+                    tail = chunk[-64:]
+        except OSError:
+            pass
+        return None
+    return None
+
+
+def _vendored_pycharmm_major(repo_root: Path) -> int | None:
+    """CHARMM major version of the in-repo ``setup/charmm`` tree the vendored package belongs to."""
+    main = repo_root / "setup" / "charmm" / "source" / "charmm" / "charmm_main.F90"
+    try:
+        with open(main, "rb") as fh:
+            m = _SOURCE_VERSION_RE.search(fh.read(4096))
+    except OSError:
+        return None
+    return int(m.group(1)) if m else None
+
+
+def _charmm_home_pycharmm_entry(charmm_home: str | os.PathLike | None) -> str | None:
+    if not charmm_home:
+        return None
+    tool = Path(charmm_home) / "tool" / "pycharmm"
+    return str(tool) if (tool / "pycharmm" / "__init__.py").is_file() else None
+
+
 def _ensure_vendored_pycharmm_on_path() -> None:
     """Prefer mmml's patched ``pycharmm`` over ``$CHARMM_HOME/tool/pycharmm``.
 
     ``sys.path.append(tool/pycharmm)`` alone lets an older CHARMM install shadow the
     vendored package (missing ``MLpot.skip_iblo_inb_update`` for PBC registration).
+
+    The vendored package follows the in-repo CHARMM version (c52a1). When the loaded
+    ``libcharmm`` is a different major version (e.g. a c49b1 build) the vendored
+    package does not match its API and crashes, so the library's own
+    ``$CHARMM_HOME/tool/pycharmm`` is preferred instead when it exists.
     """
+    lib_major = _charmm_lib_major(CHARMM_LIB_DIR)
+    vend_major = _vendored_pycharmm_major(_REPO_ROOT)
+    home_entry = _charmm_home_pycharmm_entry(CHARMM_HOME)
+    if lib_major and vend_major and lib_major != vend_major:
+        if home_entry:
+            print(
+                f"import_pycharmm: libcharmm is c{lib_major}, vendored pycharmm is c{vend_major}; "
+                f"using {home_entry}",
+                file=sys.stderr,
+            )
+            if home_entry in sys.path:
+                sys.path.remove(home_entry)
+            sys.path.insert(0, home_entry)
+            return
+        print(
+            f"import_pycharmm: warning: libcharmm is c{lib_major} but the vendored pycharmm is "
+            f"c{vend_major}, and {CHARMM_HOME}/tool/pycharmm is missing; expect API mismatches",
+            file=sys.stderr,
+        )
     entries = _vendored_pycharmm_sys_path_entries()
     root = str(_REPO_ROOT)
     # Drop stale repo-root inserts from prior imports, but ONLY when the repo
