@@ -2560,11 +2560,60 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
                 ),
             )
         if not force_gate.ok:
+            # One protein (MbCO) is a single monomer. Steepest descent can
+            # finish with GRMS ~2 kcal/mol/Å while a few atoms remain above
+            # the 2 eV/Å gate, and the per-monomer repair below does not run.
+            if (
+                pyCModel is not None
+                and atoms_per_list is not None
+                and len(atoms_per_list) <= 1
+                and bool(getattr(args, "calculator_pre_minimize", True))
+            ):
+                from mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize import (
+                    relax_for_pre_dynamics_force_gate,
+                )
+
+                try:
+                    relaxed = relax_for_pre_dynamics_force_gate(
+                        ctx,
+                        args,
+                        fmax_ceiling_ev_a=float(force_gate.max_fmax_before_dyn)
+                        / 23.060541945329334,
+                        verbose=not args.quiet,
+                    )
+                except Exception as exc:  # noqa: BLE001
+                    if not args.quiet:
+                        print(
+                            "WARN: whole-system force-gate relaxation failed "
+                            f"({exc})",
+                            flush=True,
+                        )
+                else:
+                    if relaxed.ran:
+                        sync_charmm_positions(get_charmm_positions_array())
+                        current_grms = refresh_mlpot_energy_and_grms(
+                            ctx,
+                            context="Pre-dynamics gate (post-force relaxation)"
+                            if not args.quiet
+                            else "",
+                        )
+                        force_gate = geometry_safe_for_dynamics(
+                            measure_monomer_grms_stats(atoms_per_list, mlpot_ctx=ctx),
+                            resolve_grms_thresholds(
+                                args,
+                                atoms_per_list=atoms_per_list,
+                                n_monomers=n_mol,
+                                n_atoms=n_atoms,
+                                mlpot_ctx=ctx,
+                                pbc=charmm_pbc,
+                            ),
+                        )
             # A whole-system minimizer barely feels one or two stressed monomers
             # (global RMS is dominated by the healthy majority), so before failing
             # try a targeted per-monomer calculator repair on the bad monomers.
             if (
-                getattr(args, "monomer_calc_repair", True)
+                not force_gate.ok
+                and getattr(args, "monomer_calc_repair", True)
                 and pyCModel is not None
                 and atoms_per_list is not None
                 and len(atoms_per_list) > 1

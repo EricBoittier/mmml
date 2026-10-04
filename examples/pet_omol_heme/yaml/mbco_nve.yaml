@@ -18,7 +18,7 @@ include_mm: false
 dynamics_max_monomer_extent: 100
 temperature: 300.0
 dt_fs: 0.5
-mini_nstep: 20
+mini_nstep: 2000
 ps_nve: 0.05
 output_dir: scratch/pet_omol_mbco
 extra_args:

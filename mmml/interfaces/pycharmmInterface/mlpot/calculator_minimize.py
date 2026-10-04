@@ -1647,3 +1647,149 @@ def run_pre_dynamics_hybrid_calculator_prep(
     charmm_grms_after_ener_force()
     diag = measure_hybrid_charmm_grms(mlpot_ctx)
     return float(diag.hybrid), ran
+
+
+def format_hottest_atoms(
+    forces_kcalmol_A: np.ndarray,
+    *,
+    names: list[str] | None = None,
+    resnames: list[str] | None = None,
+    resids: list[int] | None = None,
+    segids: list[str] | None = None,
+    limit: int = 8,
+) -> str:
+    """Largest per-atom forces as ``SEG resid RESN NAME mag`` labels."""
+    forces = np.asarray(forces_kcalmol_A, dtype=np.float64).reshape(-1, 3)
+    if forces.size == 0:
+        return ""
+    mags = np.linalg.norm(forces, axis=1)
+    order = np.argsort(-mags)
+    parts: list[str] = []
+    for idx in order[: max(1, int(limit))]:
+        i = int(idx)
+        bits: list[str] = []
+        if segids is not None and i < len(segids) and str(segids[i]).strip():
+            bits.append(str(segids[i]).strip())
+        if resids is not None and i < len(resids):
+            bits.append(str(resids[i]))
+        if resnames is not None and i < len(resnames) and str(resnames[i]).strip():
+            bits.append(str(resnames[i]).strip())
+        if names is not None and i < len(names) and str(names[i]).strip():
+            bits.append(str(names[i]).strip())
+        label = " ".join(bits) if bits else f"#{i}"
+        parts.append(f"{label} {float(mags[i]):.1f}")
+    return ", ".join(parts)
+
+
+def _report_pre_dynamics_hot_atoms(mlpot_ctx: Any, args: Any, *, verbose: bool) -> None:
+    """Print the atoms that tripped the per-atom force gate."""
+    if not verbose:
+        return
+    try:
+        from mmml.interfaces.pycharmmInterface.mlpot.cli_common import (
+            charmm_positions_angstrom,
+            mlpot_spherical_forces_ev_angstrom,
+        )
+        from mmml.interfaces.pycharmmInterface.mmml_calculator import ev2kcalmol
+
+        py_model = getattr(mlpot_ctx, "pyCModel", None)
+        if py_model is None:
+            return
+        box = getattr(mlpot_ctx, "cubic_box_side_A", None)
+        if box is None:
+            box = getattr(mlpot_ctx, "charmm_cubic_box_side_A", None)
+        forces_ev = mlpot_spherical_forces_ev_angstrom(
+            py_model,
+            positions=charmm_positions_angstrom(),
+            use_pbc=bool(getattr(mlpot_ctx, "use_pbc", False)),
+            box_A=float(box) if box is not None else None,
+        )
+        if forces_ev is None:
+            return
+        forces = np.asarray(forces_ev, dtype=np.float64) * float(ev2kcalmol)
+        names = getattr(args, "_cluster_atom_names", None)
+        resnames = getattr(args, "_cluster_atom_resnames", None)
+        resids = getattr(args, "_cluster_atom_resids", None)
+        segids = getattr(args, "_cluster_atom_segids", None)
+        if not names:
+            from mmml.interfaces.pycharmmInterface.myoglobin import psf_per_atom_identity
+
+            names, resnames, resids, segids = psf_per_atom_identity()
+        text = format_hottest_atoms(
+            forces,
+            names=list(names) if names is not None else None,
+            resnames=list(resnames) if resnames is not None else None,
+            resids=list(resids) if resids is not None else None,
+            segids=list(segids) if segids is not None else None,
+        )
+        if text:
+            print(
+                f"Pre-dynamics force gate: hottest atoms (kcal/mol/Å): {text}",
+                flush=True,
+            )
+    except Exception as exc:  # noqa: BLE001
+        print(f"WARN: could not list hottest atoms ({exc})", flush=True)
+
+
+def relax_for_pre_dynamics_force_gate(
+    mlpot_ctx: Any,
+    args: Any,
+    *,
+    fmax_ceiling_ev_a: float,
+    context_prefix: str = "Pre-dynamics force gate",
+    verbose: bool = True,
+) -> HybridMinimizeResult:
+    """FIRE then BFGS until the largest atomic force is under the dynamics gate.
+
+    A finished steepest-descent pass can leave the global RMS near
+    2 kcal/mol/Å while a few atoms (a metal–ligand contact, a link atom) are
+    still several eV/Å. The GRMS prep does not run in that case, and a single
+    molecule has no per-monomer repair. The safe-GRMS shortcut is disabled:
+    the RMS is already low, and that shortcut would otherwise stop at step 0.
+    """
+    if not bool(getattr(args, "calculator_pre_minimize", True)):
+        return HybridMinimizeResult(grms=float("nan"), ran=False)
+    ceiling = float(fmax_ceiling_ev_a)
+    if verbose:
+        print(
+            f"{context_prefix}: max atomic force is above {ceiling:.2f} eV/Å "
+            "after steepest descent; relaxing the whole system with the "
+            "hybrid calculator",
+            flush=True,
+        )
+    _report_pre_dynamics_hot_atoms(mlpot_ctx, args, verbose=verbose)
+    fire = coerce_hybrid_minimize_result(
+        minimize_hybrid_calculator_fire_before_sd(
+            mlpot_ctx,
+            config=HybridCalculatorFireConfig(
+                max_steps=int(getattr(args, "fire_min_steps", 200) or 200),
+                fmax_ev_a=ceiling,
+                fire_maxstep=float(getattr(args, "fire_min_maxstep", 0.2) or 0.2),
+                verbose=verbose,
+                max_start_grms_kcalmol_A=float("inf"),
+                max_initial_fmax_ev_a=1000.0,
+                safe_grms_kcalmol_A=None,
+            ),
+            context_prefix=f"{context_prefix} (FIRE)",
+        )
+    )
+    mini = coerce_hybrid_minimize_result(
+        minimize_hybrid_calculator_before_sd(
+            mlpot_ctx,
+            HybridCalculatorMinimizeConfig(
+                max_steps=int(getattr(args, "pre_min_steps", 200) or 200),
+                fmax_ev_a=ceiling,
+                bfgs_maxstep=float(getattr(args, "bfgs_maxstep", 0.05) or 0.05),
+                verbose=verbose,
+                quiet_bfgs=bool(getattr(args, "quiet_bfgs", False)),
+                max_start_grms_kcalmol_A=float("inf"),
+                max_initial_fmax_ev_a=1000.0,
+                safe_grms_kcalmol_A=None,
+            ),
+            context_prefix=f"{context_prefix} (BFGS)",
+        )
+    )
+    return HybridMinimizeResult(
+        grms=float(mini.grms),
+        ran=bool(fire.ran or mini.ran),
+    )

@@ -71,6 +71,83 @@ def test_coerce_hybrid_minimize_result_accepts_legacy_float():
     )
 
 
+def test_format_hottest_atoms_ranks_by_magnitude():
+    from mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize import (
+        format_hottest_atoms,
+    )
+
+    forces = np.array(
+        [
+            [1.0, 0.0, 0.0],
+            [0.0, 100.0, 0.0],
+            [0.0, 0.0, 40.0],
+        ],
+        dtype=float,
+    )
+    text = format_hottest_atoms(
+        forces,
+        names=["CA", "FE", "CG"],
+        resnames=["ALA", "HEME", "HSD"],
+        resids=[1, 1, 93],
+        segids=["MB", "HEM", "MB"],
+        limit=2,
+    )
+    assert text == "HEM 1 HEME FE 100.0, MB 93 HSD CG 40.0"
+
+
+def test_force_gate_relaxation_targets_the_ceiling_without_the_grms_shortcut():
+    from mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize import (
+        HybridMinimizeResult,
+        relax_for_pre_dynamics_force_gate,
+    )
+
+    args = argparse.Namespace(
+        calculator_pre_minimize=True,
+        fire_min_steps=40,
+        pre_min_steps=30,
+        fire_min_maxstep=0.2,
+        bfgs_maxstep=0.05,
+        quiet_bfgs=True,
+    )
+    seen: dict[str, object] = {}
+
+    def _fire(_ctx, config=None, **_kwargs):
+        seen["fire"] = config
+        return HybridMinimizeResult(grms=1.5, ran=True)
+
+    def _bfgs(_ctx, config, **_kwargs):
+        seen["bfgs"] = config
+        return HybridMinimizeResult(grms=1.2, ran=True)
+
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize."
+        "minimize_hybrid_calculator_fire_before_sd",
+        side_effect=_fire,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize."
+        "minimize_hybrid_calculator_before_sd",
+        side_effect=_bfgs,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.calculator_minimize."
+        "_report_pre_dynamics_hot_atoms",
+    ):
+        result = relax_for_pre_dynamics_force_gate(
+            mock.Mock(),
+            args,
+            fmax_ceiling_ev_a=2.0,
+            verbose=True,
+        )
+
+    assert result.ran is True
+    assert result.grms == pytest.approx(1.2)
+    assert seen["fire"].fmax_ev_a == pytest.approx(2.0)
+    assert seen["fire"].safe_grms_kcalmol_A is None
+    assert seen["fire"].max_steps == 40
+    assert seen["bfgs"].fmax_ev_a == pytest.approx(2.0)
+    assert seen["bfgs"].safe_grms_kcalmol_A is None
+    assert seen["bfgs"].max_steps == 30
+
+
 def test_mlpot_hybrid_grms_uses_spherical_fn():
     ctx = mock.Mock(use_pbc=True, cubic_box_side_A=50.0, pyCModel=mock.Mock())
     pos = np.zeros((2, 3), dtype=float)
