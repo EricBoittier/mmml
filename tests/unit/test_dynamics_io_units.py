@@ -51,6 +51,17 @@ def test_api_seeds_go_on_script_line_for_c52(monkeypatch):
     assert "iseed" not in kw2
 
 
+def test_api_seeds_not_on_line_for_restart(monkeypatch):
+    # READYN restores the RNG state from the restart file; ISEED would reset it.
+    monkeypatch.setattr(mdyn, "_charmm_dyna_script_parses_iseed", lambda: True)
+    monkeypatch.setattr(mdyn, "_pending_api_rngseeds", [11, 22, 33, 44])
+    kw: dict = {"restart": True, "start": False}
+    mdyn._put_api_rngseeds_on_script_line(kw, use_c_api=False)
+    assert "iseed" not in kw
+    # still consumed, so a later START does not pick up stale seeds
+    assert mdyn._pending_api_rngseeds is None
+
+
 def test_api_seeds_not_on_line_for_c_api_or_c49(monkeypatch):
     monkeypatch.setattr(mdyn, "_pending_api_rngseeds", [1, 2])
     monkeypatch.setattr(mdyn, "_charmm_dyna_script_parses_iseed", lambda: True)

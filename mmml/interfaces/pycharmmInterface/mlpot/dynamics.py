@@ -7048,9 +7048,15 @@ def _put_api_rngseeds_on_script_line(kw: dict[str, Any], *, use_c_api: bool) -> 
     on the line, seeds a START from the system clock -- so the same ``--seed``
     gave different velocities every run. ISEED on the line is what c52a1 reads;
     on c49 it sets the same seeds the API call already set.
+
+    Not on a restart (``REST``): READYN restores the generator state saved in
+    the restart file, and ISEED on the line would re-initialise it (c52a1
+    ``dyn_parse_iseed`` -> ``rngmodseeds``), so the Langevin piston / thermostat
+    noise after the restart would differ from the uninterrupted run. c49
+    likewise continued from the file seeds on a restart.
     """
     seeds = _take_pending_api_rngseeds()
-    if use_c_api or not seeds or "iseed" in kw:
+    if use_c_api or not seeds or "iseed" in kw or kw.get("restart"):
         return
     if not _charmm_dyna_script_parses_iseed():
         return
