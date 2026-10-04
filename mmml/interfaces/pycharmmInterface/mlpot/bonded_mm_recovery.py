@@ -284,7 +284,7 @@ def restore_charmm_state_from_restart(
 ) -> None:
     """Load coordinates (and crystal state) from a CHARMM restart into memory."""
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
-        read_restart_coordinates,
+        read_restart_positions,
     )
     from mmml.interfaces.pycharmmInterface.mlpot.setup import (
         get_charmm_positions_array,
@@ -294,7 +294,8 @@ def restore_charmm_state_from_restart(
     path = Path(restart_path).expanduser().resolve()
     if not path.is_file():
         raise FileNotFoundError(f"restart not found: {path}")
-    pos = read_restart_coordinates(path)
+    # XOLD for a leap-frog dynamics restart (!X holds the step displacement)
+    pos = read_restart_positions(path)
     if pos is None:
         raise RuntimeError(
             f"restart {path.name} has no finite Cartesian coordinates in !X, Y, Z"
@@ -318,7 +319,12 @@ def restore_charmm_state_from_restart(
         alias.finalize()
     n = _charmm_natom_count()
     live = get_charmm_positions_array()
-    if (
+    # A leap-frog dynamics restart keeps positions in !XOLD; after ``read
+    # restart`` the live main set may hold the !X step displacement instead.
+    leapfrog = "!XOLD" in path.read_text(errors="ignore").upper().replace(" ", "")
+    if leapfrog and pos.shape[0] == n:
+        sync_charmm_positions(pos)
+    elif (
         live is not None
         and live.shape[0] == n
         and np.all(np.isfinite(live))

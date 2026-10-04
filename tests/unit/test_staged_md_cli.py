@@ -255,7 +255,7 @@ def test_seed_charmm_coords_from_dynamics_restart_loads_heat(tmp_path: Path):
     heat.write_text("heat\n", encoding="utf-8")
     pos = np.zeros((9, 3), dtype=np.float64)
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.read_restart_coordinates",
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.read_restart_positions",
         return_value=pos,
     ) as read_coords, patch(
         "mmml.interfaces.pycharmmInterface.mlpot.setup.sync_charmm_positions",

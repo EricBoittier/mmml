@@ -7079,7 +7079,12 @@ def _rng_salt_for_dynamics(
     steps_done: int,
     retry_count: int = 0,
 ) -> int:
-    ctx_hash = abs(hash(str(overlap_context))) & 0x7FFF_FFFF
+    # zlib.crc32, not hash(): str hashes are salted per process (PYTHONHASHSEED),
+    # which made CHARMM's velocity/thermostat seeds differ between two runs with
+    # the same --seed, so no two pycharmm runs were reproducible.
+    import zlib
+
+    ctx_hash = zlib.crc32(str(overlap_context).encode("utf-8")) & 0x7FFF_FFFF
     return int(
         ctx_hash
         + chunk_index * 1_000_003

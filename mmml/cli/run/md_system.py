@@ -3818,6 +3818,79 @@ def _suite_extra_argv(args: argparse.Namespace, backend: str) -> list[str]:
     return extra
 
 
+def _charmm_dynamics_restart_kind(path: Path) -> str | None:
+    """``"cpt"`` / ``"plain"`` for a CHARMM leap-frog dynamics restart, else ``None``.
+
+    A dynamics restart has ``!XOLD`` and ``!VX`` blocks.  ``"cpt"`` when the
+    ``!CRYSTAL PARAMETERS`` block carries non-zero barostat / thermostat state
+    beyond the six lattice numbers (a CPT run); ``"plain"`` otherwise.
+    """
+    try:
+        text = Path(path).read_text(errors="ignore")
+    except OSError:
+        return None
+    if "!XOLD" not in text or "!VX" not in text:
+        return None
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
+        _restart_section_values,
+    )
+
+    if "!CRYSTAL PARAMETERS" in text:
+        xtl = _restart_section_values(Path(path), "!CRYSTAL PARAMETERS")
+        if any(abs(float(v)) > 0.0 for v in xtl[6:]):
+            return "cpt"
+    return "plain"
+
+
+def route_pycharmm_continue_from_dynamics_restart(args: argparse.Namespace) -> Path | None:
+    """Turn ``--continue-from X.res`` (CHARMM dynamics restart) into an exact READYN.
+
+    The handoff path rebuilt the state from positions + velocities (piston,
+    thermostat and leap-frog step lost; the coordinate-only seed it writes is
+    then rejected by READYN), and a separate ``--restart-from`` file only
+    seeds coordinates for a CPT stage.  The one path that continues exactly is
+    the in-place resume: the stage reads and writes ``<output-dir>/<stage>.res``.
+    So copy the restart there and pass it as ``--restart-from``.
+
+    Only for a single dynamics stage (nve / equi / prod, one segment) whose
+    ensemble matches the restart (CPT stage <-> CPT restart).
+    """
+    if getattr(args, "backend", None) != "pycharmm" or not getattr(args, "continue_from", None):
+        return None
+    if getattr(args, "restart_from", None) or args.output_dir is None:
+        return None
+    src = Path(args.continue_from).expanduser()
+    if src.suffix.lower() != ".res" or not src.is_file():
+        return None
+    stages = str(getattr(args, "md_stage", None) or getattr(args, "md_stages", None) or "")
+    stages = [x.strip() for x in stages.split(",") if x.strip()]
+    if len(stages) != 1 or stages[0] not in ("nve", "equi", "prod"):
+        return None
+    stage = stages[0]
+    if int(getattr(args, f"n_{stage}_segments", 1) or 1) > 1:
+        return None
+    kind = _charmm_dynamics_restart_kind(src)
+    cpt_stage = stage in ("equi", "prod") and str(getattr(args, "setup", "")) == "pbc_npt"
+    if kind is None or (kind == "cpt") != cpt_stage:
+        return None
+    out_dir = Path(args.output_dir).expanduser()
+    out_dir.mkdir(parents=True, exist_ok=True)
+    dst = out_dir / f"{stage}.res"
+    if not (dst.exists() and dst.resolve() == src.resolve()):
+        import shutil
+
+        shutil.copyfile(src, dst)
+    args.restart_from = dst
+    args.continue_from = None
+    print(
+        f"mmml md-system: --continue-from {src.name} is a CHARMM dynamics restart; "
+        f"resuming {stage} in place from {dst} (READYN: positions, velocities, box, "
+        "barostat/thermostat and step counter)",
+        flush=True,
+    )
+    return dst
+
+
 def build_command(args: argparse.Namespace) -> tuple[str, list[str]]:
     backend = args.backend
     if backend == "auto":
@@ -4355,6 +4428,7 @@ def main() -> int:
                 print(f"mmml md-system: jaxmd-unified failed: {exc}", file=sys.stderr)
                 exit_code = 1
             return exit_code
+        route_pycharmm_continue_from_dynamics_restart(args)
         try:
             backend, argv = build_command(args)
         except ValueError as exc:
