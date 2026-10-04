@@ -91,44 +91,56 @@ The ghost is not an MM particle; its force is split onto the two real atoms.
 
 ## 4. Sperm-whale myoglobin with CO
 
-`--residue MBCO` builds one protein from CHARMM's crystal CRD
-`setup/charmm/test/data/mbco_au_q0.crd` (153 residues, actual HSD/HSE/HSP
-protonation, 73-atom heme, CO, and 337 TIP3). Sulfate in that file is omitted.
-`PRES PHEM` bonds His93 NE2 to the iron (`MB 93 HEM 1`) with angle and
-dihedral autogeneration off. The protein segment uses NTER/CTER. Heme and CO
-use `first none last none`.
+`--residue MBCO` builds one protein. The default coordinates are CHARMM's
+crystal CRD `setup/charmm/test/data/mbco_au_q0.crd` (153 residues, the crystal
+HSD/HSE/HSP protonation, 73-atom heme, CO, and 337 TIP3). Sulfate in that file
+is omitted. `PRES PHEM` bonds His93 NE2 to the iron (`MB 93 HEM 1`) with angle
+and dihedral autogeneration off. The protein segment uses NTER/CTER. Heme and
+CO use `first none last none`.
+
+`yaml/mbco_nve.yaml` uses the solvated benchmark instead:
+`setup/charmm/test/cbenchtest/mbco/mbco4985w.crd`. That file is one protein,
+heme, CO, and 4985 TIP3 (17491 atoms) in a cube. The side length is 55.49456 Å,
+the value in `mbcodyn.inp` next to the coordinates. `box_size` turns on the
+CHARMM crystal. The setup stays `free_nve` (minimize, then 0.05 ps of NVE).
+Every histidine in this file is HSD, and residue 122 is ASN, so the coordinate
+file's formal charge is +1. A periodic build (`box_size` set) replaces the
+TIP3 farthest from the protein with one CLA, and the PSF charge is 0 (17489
+atoms). The coordinate span is about 57 Å on a side (diagonal about 98 Å), so
+the example sets `--dynamics-max-monomer-extent 120`.
 
 Six-coordinate Fe(II)–CO is a singlet. `--mm-region his93` is the PET region:
 heme, CO, and the His93 imidazole, charge −2, multiplicity 1, one ghost
 hydrogen on CB–CG. The Fe–NE2 bond stays a real CHARMM bond. Without
-`--mm-region`, PET sees the whole protein at formal charge +2 (NTER, CTER,
-the amino-acid charges, and heme −2; sulfate omitted). Do not pass `--charmm-zero-energy-terms` if the protein should keep
-its CHARMM energy. Do not pass `--counterions`; the CRD is already the solute.
+`--mm-region`, PET sees the whole system at the PSF charge (+2 for the vacuum
+crystal, 0 for this periodic cube). Keep the protein CHARMM
+energy: do not pass `--charmm-zero-energy-terms`. `--counterions` is rejected
+for MBCO.
 
-The protein is one monomer wider than the 30 Å small-molecule extent cap, so
-the example sets `--dynamics-max-monomer-extent 100` (the crystal diagonal is
-about 76 Å). A dense ML–ML exclusion
-list of this size aborts CHARMM the same way the isolated heme did, so vacuum
-registration skips it. Bonded terms and charges on the PET atoms are zeroed.
-Van der Waals among those atoms stays in CHARMM.
+The protein plus solvent is one monomer, wider than the 30 Å small-molecule
+extent cap. A dense ML–ML exclusion list of this size aborts CHARMM the same
+way the isolated heme did, so registration skips it. Bonded terms and charges
+on the PET atoms are zeroed. Van der Waals among those atoms stays in CHARMM.
 
 ```bash
 uv run --no-sync mmml md-system --backend pycharmm \
   --ml-potential-mode metatomic \
   --metatomic-eval-mode whole_system \
   --checkpoint "$PET_OMOL_S_CKPT" \
-  --residue MBCO --n-molecules 1 --builder gas \
+  --residue MBCO --n-molecules 1 \
+  --mbco-crd setup/charmm/test/cbenchtest/mbco/mbco4985w.crd \
+  --box-size 55.49456 \
   --mm-region his93 \
   --no-include-mm \
-  --dynamics-max-monomer-extent 100 \
+  --dynamics-max-monomer-extent 120 \
   --setup free_nve \
-  --mini-nstep 20 --ps-nve 0.05 --dt-fs 0.5 \
+  --mini-nstep 2000 --ps-nve 0.05 --dt-fs 0.5 \
   --temperature 300 \
-  --output-dir scratch/pet_omol_mbco
+  --output-dir scratch/pet_omol_mbco_water
 ```
 
 `yaml/mbco_nve.yaml` is the same run. Pass: the log contains
-`MbCO: 3547 atoms` and `PHEM MB 93 HEM 1`, then
+`MbCO: 17489 atoms, formal charge +0, 1 CLA` and `PHEM MB 93 HEM 1`, then
 `Metatomic electronic state: charge=-2 spin_multiplicity=1`, minimization
 finishes, and the short NVE stays finite. Fragment evaluation is rejected.
 

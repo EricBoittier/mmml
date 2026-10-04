@@ -1,13 +1,22 @@
-# Sperm-whale MbCO, vacuum, PET-OMOL S on the His93 imidazole + heme + CO.
+# Sperm-whale MbCO in CHARMM's 4985-water cube.
+# PET-OMOL S is on the His93 imidazole + heme + CO.
 #
+# Run from the repository root:
 #   export PET_OMOL_S_CKPT=$PWD/pet-omol-s-v1.0.0.pt
+#   export CHARMM_HOME=$PWD/setup/charmm
+#   export CHARMM_LIB_DIR=$CHARMM_HOME/lib
 #   uv run --no-sync mmml md-system --config examples/pet_omol_heme/yaml/mbco_nve.yaml --checkpoint "$PET_OMOL_S_CKPT"
 #
+# mbco4985w.crd is the cubic benchmark in setup/charmm/test/cbenchtest/mbco/.
+# The side length is the value in that directory's mbcodyn.inp.
+# box_size turns on the CHARMM crystal and replaces one distant TIP3 with CLA
+# so the PSF charge is 0. setup stays the short mini + NVE.
 # See examples/pet_omol_heme/README.md section 4.
 
 residue: MBCO
 n_molecules: 1
-builder: gas
+mbco_crd: setup/charmm/test/cbenchtest/mbco/mbco4985w.crd
+box_size: 55.49456
 backend: pycharmm
 setup: free_nve
 mm_region: his93
@@ -15,12 +24,12 @@ checkpoint: ${PET_OMOL_S_CKPT}
 ml_potential_mode: metatomic
 metatomic_eval_mode: whole_system
 include_mm: false
-dynamics_max_monomer_extent: 100
+dynamics_max_monomer_extent: 120
 temperature: 300.0
 dt_fs: 0.5
 mini_nstep: 2000
 ps_nve: 0.05
-output_dir: scratch/pet_omol_mbco
+output_dir: scratch/pet_omol_mbco_water
 extra_args:
   - --no-include-mm
   - --no-echeck

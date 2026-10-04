@@ -78,6 +78,8 @@ HIS_IMIDAZOLE_NAMES = frozenset(
     }
 )
 OMITTED_RESIDUES = frozenset({"SO4"})
+# Segment for ions added so a periodic MbCO box is charge 0.
+ION_SEGID = "ION"
 
 
 def is_myoglobin_residue(name: str) -> bool:
@@ -283,11 +285,18 @@ def myoglobin_electronic_state(args: object):
             "six-coordinate Fe(II)–CO is a singlet, heme formal charge −2"
         )
     elif mm_region in {"", "none"}:
-        charge = load_mbco(getattr(args, "mbco_crd", None)).formal_charge()
-        reason = (
-            f"MbCO whole system formal charge {charge:+d}; "
-            "six-coordinate Fe(II)–CO is a singlet"
-        )
+        if getattr(args, "box_size", None) is not None:
+            charge = 0
+            reason = (
+                "periodic MbCO is neutralized with CLA or SOD; "
+                "six-coordinate Fe(II)–CO is a singlet"
+            )
+        else:
+            charge = load_mbco(getattr(args, "mbco_crd", None)).formal_charge()
+            reason = (
+                f"MbCO whole system formal charge {charge:+d}; "
+                "six-coordinate Fe(II)–CO is a singlet"
+            )
     else:
         raise ValueError(f"MBCO does not use --mm-region {mm_region!r}")
     spin = MBCO_SPIN_MULTIPLICITY
@@ -383,6 +392,81 @@ def crd_coordinate_table(
     return table
 
 
+def sequence_read_command(resnames: Sequence[str]) -> str | None:
+    """``read sequ NAME N`` when a segment is one residue repeated.
+
+    ``read.sequence_string`` copies the remainder of the sequence through a
+    fixed scratch on every word. Spelling ``TIP3`` 4985 times is cut off after
+    1001 waters (5539 atoms). The CHARMM water-cube input uses the repeat form.
+    """
+    names = [str(name).strip().upper() for name in resnames]
+    if len(names) >= 2 and all(name == names[0] for name in names):
+        return f"read sequ {names[0]} {len(names)}"
+    return None
+
+
+def neutralize_mbco(structure: MbcoStructure) -> MbcoStructure:
+    """Replace bulk TIP3 with monovalent ions until the formal charge is 0.
+
+    A positive solute gets CLA and a negative solute gets SOD, one ion per
+    unit charge. Each ion takes the oxygen site of a TIP3 far from the
+    protein, heme, and CO, so the ion does not overlap a remaining atom.
+    """
+    charge = structure.formal_charge()
+    if charge == 0:
+        return structure
+    ion_name = "CLA" if charge > 0 else "SOD"
+    n_ions = abs(int(charge))
+    solute = [atom for atom in structure.atoms if atom.resname != "TIP3"]
+    waters: dict[tuple[str, int], list[CrdAtom]] = {}
+    for atom in structure.atoms:
+        if atom.resname == "TIP3":
+            waters.setdefault((atom.segid, atom.resid), []).append(atom)
+    if len(waters) < n_ions:
+        raise ValueError(
+            f"MbCO charge {charge:+d} needs {n_ions} {ion_name}, "
+            f"and the CRD has {len(waters)} TIP3"
+        )
+    solute_pos = np.asarray([atom.xyz for atom in solute], dtype=np.float64)
+    oxygen_pos = []
+    oxygen_keys: list[tuple[tuple[str, int], CrdAtom]] = []
+    for key, group in waters.items():
+        oxygen = next((atom for atom in group if atom.name == "OH2"), None)
+        if oxygen is None:
+            raise ValueError(f"TIP3 {key[0]} {key[1]} has no OH2")
+        oxygen_pos.append(oxygen.xyz)
+        oxygen_keys.append((key, oxygen))
+    oxy = np.asarray(oxygen_pos, dtype=np.float64)
+    nearest = np.empty(len(oxygen_keys), dtype=np.float64)
+    for start in range(0, len(oxygen_keys), 256):
+        block = oxy[start : start + 256]
+        dist = np.linalg.norm(block[:, None, :] - solute_pos[None, :, :], axis=2)
+        nearest[start : start + 256] = dist.min(axis=1)
+    order = np.argsort(-nearest)
+    drop = {oxygen_keys[int(i)][0] for i in order[:n_ions]}
+    ions = tuple(
+        CrdAtom(
+            resname=ion_name,
+            name=ion_name,
+            x=oxygen_keys[int(i)][1].x,
+            y=oxygen_keys[int(i)][1].y,
+            z=oxygen_keys[int(i)][1].z,
+            segid=ION_SEGID,
+            resid=placed,
+        )
+        for placed, i in enumerate(order[:n_ions], start=1)
+    )
+    kept = tuple(
+        atom for atom in structure.atoms if (atom.segid, atom.resid) not in drop
+    )
+    atoms = kept + ions
+    return MbcoStructure(
+        atoms=atoms,
+        segments=tuple(_segments(atoms)),
+        source=structure.source,
+    )
+
+
 def positions_from_crd(structure: MbcoStructure) -> np.ndarray:
     """PSF-order coordinates. The PSF resid is the residue's place in its segment."""
     names, _resnames, resids, segids = psf_per_atom_identity()
@@ -412,13 +496,15 @@ def build_myoglobin_in_charmm(
     path: Path | str | None = None,
     *,
     n_molecules: int = 1,
+    neutralize: bool = False,
 ) -> tuple[np.ndarray, np.ndarray, list[int], list[str]]:
     """Generate MbCO in the live CHARMM session and return ``(Z, positions, ...)``.
 
     Protein segment uses NTER/CTER. Heme and CO use ``first none last none``.
     Waters are generated with no angles and no dihedrals. ``PHEM`` is applied
     with angle and dihedral autogeneration off, then coordinates are assigned
-    from the CRD.
+    from the CRD. ``neutralize`` replaces bulk TIP3 with CLA or SOD until the
+    formal charge is 0. A repeated residue is read as ``read sequ NAME N``.
     """
     if int(n_molecules) != 1:
         raise ValueError("MBCO is one crystal structure; --n-molecules must be 1")
@@ -437,16 +523,22 @@ def build_myoglobin_in_charmm(
     import pandas as pd
 
     structure = load_mbco(path)
+    if neutralize:
+        structure = neutralize_mbco(structure)
     lingo.charmm_script("DELETE ATOM SELE ALL END")
     prepare_charmm_vacuum()
     read_cgenff_toppar(enable_drude=False)
     for segment in structure.segments:
         if segment.kind == "omit":
             continue
-        read.sequence_string(" ".join(segment.resnames))
+        command = sequence_read_command(segment.resnames)
+        if command is None:
+            read.sequence_string(" ".join(segment.resnames))
+        else:
+            lingo.charmm_script(command)
         if segment.kind == "protein":
             gen.new_segment(seg_name=segment.segid, setup_ic=False)
-        elif segment.kind in {"heme", "ligand"}:
+        elif segment.kind in {"heme", "ligand", "ion"}:
             gen.new_segment(
                 seg_name=segment.segid,
                 first_patch="NONE",
@@ -470,9 +562,15 @@ def build_myoglobin_in_charmm(
         raise RuntimeError(
             f"MbCO Z length {len(atomic_numbers)} != coordinates {len(positions)}"
         )
+    ion_segments = [segment for segment in structure.segments if segment.kind == "ion"]
+    ion_note = ""
+    if ion_segments:
+        ion_note = ", " + ", ".join(
+            f"{len(segment.resnames)} {segment.resnames[0]}" for segment in ion_segments
+        )
     print(
-        f"MbCO: {len(positions)} atoms, formal charge {structure.formal_charge():+d}, "
-        f"PHEM {PHEM_SITES}, sulfate omitted ({structure.source.name})",
+        f"MbCO: {len(positions)} atoms, formal charge {structure.formal_charge():+d}"
+        f"{ion_note}, PHEM {PHEM_SITES}, sulfate omitted ({structure.source.name})",
         flush=True,
     )
     return atomic_numbers, positions, [len(positions)], ["MBCO"]
@@ -507,6 +605,12 @@ def _integer_charge(text: str) -> int:
     return rounded
 
 
+def _protein_ion_names() -> frozenset[str]:
+    from mmml.interfaces.pycharmmInterface.heme_electronic import PROTEIN_ION_CHARGE
+
+    return frozenset(PROTEIN_ION_CHARGE)
+
+
 def _segments(atoms: Sequence[CrdAtom]) -> list[MbcoSegment]:
     grouped: list[tuple[str, list[str]]] = []
     current_key: tuple[str, int] | None = None
@@ -531,6 +635,8 @@ def _segments(atoms: Sequence[CrdAtom]) -> list[MbcoSegment]:
             kind = "ligand"
         elif unique <= protein:
             kind = "protein"
+        elif unique <= _protein_ion_names():
+            kind = "ion"
         else:
             unknown = sorted(unique - protein)
             raise ValueError(

@@ -1757,6 +1757,7 @@ def _build_cluster_from_args_with_tag(
             z, r, atoms_per_list, residue_labels = build_myoglobin_in_charmm(
                 getattr(args, "mbco_crd", None),
                 n_molecules=1,
+                neutralize=getattr(args, "box_size", None) is not None,
             )
             composition_summary = {"MBCO": 1}
             tag = composition_tag(None, "MBCO", 1)

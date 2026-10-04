@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
+import yaml
 from argparse import Namespace
 
 from mmml.interfaces.calculators.link_atoms import link_atom_position
@@ -19,11 +20,14 @@ from mmml.interfaces.pycharmmInterface.myoglobin import (
     HIS93_ML_CHARGE,
     HIS93_RESID,
     HIS93_SEGID,
+    ION_SEGID,
     MBCO_SPIN_MULTIPLICITY,
     PHEM_SITES,
     crd_coordinate_table,
     his93_partition_columns,
     load_mbco,
+    neutralize_mbco,
+    sequence_read_command,
 )
 
 
@@ -175,6 +179,85 @@ def test_mbco_electronic_state_is_the_liganded_singlet() -> None:
                 mm_region="propionates",
             )
         )
+
+
+def test_charmm_water_cube_is_4985_tip3_at_charge_plus_one() -> None:
+    from mmml.interfaces.pycharmmInterface.charmm_paths import mmml_repo_root
+
+    path = mmml_repo_root() / "setup/charmm/test/cbenchtest/mbco/mbco4985w.crd"
+    structure = load_mbco(path)
+    assert len(structure.atoms) == 17491
+    kinds = {segment.segid: segment.kind for segment in structure.segments}
+    assert kinds == {"MB": "protein", "HEM": "heme", "CO": "ligand", "WAT": "water"}
+    waters = next(segment for segment in structure.segments if segment.segid == "WAT")
+    assert len(waters.resnames) == 4985
+    assert set(waters.resnames) == {"TIP3"}
+    protein = next(segment for segment in structure.segments if segment.segid == "MB")
+    assert protein.resnames[121] == "ASN"
+    assert "HSE" not in protein.resnames
+    assert "HSP" not in protein.resnames
+    assert structure.formal_charge() == 1
+    his = [
+        atom
+        for atom in structure.atoms
+        if atom.segid == HIS93_SEGID and atom.resid == HIS93_RESID
+    ]
+    assert {atom.resname for atom in his} == {"HSD"}
+    names, resnames, resids, segids = _columns(structure)
+    ml, links = his93_partition_columns(names, resnames, resids, segids)
+    assert len(ml) == 83
+    assert len(links) == 1
+    span = structure.positions().max(axis=0) - structure.positions().min(axis=0)
+    assert float(np.linalg.norm(span)) == pytest.approx(98.41, abs=0.05)
+
+    example = yaml.safe_load(
+        (mmml_repo_root() / "examples/pet_omol_heme/yaml/mbco_nve.yaml").read_text()
+    )
+    assert example["mbco_crd"].endswith("mbco4985w.crd")
+    assert float(example["box_size"]) == pytest.approx(55.49456)
+    assert float(example["dynamics_max_monomer_extent"]) >= float(np.linalg.norm(span))
+
+
+def test_periodic_water_cube_replaces_one_distant_tip3_with_chloride() -> None:
+    assert sequence_read_command(("TIP3",) * 4985) == "read sequ TIP3 4985"
+    assert sequence_read_command(("VAL", "LEU")) is None
+    from mmml.interfaces.pycharmmInterface.charmm_paths import mmml_repo_root
+
+    neutral = neutralize_mbco(
+        load_mbco(mmml_repo_root() / "setup/charmm/test/cbenchtest/mbco/mbco4985w.crd")
+    )
+    assert neutral.formal_charge() == 0
+    assert len(neutral.atoms) == 17489
+    ions = [atom for atom in neutral.atoms if atom.resname == "CLA"]
+    assert len(ions) == 1
+    assert ions[0].segid == ION_SEGID
+    assert ions[0].name == "CLA"
+    waters = [segment for segment in neutral.segments if segment.kind == "water"]
+    assert sum(len(segment.resnames) for segment in waters) == 4984
+    assert sequence_read_command(waters[0].resnames) == "read sequ TIP3 4984"
+    assert {segment.kind for segment in neutral.segments if segment.segid == ION_SEGID} == {
+        "ion"
+    }
+    names, resnames, resids, segids = _columns(neutral)
+    ml, links = his93_partition_columns(names, resnames, resids, segids)
+    assert len(ml) == 83
+    assert len(links) == 1
+    solute = np.asarray(
+        [atom.xyz for atom in neutral.atoms if atom.resname not in {"TIP3", "CLA"}],
+        dtype=float,
+    )
+    distance = float(np.linalg.norm(solute - np.asarray(ions[0].xyz), axis=1).min())
+    assert distance > 3.0
+    periodic = Namespace(
+        residue="MBCO",
+        n_molecules=1,
+        composition=None,
+        mm_region="none",
+        box_size=55.49456,
+    )
+    state = resolve_metatomic_electronic_state(periodic)
+    assert state.charge == 0
+    assert state.spin_multiplicity == 1
 
 
 def test_mbco_topology_includes_water_and_rejects_counterions() -> None:

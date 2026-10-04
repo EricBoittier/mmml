@@ -203,8 +203,10 @@ the CAA–CBA and CAD–CBD cuts with ghost hydrogens inside PET.
 
 A HEME build reads `top_all36_prot.rtf`, `par_all36m_prot.prm`, and
 `toppar_all36_prot_heme.str` (plus `toppar_water_ions.str` when ions or TIP3
-are present). `--residue MBCO` builds sperm-whale myoglobin from the CHARMM
-crystal CRD, applies `PRES PHEM` (His93 NE2–Fe), and uses multiplicity 1.
+are present). `--residue MBCO` builds sperm-whale myoglobin from a CHARMM
+CRD and applies `PRES PHEM` (His93 NE2–Fe) at multiplicity 1. The worked
+example uses `mbco4985w.crd`, the 4985-water cube at 55.49456 Å, with one
+CLA in place of a distant TIP3 so the box is neutral.
 `--mm-region his93` puts the imidazole, heme, and CO in PET (charge −2) with
 one ghost hydrogen on His93 CB–CG. Details: `examples/pet_omol_heme/README.md`.
 
