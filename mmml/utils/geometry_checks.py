@@ -157,6 +157,12 @@ def ensure_monomers_inside_cell(
             col = pos[s:e, d]
             lo = float(col.min())
             hi = float(col.max())
+            # A monomer wider than the cell cannot seat both faces. The low-side
+            # branch and the high-side branch would alternate, sliding the whole
+            # monomer by ``span - (L - 2*margin)`` on every call. MbCO's solvent
+            # cube is one monomer ~1.5 Å wider than L=55.5, which is that slide.
+            if hi - lo > L_d - 2.0 * margin_A:
+                continue
             if lo < margin_A:
                 pos[s:e, d] += margin_A - lo
             elif hi > L_d - margin_A:
@@ -1360,6 +1366,28 @@ def min_counted_intramonomer_pair(
     return _min_counted_pair_chunked(block, excluded_local, cell_mat, clash_floor)
 
 
+def _cell_for_intramonomer_block(
+    block: np.ndarray,
+    cell_mat: np.ndarray | None,
+) -> np.ndarray | None:
+    """MIC cell for one monomer, or ``None`` when the monomer does not fit in it.
+
+    Minimum-image distances inside a monomer wider than the box connect opposite
+    faces of one periodic system (a pair ~L apart in Cartesian coordinates reads
+    as a sub-Ångström clash). That is an image contact, not a crushed bond.
+    Small monomers still use MIC, including a molecule that has wrapped.
+    """
+    if cell_mat is None:
+        return None
+    lengths = _orthorhombic_box_lengths(cell_mat)
+    if lengths is None:
+        return cell_mat
+    span = np.asarray(block, dtype=float).max(axis=0) - np.asarray(block, dtype=float).min(axis=0)
+    if np.any(span > lengths):
+        return None
+    return cell_mat
+
+
 def find_worst_intramonomer_close_contact(
     positions: np.ndarray,
     monomer_offsets: np.ndarray,
@@ -1394,7 +1422,7 @@ def find_worst_intramonomer_close_contact(
         found = min_counted_intramonomer_pair(
             pos[si:ei],
             _local_exclusion_set(excluded, si, ei),
-            cell_mat,
+            _cell_for_intramonomer_block(pos[si:ei], cell_mat),
             clash_floor,
         )
         if found is None:
