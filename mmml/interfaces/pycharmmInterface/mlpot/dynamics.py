@@ -116,7 +116,26 @@ def _apply_dynamics_io_setters(
         if isinstance(val, str):
             if not setter(val):
                 raise RuntimeError(f"dynamics {key} open failed: {val}")
-            kw.pop(key, None)
+            # CHARMM c52a1 DCNTRL defaults IUNCRD/IUNWRI to -1 unless the unit is
+            # on the DYNA line (c49 KEY_LIBRARY kept the unit the setter opened),
+            # so script-path runs lost the DCD and restart. Pass the opened unit.
+            unit = _charmm_reawri_unit(key)
+            if unit is not None and unit > 0:
+                kw[key] = unit
+            else:
+                kw.pop(key, None)
+
+
+def _charmm_reawri_unit(key: str) -> int | None:
+    """Fortran unit held in ``reawri::<key>`` (``iuncrd``/``iunwri``/``iunrea``), or None."""
+    try:
+        import ctypes
+
+        import pycharmm.lib as charmm_lib
+
+        return int(ctypes.c_int.in_dll(charmm_lib.charmm, f"__reawri_MOD_{key}").value)
+    except (ImportError, OSError, ValueError, AttributeError):
+        return None
 
 
 def _emit_overlap_log(
