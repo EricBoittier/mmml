@@ -37,3 +37,27 @@ def test_unknown_unit_drops_keyword(monkeypatch):
     kw = {"iuncrd": "/tmp/x.dcd"}
     mdyn._apply_dynamics_io_setters(kw)
     assert "iuncrd" not in kw
+
+
+def test_api_seeds_go_on_script_line_for_c52(monkeypatch):
+    monkeypatch.setattr(mdyn, "_charmm_dyna_script_parses_iseed", lambda: True)
+    monkeypatch.setattr(mdyn, "_pending_api_rngseeds", [11, 22, 33, 44])
+    kw: dict = {}
+    mdyn._put_api_rngseeds_on_script_line(kw, use_c_api=False)
+    assert kw["iseed"] == "11 22 33 44"
+    # consumed: the next DYNA without a fresh set_rngseeds gets nothing (as c49)
+    kw2: dict = {}
+    mdyn._put_api_rngseeds_on_script_line(kw2, use_c_api=False)
+    assert "iseed" not in kw2
+
+
+def test_api_seeds_not_on_line_for_c_api_or_c49(monkeypatch):
+    monkeypatch.setattr(mdyn, "_pending_api_rngseeds", [1, 2])
+    monkeypatch.setattr(mdyn, "_charmm_dyna_script_parses_iseed", lambda: True)
+    kw: dict = {}
+    mdyn._put_api_rngseeds_on_script_line(kw, use_c_api=True)
+    assert kw == {}
+    monkeypatch.setattr(mdyn, "_pending_api_rngseeds", [1, 2])
+    monkeypatch.setattr(mdyn, "_charmm_dyna_script_parses_iseed", lambda: False)
+    mdyn._put_api_rngseeds_on_script_line(kw, use_c_api=False)
+    assert kw == {}

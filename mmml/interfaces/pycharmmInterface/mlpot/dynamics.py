@@ -4971,6 +4971,7 @@ def run_dynamics(dynamics_kwargs: dict[str, Any]) -> Any:
         init_velocities=init_velocities,
     )
     _apply_dynamics_io_setters(kw, restart_read_unit=restart_read_unit)
+    _put_api_rngseeds_on_script_line(kw, use_c_api=use_c_api)
     _prepare_dynamics_list_frequencies(kw, nstep=nstep)
     heat_append = _dynamics_script_append_for_heat_ramp(kw)
     from mmml.interfaces.pycharmmInterface.mlpot.strain_virial import (
@@ -7015,6 +7016,51 @@ def _refresh_charmm_dynamics_rng(*, base: int | None, salt: int) -> None:
         rng = np.random.default_rng(int(base) + int(salt) * 1_000_003)
     seeds = [int(x) for x in rng.integers(1, 2**31, size=nrand)]
     dyn.set_rngseeds(seeds)
+    global _pending_api_rngseeds
+    _pending_api_rngseeds = list(seeds)
+
+
+# Seeds last set with ``dynamics_set_rngseeds``, not yet handed to a DYNA call.
+_pending_api_rngseeds: list[int] | None = None
+
+
+def _take_pending_api_rngseeds() -> list[int] | None:
+    global _pending_api_rngseeds
+    seeds, _pending_api_rngseeds = _pending_api_rngseeds, None
+    return seeds
+
+
+def _put_api_rngseeds_on_script_line(kw: dict[str, Any], *, use_c_api: bool) -> None:
+    """Make the DYNA script path honour seeds set through ``dynamics_set_rngseeds``.
+
+    c49 KEY_LIBRARY DCNTRL always used ``dyn_init_rng`` (honours the API seeds).
+    c52a1 does that only for the C-API (``options``) path; the DYNA script path
+    calls ``dyn_parse_iseed``, which ignores ``qapi_seed_set`` and, without ISEED
+    on the line, seeds a START from the system clock -- so the same ``--seed``
+    gave different velocities every run. ISEED on the line is what c52a1 reads;
+    on c49 it sets the same seeds the API call already set.
+    """
+    seeds = _take_pending_api_rngseeds()
+    if use_c_api or not seeds or "iseed" in kw:
+        return
+    if not _charmm_dyna_script_parses_iseed():
+        return
+    kw["iseed"] = " ".join(str(int(s)) for s in seeds)
+
+
+def _charmm_dyna_script_parses_iseed() -> bool:
+    """True for CHARMM libraries (c52a1+) whose DYNA script path reads ISEED.
+
+    c49 KEY_LIBRARY builds ignore ISEED there (it would only print an
+    "extraneous characters" warning) and already honour the API seeds.
+    ``api_keywords_count`` first appears in the c52a1 library API.
+    """
+    try:
+        import pycharmm.lib as charmm_lib
+
+        return hasattr(charmm_lib.charmm, "api_keywords_count")
+    except (ImportError, OSError):
+        return False
 
 
 def _rng_salt_for_dynamics(
