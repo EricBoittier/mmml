@@ -5769,8 +5769,18 @@ def _ensure_nsavc_below_nstep(kw: dict[str, Any]) -> None:
     kw["nsavc"] = new
 
 
-def _align_inbfrq_with_imgfrq(chunk_kw: dict[str, Any]) -> None:
-    """CHARMM FINCYC: ``IMGFRQ`` must be a multiple of ``INBFRQ`` when ``INBFRQ > 0``."""
+def _align_inbfrq_with_imgfrq(
+    chunk_kw: dict[str, Any],
+    *,
+    nstep: int | None = None,
+) -> None:
+    """CHARMM FINCYC: ``IMGFRQ`` must be a multiple of ``INBFRQ`` when ``INBFRQ > 0``.
+
+    An image frequency already past ``nstep`` is disabled on purpose (loose PBC).
+    Raising it to the next multiple of ``inbfrq`` keeps that skip. Shrinking
+    ``inbfrq`` to a divisor of ``nstep + 1`` does not: 101 is prime, so a 100-step
+    NVE collapsed a 50-step nonbond/MLpot rebuild to every step.
+    """
     if "inbfrq" not in chunk_kw or "imgfrq" not in chunk_kw:
         return
     inb = int(chunk_kw["inbfrq"])
@@ -5786,6 +5796,13 @@ def _align_inbfrq_with_imgfrq(chunk_kw: dict[str, Any]) -> None:
         return
     if img % inb == 0:
         return
+    if nstep is not None and int(nstep) > 0 and img > int(nstep):
+        lifted = inb * (int(nstep) // inb + 1)
+        chunk_kw["imgfrq"] = lifted
+        for key in ("ihbfrq", "ilbfrq"):
+            if key in chunk_kw and int(chunk_kw[key]) == img:
+                chunk_kw[key] = lifted
+        return
     for d in range(min(inb, img), 0, -1):
         if img % d == 0:
             chunk_kw["inbfrq"] = d
@@ -5798,7 +5815,7 @@ def _prepare_dynamics_list_frequencies(kw: dict[str, Any], *, nstep: int) -> Non
     ``dynamics.set_inbfrq`` updates ``contrl`` but not image-list cadence; a leftover
     ``imgfrq=-1`` with ``inbfrq>0`` triggers BOMLev -2 (IMGFRQ not a multiple of INBFRQ).
     """
-    _align_inbfrq_with_imgfrq(kw)
+    _align_inbfrq_with_imgfrq(kw, nstep=nstep)
     inb = int(kw.get("inbfrq", -1))
     if inb == 0:
         kw["imgfrq"] = 0
@@ -5918,9 +5935,10 @@ def _harmonize_overlap_chunk_frequencies(
             chunk_kw[key] = _harmonize_dynamics_frequency(int(cadence), n)
         else:
             chunk_kw[key] = _harmonize_dynamics_frequency(int(chunk_kw[key]), n)
-    _align_inbfrq_with_imgfrq(chunk_kw)
+    _align_inbfrq_with_imgfrq(chunk_kw, nstep=n)
     if loose_pbc:
         apply_loose_pbc_dyn_freq_kwargs(chunk_kw, nstep=n)
+        _align_inbfrq_with_imgfrq(chunk_kw, nstep=n)
     else:
         _ensure_ntrfrq_above_nstep(chunk_kw, n)
         _maybe_disable_ixtfrq_for_fixed_volume_chunk(chunk_kw, n)

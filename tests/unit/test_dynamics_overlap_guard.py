@@ -4255,6 +4255,22 @@ def test_apply_overlap_chunk_heat_ramp_chunk_zero():
     assert chunk_kw["TEMINC"] > 0.0
 
 
+def test_disabled_image_frequency_does_not_collapse_inbfrq_to_every_step():
+    """Loose PBC sets imgfrq = nstep + 1. A prime value must not force inbfrq = 1."""
+    from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
+        _align_inbfrq_with_imgfrq,
+    )
+
+    kw = {"inbfrq": 50, "imgfrq": 101, "ihbfrq": 101, "ilbfrq": 101}
+    _align_inbfrq_with_imgfrq(kw, nstep=100)
+    assert kw["inbfrq"] == 50
+    assert kw["imgfrq"] == 150
+    assert kw["ihbfrq"] == 150
+    assert kw["ilbfrq"] == 150
+    assert kw["imgfrq"] % kw["inbfrq"] == 0
+    assert kw["imgfrq"] > 100
+
+
 def test_prepare_dynamics_list_frequencies_aligns_stale_imgfrq():
     from mmml.interfaces.pycharmmInterface.mlpot.dynamics import (
         _align_inbfrq_with_imgfrq,
