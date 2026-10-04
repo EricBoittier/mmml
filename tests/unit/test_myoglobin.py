@@ -27,7 +27,7 @@ from mmml.interfaces.pycharmmInterface.myoglobin import (
     his93_partition_columns,
     load_mbco,
     neutralize_mbco,
-    sequence_read_command,
+    sequence_string_chunks,
 )
 
 
@@ -219,8 +219,11 @@ def test_charmm_water_cube_is_4985_tip3_at_charge_plus_one() -> None:
 
 
 def test_periodic_water_cube_replaces_one_distant_tip3_with_chloride() -> None:
-    assert sequence_read_command(("TIP3",) * 4985) == "read sequ TIP3 4985"
-    assert sequence_read_command(("VAL", "LEU")) is None
+    chunks = sequence_string_chunks(("TIP3",) * 4985)
+    assert sum(len(chunk.split()) for chunk in chunks) == 4985
+    assert all(len(chunk) <= 4000 for chunk in chunks)
+    assert len(chunks) > 1
+    assert sequence_string_chunks(("VAL", "LEU")) == ["VAL LEU"]
     from mmml.interfaces.pycharmmInterface.charmm_paths import mmml_repo_root
 
     neutral = neutralize_mbco(
@@ -234,7 +237,9 @@ def test_periodic_water_cube_replaces_one_distant_tip3_with_chloride() -> None:
     assert ions[0].name == "CLA"
     waters = [segment for segment in neutral.segments if segment.kind == "water"]
     assert sum(len(segment.resnames) for segment in waters) == 4984
-    assert sequence_read_command(waters[0].resnames) == "read sequ TIP3 4984"
+    water_chunks = sequence_string_chunks(waters[0].resnames)
+    assert sum(len(chunk.split()) for chunk in water_chunks) == 4984
+    assert all(len(chunk) <= 4000 for chunk in water_chunks)
     assert {segment.kind for segment in neutral.segments if segment.segid == ION_SEGID} == {
         "ion"
     }

@@ -392,17 +392,33 @@ def crd_coordinate_table(
     return table
 
 
-def sequence_read_command(resnames: Sequence[str]) -> str | None:
-    """``read sequ NAME N`` when a segment is one residue repeated.
+# NEXTWD copies each remainder through SCRTCH. This library's SCRMAX is 5000,
+# so one sequence_string of 4985 TIP3 names kept 1001 waters. Stay under that.
+SEQUENCE_STRING_MAX_CHARS = 4000
 
-    ``read.sequence_string`` copies the remainder of the sequence through a
-    fixed scratch on every word. Spelling ``TIP3`` 4985 times is cut off after
-    1001 waters (5539 atoms). The CHARMM water-cube input uses the repeat form.
+
+def sequence_string_chunks(resnames: Sequence[str]) -> list[str]:
+    """Split a residue list into ``sequence_string`` calls that fit SCRTCH.
+
+    Several calls before ``generate`` accumulate. ``read sequ`` is not a
+    command in this CHARMM library, so the repeat form cannot be used.
     """
-    names = [str(name).strip().upper() for name in resnames]
-    if len(names) >= 2 and all(name == names[0] for name in names):
-        return f"read sequ {names[0]} {len(names)}"
-    return None
+    names = [str(name).strip().upper() for name in resnames if str(name).strip()]
+    chunks: list[str] = []
+    current: list[str] = []
+    length = 0
+    for name in names:
+        extra = len(name) if not current else len(name) + 1
+        if current and length + extra > SEQUENCE_STRING_MAX_CHARS:
+            chunks.append(" ".join(current))
+            current = [name]
+            length = len(name)
+        else:
+            current.append(name)
+            length += extra
+    if current:
+        chunks.append(" ".join(current))
+    return chunks
 
 
 def neutralize_mbco(structure: MbcoStructure) -> MbcoStructure:
@@ -504,7 +520,8 @@ def build_myoglobin_in_charmm(
     Waters are generated with no angles and no dihedrals. ``PHEM`` is applied
     with angle and dihedral autogeneration off, then coordinates are assigned
     from the CRD. ``neutralize`` replaces bulk TIP3 with CLA or SOD until the
-    formal charge is 0. A repeated residue is read as ``read sequ NAME N``.
+    formal charge is 0. Long segments are read in several ``sequence_string``
+    calls so the 5000-character scratch does not drop residues.
     """
     if int(n_molecules) != 1:
         raise ValueError("MBCO is one crystal structure; --n-molecules must be 1")
@@ -531,11 +548,13 @@ def build_myoglobin_in_charmm(
     for segment in structure.segments:
         if segment.kind == "omit":
             continue
-        command = sequence_read_command(segment.resnames)
-        if command is None:
-            read.sequence_string(" ".join(segment.resnames))
-        else:
-            lingo.charmm_script(command)
+        for chunk in sequence_string_chunks(segment.resnames):
+            status = int(read.sequence_string(chunk))
+            if status != 1:
+                raise RuntimeError(
+                    f"CHARMM sequence read failed for {segment.segid} "
+                    f"({status})"
+                )
         if segment.kind == "protein":
             gen.new_segment(seg_name=segment.segid, setup_ic=False)
         elif segment.kind in {"heme", "ligand", "ion"}:
