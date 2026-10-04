@@ -735,11 +735,25 @@ def build(cutoff, sym_ops=None):
     cutoff_c = ctypes.c_double(cutoff)
     nops_c = ctypes.c_int(nops)
 
-    # Pass array directly (not byref) - ctypes arrays are already passed by reference
-    # nops is passed by value (Fortran has 'value' attribute)
-    success = lib.crystal_build(ctypes.byref(cutoff_c),
-                                           str_array,
-                                           nops_c)
+    # Pass array directly (not byref) - ctypes arrays are already passed by reference.
+    # c52a1 crystal_build takes nops by value. libcharmm.so from before that bump
+    # takes nops by pointer; passing the integer by value segfaults on entry.
+    # blockdata_is_active was added in the same bump and is absent from the older library.
+    try:
+        lib.blockdata_is_active
+        nops_by_value = True
+    except AttributeError:
+        nops_by_value = False
+    if nops_by_value:
+        success = lib.crystal_build(ctypes.byref(cutoff_c), str_array, nops_c)
+    else:
+        if nops == 0:
+            str_array = (ctypes.c_char_p * 0)()
+        success = lib.crystal_build(
+            ctypes.byref(cutoff_c),
+            str_array,
+            ctypes.byref(nops_c),
+        )
     return success
 
 

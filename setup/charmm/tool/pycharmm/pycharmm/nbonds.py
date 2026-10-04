@@ -366,6 +366,32 @@ def update_bnbnd():
     return
 
 
+def _nbond_getters_return_double() -> bool:
+    """c52a1 getters return ``real(c_double)``. Older libcharmm writes an out-argument and returns status.
+
+    ``blockdata_is_active`` arrived in the same API bump and is absent from the older library.
+    """
+    try:
+        lib.blockdata_is_active
+    except AttributeError:
+        return False
+    return True
+
+
+def _get_nbond_distance(symbol: str) -> float:
+    getter = getattr(lib, symbol)
+    if _nbond_getters_return_double():
+        getter.restype = ctypes.c_double
+        getter.argtypes = []
+        return float(getter())
+    slot = (ctypes.c_double * 1)()
+    getter.restype = ctypes.c_int
+    getter.argtypes = [ctypes.POINTER(ctypes.c_double)]
+    if not bool(getter(slot)):
+        raise RuntimeError(f"There was a problem fetching {symbol}.")
+    return float(slot[0])
+
+
 def get_cutnb():
     """Get the current value of cutnb from CHARMM
 
@@ -374,10 +400,7 @@ def get_cutnb():
     float
         the current cutnb value
     """
-    get_cutnb_c = lib.nbonds_get_cutnb
-    get_cutnb_c.restype = ctypes.c_double
-    cutnb = get_cutnb_c()
-    return cutnb
+    return _get_nbond_distance("nbonds_get_cutnb")
 
 
 def get_ctonnb():
@@ -388,10 +411,7 @@ def get_ctonnb():
     float
         the current ctonnb value
     """
-    get_ctonnb_c = lib.nbonds_get_ctonnb
-    get_ctonnb_c.restype = ctypes.c_double
-    ctonnb = get_ctonnb_c()
-    return ctonnb
+    return _get_nbond_distance("nbonds_get_ctonnb")
 
 
 def get_ctofnb():
@@ -402,10 +422,7 @@ def get_ctofnb():
     float
         the current ctofnb value
     """
-    get_ctofnb_c = lib.nbonds_get_ctofnb
-    get_ctofnb_c.restype = ctypes.c_double
-    ctofnb = get_ctofnb_c()
-    return ctofnb
+    return _get_nbond_distance("nbonds_get_ctofnb")
 
 
 def update_nbxmod():
