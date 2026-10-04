@@ -1692,6 +1692,172 @@ def switched_mm_eterm_split(
     )
 
 
+def update_jax_md_mm_pairs(
+    positions,
+    box,
+    *,
+    positions_jax,
+    debug: bool,
+    fractional_coordinates: bool,
+    pbc_cell,
+    mm_r_min,
+    n_monomers: int,
+    ml_jnp_dtype,
+    max_overflow_retries: int,
+    capacity_growth_factor: float,
+    nbrs_cell: list,
+    neighbor_fn_cell: list,
+    filter_fn_cell: list,
+    capacity_multiplier_cell: list,
+    pair_idx_cell: list,
+    pair_mask_cell: list,
+    last_positions: list,
+    last_cartesian_positions: list,
+    last_box: list,
+    monomer_id_jnp,
+    pair_stats: dict,
+    list_cutoff,
+    check_extent_and_radius,
+    create_bundle,
+    cell_list_fallback,
+):
+    """Refresh the jax-md MM neighbor list, refitting the cutoff first if it is short.
+
+    ``list_cutoff`` is ``lambda: float`` of the live cutoff. ``check_extent_and_radius``
+    may raise it (and ``create_bundle`` closes over that new value) before allocate.
+    """
+    R = positions
+    nbrs = nbrs_cell[0]
+    box_jnp = jnp.asarray(box) if box is not None else None
+    pbc_cell_jnp = jnp.asarray(pbc_cell) if pbc_cell is not None else None
+    mm_r_min_val = float(mm_r_min) if mm_r_min is not None else None
+    host_pos = (
+        np.asarray(jax.device_get(positions), dtype=np.float64)
+        if positions_jax is not None
+        else np.asarray(positions, dtype=np.float64)
+    )
+    if positions_jax is not None:
+        pair_stats["host_syncs"] += 1
+    cutoff_before = float(list_cutoff())
+    check_extent_and_radius(host_pos, box)
+    if float(list_cutoff()) != cutoff_before:
+        rebuilt = create_bundle(capacity_multiplier_cell[0])
+        if rebuilt is None:
+            return cell_list_fallback(host_pos, debug, box_in=box)
+        neighbor_fn_cell[0], filter_fn_cell[0], _ = rebuilt
+        if box_jnp is not None and fractional_coordinates:
+            nbrs = neighbor_fn_cell[0].allocate(R, box=box_jnp)
+        else:
+            nbrs = neighbor_fn_cell[0].allocate(R)
+        nbrs_cell[0] = nbrs
+
+    try:
+        nbrs, pair_idx, pair_mask = _optimized_jax_md_update_gpu(
+            R,
+            nbrs,
+            neighbor_fn_cell[0],
+            filter_fn_cell[0],
+            monomer_id_jnp,
+            box_jnp,
+            pbc_cell_jnp,
+            mm_r_min_val,
+            int(n_monomers),
+            bool(fractional_coordinates),
+        )
+    except Exception as e:
+        if debug:
+            print(f"[nbr] update failed before overflow check ({type(e).__name__}): {e}")
+        return cell_list_fallback(
+            np.asarray(jax.device_get(positions), dtype=np.float64)
+            if positions_jax is not None
+            else np.asarray(positions, dtype=np.float64),
+            debug,
+            box_in=box,
+        )
+
+    realloc_count = 0
+    for _ in range(int(max_overflow_retries)):
+        overflow = np.asarray(jax.device_get(nbrs.did_buffer_overflow))
+        did_overflow = bool(overflow) if overflow.ndim == 0 else bool(overflow.any())
+        if debug:
+            print(
+                f"[nbr] update: overflow={did_overflow}, realloc={realloc_count}, "
+                f"box={'None' if box is None else np.asarray(box).tolist()}"
+            )
+        if not did_overflow:
+            break
+        realloc_count += 1
+        pair_stats["reallocs"] += 1
+        next_multiplier = capacity_multiplier_cell[0] * float(capacity_growth_factor)
+        rebuilt = create_bundle(next_multiplier)
+        if rebuilt is not None:
+            neighbor_fn_new, filter_fn_new, _ = rebuilt
+            neighbor_fn_cell[0] = neighbor_fn_new
+            filter_fn_cell[0] = filter_fn_new
+            capacity_multiplier_cell[0] = next_multiplier
+            pair_stats["capacity_multiplier"] = float(next_multiplier)
+        try:
+            nbrs_alloc = (
+                neighbor_fn_cell[0].allocate(R, box=box_jnp)
+                if (box_jnp is not None and fractional_coordinates)
+                else neighbor_fn_cell[0].allocate(R)
+            )
+            nbrs, pair_idx, pair_mask = _optimized_jax_md_update_gpu(
+                R,
+                nbrs_alloc,
+                neighbor_fn_cell[0],
+                filter_fn_cell[0],
+                monomer_id_jnp,
+                box_jnp,
+                pbc_cell_jnp,
+                mm_r_min_val,
+                int(n_monomers),
+                bool(fractional_coordinates),
+            )
+        except Exception as e:
+            if debug:
+                print(
+                    f"[nbr] allocate/update failed during retry {realloc_count} "
+                    f"({type(e).__name__}): {e}"
+                )
+            return cell_list_fallback(
+                np.asarray(jax.device_get(positions), dtype=np.float64)
+                if positions_jax is not None
+                else np.asarray(positions, dtype=np.float64),
+                debug,
+                box_in=box,
+            )
+    else:
+        if debug:
+            print("[nbr] persistent overflow after retries; attempting cell-list fallback")
+        return cell_list_fallback(
+            np.asarray(jax.device_get(positions), dtype=np.float64)
+            if positions_jax is not None
+            else np.asarray(positions, dtype=np.float64),
+            debug,
+            box_in=box,
+        )
+
+    nbrs_cell[0] = nbrs
+    if mm_r_min is not None:
+        pair_stats["com_filter_calls"] += 1
+    pair_mask = jnp.asarray(pair_mask, dtype=ml_jnp_dtype)
+    pair_idx_cell[0] = pair_idx
+    pair_mask_cell[0] = pair_mask
+    last_positions[0] = None
+    last_cartesian_positions[0] = None
+    last_box[0] = None if box is None else np.asarray(box, dtype=np.float64).copy()
+    pair_stats["updates"] += 1
+    if debug:
+        n_valid = int(np.sum(np.asarray(jax.device_get(pair_mask))))
+        capacity = pair_idx.shape[0]
+        print(
+            f"[nbr] pairs: n_valid={n_valid}, capacity={capacity}, "
+            f"frac_coords={fractional_coordinates}"
+        )
+    return pair_idx, pair_mask
+
+
 def _is_device_positions(x) -> bool:
     """JAX/CuPy device buffers only. NumPy ≥1.23 exposes ``__dlpack_device__``."""
     return x is not None and not isinstance(x, np.ndarray) and hasattr(x, "__dlpack_device__")
@@ -2961,146 +3127,34 @@ def build_mm_energy_forces_fn(
             _pair_stats["calls"] += 1
 
             if _use_jax_md_nbrs:
-                # Neighbor update stays on device. The extent guard reads host
-                # positions once per refresh (same cadence as a vesin rebuild):
-                # the neighbor function closes over the setup cutoff, so an
-                # outgrown molecule or a shrunk NpT box must refit and allocate
-                # at the new cutoff before this update returns pairs.
-                R = positions
-                nbrs = _nbrs[0]
-                box_jnp = jnp.asarray(box) if box is not None else None
-                pbc_cell_jnp = jnp.asarray(pbc_cell) if pbc_cell is not None else None
-                mm_r_min_val = float(mm_r_min) if mm_r_min is not None else None
-                host_pos = (
-                    np.asarray(jax.device_get(positions), dtype=np.float64)
-                    if positions_jax is not None
-                    else np.asarray(positions, dtype=np.float64)
+                return update_jax_md_mm_pairs(
+                    positions,
+                    box,
+                    positions_jax=positions_jax,
+                    debug=_nbr_debug,
+                    fractional_coordinates=bool(fractional_coordinates),
+                    pbc_cell=pbc_cell,
+                    mm_r_min=mm_r_min,
+                    n_monomers=int(n_monomers),
+                    ml_jnp_dtype=ml_jnp_dtype,
+                    max_overflow_retries=int(jax_md_max_overflow_retries),
+                    capacity_growth_factor=float(jax_md_capacity_growth_factor),
+                    nbrs_cell=_nbrs,
+                    neighbor_fn_cell=_neighbor_fn_cell,
+                    filter_fn_cell=_filter_fn_cell,
+                    capacity_multiplier_cell=_current_capacity_multiplier,
+                    pair_idx_cell=_pair_idx_cell,
+                    pair_mask_cell=_pair_mask_cell,
+                    last_positions=_last_positions,
+                    last_cartesian_positions=_last_cartesian_positions,
+                    last_box=_last_box,
+                    monomer_id_jnp=_monomer_id_jnp,
+                    pair_stats=_pair_stats,
+                    list_cutoff=lambda: _mm_list_cutoff,
+                    check_extent_and_radius=_check_extent_and_radius,
+                    create_bundle=_create_jax_md_bundle,
+                    cell_list_fallback=_cell_list_fallback_pairs,
                 )
-                if positions_jax is not None:
-                    _pair_stats["host_syncs"] += 1
-                cutoff_before = float(_mm_list_cutoff)
-                _check_extent_and_radius(host_pos, box)
-                if float(_mm_list_cutoff) != cutoff_before:
-                    rebuilt = _create_jax_md_bundle(_current_capacity_multiplier[0])
-                    if rebuilt is None:
-                        return _cell_list_fallback_pairs(host_pos, _nbr_debug, box_in=box)
-                    _neighbor_fn_cell[0], _filter_fn_cell[0], _ = rebuilt
-                    if box_jnp is not None and fractional_coordinates:
-                        nbrs = _neighbor_fn_cell[0].allocate(R, box=box_jnp)
-                    else:
-                        nbrs = _neighbor_fn_cell[0].allocate(R)
-                    _nbrs[0] = nbrs
-
-                try:
-                    nbrs, pair_idx, pair_mask = _optimized_jax_md_update_gpu(
-                        R,
-                        nbrs,
-                        _neighbor_fn_cell[0],
-                        _filter_fn_cell[0],
-                        _monomer_id_jnp,
-                        box_jnp,
-                        pbc_cell_jnp,
-                        mm_r_min_val,
-                        int(n_monomers),
-                        bool(fractional_coordinates),
-                    )
-                except Exception as e:
-                    if _nbr_debug:
-                        print(f"[nbr] update failed before overflow check ({type(e).__name__}): {e}")
-                    return _cell_list_fallback_pairs(
-                        np.asarray(jax.device_get(positions), dtype=np.float64) if positions_jax is not None else np.asarray(positions, dtype=np.float64),
-                        _nbr_debug,
-                        box_in=box,
-                    )
-                
-                realloc_count = 0
-                for _ in range(int(jax_md_max_overflow_retries)):
-                    overflow = np.asarray(jax.device_get(nbrs.did_buffer_overflow))
-                    did_overflow = bool(overflow) if overflow.ndim == 0 else bool(overflow.any())
-                    
-                    if _nbr_debug:
-                        print(
-                            f"[nbr] update: overflow={did_overflow}, realloc={realloc_count}, "
-                            f"box={'None' if box is None else np.asarray(box).tolist()}"
-                        )
-                    
-                    if not did_overflow:
-                        break
-                    
-                    realloc_count += 1
-                    _pair_stats["reallocs"] += 1
-                    
-                    next_multiplier = (
-                        _current_capacity_multiplier[0]
-                        * float(jax_md_capacity_growth_factor)
-                    )
-                    
-                    rebuilt = _create_jax_md_bundle(next_multiplier)
-                    if rebuilt is not None:
-                        _neighbor_fn_new, _filter_fn_new, _ = rebuilt
-                        _neighbor_fn_cell[0] = _neighbor_fn_new
-                        _filter_fn_cell[0] = _filter_fn_new
-                        _current_capacity_multiplier[0] = next_multiplier
-                        _pair_stats["capacity_multiplier"] = float(next_multiplier)
-                        
-                    try:
-                        nbrs_alloc = _neighbor_fn_cell[0].allocate(R, box=box_jnp) if (box_jnp is not None and fractional_coordinates) else _neighbor_fn_cell[0].allocate(R)
-                        nbrs, pair_idx, pair_mask = _optimized_jax_md_update_gpu(
-                            R,
-                            nbrs_alloc,
-                            _neighbor_fn_cell[0],
-                            _filter_fn_cell[0],
-                            _monomer_id_jnp,
-                            box_jnp,
-                            pbc_cell_jnp,
-                            mm_r_min_val,
-                            int(n_monomers),
-                            bool(fractional_coordinates),
-                        )
-                    except Exception as e:
-                        if _nbr_debug:
-                            print(
-                                f"[nbr] allocate/update failed during retry {realloc_count} "
-                                f"({type(e).__name__}): {e}"
-                            )
-                        return _cell_list_fallback_pairs(
-                            np.asarray(jax.device_get(positions), dtype=np.float64) if positions_jax is not None else np.asarray(positions, dtype=np.float64),
-                            _nbr_debug,
-                            box_in=box,
-                        )
-                else:
-                    if _nbr_debug:
-                        print("[nbr] persistent overflow after retries; attempting cell-list fallback")
-                    return _cell_list_fallback_pairs(
-                        np.asarray(jax.device_get(positions), dtype=np.float64) if positions_jax is not None else np.asarray(positions, dtype=np.float64),
-                        _nbr_debug,
-                        box_in=box,
-                    )
-                
-                _nbrs[0] = nbrs
-                
-                if mm_r_min is not None:
-                    _pair_stats["com_filter_calls"] += 1
-                
-                pair_mask = jnp.asarray(pair_mask, dtype=ml_jnp_dtype)
-                
-                _pair_idx_cell[0] = pair_idx
-                _pair_mask_cell[0] = pair_mask
-                
-                _last_positions[0] = None
-                _last_cartesian_positions[0] = None
-                _last_box[0] = None if box is None else np.asarray(box, dtype=np.float64).copy()
-                _pair_stats["updates"] += 1
-                
-                if _nbr_debug:
-                    n_valid = int(np.sum(np.asarray(jax.device_get(pair_mask))))
-                    capacity = pair_idx.shape[0]
-                    print(
-                        f"[nbr] pairs: n_valid={n_valid}, capacity={capacity}, "
-                        f"frac_coords={fractional_coordinates}"
-                    )
-                
-                return pair_idx, pair_mask
 
             interval = int(max(1, jax_md_update_interval))
             skin = _mm_skin_A
