@@ -1828,10 +1828,22 @@ def build_parser() -> argparse.ArgumentParser:
         "--mm-region",
         type=str,
         default=None,
-        choices=("none", "propionates"),
+        choices=("none", "propionates", "his93"),
         help=(
             "propionates: keep the heme tails and counterions as MM and cap "
-            "the CAA–CBA and CAD–CBD cuts with ghost hydrogens in PET."
+            "the CAA–CBA and CAD–CBD cuts with ghost hydrogens in PET. "
+            "his93: MbCO protein stays MM; PET sees the His93 imidazole, "
+            "heme, and CO, with one ghost hydrogen on CB–CG."
+        ),
+    )
+    parser.add_argument(
+        "--mbco-crd",
+        type=str,
+        default=None,
+        help=(
+            "CHARMM card coordinates for --residue MBCO. Default is "
+            "setup/charmm/test/data/mbco_au_q0.crd (crystal waters, no box). "
+            "Sulfate in that file is omitted."
         ),
     )
     parser.add_argument(
@@ -3567,6 +3579,7 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
     )
     _append_optional(cmd, "--counterions", getattr(args, "counterions", None))
     _append_optional(cmd, "--mm-region", getattr(args, "mm_region", None))
+    _append_optional(cmd, "--mbco-crd", getattr(args, "mbco_crd", None))
     _append_optional(
         cmd,
         "--bonded-intra-damp-onset",

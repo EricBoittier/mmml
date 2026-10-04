@@ -435,8 +435,9 @@ def read_cgenff_toppar(*, enable_drude: bool = False) -> None:
     available to Packmol / ``md-system`` compositions. Extra append PRMs from
     ``MMML_CGENFF_EXTRA_PRM`` are read after the base CGenFF parameter file.
 
-    A heme-only cluster (``topology_residue_context``) reads the protein
-    topology and ``toppar_all36_prot_heme.str`` instead of CGenFF.
+    A heme or MbCO cluster (``topology_residue_context``) reads the protein
+    topology and ``toppar_all36_prot_heme.str`` instead of CGenFF. TIP3 and
+    protein ions also append ``toppar_water_ions.str``.
     """
     from mmml.interfaces.pycharmmInterface.heme_library import (
         active_topology_residues,

@@ -115,6 +115,14 @@ def expand_counterions(args: object) -> None:
     kind = getattr(args, "counterions", None)
     if kind is None or str(kind).strip().lower() in {"", "none"}:
         return
+    from mmml.interfaces.pycharmmInterface.myoglobin import is_myoglobin_args
+
+    if is_myoglobin_args(args):
+        raise ValueError(
+            "--counterions does not apply to MBCO. The crystal CRD is loaded "
+            "as written, with sulfate omitted. Use --charge to override the "
+            "metatomic charge."
+        )
     ion = str(kind).strip().upper()
     if ion not in PROTEIN_ION_CHARGE:
         known = ", ".join(sorted(PROTEIN_ION_CHARGE))
@@ -182,6 +190,13 @@ def resolve_metatomic_electronic_state(args: object | None) -> MetatomicElectron
     """
     if args is None:
         return MetatomicElectronicState(None, None, None, None, "")
+    from mmml.interfaces.pycharmmInterface.myoglobin import (
+        is_myoglobin_args,
+        myoglobin_electronic_state,
+    )
+
+    if is_myoglobin_args(args):
+        return myoglobin_electronic_state(args)
     explicit_charge = getattr(args, "charge", None)
     explicit_spin = getattr(args, "spin_multiplicity", None)
     mm_region = str(getattr(args, "mm_region", None) or "none").strip().lower()

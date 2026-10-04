@@ -1017,6 +1017,14 @@ def resolve_mlpot_selection_from_args(args: Any | None) -> Any:
     """
     from mmml.md.ml_region import parse_ml_resnames
 
+    mm_region = (
+        str(getattr(args, "mm_region", None) or "").strip().lower() if args is not None else ""
+    )
+    if mm_region == "his93":
+        from mmml.interfaces.pycharmmInterface.myoglobin import his93_cut_from_args
+
+        ml_indices, _links = his93_cut_from_args(args)
+        return _select_atoms_cls()(atom_nums=[int(i) for i in ml_indices])
     ml_resnames = parse_ml_resnames(
         getattr(args, "ml_resnames", None) if args is not None else None
     )
@@ -2126,6 +2134,15 @@ def _expected_ml_ml_exclusion_pairs(n_ml: int) -> int:
     return n * (n - 1) // 2
 
 
+# A vacuum heme PSF aborted inside CHARMM at this pair count (73*72/2).
+VACUUM_DENSE_EXCLUSION_ABORT_PAIRS = 2628
+
+
+def vacuum_dense_exclusions_would_abort(n_ml: int) -> bool:
+    """True when a dense ML–ML exclusion list is large enough to abort ``upinb``."""
+    return _expected_ml_ml_exclusion_pairs(n_ml) >= VACUUM_DENSE_EXCLUSION_ABORT_PAIRS
+
+
 def should_skip_dense_ml_ml_exclusions(
     ml_selection: Any,
     *,
@@ -2741,18 +2758,34 @@ def register_mlpot(
             # All-ML jax_mic keeps MM pairs in JAX (or skips them). Writing
             # N(N-1)/2 exclusions and calling upinb here aborts CHARMM; the
             # vacuum heme run died after MAKINB reported 2628 exclusions.
-            if should_skip_dense_ml_ml_exclusions(
+            # A smaller-than-all-ML region of that size (MbCO His93) hits the
+            # same abort, so it skips the dense list too.
+            n_ml_now = len(ml_selection.get_atom_indexes())
+            skip_all_ml = should_skip_dense_ml_ml_exclusions(
                 ml_selection,
                 periodic_external=bool(periodic_external),
-            ):
+            )
+            skip_abort = vacuum_dense_exclusions_would_abort(n_ml_now)
+            if skip_all_ml or skip_abort:
                 skip_iblo_inb_update = True
-                n_ml = len(ml_selection.get_atom_indexes())
                 if verbose or not getattr(workflow_args, "quiet", False):
-                    print(
-                        "MLpot vacuum: skipping dense ML–ML exclusions for all-ML jax_mic "
-                        f"(n_ml={n_ml}, would need {_expected_ml_ml_exclusion_pairs(n_ml)} pairs)",
-                        flush=True,
-                    )
+                    n_pairs = _expected_ml_ml_exclusion_pairs(n_ml_now)
+                    if skip_all_ml:
+                        print(
+                            "MLpot vacuum: skipping dense ML–ML exclusions for all-ML jax_mic "
+                            f"(n_ml={n_ml_now}, would need {n_pairs} pairs)",
+                            flush=True,
+                        )
+                    else:
+                        print(
+                            "MLpot vacuum: skipping dense ML–ML exclusions "
+                            f"(n_ml={n_ml_now} needs {n_pairs} pairs; "
+                            "CHARMM aborted a vacuum PSF at "
+                            f"{VACUUM_DENSE_EXCLUSION_ABORT_PAIRS}). "
+                            "ML bonded terms and charges are zeroed on the selection. "
+                            "VDW among those atoms stays in CHARMM.",
+                            flush=True,
+                        )
         if workflow_args is not None:
             from mmml.interfaces.pycharmmInterface.mlpot.charmm_energy_policy import (
                 enforce_charmm_energy_term_policies,

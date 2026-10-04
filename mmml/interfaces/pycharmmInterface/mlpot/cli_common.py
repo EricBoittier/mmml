@@ -1548,15 +1548,18 @@ def build_cluster_from_args_with_tag(
 
 
 def _stash_cluster_atom_names(args: argparse.Namespace) -> None:
-    """Remember IUPAC names so a later ML/MM cut can find the propionate bonds."""
+    """Remember PSF identity so a later ML/MM cut can find the boundary bonds."""
     try:
-        import pycharmm.psf as psf
+        from mmml.interfaces.pycharmmInterface.myoglobin import psf_per_atom_identity
 
-        names = [str(x).strip() for x in psf.get_atype()]
+        names, resnames, resids, segids = psf_per_atom_identity()
     except Exception:
         return
     if names:
         setattr(args, "_cluster_atom_names", names)
+        setattr(args, "_cluster_atom_resnames", resnames)
+        setattr(args, "_cluster_atom_resids", resids)
+        setattr(args, "_cluster_atom_segids", segids)
 
 
 def _build_cluster_from_args_with_tag(
@@ -1731,15 +1734,43 @@ def _build_cluster_from_args_with_tag(
     else:
         residue = args.residue.upper()
         n_mol = int(args.n_molecules)
-        if residue == "ACO":
-            z, r = build_acetone_cluster(n_mol, spacing)
+        if residue in {"MBCO", "MYOGLOBIN"}:
+            from mmml.interfaces.pycharmmInterface.myoglobin import (
+                build_myoglobin_in_charmm,
+            )
+
+            if int(n_mol) != 1:
+                raise ValueError("MBCO is one crystal structure; --n-molecules must be 1")
+            requested = getattr(args, "metatomic_eval_mode", None)
+            if str(requested or "").strip().lower() in {"fragments", "fragment"}:
+                raise ValueError(
+                    "MBCO is one protein. --metatomic-eval-mode fragments would "
+                    "evaluate every residue pair. Use whole_system."
+                )
+            mode = str(getattr(args, "ml_potential_mode", "") or "").strip().lower()
+            if requested is None and mode in {"metatomic", "metatensor"}:
+                setattr(args, "metatomic_eval_mode", "whole_system")
+                print(
+                    "MBCO: metatomic evaluation set to whole_system (one protein).",
+                    flush=True,
+                )
+            z, r, atoms_per_list, residue_labels = build_myoglobin_in_charmm(
+                getattr(args, "mbco_crd", None),
+                n_molecules=1,
+            )
+            composition_summary = {"MBCO": 1}
+            tag = composition_tag(None, "MBCO", 1)
+            n_mol = 1
         else:
-            z, r = build_ase_cluster(residue, n_mol, spacing)
-        atoms_per = int(len(z) // n_mol)
-        atoms_per_list = [atoms_per] * int(n_mol)
-        residue_labels = [residue] * int(n_mol)
-        composition_summary = {residue: int(n_mol)}
-        tag = composition_tag(None, residue, n_mol)
+            if residue == "ACO":
+                z, r = build_acetone_cluster(n_mol, spacing)
+            else:
+                z, r = build_ase_cluster(residue, n_mol, spacing)
+            atoms_per = int(len(z) // n_mol)
+            atoms_per_list = [atoms_per] * int(n_mol)
+            residue_labels = [residue] * int(n_mol)
+            composition_summary = {residue: int(n_mol)}
+            tag = composition_tag(None, residue, n_mol)
     setattr(args, "_cluster_atoms_per_list", list(atoms_per_list))
     setattr(args, "_cluster_residue_labels", list(residue_labels))
     setattr(args, "_cluster_composition_summary", dict(composition_summary))
@@ -4912,11 +4943,23 @@ def add_mlpot_lr_nonbond_args(parser: argparse.ArgumentParser) -> None:
         "--mm-region",
         type=str,
         default=None,
-        choices=("none", "propionates"),
+        choices=("none", "propionates", "his93"),
         help=(
             "none: the metatomic system is the whole cluster. propionates: the "
             "heme tails (and any counterions) stay MM, and each CAA–CBA / CAD–CBD "
-            "cut is capped by a ghost hydrogen in the PET evaluation."
+            "cut is capped by a ghost hydrogen in the PET evaluation. his93: "
+            "MbCO keeps the protein and His93 backbone as MM; PET sees the "
+            "imidazole, heme, and CO, with one ghost hydrogen on CB–CG."
+        ),
+    )
+    group.add_argument(
+        "--mbco-crd",
+        type=str,
+        default=None,
+        help=(
+            "CHARMM card coordinates for --residue MBCO. Default is the "
+            "sperm-whale crystal CRD shipped with CHARMM "
+            "(setup/charmm/test/data/mbco_au_q0.crd). Sulfate is omitted."
         ),
     )
     group.add_argument(

@@ -104,34 +104,54 @@ def residues_from_cluster_args(args: object) -> tuple[str, ...]:
         return tuple(entry.residue for entry in parse_composition_entries(str(composition)))
     residue = getattr(args, "residue", None)
     if residue:
-        return (str(residue).strip().upper(),)
+        from mmml.interfaces.pycharmmInterface.myoglobin import (
+            is_myoglobin_residue,
+            mbco_topology_residue_names,
+        )
+
+        key = str(residue).strip().upper()
+        if is_myoglobin_residue(key):
+            return mbco_topology_residue_names(getattr(args, "mbco_crd", None))
+        return (key,)
     return ()
 
 
 def topology_family(residues: Sequence[str] | None) -> str:
     """``cgenff`` or ``heme``. Mixed libraries raise ``ValueError``.
 
-    Protein ions (SOD, POT, CLA, …) live in ``toppar_water_ions.str`` and are
-    read with the heme library so a −2 heme can be neutralized.
+    Protein ions (SOD, POT, CLA, …) and TIP3 live in ``toppar_water_ions.str``
+    and are read with the heme library. Standard amino acids from
+    ``top_all36_prot.rtf`` can share that build (MbCO). CGenFF names cannot.
     """
     if not residues:
         return "cgenff"
     from mmml.interfaces.pycharmmInterface.heme_electronic import is_protein_ion
+    from mmml.interfaces.pycharmmInterface.myoglobin import protein_rtf_residue_names
 
     names = [str(r).strip().upper() for r in residues if str(r).strip()]
     heme = [name for name in names if is_heme_library_residue(name)]
-    stray = [name for name in names if name not in heme and not is_protein_ion(name)]
-    if heme and stray:
+    if not heme:
+        return "cgenff"
+    protein = protein_rtf_residue_names()
+
+    def _allowed(name: str) -> bool:
+        return (
+            is_heme_library_residue(name)
+            or is_protein_ion(name)
+            or name == "TIP3"
+            or name in protein
+        )
+
+    stray = [name for name in names if not _allowed(name)]
+    if stray:
         raise ValueError(
             "HEME library residues "
             f"({', '.join(sorted(set(heme)))}) use top_all36_prot.rtf and "
-            "toppar_all36_prot_heme.str, not CGenFF. Protein ions "
-            "(SOD, POT, CLA, …) can share that build. "
+            "toppar_all36_prot_heme.str, not CGenFF. Protein residues, TIP3, "
+            "and protein ions (SOD, POT, CLA, …) can share that build. "
             f"Other names in this build: {', '.join(stray)}."
         )
-    if heme:
-        return "heme"
-    return "cgenff"
+    return "heme"
 
 
 _READ_RTF = re.compile(r"^\s*read\s+rtf\b", re.IGNORECASE)
@@ -242,7 +262,7 @@ def read_protein_heme_toppar() -> None:
         ion_stream = (mmml_repo_root() / _WATER_IONS)
         if not ion_stream.is_file():
             raise FileNotFoundError(
-                f"protein ions were requested but {ion_stream} is missing"
+                f"TIP3 or protein ions were requested but {ion_stream} is missing"
             )
         cards.append(heme_stream_cards(ion_stream))
     written: list[str] = []
@@ -269,4 +289,6 @@ def _active_residues_include_ions() -> bool:
     from mmml.interfaces.pycharmmInterface.heme_electronic import is_protein_ion
 
     residues = active_topology_residues() or ()
-    return any(is_protein_ion(name) for name in residues)
+    return any(
+        is_protein_ion(name) or str(name).strip().upper() == "TIP3" for name in residues
+    )

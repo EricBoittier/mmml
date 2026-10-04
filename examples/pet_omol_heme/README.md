@@ -78,9 +78,8 @@ the check that PET saw the neutralized triplet. Without `--counterions` the
 same line is `charge=-2`.
 
 Pass: CHARMM `ENER` shows a finite `USER` term, minimization finishes, and the
-short NVE does not blow up. This is one cofactor plus two sodiums in vacuum,
-not a protein. A heme–histidine link is the `PHEM` patch on top of a protein
-PSF; that is a different build.
+short NVE does not blow up. This is one cofactor plus two sodiums in vacuum.
+Section 4 builds the protein around that cofactor.
 
 ## 3. Propionate tails as MM, ghost hydrogens on the cuts
 
@@ -89,3 +88,47 @@ MM region. PET evaluates the porphyrin core (formal charge 0, multiplicity 3)
 plus one ghost hydrogen on CAA–CBA and one on CAD–CBD. Drop `bonded` from
 `--charmm-zero-energy-terms` so CHARMM still holds the tail and the cut bonds.
 The ghost is not an MM particle; its force is split onto the two real atoms.
+
+## 4. Sperm-whale myoglobin with CO
+
+`--residue MBCO` builds one protein from CHARMM's crystal CRD
+`setup/charmm/test/data/mbco_au_q0.crd` (153 residues, actual HSD/HSE/HSP
+protonation, 73-atom heme, CO, and 337 TIP3). Sulfate in that file is omitted.
+`PRES PHEM` bonds His93 NE2 to the iron (`MB 93, HEM 1`) with angle and
+dihedral autogeneration off. The protein segment uses NTER/CTER. Heme and CO
+use `first none last none`.
+
+Six-coordinate Fe(II)–CO is a singlet. `--mm-region his93` is the PET region:
+heme, CO, and the His93 imidazole, charge −2, multiplicity 1, one ghost
+hydrogen on CB–CG. The Fe–NE2 bond stays a real CHARMM bond. Without
+`--mm-region`, PET sees the whole protein at formal charge +2 (NTER, CTER,
+the amino-acid charges, and heme −2; sulfate omitted). Do not pass `--charmm-zero-energy-terms` if the protein should keep
+its CHARMM energy. Do not pass `--counterions`; the CRD is already the solute.
+
+The protein is one monomer wider than the 30 Å small-molecule extent cap, so
+the example sets `--dynamics-max-monomer-extent 100` (the crystal diagonal is
+about 76 Å). A dense ML–ML exclusion
+list of this size aborts CHARMM the same way the isolated heme did, so vacuum
+registration skips it. Bonded terms and charges on the PET atoms are zeroed.
+Van der Waals among those atoms stays in CHARMM.
+
+```bash
+uv run --no-sync mmml md-system --backend pycharmm \
+  --ml-potential-mode metatomic \
+  --metatomic-eval-mode whole_system \
+  --checkpoint "$PET_OMOL_S_CKPT" \
+  --residue MBCO --n-molecules 1 --builder gas \
+  --mm-region his93 \
+  --no-include-mm \
+  --dynamics-max-monomer-extent 100 \
+  --setup free_nve \
+  --mini-nstep 20 --ps-nve 0.05 --dt-fs 0.5 \
+  --temperature 300 \
+  --output-dir scratch/pet_omol_mbco
+```
+
+`yaml/mbco_nve.yaml` is the same run. Pass: the log contains
+`MbCO: 3547 atoms` and `PHEM MB 93, HEM 1`, then
+`Metatomic electronic state: charge=-2 spin_multiplicity=1`, minimization
+finishes, and the short NVE stays finite. Fragment evaluation is rejected.
+

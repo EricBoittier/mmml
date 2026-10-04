@@ -202,8 +202,11 @@ each carboxylate, so the whole-system charge is 0 and the multiplicity stays
 the CAA–CBA and CAD–CBD cuts with ghost hydrogens inside PET.
 
 A HEME build reads `top_all36_prot.rtf`, `par_all36m_prot.prm`, and
-`toppar_all36_prot_heme.str` (plus `toppar_water_ions.str` when ions are
-present). Details: `examples/pet_omol_heme/README.md`.
+`toppar_all36_prot_heme.str` (plus `toppar_water_ions.str` when ions or TIP3
+are present). `--residue MBCO` builds sperm-whale myoglobin from the CHARMM
+crystal CRD, applies `PRES PHEM` (His93 NE2–Fe), and uses multiplicity 1.
+`--mm-region his93` puts the imidazole, heme, and CO in PET (charge −2) with
+one ghost hydrogen on His93 CB–CG. Details: `examples/pet_omol_heme/README.md`.
 
 ## Periodic liquid ethanol (32 Å, 300 K, 0.5 fs)
 

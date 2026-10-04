@@ -550,6 +550,16 @@ def test_should_skip_dense_ml_ml_exclusions():
     )
 
 
+def test_vacuum_dense_exclusions_abort_at_the_heme_pair_count():
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import (
+        vacuum_dense_exclusions_would_abort,
+    )
+
+    assert vacuum_dense_exclusions_would_abort(73)
+    assert vacuum_dense_exclusions_would_abort(85)
+    assert not vacuum_dense_exclusions_would_abort(72)
+
+
 def test_register_mlpot_context_skips_user_check_when_jax_deferred():
     from mmml.interfaces.pycharmmInterface.mlpot import run_workflow
 

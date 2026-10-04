@@ -567,6 +567,11 @@ def build_metatomic_mlpot_model(
         labels = getattr(args, "_cluster_residue_labels", None)
         ml_indices, link_atoms = partition_system(names, labels, per)
         mode = "whole_system"
+    elif mm_region == "his93":
+        from mmml.interfaces.pycharmmInterface.myoglobin import his93_cut_from_args
+
+        ml_indices, link_atoms = his93_cut_from_args(args)
+        mode = "whole_system"
     if electronic.reason:
         print(
             f"Metatomic electronic state: charge={electronic.charge} "
@@ -574,9 +579,13 @@ def build_metatomic_mlpot_model(
             flush=True,
         )
     if link_atoms:
+        if mm_region == "his93":
+            cut = "His93 CB–CG (the Fe–NE2 bond stays real)"
+        else:
+            cut = "the propionate cuts"
         print(
             f"Metatomic ML/MM: {len(ml_indices)} ML atoms, "
-            f"{len(link_atoms)} ghost hydrogen link atoms on the propionate cuts",
+            f"{len(link_atoms)} ghost hydrogen link atoms on {cut}",
             flush=True,
         )
     calc = calculator if calculator is not None else load_metatomic_calculator(ckpt)

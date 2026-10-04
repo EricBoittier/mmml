@@ -234,6 +234,10 @@ def _policy_args_use_heme_library(args: argparse.Namespace | None) -> bool:
         return False
     from mmml.interfaces.pycharmmInterface.heme_library import is_heme_library_residue
 
+    from mmml.interfaces.pycharmmInterface.myoglobin import is_myoglobin_args
+
+    if is_myoglobin_args(args):
+        return True
     names: list[str] = []
     residue = getattr(args, "residue", None)
     if residue:

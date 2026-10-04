@@ -39,8 +39,10 @@ def test_heme_only_selects_the_protein_topology() -> None:
     assert topology_family(None) == "cgenff"
     assert topology_family(("ACO",)) == "cgenff"
     assert topology_family(("HEME",)) == "heme"
+    assert topology_family(("HEME", "TIP3")) == "heme"
+    assert topology_family(("HEME", "ALA", "TIP3", "CO")) == "heme"
     with pytest.raises(ValueError, match="toppar_all36_prot_heme"):
-        topology_family(("HEME", "TIP3"))
+        topology_family(("HEME", "MEOH"))
 
 
 def test_heme_stream_cards_drop_the_script_commands() -> None:

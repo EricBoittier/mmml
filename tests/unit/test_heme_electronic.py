@@ -61,8 +61,9 @@ def test_counterions_neutralize_heme_and_keep_the_triplet() -> None:
     assert state.monomer_spins == (3, 1, 1)
     assert require_cgenff_residue_name("SOD") == "SOD"
     assert topology_family(("HEME", "SOD")) == "heme"
+    assert topology_family(("HEME", "TIP3")) == "heme"
     with pytest.raises(ValueError, match="toppar_all36_prot_heme"):
-        topology_family(("HEME", "TIP3"))
+        topology_family(("HEME", "MEOH"))
 
 
 def test_two_hemes_need_an_explicit_spin() -> None:
