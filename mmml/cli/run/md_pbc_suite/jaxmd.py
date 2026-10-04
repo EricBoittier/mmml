@@ -17,7 +17,11 @@ from ase.optimize.fire import FIRE
 from jax import random
 
 from mmml.cli.base import resolve_checkpoint_paths
-from mmml.cli.run.jaxmd_runner import set_up_nhc_sim_routine
+from mmml.cli.run.jaxmd_runner import (
+    configure_jaxmd_dtype,
+    set_up_nhc_sim_routine,
+    summarize_jaxmd_recoveries,
+)
 from mmml.cli.run.summaries import save_calculator_summary_json
 from mmml.utils.geometry_checks import assert_no_intermonomer_atom_overlap
 from mmml.interfaces.pycharmmInterface.cutoffs import (
@@ -272,6 +276,17 @@ def build_parser() -> argparse.ArgumentParser:
         type=float,
         default=0.5,
         help="Abort NVE when total-energy drift exceeds this value (<=0 disables).",
+    )
+    p.add_argument(
+        "--nve-require-float64",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help=(
+            "Refuse NVE unless JAX runs float64 (x64 + --ml-compute-dtype float64). "
+            "Default: float32 NVE runs with a warning, the force-energy FD preflight "
+            "is skipped (below float32 resolution) and the E_tot drift gate guards "
+            "conservation. Also MMML_NVE_REQUIRE_FLOAT64=1."
+        ),
     )
     p.add_argument(
         "--nve-etot-drift-rescue",
@@ -944,6 +959,7 @@ def main(argv: list[str] | None = None) -> int:
         raise ValueError("--free-space cannot be combined with NPT (--ensemble npt)")
     if args.box_size is not None and args.box_size <= 0:
         raise ValueError("--box-size must be positive")
+    configure_jaxmd_dtype(getattr(args, "ml_compute_dtype", None))
 
     # NL backend/device are resolved via env inside mm_energy_forces / nl_gpu.
     if getattr(args, "mm_nl_backend", None):
@@ -2045,6 +2061,7 @@ def main(argv: list[str] | None = None) -> int:
             args, "nve_force_energy_freeze_charges", None
         ),
         nve_etot_drift_abort_eV=float(getattr(args, "nve_etot_drift_abort_eV", 0.5)),
+        nve_require_float64=bool(getattr(args, "nve_require_float64", False)),
         nve_etot_drift_rescue=bool(getattr(args, "nve_etot_drift_rescue", True)),
         nve_etot_drift_rescue_attempts=int(
             getattr(args, "nve_etot_drift_rescue_attempts", 5)
@@ -2337,6 +2354,9 @@ def main(argv: list[str] | None = None) -> int:
         except Exception:
             pass
     stats = summary.get("mm_pair_update_stats")
+    summary["recoveries"] = summarize_jaxmd_recoveries(
+        getattr(run_sim, "recoveries", None), stats if isinstance(stats, dict) else None
+    )
     if isinstance(stats, dict) and stats:
         summary_line = format_mm_pair_update_stats_summary(stats)
         summary["mm_pair_reuse_fraction"] = float(stats.get("reused", 0)) / max(

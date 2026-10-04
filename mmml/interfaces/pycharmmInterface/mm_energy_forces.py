@@ -33,8 +33,8 @@ from mmml.interfaces.pycharmmInterface.pbc_utils_jax import (
 DEFAULT_JAX_MD_CAPACITY_MULTIPLIER = 1.75
 DEFAULT_JAX_MD_SKIN_DISTANCE_A = 0.25
 # Flexibility margin (A) added to the measured max atom-to-centroid distance when
-# sizing the COM-switched MM pair list (radius grows by 2x this). Rebuilds raise if
-# a molecule's extent exceeds the assumed value.
+# sizing the COM-switched MM pair list (radius grows by 2x this). A rebuild that
+# finds a molecule past the assumed extent refits the list (refit_mm_pair_list).
 DEFAULT_MM_EXTENT_MARGIN_A = 0.25
 
 
@@ -186,9 +186,10 @@ def resolve_mm_extent_margin_A(
 ) -> float:
     """Extent margin for the MM pair list: the requested floor, grown into free L/2 headroom.
 
-    The list assumes ``measured extent + margin`` per molecule and the rebuild
-    raises once a molecule grows past it. The extent is measured on the start
-    structure (often freshly minimised, i.e. compact), so a fixed 0.25 A was
+    The list assumes ``measured extent + margin`` per molecule; a rebuild that
+    finds a molecule past it refits the list (``refit_mm_pair_list``). The
+    extent is measured on the start structure (often freshly minimised, i.e.
+    compact), so a fixed 0.25 A was
     overshot by a DCM C-Cl stretch within a few hundred steps at 300 K and
     aborted NVT/NpT runs. Use the room left below ``L/2`` instead (capped at
     ``MAX_AUTO_MM_EXTENT_MARGIN_A``), never less than ``requested_A``.
@@ -207,19 +208,14 @@ def resolve_mm_extent_margin_A(
     return max(floor, min(MAX_AUTO_MM_EXTENT_MARGIN_A, headroom))
 
 
-def max_monomer_extent_A(
+def _whole_monomer_displacements(
     positions: np.ndarray,
     monomer_offsets: np.ndarray,
     cell: np.ndarray | None = None,
-) -> float:
-    """Largest atom-to-centroid distance over monomers (molecules made whole by MIC).
-
-    Vectorized (one pass over atoms), cheap enough to run on every pair-list rebuild.
-    """
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Atom positions relative to their monomer's first atom (MIC), monomer ids, sizes."""
     offs = np.asarray(monomer_offsets, dtype=np.int64)
     sizes = np.diff(offs)
-    if sizes.size == 0 or int(offs[-1]) <= int(offs[0]):
-        return 0.0
     R = np.asarray(positions, dtype=np.float64)[offs[0] : offs[-1]]
     mol = np.repeat(np.arange(sizes.size), sizes)
     d = R - R[offs[:-1] - offs[0]][mol]
@@ -227,11 +223,308 @@ def max_monomer_extent_A(
         cell_m = _cell_matrix_np(cell)
         frac = d @ np.linalg.inv(cell_m)
         d = (frac - np.round(frac)) @ cell_m
+    return d, mol, sizes
+
+
+def monomer_extents_A(
+    positions: np.ndarray,
+    monomer_offsets: np.ndarray,
+    cell: np.ndarray | None = None,
+) -> np.ndarray:
+    """Max atom-to-centroid distance of each monomer (molecules made whole by MIC).
+
+    Vectorized (one pass over atoms), cheap enough to run on every pair-list rebuild.
+    """
+    offs = np.asarray(monomer_offsets, dtype=np.int64)
+    if offs.size < 2 or int(offs[-1]) <= int(offs[0]):
+        return np.zeros(max(0, offs.size - 1))
+    d, mol, sizes = _whole_monomer_displacements(positions, offs, cell)
     n = np.maximum(sizes, 1).astype(np.float64)
     cen = np.stack(
         [np.bincount(mol, weights=d[:, k], minlength=sizes.size) / n for k in range(3)], axis=1
     )
-    return float(np.max(np.linalg.norm(d - cen[mol], axis=1)))
+    r = np.linalg.norm(d - cen[mol], axis=1)
+    out = np.zeros(sizes.size)
+    np.maximum.at(out, mol, r)
+    return out
+
+
+def max_monomer_extent_A(
+    positions: np.ndarray,
+    monomer_offsets: np.ndarray,
+    cell: np.ndarray | None = None,
+) -> float:
+    """Largest atom-to-centroid distance over monomers (molecules made whole by MIC)."""
+    ext = monomer_extents_A(positions, monomer_offsets, cell)
+    return float(np.max(ext)) if ext.size else 0.0
+
+
+def intramolecular_nearest_neighbour_A(
+    positions: np.ndarray,
+    monomer_offsets: np.ndarray,
+    cell: np.ndarray | None = None,
+    monomers: Sequence[int] | None = None,
+) -> np.ndarray:
+    """Per-atom distance to the nearest other atom of the same monomer (inf if alone).
+
+    Only ``monomers`` are evaluated (all by default); other atoms are NaN.
+    """
+    offs = np.asarray(monomer_offsets, dtype=np.int64)
+    d, _, sizes = _whole_monomer_displacements(positions, offs, cell)
+    out = np.full(d.shape[0], np.nan)
+    for m in range(sizes.size) if monomers is None else monomers:
+        a, b = int(offs[m] - offs[0]), int(offs[m + 1] - offs[0])
+        x = d[a:b]
+        dist = np.linalg.norm(x[:, None] - x[None], axis=-1)
+        np.fill_diagonal(dist, np.inf)
+        out[a:b] = dist.min(axis=1) if b - a > 1 else np.inf
+    return out
+
+
+# A molecule past the extent the MM pair list assumes is only a bookkeeping
+# limit until one of its atoms has left: nearest same-molecule atom farther
+# than this x its distance in the start structure (C-Cl 1.77 -> 2.65 A).
+MM_DISSOCIATION_NN_RATIO = 1.5
+# On a refit the list re-adds at least this extent headroom, taking it out of
+# the Verlet skin when L/2 leaves no room, but never below MM_REFIT_MIN_SKIN_A.
+MM_REFIT_EXTENT_MARGIN_A = 0.05
+MM_REFIT_MIN_SKIN_A = 0.05
+# Under a variable cell (NpT) a refit keeps this fraction of the free room as
+# L/2 headroom, so a slowly shrinking box does not trigger a refit per rebuild.
+MM_REFIT_BOX_HEADROOM_FRACTION = 0.5
+# Least extent margin a setup-time refit may shrink the requested floor to;
+# below it the box is too small for the switch and the setup raises.
+MM_SETUP_MIN_EXTENT_MARGIN_A = 0.1
+
+
+def check_monomer_dissociation(
+    positions: np.ndarray,
+    monomer_offsets: np.ndarray,
+    cell: np.ndarray | None,
+    monomers: Sequence[int],
+    reference_nn_A: np.ndarray,
+    *,
+    ratio: float = MM_DISSOCIATION_NN_RATIO,
+) -> None:
+    """Raise ``ValueError`` if an atom of ``monomers`` has left its molecule."""
+    nn = intramolecular_nearest_neighbour_A(positions, monomer_offsets, cell, monomers)
+    ref = np.asarray(reference_nn_A, dtype=np.float64)
+    with np.errstate(invalid="ignore", divide="ignore"):
+        stretch = np.where(np.isfinite(nn) & np.isfinite(ref) & (ref > 0), nn / ref, 0.0)
+    a = int(np.argmax(stretch))
+    if stretch[a] > float(ratio):
+        offs = np.asarray(monomer_offsets, dtype=np.int64)
+        m = int(np.searchsorted(offs, a + offs[0], side="right") - 1)
+        raise ValueError(
+            f"Molecule {m} has dissociated: atom {a + int(offs[0])} is {nn[a]:.3f} A from the "
+            f"nearest atom of its molecule ({ref[a]:.3f} A in the start structure, "
+            f"x{stretch[a]:.2f} > x{float(ratio):.2f}). A bond broke during dynamics; the "
+            "potential is not holding this molecule together (check the ML model / timestep)."
+        )
+
+
+def refit_mm_pair_list(
+    *,
+    extent_A: float,
+    com_switch_end_A: float,
+    skin_A: float,
+    box_half_min_A: float,
+    box_headroom_fraction: float = 0.0,
+    min_margin_A: float = 0.0,
+) -> dict[str, float]:
+    """Smallest change to (assumed extent, skin) that again covers ``extent_A`` below L/2.
+
+    The list stays exact while ``list = switch_end + 2 x assumed + skin < L/2`` with
+    ``assumed >= extent`` at every rebuild. Keep the requested skin and grow the
+    extent margin into L/2 headroom (capped like ``resolve_mm_extent_margin_A``);
+    when there is no room, trade skin (more rebuilds, same pairs) for margin.
+    ``box_headroom_fraction`` of the room left after the skin is kept free below
+    L/2 instead of going to the margin (variable cell: the box may shrink).
+    ``min_margin_A`` is the least extent margin accepted (the setup list, built on
+    a measured start structure, needs real flexibility headroom).
+    Raises when even ``MM_REFIT_MIN_SKIN_A`` does not fit: atom pairs of switched-on
+    dimers would then reach L/2 and the minimum image could no longer hold them.
+    """
+    room = float(box_half_min_A) - 1e-3 - float(com_switch_end_A) - 2.0 * float(extent_A)
+    min_margin = max(0.0, float(min_margin_A))
+    if room < MM_REFIT_MIN_SKIN_A + 2.0 * min_margin:
+        raise ValueError(
+            f"Molecule extent {float(extent_A):.3f} A no longer fits the box: COM switch end "
+            f"{float(com_switch_end_A):.3f} A + 2 x (extent + {min_margin:.2f} A) + skin "
+            f"{MM_REFIT_MIN_SKIN_A:.2f} A reaches half the box (L/2 = {float(box_half_min_A):.3f} A), so "
+            "switched-on dimer atom pairs cannot all be minimum-image pairs. Use a larger "
+            "box or a smaller --mm-switch-on/--mm-switch-width."
+        )
+    skin = max(
+        MM_REFIT_MIN_SKIN_A,
+        min(float(skin_A), room - 2.0 * max(MM_REFIT_EXTENT_MARGIN_A, min_margin)),
+    )
+    keep = min(max(float(box_headroom_fraction), 0.0), 1.0)
+    margin = max(min_margin, min(MAX_AUTO_MM_EXTENT_MARGIN_A, 0.5 * (room - skin) * (1.0 - keep)))
+    assumed = float(extent_A) + margin
+    return {
+        "assumed_extent_A": assumed,
+        "extent_margin_A": margin,
+        "skin_A": skin,
+        "list_radius_A": float(com_switch_end_A) + 2.0 * assumed + skin,
+    }
+
+
+def refit_mm_pair_list_if_outgrown(
+    positions: np.ndarray,
+    monomer_offsets: np.ndarray,
+    cell: np.ndarray,
+    *,
+    assumed_extent_A: float,
+    list_radius_A: float,
+    skin_A: float,
+    requested_skin_A: float,
+    mm_switch_on: float,
+    mm_switch_width: float,
+    reference_nn_A: np.ndarray | None,
+    stats: dict[str, Any] | None = None,
+    variable_cell: bool = False,
+) -> dict[str, Any] | None:
+    """Rebuild-time guard of the COM-switched MM list; ``None`` when it still holds.
+
+    A molecule past ``assumed_extent_A`` (or, under NpT, a box shrunk to the list
+    radius) is a bookkeeping limit: refit before this rebuild, so no step runs
+    on a list that misses a weighted pair. Raises only for real problems: a
+    dissociated molecule, or an extent that no longer fits below L/2.
+    ``variable_cell`` keeps ``MM_REFIT_BOX_HEADROOM_FRACTION`` of the free room
+    below L/2 so a shrinking NpT box does not refit on every rebuild.
+    """
+    ext = monomer_extents_A(positions, monomer_offsets, cell)
+    half = 0.5 * float(np.min(np.diag(_cell_matrix_np(cell))))
+    over = np.flatnonzero(ext > float(assumed_extent_A))
+    if over.size == 0 and float(list_radius_A) < half:
+        return None
+    if over.size and reference_nn_A is not None:
+        check_monomer_dissociation(positions, monomer_offsets, cell, over, reference_nn_A)
+    extent = float(np.max(ext))
+    fit = refit_mm_pair_list(
+        extent_A=extent,
+        com_switch_end_A=float(mm_switch_on) + float(mm_switch_width),
+        skin_A=float(max(0.0, requested_skin_A)),
+        box_half_min_A=half,
+        box_headroom_fraction=MM_REFIT_BOX_HEADROOM_FRACTION if variable_cell else 0.0,
+    )
+    reason = (
+        f"molecule {int(over[np.argmax(ext[over])])} extent {extent:.3f} A > assumed "
+        f"{float(assumed_extent_A):.3f} A"
+        if over.size
+        else f"box shrank: list {float(list_radius_A):.3f} A >= L/2"
+    )
+    print(
+        f"[nbr] WARNING: MM pair list refit ({reason}; bookkeeping limit, not a "
+        f"failure): assumed extent {fit['assumed_extent_A']:.3f} A, list {float(list_radius_A):.3f} -> "
+        f"{fit['list_radius_A']:.3f} A, skin {float(skin_A):.3f} -> {fit['skin_A']:.3f} A "
+        f"(L/2={half:.3f} A)",
+        flush=True,
+    )
+    fit["radius_info"] = mm_pair_list_radius_breakdown(
+        mm_switch_on=mm_switch_on,
+        mm_switch_width=mm_switch_width,
+        skin_distance=fit["skin_A"],
+        measured_extent_A=extent,
+        extent_margin_A=fit["extent_margin_A"],
+        cell=cell,
+    )
+    if stats is not None:
+        stats["radius"] = fit["radius_info"]
+        stats["skin_distance"] = fit["skin_A"]
+        stats["list_refits"] = int(stats.get("list_refits", 0)) + 1
+    return fit
+
+
+def fit_mm_pair_list_at_setup(
+    *,
+    list_radius_A: float,
+    assumed_extent_A: float,
+    measured_extent_A: float,
+    extent_margin_A: float,
+    mm_switch_on: float,
+    mm_switch_width: float,
+    skin_A: float,
+    cell: np.ndarray,
+) -> dict[str, Any] | None:
+    """Setup list that does not fit below L/2: a smaller margin/skin may (``None`` if it fits).
+
+    Trading margin for skin keeps the same pairs (more rebuilds); it raises when
+    even ``MM_SETUP_MIN_EXTENT_MARGIN_A`` and the minimum skin do not fit.
+    """
+    half = 0.5 * float(np.min(np.diag(_cell_matrix_np(cell))))
+    if float(assumed_extent_A) <= 0.0 or float(list_radius_A) < half:
+        return None
+    fit = refit_mm_pair_list(
+        extent_A=measured_extent_A,
+        com_switch_end_A=float(mm_switch_on) + float(mm_switch_width),
+        skin_A=float(max(0.0, skin_A)),
+        box_half_min_A=half,
+        min_margin_A=min(float(extent_margin_A), MM_SETUP_MIN_EXTENT_MARGIN_A),
+    )
+    print(
+        f"[nbr] WARNING: MM pair list {float(list_radius_A):.3f} A does not fit below "
+        f"L/2={half:.3f} A with extent margin {float(extent_margin_A):.3f} A / "
+        f"skin {float(skin_A):.3f} A; using margin {fit['extent_margin_A']:.3f} A, "
+        f"skin {fit['skin_A']:.3f} A (list {fit['list_radius_A']:.3f} A)",
+        flush=True,
+    )
+    fit["radius_info"] = mm_pair_list_radius_breakdown(
+        mm_switch_on=mm_switch_on,
+        mm_switch_width=mm_switch_width,
+        skin_distance=fit["skin_A"],
+        measured_extent_A=measured_extent_A,
+        extent_margin_A=fit["extent_margin_A"],
+        cell=cell,
+    )
+    return fit
+
+
+def cartesian_for_nl_build(
+    positions_in: np.ndarray,
+    box_in: Optional[np.ndarray],
+    *,
+    pbc_cell: Any,
+    fractional: bool,
+) -> np.ndarray:
+    """Cartesian float64 positions for a host pair-list build (fractional -> @ cell)."""
+    R_np = np.asarray(positions_in, dtype=np.float64)
+    if not fractional:
+        return R_np
+    if box_in is not None:
+        box_np = np.asarray(box_in, dtype=np.float64)
+        cell_3x3 = np.diag(box_np) if box_np.ndim == 1 else box_np
+        return np.asarray(R_np @ cell_3x3, dtype=np.float64)
+    cell_np = np.asarray(pbc_cell, dtype=np.float64)
+    if cell_np.ndim == 0:
+        cell_3x3 = np.diag([float(cell_np)] * 3)
+    elif cell_np.shape == (3,):
+        cell_3x3 = np.diag(cell_np)
+    else:
+        cell_3x3 = cell_np
+    return np.asarray(R_np @ cell_3x3, dtype=np.float64)
+
+
+def pbc_cell_for_nl_build(box_in: Optional[np.ndarray], *, pbc_cell: Any) -> np.ndarray:
+    """3x3 cell of a pair-list build: the live NpT box when given, else the setup cell."""
+    if box_in is not None:
+        box_np = np.asarray(box_in, dtype=np.float64)
+        return np.diag(box_np) if box_np.ndim == 1 else box_np
+    return np.asarray(pbc_cell, dtype=np.float64)
+
+
+class StickyCellChange:
+    """``True`` from the first rebuild cell that differs from the setup cell on (NpT)."""
+
+    def __init__(self, setup_cell: Any):
+        self._ref = None if setup_cell is None else _cell_matrix_np(setup_cell)
+        self._changed = False
+
+    def __call__(self, cell_now: np.ndarray) -> bool:
+        if not self._changed and self._ref is not None:
+            self._changed = not np.allclose(cell_now, self._ref, rtol=0.0, atol=1e-8)
+        return self._changed
 
 
 def check_mm_pair_list_radius(radius_A: float, cell: np.ndarray, *, detail: str = "") -> None:
@@ -530,6 +823,7 @@ def _mm_pair_stats_init(
         "skin_distance": float(max(0.0, skin_distance)),
         "cache_reuse_reason": "init",
         "last_reuse_reason": "init",
+        "list_refits": 0,
     }
 
 
@@ -602,6 +896,9 @@ def format_mm_pair_update_stats_summary(stats: dict) -> str:
                 f", list={float(list_r):.3f} A "
                 f"(interaction {float(inter):.3f} + skin {float(skin):.3f}, L/2={half_s})"
             )
+    refits = int(stats.get("list_refits", 0))
+    if refits:
+        backend_bit += f", list_refits={refits}"
     return (
         f"[jaxmd_nbr] pair-list cache: {reused}/{calls} reused ({pct:.1f}%), "
         f"{updates} rebuilds (cpu={cpu_rebuilds}, gpu={gpu_rebuilds}), "
@@ -1386,12 +1683,179 @@ def switched_mm_eterm_split(
 
     def _sw(e: Array) -> Array:
         return apply_switching(
-            positions, e, distances=distances, pair_dimer_idx_arg=pdi, box_override=cell
+            positions, e, distances=distances, pair_dimer_idx_arg=pdi, box_override=cell,
+            pair_idx_arg=pair_idx,
         )
 
     return jnp.stack(
         [_sw(vdw * primary), _sw(vdw * (1 - primary)), _sw(elec * primary), _sw(elec * (1 - primary))]
     )
+
+
+def update_jax_md_mm_pairs(
+    positions,
+    box,
+    *,
+    positions_jax,
+    debug: bool,
+    fractional_coordinates: bool,
+    pbc_cell,
+    mm_r_min,
+    n_monomers: int,
+    ml_jnp_dtype,
+    max_overflow_retries: int,
+    capacity_growth_factor: float,
+    nbrs_cell: list,
+    neighbor_fn_cell: list,
+    filter_fn_cell: list,
+    capacity_multiplier_cell: list,
+    pair_idx_cell: list,
+    pair_mask_cell: list,
+    last_positions: list,
+    last_cartesian_positions: list,
+    last_box: list,
+    monomer_id_jnp,
+    pair_stats: dict,
+    list_cutoff,
+    check_extent_and_radius,
+    create_bundle,
+    cell_list_fallback,
+):
+    """Refresh the jax-md MM neighbor list, refitting the cutoff first if it is short.
+
+    ``list_cutoff`` is ``lambda: float`` of the live cutoff. ``check_extent_and_radius``
+    may raise it (and ``create_bundle`` closes over that new value) before allocate.
+    """
+    R = positions
+    nbrs = nbrs_cell[0]
+    box_jnp = jnp.asarray(box) if box is not None else None
+    pbc_cell_jnp = jnp.asarray(pbc_cell) if pbc_cell is not None else None
+    mm_r_min_val = float(mm_r_min) if mm_r_min is not None else None
+    host_pos = (
+        np.asarray(jax.device_get(positions), dtype=np.float64)
+        if positions_jax is not None
+        else np.asarray(positions, dtype=np.float64)
+    )
+    if positions_jax is not None:
+        pair_stats["host_syncs"] += 1
+    cutoff_before = float(list_cutoff())
+    check_extent_and_radius(host_pos, box)
+    if float(list_cutoff()) != cutoff_before:
+        rebuilt = create_bundle(capacity_multiplier_cell[0])
+        if rebuilt is None:
+            return cell_list_fallback(host_pos, debug, box_in=box)
+        neighbor_fn_cell[0], filter_fn_cell[0], _ = rebuilt
+        if box_jnp is not None and fractional_coordinates:
+            nbrs = neighbor_fn_cell[0].allocate(R, box=box_jnp)
+        else:
+            nbrs = neighbor_fn_cell[0].allocate(R)
+        nbrs_cell[0] = nbrs
+
+    try:
+        nbrs, pair_idx, pair_mask = _optimized_jax_md_update_gpu(
+            R,
+            nbrs,
+            neighbor_fn_cell[0],
+            filter_fn_cell[0],
+            monomer_id_jnp,
+            box_jnp,
+            pbc_cell_jnp,
+            mm_r_min_val,
+            int(n_monomers),
+            bool(fractional_coordinates),
+        )
+    except Exception as e:
+        if debug:
+            print(f"[nbr] update failed before overflow check ({type(e).__name__}): {e}")
+        return cell_list_fallback(
+            np.asarray(jax.device_get(positions), dtype=np.float64)
+            if positions_jax is not None
+            else np.asarray(positions, dtype=np.float64),
+            debug,
+            box_in=box,
+        )
+
+    realloc_count = 0
+    for _ in range(int(max_overflow_retries)):
+        overflow = np.asarray(jax.device_get(nbrs.did_buffer_overflow))
+        did_overflow = bool(overflow) if overflow.ndim == 0 else bool(overflow.any())
+        if debug:
+            print(
+                f"[nbr] update: overflow={did_overflow}, realloc={realloc_count}, "
+                f"box={'None' if box is None else np.asarray(box).tolist()}"
+            )
+        if not did_overflow:
+            break
+        realloc_count += 1
+        pair_stats["reallocs"] += 1
+        next_multiplier = capacity_multiplier_cell[0] * float(capacity_growth_factor)
+        rebuilt = create_bundle(next_multiplier)
+        if rebuilt is not None:
+            neighbor_fn_new, filter_fn_new, _ = rebuilt
+            neighbor_fn_cell[0] = neighbor_fn_new
+            filter_fn_cell[0] = filter_fn_new
+            capacity_multiplier_cell[0] = next_multiplier
+            pair_stats["capacity_multiplier"] = float(next_multiplier)
+        try:
+            nbrs_alloc = (
+                neighbor_fn_cell[0].allocate(R, box=box_jnp)
+                if (box_jnp is not None and fractional_coordinates)
+                else neighbor_fn_cell[0].allocate(R)
+            )
+            nbrs, pair_idx, pair_mask = _optimized_jax_md_update_gpu(
+                R,
+                nbrs_alloc,
+                neighbor_fn_cell[0],
+                filter_fn_cell[0],
+                monomer_id_jnp,
+                box_jnp,
+                pbc_cell_jnp,
+                mm_r_min_val,
+                int(n_monomers),
+                bool(fractional_coordinates),
+            )
+        except Exception as e:
+            if debug:
+                print(
+                    f"[nbr] allocate/update failed during retry {realloc_count} "
+                    f"({type(e).__name__}): {e}"
+                )
+            return cell_list_fallback(
+                np.asarray(jax.device_get(positions), dtype=np.float64)
+                if positions_jax is not None
+                else np.asarray(positions, dtype=np.float64),
+                debug,
+                box_in=box,
+            )
+    else:
+        if debug:
+            print("[nbr] persistent overflow after retries; attempting cell-list fallback")
+        return cell_list_fallback(
+            np.asarray(jax.device_get(positions), dtype=np.float64)
+            if positions_jax is not None
+            else np.asarray(positions, dtype=np.float64),
+            debug,
+            box_in=box,
+        )
+
+    nbrs_cell[0] = nbrs
+    if mm_r_min is not None:
+        pair_stats["com_filter_calls"] += 1
+    pair_mask = jnp.asarray(pair_mask, dtype=ml_jnp_dtype)
+    pair_idx_cell[0] = pair_idx
+    pair_mask_cell[0] = pair_mask
+    last_positions[0] = None
+    last_cartesian_positions[0] = None
+    last_box[0] = None if box is None else np.asarray(box, dtype=np.float64).copy()
+    pair_stats["updates"] += 1
+    if debug:
+        n_valid = int(np.sum(np.asarray(jax.device_get(pair_mask))))
+        capacity = pair_idx.shape[0]
+        print(
+            f"[nbr] pairs: n_valid={n_valid}, capacity={capacity}, "
+            f"frac_coords={fractional_coordinates}"
+        )
+    return pair_idx, pair_mask
 
 
 def _is_device_positions(x) -> bool:
@@ -1627,7 +2091,7 @@ def build_mm_energy_forces_fn(
     else:
         if pbc_cell is not None:
             # Flexible molecules: the list assumes extent + margin; the rebuild
-            # path raises if a molecule later grows past it.
+            # path refits it if a molecule later grows past it.
             _mm_measured_extent = max_monomer_extent_A(R, monomer_offsets, pbc_cell)
             mm_extent_margin_A = resolve_mm_extent_margin_A(
                 mm_extent_margin_A,
@@ -1648,11 +2112,26 @@ def build_mm_energy_forces_fn(
             cell=pbc_cell,
         )
     _mm_list_cutoff = float(_mm_radius_info["list_radius_A"])
+    _mm_skin_A = float(max(0.0, jax_md_skin_distance))  # refits may shrink it
+    # Start-structure bond scale: tells a broken molecule from a stretched one.
+    _mm_ref_nn = intramolecular_nearest_neighbour_A(R, monomer_offsets, pbc_cell) if _mm_assumed_extent > 0.0 else None
     _mm_radius_detail = format_mm_pair_list_radius_report(_mm_radius_info)
     if debug:
         print(_mm_radius_detail, flush=True)
+    _mm_setup_refits = 0
     # Ewald returns before any pair list is used (full-box Coulomb, all-pairs LJ).
     if pbc_cell is not None and pick_lr_solver(lr_solver) != "ewald":
+        _setup_fit = fit_mm_pair_list_at_setup(
+            list_radius_A=_mm_list_cutoff, assumed_extent_A=_mm_assumed_extent,
+            measured_extent_A=_mm_measured_extent, extent_margin_A=mm_extent_margin_A,
+            mm_switch_on=mm_switch_on, mm_switch_width=mm_switch_width,
+            skin_A=jax_md_skin_distance, cell=pbc_cell,
+        )
+        if _setup_fit is not None:
+            _mm_assumed_extent, _mm_list_cutoff, _mm_skin_A = (
+                _setup_fit["assumed_extent_A"], _setup_fit["list_radius_A"], _setup_fit["skin_A"])
+            _mm_radius_info, _mm_setup_refits = _setup_fit["radius_info"], 1
+            _mm_radius_detail = format_mm_pair_list_radius_report(_mm_radius_info)
         check_mm_pair_list_radius(_mm_list_cutoff, pbc_cell, detail=_mm_radius_detail)
 
     def _create_jax_md_bundle(capacity_multiplier: float):
@@ -2111,6 +2590,7 @@ def build_mm_energy_forces_fn(
             distances: Optional[Array] = None,
             pair_dimer_idx_arg: Optional[Array] = None,
             box_override: Optional[Array] = None,
+            pair_idx_arg: Optional[Array] = None,
         ) -> Array:
             if hybrid_hamiltonian == "shared_cutoff":
                 return jnp.sum(pair_energies)
@@ -2149,8 +2629,10 @@ def build_mm_energy_forces_fn(
                 else:
                     atom_atom_taper = 0.0
 
-                monomer_i = _monomer_id_jnp[pair_idx_atom_atom[:, 0]]
-                monomer_j = _monomer_id_jnp[pair_idx_atom_atom[:, 1]]
+                # pdi's pairs: a capacity grow changes the dynamic list length.
+                pidx = pair_idx_arg if pair_idx_arg is not None else pair_idx_atom_atom
+                monomer_i = _monomer_id_jnp[pidx[:, 0]]
+                monomer_j = _monomer_id_jnp[pidx[:, 1]]
                 is_inter = (monomer_i != monomer_j)
 
                 mm_scale_with_dummy = jnp.concatenate([mm_scale, jnp.zeros(1)])
@@ -2260,9 +2742,10 @@ def build_mm_energy_forces_fn(
             ),
             radius_info=_mm_radius_info,
             update_interval=int(jax_md_update_interval),
-            skin_distance=float(jax_md_skin_distance),
+            skin_distance=_mm_skin_A,
             capacity_multiplier=float(jax_md_capacity_multiplier),
         )
+        _pair_stats["list_refits"] = int(_mm_setup_refits)
         _last_positions = [None]
         _last_cartesian_positions = [None]
         _last_cartesian_positions_jax = [None]
@@ -2319,6 +2802,7 @@ def build_mm_energy_forces_fn(
                 distances=distances,
                 pair_dimer_idx_arg=pair_dimer_idx_dyn,
                 box_override=cell_for_mic,
+                pair_idx_arg=pair_idx,
             )
 
         _mm_dynamic_value_and_grad = jax.jit(
@@ -2434,31 +2918,10 @@ def build_mm_energy_forces_fn(
                 jnp.asarray(cl_mask, dtype=ml_jnp_dtype),
             )
 
-        def _cartesian_for_nl_build(
-            positions_in: np.ndarray,
-            box_in: Optional[np.ndarray],
-        ) -> np.ndarray:
-            R_np = np.asarray(positions_in, dtype=np.float64)
-            if not fractional_coordinates:
-                return R_np
-            if box_in is not None:
-                box_np = np.asarray(box_in, dtype=np.float64)
-                cell_3x3 = np.diag(box_np) if box_np.ndim == 1 else box_np
-                return np.asarray(R_np @ cell_3x3, dtype=np.float64)
-            cell_np = np.asarray(pbc_cell, dtype=np.float64)
-            if cell_np.ndim == 0:
-                cell_3x3 = np.diag([float(cell_np)] * 3)
-            elif cell_np.shape == (3,):
-                cell_3x3 = np.diag(cell_np)
-            else:
-                cell_3x3 = cell_np
-            return np.asarray(R_np @ cell_3x3, dtype=np.float64)
-
-        def _pbc_cell_for_nl_build(box_in: Optional[np.ndarray]) -> np.ndarray:
-            if box_in is not None:
-                box_np = np.asarray(box_in, dtype=np.float64)
-                return np.diag(box_np) if box_np.ndim == 1 else box_np
-            return np.asarray(pbc_cell, dtype=np.float64)
+        _cartesian_for_nl_build = partial(
+            cartesian_for_nl_build, pbc_cell=pbc_cell, fractional=bool(fractional_coordinates)
+        )
+        _pbc_cell_for_nl_build = partial(pbc_cell_for_nl_build, pbc_cell=pbc_cell)
 
         def _jax_cartesian_for_nl_build(positions_in: Array, box_in: Optional[np.ndarray]) -> Array:
             pos = jnp.asarray(positions_in)
@@ -2482,25 +2945,29 @@ def build_mm_energy_forces_fn(
             box_delta = float(np.max(np.abs(np.asarray(box_in) - np.asarray(_last_box[0]))))
             return box_delta <= 1e-8
 
+        _cell_varies = StickyCellChange(pbc_cell)
+
         def _check_extent_and_radius(
             positions_in: np.ndarray, box_in: Optional[np.ndarray]
         ) -> None:
+            nonlocal _mm_assumed_extent, _mm_list_cutoff, _mm_skin_A, _mm_radius_detail
             cell_now = _pbc_cell_for_nl_build(box_in)
-            if box_in is not None:
-                check_mm_pair_list_radius(_mm_list_cutoff, cell_now, detail=_mm_radius_detail)
-            if _mm_assumed_extent <= 0.0:
+            if _mm_assumed_extent <= 0.0:  # shared cutoff: nothing to refit
+                if box_in is not None:
+                    check_mm_pair_list_radius(_mm_list_cutoff, cell_now, detail=_mm_radius_detail)
                 return
-            ext = max_monomer_extent_A(
-                _cartesian_for_nl_build(positions_in, box_in), _offsets_np, cell_now
+            fit = refit_mm_pair_list_if_outgrown(
+                _cartesian_for_nl_build(positions_in, box_in), _offsets_np, cell_now,
+                assumed_extent_A=_mm_assumed_extent, list_radius_A=_mm_list_cutoff,
+                skin_A=_mm_skin_A, requested_skin_A=jax_md_skin_distance,
+                mm_switch_on=mm_switch_on, mm_switch_width=mm_switch_width,
+                reference_nn_A=_mm_ref_nn, stats=_pair_stats,
+                variable_cell=_cell_varies(cell_now),
             )
-            if ext > _mm_assumed_extent:
-                raise ValueError(
-                    f"Molecule extent {ext:.3f} A (max atom-to-centroid distance) exceeds the "
-                    f"{_mm_assumed_extent:.3f} A assumed for the MM pair list radius "
-                    f"({_mm_list_cutoff:.2f} A): atom pairs of switched-on dimers may be "
-                    "missing. Raise mm_extent_margin_A (needs a correspondingly larger box) "
-                    "or check for a distorted molecule."
-                )
+            if fit is not None:
+                _mm_assumed_extent, _mm_list_cutoff, _mm_skin_A = (
+                    fit["assumed_extent_A"], fit["list_radius_A"], fit["skin_A"])
+                _mm_radius_detail = format_mm_pair_list_radius_report(fit["radius_info"])
 
         def _rebuild_pairs_with_static_backend(
             positions_in: np.ndarray,
@@ -2660,126 +3127,37 @@ def build_mm_energy_forces_fn(
             _pair_stats["calls"] += 1
 
             if _use_jax_md_nbrs:
-                # Optimized GPU JAX-MD path to avoid host synchronization of coordinates
-                R = positions
-                nbrs = _nbrs[0]
-                box_jnp = jnp.asarray(box) if box is not None else None
-                pbc_cell_jnp = jnp.asarray(pbc_cell) if pbc_cell is not None else None
-                mm_r_min_val = float(mm_r_min) if mm_r_min is not None else None
-                
-                try:
-                    nbrs, pair_idx, pair_mask = _optimized_jax_md_update_gpu(
-                        R,
-                        nbrs,
-                        _neighbor_fn_cell[0],
-                        _filter_fn_cell[0],
-                        _monomer_id_jnp,
-                        box_jnp,
-                        pbc_cell_jnp,
-                        mm_r_min_val,
-                        int(n_monomers),
-                        bool(fractional_coordinates),
-                    )
-                except Exception as e:
-                    if _nbr_debug:
-                        print(f"[nbr] update failed before overflow check ({type(e).__name__}): {e}")
-                    return _cell_list_fallback_pairs(
-                        np.asarray(jax.device_get(positions), dtype=np.float64) if positions_jax is not None else np.asarray(positions, dtype=np.float64),
-                        _nbr_debug,
-                        box_in=box,
-                    )
-                
-                realloc_count = 0
-                for _ in range(int(jax_md_max_overflow_retries)):
-                    overflow = np.asarray(jax.device_get(nbrs.did_buffer_overflow))
-                    did_overflow = bool(overflow) if overflow.ndim == 0 else bool(overflow.any())
-                    
-                    if _nbr_debug:
-                        print(
-                            f"[nbr] update: overflow={did_overflow}, realloc={realloc_count}, "
-                            f"box={'None' if box is None else np.asarray(box).tolist()}"
-                        )
-                    
-                    if not did_overflow:
-                        break
-                    
-                    realloc_count += 1
-                    _pair_stats["reallocs"] += 1
-                    
-                    next_multiplier = (
-                        _current_capacity_multiplier[0]
-                        * float(jax_md_capacity_growth_factor)
-                    )
-                    
-                    rebuilt = _create_jax_md_bundle(next_multiplier)
-                    if rebuilt is not None:
-                        _neighbor_fn_new, _filter_fn_new, _ = rebuilt
-                        _neighbor_fn_cell[0] = _neighbor_fn_new
-                        _filter_fn_cell[0] = _filter_fn_new
-                        _current_capacity_multiplier[0] = next_multiplier
-                        _pair_stats["capacity_multiplier"] = float(next_multiplier)
-                        
-                    try:
-                        nbrs_alloc = _neighbor_fn_cell[0].allocate(R, box=box_jnp) if (box_jnp is not None and fractional_coordinates) else _neighbor_fn_cell[0].allocate(R)
-                        nbrs, pair_idx, pair_mask = _optimized_jax_md_update_gpu(
-                            R,
-                            nbrs_alloc,
-                            _neighbor_fn_cell[0],
-                            _filter_fn_cell[0],
-                            _monomer_id_jnp,
-                            box_jnp,
-                            pbc_cell_jnp,
-                            mm_r_min_val,
-                            int(n_monomers),
-                            bool(fractional_coordinates),
-                        )
-                    except Exception as e:
-                        if _nbr_debug:
-                            print(
-                                f"[nbr] allocate/update failed during retry {realloc_count} "
-                                f"({type(e).__name__}): {e}"
-                            )
-                        return _cell_list_fallback_pairs(
-                            np.asarray(jax.device_get(positions), dtype=np.float64) if positions_jax is not None else np.asarray(positions, dtype=np.float64),
-                            _nbr_debug,
-                            box_in=box,
-                        )
-                else:
-                    if _nbr_debug:
-                        print("[nbr] persistent overflow after retries; attempting cell-list fallback")
-                    return _cell_list_fallback_pairs(
-                        np.asarray(jax.device_get(positions), dtype=np.float64) if positions_jax is not None else np.asarray(positions, dtype=np.float64),
-                        _nbr_debug,
-                        box_in=box,
-                    )
-                
-                _nbrs[0] = nbrs
-                
-                if mm_r_min is not None:
-                    _pair_stats["com_filter_calls"] += 1
-                
-                pair_mask = jnp.asarray(pair_mask, dtype=ml_jnp_dtype)
-                
-                _pair_idx_cell[0] = pair_idx
-                _pair_mask_cell[0] = pair_mask
-                
-                _last_positions[0] = None
-                _last_cartesian_positions[0] = None
-                _last_box[0] = None if box is None else np.asarray(box, dtype=np.float64).copy()
-                _pair_stats["updates"] += 1
-                
-                if _nbr_debug:
-                    n_valid = int(np.sum(np.asarray(jax.device_get(pair_mask))))
-                    capacity = pair_idx.shape[0]
-                    print(
-                        f"[nbr] pairs: n_valid={n_valid}, capacity={capacity}, "
-                        f"frac_coords={fractional_coordinates}"
-                    )
-                
-                return pair_idx, pair_mask
+                return update_jax_md_mm_pairs(
+                    positions,
+                    box,
+                    positions_jax=positions_jax,
+                    debug=_nbr_debug,
+                    fractional_coordinates=bool(fractional_coordinates),
+                    pbc_cell=pbc_cell,
+                    mm_r_min=mm_r_min,
+                    n_monomers=int(n_monomers),
+                    ml_jnp_dtype=ml_jnp_dtype,
+                    max_overflow_retries=int(jax_md_max_overflow_retries),
+                    capacity_growth_factor=float(jax_md_capacity_growth_factor),
+                    nbrs_cell=_nbrs,
+                    neighbor_fn_cell=_neighbor_fn_cell,
+                    filter_fn_cell=_filter_fn_cell,
+                    capacity_multiplier_cell=_current_capacity_multiplier,
+                    pair_idx_cell=_pair_idx_cell,
+                    pair_mask_cell=_pair_mask_cell,
+                    last_positions=_last_positions,
+                    last_cartesian_positions=_last_cartesian_positions,
+                    last_box=_last_box,
+                    monomer_id_jnp=_monomer_id_jnp,
+                    pair_stats=_pair_stats,
+                    list_cutoff=lambda: _mm_list_cutoff,
+                    check_extent_and_radius=_check_extent_and_radius,
+                    create_bundle=_create_jax_md_bundle,
+                    cell_list_fallback=_cell_list_fallback_pairs,
+                )
 
             interval = int(max(1, jax_md_update_interval))
-            skin = float(max(0.0, jax_md_skin_distance))
+            skin = _mm_skin_A
 
             have_cache = (
                 _pair_idx_cell[0] is not None

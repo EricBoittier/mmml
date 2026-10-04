@@ -238,3 +238,93 @@ def test_nve_pbc_does_not_write_molecular_wrap_into_integrator_state():
     )[0]
     assert "wrapped_for_nl" in step_block
     assert "state.set(position=as_jaxmd_dtype(wrapped" not in step_block
+
+
+def test_configure_jaxmd_dtype_honours_explicit_dtype(monkeypatch):
+    import jax
+
+    from mmml.cli.run import jaxmd_runner
+
+    if not jax.config.read("jax_enable_x64"):
+        pytest.skip("float64 needs jax_enable_x64")
+    monkeypatch.setattr(jaxmd_runner, "_JAXMD_DTYPE", jaxmd_runner._JAXMD_DTYPE)
+    assert jaxmd_runner.configure_jaxmd_dtype("float64") == jnp.float64
+    assert jaxmd_runner.as_jaxmd_dtype(np.ones(3, dtype=np.float32)).dtype == jnp.float64
+
+
+def test_epot_blow_up_ignores_arbitrary_zero_crossing():
+    from mmml.cli.run.jaxmd_runner import epot_blew_up
+
+    # 26 Sep ACO:266 NVT: -87.4 -> +1.1 eV in 0.8 ps is thermalisation (0.03 eV/atom).
+    assert not epot_blew_up(1.118, -87.43, 2660)
+    assert epot_blew_up(-87.43 + 0.6 * 2660, -87.43, 2660)
+
+
+def test_nve_float32_runs_with_warning_unless_strict(monkeypatch):
+    from mmml.cli.run.jaxmd_runner import NVE_REQUIRE_FLOAT64_ENV, nve_float64_policy
+
+    monkeypatch.delenv(NVE_REQUIRE_FLOAT64_ENV, raising=False)
+    assert nve_float64_policy(True, jnp.float64) == ("ok", "")
+    action, msg = nve_float64_policy(True, jnp.float32)
+    assert action == "warn" and "float32" in msg
+    assert nve_float64_policy(False, jnp.float32)[0] == "warn"
+    action, msg = nve_float64_policy(True, jnp.float32, require_float64=True)
+    assert action == "refuse" and msg.startswith("NVE requires JAX float64")
+    monkeypatch.setenv(NVE_REQUIRE_FLOAT64_ENV, "1")
+    assert nve_float64_policy(True, jnp.float32)[0] == "refuse"
+    assert nve_float64_policy(True, jnp.float64)[0] == "ok"
+
+
+def test_nve_float32_skips_fd_preflight_only_for_float32():
+    """The FD gate runs only on float64 (float32 noise > the 0.01 A FD signal)."""
+    from mmml.cli.run import jaxmd_runner as jr
+
+    src = Path(jr.__file__).read_text(encoding="utf-8")
+    assert "if fd_tol > 0.0 and is_f64:" in src
+    assert 'run_sim.recoveries["nve_float32_fd_preflight_skipped"] = True' in src
+
+
+def test_nve_require_float64_flag_reaches_runner():
+    import inspect
+
+    from mmml.cli.run.md_pbc_suite import jaxmd
+
+    src = inspect.getsource(jaxmd)
+    block = src[src.index("jargs = SimpleNamespace(") :]
+    block = block[: block.index("set_up_nhc_sim_routine(")]
+    assert "nve_require_float64=" in block
+    assert jaxmd.build_parser().parse_args(["--nve-require-float64"]).nve_require_float64 is True
+    assert jaxmd.build_parser().parse_args([]).nve_require_float64 is False
+
+
+def test_cast_carry_like_keeps_input_dtypes():
+    import jax
+
+    from mmml.cli.run.jaxmd_runner import cast_carry_like
+
+    if not jax.config.read("jax_enable_x64"):
+        pytest.skip("needs x64 to produce float64 leaves")
+    old = {"force": jnp.zeros((2, 3), jnp.float32), "box": jnp.ones((), jnp.float32), "n": jnp.int32(1)}
+    new = {"force": jnp.ones((2, 3), jnp.float64), "box": jnp.full((), 2.0, jnp.float64), "n": jnp.int32(2)}
+    out = cast_carry_like(new, old)
+    assert {k: v.dtype for k, v in out.items()} == {k: v.dtype for k, v in old.items()}
+    same = cast_carry_like(old, old)
+    assert all(same[k] is old[k] or np.array_equal(same[k], old[k]) for k in old)
+
+
+def test_summarize_jaxmd_recoveries():
+    from mmml.cli.run.jaxmd_runner import summarize_jaxmd_recoveries
+
+    out = summarize_jaxmd_recoveries(None, None)
+    assert out == {
+        "mm_pair_list_refits": 0,
+        "mm_pair_capacity_grows": 0,
+        "mm_pair_reallocs": 0,
+        "mm_pair_fallbacks": 0,
+        "nve_float32_fd_preflight_skipped": False,
+    }
+    out = summarize_jaxmd_recoveries(
+        {"nve_float32_fd_preflight_skipped": True}, {"list_refits": 2, "capacity_grows": 1}
+    )
+    assert out["mm_pair_list_refits"] == 2 and out["mm_pair_capacity_grows"] == 1
+    assert out["nve_float32_fd_preflight_skipped"] is True

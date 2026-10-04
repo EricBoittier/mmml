@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import time
 from pathlib import Path
 
@@ -268,6 +269,57 @@ def _nl_update_positions(positions):
     if hasattr(positions, "__dlpack_device__") and os.environ.get("MMML_MM_NL_FORCE_HOST") != "1":
         return positions
     return np.asarray(positions)
+
+# E_pot has an arbitrary zero (model reference energies), so crossing 0 is not a
+# blow-up: an ACO:266 NVT start at -87 eV thermalises past 0 (+1.5 kT/atom is
+# ~0.04 eV/atom at 300 K). A runaway rise is orders of magnitude above that.
+JAXMD_EPOT_BLOWUP_RISE_EV_PER_ATOM = 0.5
+
+
+def epot_blew_up(e_pot: float, e_pot_start: float, n_atoms: int) -> bool:
+    """True when E_pot rose more than ``JAXMD_EPOT_BLOWUP_RISE_EV_PER_ATOM`` per atom."""
+    rise = float(e_pot) - float(e_pot_start)
+    return rise > JAXMD_EPOT_BLOWUP_RISE_EV_PER_ATOM * max(int(n_atoms), 1)
+
+
+NVE_REQUIRE_FLOAT64_ENV = "MMML_NVE_REQUIRE_FLOAT64"
+
+
+def nve_float64_policy(x64_on: bool, ml_dtype, *, require_float64: bool = False) -> tuple[str, str]:
+    """``("ok"|"warn"|"refuse", message)`` for the NVE compute-dtype preflight.
+
+    float32 NVE is allowed with a warning (production CHARMM NVE runs float32 ML;
+    the E_tot drift gate still aborts a non-conservative run). ``require_float64``
+    (``--nve-require-float64`` or ``MMML_NVE_REQUIRE_FLOAT64=1``) restores the refusal.
+    """
+    if bool(x64_on) and ml_dtype == jnp.float64:
+        return "ok", ""
+    strict = bool(require_float64) or os.environ.get(NVE_REQUIRE_FLOAT64_ENV, "").strip() == "1"
+    msg = (
+        f"NVE with float32 (jax_enable_x64={bool(x64_on)}, ml_dtype={ml_dtype}). "
+        "For float64 use --ml-compute-dtype float64 / MMML_ML_DTYPE=float64 "
+        "with JAX_ENABLE_X64=1."
+    )
+    if strict:
+        return "refuse", (
+            f"NVE requires JAX float64 (--nve-require-float64 / {NVE_REQUIRE_FLOAT64_ENV}=1). {msg}"
+        )
+    return "warn", msg
+
+
+def summarize_jaxmd_recoveries(run_recoveries: Optional[dict], pair_stats: Optional[dict]) -> dict:
+    """Counters of recovered bookkeeping limits for the run summary (all 0 = no guard tripped)."""
+    ps = pair_stats or {}
+    out = {
+        "mm_pair_list_refits": int(ps.get("list_refits", 0) or 0),
+        "mm_pair_capacity_grows": int(ps.get("capacity_grows", 0) or 0),
+        "mm_pair_reallocs": int(ps.get("reallocs", 0) or 0),
+        "mm_pair_fallbacks": int(ps.get("fallbacks", 0) or 0),
+        "nve_float32_fd_preflight_skipped": False,
+    }
+    out.update(dict(run_recoveries or {}))
+    return out
+
 
 WORSE_COUNT_THRESHOLD = 100
 # jax-md FIRE timesteps are in the metal unit system (ps).  Historical default
@@ -820,6 +872,25 @@ def resolve_jaxmd_steps_per_loop_call(
 # and can destabilize Nose-Hoover integration even when the calculator itself
 # evaluates in float64.
 _JAXMD_DTYPE = resolve_ml_compute_dtype()
+
+
+def cast_carry_like(new, old):
+    """Cast every leaf of ``new`` to the dtype of the matching leaf of ``old``.
+
+    Under x64 with a float32 ML dtype, float64 constants promoted the NpT
+    force/box/thermostat leaves of one step and ``lax.fori_loop`` refused the
+    carry (every 26 Sep jax-md NpT run). A no-op when the dtypes already agree.
+    """
+    return jax.tree_util.tree_map(
+        lambda a, b: jnp.asarray(a, dtype=jnp.asarray(b).dtype), new, old
+    )
+
+
+def configure_jaxmd_dtype(ml_compute_dtype: Optional[str] = None):
+    """Re-resolve the carry dtype from ``--ml-compute-dtype`` (import time only sees env)."""
+    global _JAXMD_DTYPE
+    _JAXMD_DTYPE = resolve_ml_compute_dtype(ml_compute_dtype)
+    return _JAXMD_DTYPE
 
 
 def as_jaxmd_dtype(x):
@@ -1674,17 +1745,17 @@ def set_up_nhc_sim_routine(
 
         @jit
         def _sim(state, neighbor=None, pressure=None):
-            def _cast_state(s):
-                return normalize_jaxmd_state(s)
+            def _cast_state(new, old):
+                return cast_carry_like(normalize_jaxmd_state(new), old)
 
             def step_nve(i, s):
                 if neighbor is not None:
-                    return _cast_state(apply_fn_local(s, neighbor=neighbor))
-                return _cast_state(apply_fn_local(s))
+                    return _cast_state(apply_fn_local(s, neighbor=neighbor), s)
+                return _cast_state(apply_fn_local(s), s)
 
             def step_npt(i, s):
                 return _cast_state(
-                    apply_fn_local(s, neighbor=neighbor, pressure=pressure)
+                    apply_fn_local(s, neighbor=neighbor, pressure=pressure), s
                 )
 
             step_fn = (
@@ -1809,6 +1880,8 @@ def set_up_nhc_sim_routine(
         nonlocal init_fn, apply_fn, sim, dt, dt_fs, steps_per_loop_call
         run_sim.last_status = "running"
         run_sim.last_error = None
+        # Recovered bookkeeping limits / relaxed gates (run summary "recoveries").
+        run_sim.recoveries = {}
         run_sim.last_hdf5_path = None
         run_sim.last_velocities = None
         total_records = total_steps // steps_per_recording
@@ -2547,18 +2620,26 @@ def set_up_nhc_sim_routine(
                 run_sim.last_error = msg
                 pos0 = np.asarray(jax.device_get(state.position), dtype=float)
                 return 0, np.stack([pos0]), None
-            # float32 energy differences are too coarse for force–energy FD and
-            # to reduce integration error on stiff hybrid potentials. Conservation
-            # must be established from each run's energy-drift receipt.
-            x64_on = bool(jax.config.read("jax_enable_x64"))
-            if (not x64_on) or _JAXMD_DTYPE != jnp.float64:
-                msg = (
-                    "NVE requires JAX float64. Export JAX_ENABLE_X64=1 "
-                    "*before* starting Python (and use --ml-compute-dtype float64 "
-                    "or MMML_ML_DTYPE=float64). "
-                    f"Current: jax_enable_x64={x64_on}, "
-                    f"ml_dtype={_JAXMD_DTYPE}."
+            # float64 tightens the force–energy FD check and integration error on
+            # stiff hybrid potentials, but float32 NVE conserves fine in practice;
+            # conservation is established from each run's energy-drift receipt
+            # (--nve-etot-drift-abort-eV). --nve-require-float64 restores the refusal.
+            dtype_action, dtype_msg = nve_float64_policy(
+                bool(jax.config.read("jax_enable_x64")),
+                _JAXMD_DTYPE,
+                require_float64=bool(getattr(args, "nve_require_float64", False)),
+            )
+            is_f64 = dtype_action == "ok"
+            if dtype_action == "warn":
+                # float32 energy noise (~0.04 eV on DCM:308, ML-only included) swamps
+                # the ~3e-4 eV dE of the 0.01 A force–energy FD below: skip it.
+                run_sim.recoveries["nve_float32_fd_preflight_skipped"] = True
+                c.print(
+                    f"[yellow]WARNING: {dtype_msg} Force–energy FD preflight skipped (below "
+                    "float32 energy resolution); conservation is checked by the E_tot drift gate.[/yellow]"
                 )
+            elif dtype_action == "refuse":
+                msg = dtype_msg
                 c.print(
                     Panel(
                         msg,
@@ -2578,7 +2659,7 @@ def set_up_nhc_sim_routine(
                 getattr(args, "nve_force_energy_relative_tolerance", 0.20)
                 or 0.0
             )
-            if fd_tol > 0.0:
+            if fd_tol > 0.0 and is_f64:
                 fd_eps = float(
                     getattr(args, "nve_force_energy_epsilon_A", 0.01) or 0.01
                 )
@@ -3874,10 +3955,13 @@ def set_up_nhc_sim_routine(
                         if is_npt:
                             nhc_boxes = nhc_boxes[:-1]
                     break
-                if e_pot >= 0 and energy_initial < 0:
+                if epot_blew_up(e_pot, energy_initial, state.position.shape[0]):
                     run_status = "error"
-                    run_error = f"energy blow-up at step {steps} (E_pot={e_pot:.4f})"
-                    c.print(Panel(f"Energy blow-up at step {steps} (E_pot={e_pot:.4f}); stopping.", title="[bold red]Error[/bold red]", border_style="red"))
+                    run_error = (
+                        f"energy blow-up at step {steps} (E_pot={e_pot:.4f}, start "
+                        f"{energy_initial:.4f} eV: > {JAXMD_EPOT_BLOWUP_RISE_EV_PER_ATOM} eV/atom)"
+                    )
+                    c.print(Panel(f"{run_error}; stopping.", title="[bold red]Error[/bold red]", border_style="red"))
                     if len(nhc_positions) > 1:
                         nhc_positions = nhc_positions[:-1]
                         if is_npt:
