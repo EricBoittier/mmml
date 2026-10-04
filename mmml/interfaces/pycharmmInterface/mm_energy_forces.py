@@ -2961,13 +2961,36 @@ def build_mm_energy_forces_fn(
             _pair_stats["calls"] += 1
 
             if _use_jax_md_nbrs:
-                # Optimized GPU JAX-MD path to avoid host synchronization of coordinates
+                # Neighbor update stays on device. The extent guard reads host
+                # positions once per refresh (same cadence as a vesin rebuild):
+                # the neighbor function closes over the setup cutoff, so an
+                # outgrown molecule or a shrunk NpT box must refit and allocate
+                # at the new cutoff before this update returns pairs.
                 R = positions
                 nbrs = _nbrs[0]
                 box_jnp = jnp.asarray(box) if box is not None else None
                 pbc_cell_jnp = jnp.asarray(pbc_cell) if pbc_cell is not None else None
                 mm_r_min_val = float(mm_r_min) if mm_r_min is not None else None
-                
+                host_pos = (
+                    np.asarray(jax.device_get(positions), dtype=np.float64)
+                    if positions_jax is not None
+                    else np.asarray(positions, dtype=np.float64)
+                )
+                if positions_jax is not None:
+                    _pair_stats["host_syncs"] += 1
+                cutoff_before = float(_mm_list_cutoff)
+                _check_extent_and_radius(host_pos, box)
+                if float(_mm_list_cutoff) != cutoff_before:
+                    rebuilt = _create_jax_md_bundle(_current_capacity_multiplier[0])
+                    if rebuilt is None:
+                        return _cell_list_fallback_pairs(host_pos, _nbr_debug, box_in=box)
+                    _neighbor_fn_cell[0], _filter_fn_cell[0], _ = rebuilt
+                    if box_jnp is not None and fractional_coordinates:
+                        nbrs = _neighbor_fn_cell[0].allocate(R, box=box_jnp)
+                    else:
+                        nbrs = _neighbor_fn_cell[0].allocate(R)
+                    _nbrs[0] = nbrs
+
                 try:
                     nbrs, pair_idx, pair_mask = _optimized_jax_md_update_gpu(
                         R,

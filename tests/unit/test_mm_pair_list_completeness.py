@@ -84,6 +84,8 @@ def _fake_charmm(n_atoms: int):
 def _build(R, *, box_L=L, **kw):
     n = R.shape[0]
     n_mono = n // APM
+    kw.setdefault("use_jax_md_neighbor_list", False)
+    kw.setdefault("mm_nl_backend", "vesin")
     with _fake_charmm(n):
         return build_mm_energy_forces_fn(
             R,
@@ -96,8 +98,6 @@ def _build(R, *, box_L=L, **kw):
             mm_switch_on=ON,
             mm_switch_width=WIDTH,
             pbc_cell=np.diag([box_L] * 3),
-            use_jax_md_neighbor_list=False,
-            mm_nl_backend="vesin",
             lr_solver="mic",
             defer_xla_gpu_warmup=True,
             **kw,
@@ -240,6 +240,32 @@ def test_outgrown_extent_refits_list_and_matches_larger_margin(monkeypatch):
     monkeypatch.setenv("MMML_MM_EXTENT_MARGIN_A", "1.0")
     mm_ref, update_ref = _build(R)
     e_ref, f_ref = _mm(mm_ref, *update_ref(stretched, force_rebuild=True), stretched)
+    assert update_ref.get_stats()["list_refits"] == 0
+    assert e == pytest.approx(e_ref, rel=1e-12, abs=1e-12)
+    np.testing.assert_allclose(f, f_ref, rtol=1e-10, atol=1e-12)
+
+
+def test_jax_md_backend_refits_outgrown_extent(monkeypatch):
+    """``mm_nl_backend=jax_md`` closes over the setup cutoff; a refit reallocates it."""
+    pytest.importorskip("jax_md")
+    monkeypatch.setenv("MMML_MM_EXTENT_MARGIN_A", "0.25")
+    R = _box(ON + WIDTH - 0.01)
+    kw = dict(use_jax_md_neighbor_list=True, mm_nl_backend="jax_md")
+    mm_fn, update = _build(R, **kw)
+    old_list = update.get_stats()["radius"]["list_radius_A"]
+    stretched = _stretch(_stretch(R, 0, 0.4), 1, 0.4)
+    pidx, pmask = update(stretched)
+    stats = update.get_stats()
+    assert stats["list_refits"] == 1
+    assert stats["radius"]["assumed_extent_A"] >= 1.6
+    assert old_list < stats["radius"]["list_radius_A"] < L / 2
+    listed = {tuple(int(a) for a in p) for p in np.asarray(pidx)[np.asarray(pmask) > 0]}
+    assert (0, 5) in listed
+    e, f = _mm(mm_fn, pidx, pmask, stretched)
+
+    monkeypatch.setenv("MMML_MM_EXTENT_MARGIN_A", "1.0")
+    mm_ref, update_ref = _build(R, **kw)
+    e_ref, f_ref = _mm(mm_ref, *update_ref(stretched), stretched)
     assert update_ref.get_stats()["list_refits"] == 0
     assert e == pytest.approx(e_ref, rel=1e-12, abs=1e-12)
     np.testing.assert_allclose(f, f_ref, rtol=1e-10, atol=1e-12)

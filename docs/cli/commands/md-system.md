@@ -1242,6 +1242,10 @@ Full help (all categories). Short index: -h One category: -hN or -halias (see
   --pycharmm-pre-dynamics-lingo-file PYCHARMM_PRE_DYNAMICS_LINGO_FILE
                         pycharmm: path to a CHARMM script file run once before
                         dynamics
+  --nve-require-float64
+                        jaxmd: refuse NVE unless JAX runs float64 (default:
+                        float32 NVE runs with a warning; the E_tot drift gate
+                        guards conservation).
   --max-fmax-before-dyn-ev-A EV_A
                         pycharmm: abort if max atomic |F| exceeds this (eV/Å)
                         before dynamics; default 2.0. Raise only for controlled
