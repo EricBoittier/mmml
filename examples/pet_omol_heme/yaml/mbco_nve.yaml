@@ -28,7 +28,7 @@ metatomic_eval_mode: whole_system
 include_mm: false
 dynamics_max_monomer_extent: 120
 temperature: 300.0
-dt_fs: 0.5
+dt_fs: 1.5
 mini_nstep: 2000
 ps_nve: 100
 output_dir: scratch/pet_omol_mbco_water
