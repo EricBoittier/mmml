@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import os
 import re
+import shlex
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal, Optional, Sequence, Tuple
@@ -2411,6 +2412,55 @@ def format_resid_constraint_message(resids: list[int], *, context: str) -> str:
     return f"{context}: cons_fix on resid(s) [{ids}] ({len(resids)} monomer(s))"
 
 
+# CHARMM histidines are HSD/HSE/HSP. VMD's ``protein`` keyword does not always
+# mark those when the structure is a PSF, so the ribbon selection names them.
+_VMD_PROTEIN_RESNAMES = (
+    "ALA ARG ASN ASP CYS GLN GLU GLY HIS HSD HSE HSP "
+    "ILE LEU LYS MET PHE PRO SER THR TRP TYR VAL ASH GLH CYM"
+)
+_VMD_ION_RESNAMES = "LIT SOD MG POT CAL RUB CES BAR ZN2 CD2 CLA"
+_VMD_WATER_SELECTION = "water or resname TIP3 TIP4 HOH WAT"
+
+
+def _vmd_rep_lines(representation: str, color: str, selection: str) -> list[str]:
+    return [
+        f"mol representation {representation}",
+        f"mol color {color}",
+        f"mol selection {{{selection}}}",
+        "mol material Opaque",
+        "mol addrep top",
+    ]
+
+
+def _vmd_style_lines() -> list[str]:
+    """One representation per chemical selection.
+
+    Protein is a cartoon, heme is CPK, ions are VDW spheres, water is points,
+    and everything else (ligands such as CO) is licorice.
+    """
+    protein = f"protein or resname {_VMD_PROTEIN_RESNAMES}"
+    heme = "resname HEME"
+    ions = f"resname {_VMD_ION_RESNAMES}"
+    water = _VMD_WATER_SELECTION
+    other = f"not ({protein}) and not ({heme}) and not ({ions}) and not ({water})"
+    lines = ["mol delrep 0 top"]
+    lines.extend(_vmd_rep_lines("NewCartoon", "Structure", protein))
+    lines.extend(_vmd_rep_lines("CPK", "Element", heme))
+    lines.extend(_vmd_rep_lines("Licorice 0.15 12 12", "Name", other))
+    lines.extend(_vmd_rep_lines("VDW 0.8 12", "Name", ions))
+    lines.extend(_vmd_rep_lines("Points 2", "Name", water))
+    return lines
+
+
+def _vmd_trajectory_token(out_dir: Path, trajectory: Path) -> str:
+    """Path VMD should open after ``cd`` into the job directory."""
+    try:
+        relative = Path(trajectory).resolve().relative_to(Path(out_dir).resolve())
+    except ValueError:
+        return Path(trajectory).name
+    return relative.as_posix()
+
+
 def write_vmd_load_script(
     *,
     out_dir: Path,
@@ -2423,15 +2473,19 @@ def write_vmd_load_script(
 
     topology_psf = Path(topology_psf)
     lines = [
-        "# VMD: run from the job output directory (basename paths for sshfs / compute nodes).",
+        "# cd into this directory first, then: vmd -e view.vmd.tcl",
+        "# Basenames only (sshfs / compute nodes).",
         f"# Atoms: {n_atoms} — must match trajectory frame count.",
         f"mol new {{{topology_psf.name}}}",
     ]
     trajectories = _normalize_trajectory_paths(trajectory)
     for traj in trajectories:
-        lines.append(f"mol addfile {{{Path(traj).name}}} waitfor all")
+        lines.append(
+            f"mol addfile {{{_vmd_trajectory_token(out_dir, traj)}}} waitfor all"
+        )
     if trajectories:
         lines.append("animate goto 0")
+    lines.extend(_vmd_style_lines())
     lines.append("display update")
     tcl_path = Path(out_dir) / VMD_TCL
     tcl_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
@@ -2448,29 +2502,26 @@ def print_vmd_load_help(
     bondless_psf: Path | None = None,
 ) -> None:
     topo = topology_psf.resolve()
+    job = Path(out_dir).resolve()
     print("\n=== VMD ===")
     print(f"  Atoms in this run: {n_atoms}")
     print(f"  Topology (bonds):  {topo}")
     trajectories = _normalize_trajectory_paths(trajectory)
-    if trajectories:
-        if len(trajectories) == 1:
-            print(f"  Trajectory:        {trajectories[0]}")
-            print(f"\n  vmd {topo} {trajectories[0]}")
-        else:
-            print("  Trajectories:")
-            for traj in trajectories:
-                print(f"    {traj}")
-            print(f"\n  vmd {topo}")
-        tcl = write_vmd_load_script(
-            out_dir=out_dir,
-            tag=tag,
-            topology_psf=topo,
-            trajectory=trajectories,
-            n_atoms=n_atoms,
-        )
-        print(f"  # or: vmd -e {tcl}")
-    else:
-        print(f"\n  vmd {topo}")
+    if len(trajectories) == 1:
+        print(f"  Trajectory:        {trajectories[0]}")
+    elif trajectories:
+        print("  Trajectories:")
+        for traj in trajectories:
+            print(f"    {traj}")
+    tcl = write_vmd_load_script(
+        out_dir=job,
+        tag=tag,
+        topology_psf=topo,
+        trajectory=trajectories,
+        n_atoms=n_atoms,
+    )
+    print(f"\n  cd {shlex.quote(str(job))}")
+    print(f"  vmd -e {tcl.name}")
     if bondless_psf is not None:
         print(
             f"\n  Prefer {topology_psf.name} in VMD (full connectivity). "

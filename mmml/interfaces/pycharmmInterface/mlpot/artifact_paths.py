@@ -1,7 +1,8 @@
 """Short on-disk artifact names (CHARMM Fortran path limits).
 
 Each run uses its own output directory, so filenames omit composition tags.
-VMD scripts reference basenames only (run ``vmd -e view.vmd.tcl`` from the job dir).
+VMD scripts use paths relative to the job directory. The printed suggestion is
+``cd`` into that directory, then ``vmd -e view.vmd.tcl``.
 """
 
 from __future__ import annotations

@@ -90,4 +90,49 @@ def test_vmd_script_uses_basename_paths(tmp_path: Path) -> None:
     text = tcl.read_text(encoding="utf-8")
     assert "mol new {model.psf}" in text
     assert "mol addfile {heat.0000.dcd}" in text
+    assert "mol representation NewCartoon" in text
+    assert "mol representation CPK" in text
+    assert "resname HEME" in text
+    assert "resname ALA ARG ASN ASP CYS GLN GLU GLY HIS HSD HSE HSP" in text
     assert str(tmp_path) not in text
+
+
+def test_vmd_script_keeps_trajectory_subdir(tmp_path: Path) -> None:
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import write_vmd_load_script
+
+    topo = tmp_path / "model.psf"
+    pretreat = tmp_path / "pretreat"
+    pretreat.mkdir()
+    traj = pretreat / "01_mm.dcd"
+    topo.write_text("psf", encoding="utf-8")
+    traj.write_bytes(b"x")
+    tcl = write_vmd_load_script(
+        out_dir=tmp_path,
+        tag="ignored",
+        topology_psf=topo,
+        trajectory=traj,
+        n_atoms=10,
+    )
+    text = tcl.read_text(encoding="utf-8")
+    assert "mol addfile {pretreat/01_mm.dcd}" in text
+    assert str(tmp_path) not in text
+
+
+def test_vmd_help_cds_into_job_dir(tmp_path: Path, capsys) -> None:
+    from mmml.interfaces.pycharmmInterface.mlpot.cli_common import print_vmd_load_help
+
+    topo = tmp_path / "model.psf"
+    traj = tmp_path / "nve.dcd"
+    topo.write_text("psf", encoding="utf-8")
+    traj.write_bytes(b"x")
+    print_vmd_load_help(
+        out_dir=tmp_path,
+        tag="ignored",
+        topology_psf=topo,
+        trajectory=traj,
+        n_atoms=10,
+    )
+    out = capsys.readouterr().out
+    assert f"cd {tmp_path.resolve()}" in out
+    assert "vmd -e view.vmd.tcl" in out
+    assert f"vmd -e {tmp_path.resolve() / 'view.vmd.tcl'}" not in out
