@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import platform
 import re
 import shutil
 import subprocess
@@ -42,14 +43,60 @@ def _binary_runs_on_host(path: Path) -> bool:
     return True
 
 
-def packmol_executable() -> str:
+def _packmol_cache_candidates() -> list[Path]:
+    """Binaries left by ``scripts/rebuild_packmol.sh`` outside the source tree.
+
+    A ``uv tool`` install does not contain the gitignored Packmol executable.
+    The rebuild script still installs one under ``PACKMOL_BUILD_DIR`` (default
+    ``~/.cache/mmml-packmol-build/<platform>/install/bin/packmol``).
+    """
+    override = os.environ.get("PACKMOL_BUILD_DIR", "").strip()
+    if override:
+        roots = [Path(override).expanduser()]
+    else:
+        tag = f"{platform.system().lower()}-{platform.machine()}"
+        roots = [Path.home() / ".cache" / "mmml-packmol-build" / tag]
+    candidates: list[Path] = []
+    for root in roots:
+        candidates.append(root / "install" / "bin" / "packmol")
+        candidates.append(root / "packmol")
+        candidates.append(root / "bin" / "packmol")
+    return candidates
+
+
+def _packmol_checkout_candidates() -> list[Path]:
+    """``mmml/generate/packmol/packmol`` walking up from the working directory."""
+    found: list[Path] = []
+    here = Path.cwd()
+    for _ in range(8):
+        found.append(here / "mmml" / "generate" / "packmol" / "packmol")
+        if here.parent == here:
+            break
+        here = here.parent
+    return found
+
+
+def _packmol_candidates() -> list[Path]:
     from mmml.paths import bundled_file
 
-    candidates = [
-        bundled_file("generate", "packmol", "packmol"),
-        bundled_file("generate", "packmol", "bin", "packmol"),
-        Path(os.path.expanduser(str(PACKMOL_PATH))),
-    ]
+    candidates: list[Path] = []
+    env = os.environ.get("MMML_PACKMOL", "").strip()
+    if env:
+        candidates.append(Path(env).expanduser())
+    candidates.extend(
+        [
+            bundled_file("generate", "packmol", "packmol"),
+            bundled_file("generate", "packmol", "bin", "packmol"),
+            Path(os.path.expanduser(str(PACKMOL_PATH))),
+        ]
+    )
+    candidates.extend(_packmol_cache_candidates())
+    candidates.extend(_packmol_checkout_candidates())
+    return candidates
+
+
+def packmol_executable() -> str:
+    candidates = _packmol_candidates()
     for path in candidates:
         if _binary_runs_on_host(path):
             return str(path)
@@ -59,8 +106,10 @@ def packmol_executable() -> str:
     tried = ", ".join(str(p) for p in candidates)
     raise FileNotFoundError(
         "packmol not found for this platform "
-        f"(tried {tried}). Run: bash scripts/rebuild_charmm_mlpot.sh "
-        "or bash scripts/rebuild_packmol.sh"
+        f"(tried {tried}). A uv tool install does not ship this binary. "
+        "From a source checkout run: bash scripts/rebuild_packmol.sh "
+        "(also installs ~/.cache/mmml-packmol-build/<platform>/install/bin/packmol). "
+        "Or set MMML_PACKMOL to the executable."
     )
 
 

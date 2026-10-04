@@ -36,6 +36,25 @@ def test_binary_runs_on_host_accepts_mach_o_on_darwin(monkeypatch, tmp_path):
         assert packmol_placement._binary_runs_on_host(path) is True
 
 
+def test_packmol_executable_uses_build_cache(monkeypatch, tmp_path):
+    binary = tmp_path / "install" / "bin" / "packmol"
+    binary.parent.mkdir(parents=True)
+    binary.write_bytes(b"stub")
+    monkeypatch.setenv("PACKMOL_BUILD_DIR", str(tmp_path))
+
+    def _runs(path: Path) -> bool:
+        return Path(path) == binary
+
+    with mock.patch(
+        "mmml.interfaces.pycharmmInterface.packmol_placement._binary_runs_on_host",
+        side_effect=_runs,
+    ), mock.patch(
+        "mmml.interfaces.pycharmmInterface.packmol_placement.shutil.which",
+        return_value=None,
+    ):
+        assert packmol_placement.packmol_executable() == str(binary)
+
+
 def test_packmol_executable_skips_foreign_bundled_binary(monkeypatch):
     with mock.patch(
         "mmml.interfaces.pycharmmInterface.packmol_placement._binary_runs_on_host",
