@@ -99,6 +99,11 @@ def _apply_dynamics_io_setters(
     iunrea = kw.get("iunrea")
     if isinstance(iunrea, str):
         if kw.get("restart"):
+            from mmml.interfaces.pycharmmInterface.mlpot.charmm_restart_compat import (
+                restart_with_seed_count,
+            )
+
+            iunrea = str(restart_with_seed_count(iunrea))
             if not charm_dyn.set_iunrea(iunrea):
                 raise RuntimeError(f"dynamics iunrea open failed: {iunrea}")
             if os.environ.get("MMML_TRACE_DYNAMICS_COMMAND") == "1":
@@ -179,8 +184,12 @@ class CharmmTrajectoryFiles:
         if self.restart_read is not None:
             import pycharmm
 
+            from mmml.interfaces.pycharmmInterface.mlpot.charmm_restart_compat import (
+                restart_with_seed_count,
+            )
+
             fortran_path, alias = _dynamics_io_fortran_path(
-                self.restart_read,
+                restart_with_seed_count(self.restart_read),
                 for_write=False,
             )
             if alias is not None:
