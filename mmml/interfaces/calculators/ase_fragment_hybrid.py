@@ -136,16 +136,112 @@ def _eval_atoms(
     return energy, forces
 
 
+def _stamp_electronic_state(
+    atoms: Atoms,
+    *,
+    charge: float | None,
+    spin_multiplicity: float | None,
+) -> Atoms:
+    """PET-OMOL reads total charge and multiplicity from ``atoms.info``.
+
+    Absent keys become charge 0 and multiplicity 1 inside MetatomicCalculator.
+    ``spin`` is the OMol25 name for the multiplicity; ``spin_multiplicity`` is
+    the metatomic name. Both are set to the same value.
+    """
+    if charge is not None:
+        atoms.info["charge"] = float(charge)
+    if spin_multiplicity is not None:
+        atoms.info["spin"] = float(spin_multiplicity)
+        atoms.info["spin_multiplicity"] = float(spin_multiplicity)
+    return atoms
+
+
+def _make_atoms(
+    numbers: np.ndarray,
+    positions: np.ndarray,
+    *,
+    charge: float | None = None,
+    spin_multiplicity: float | None = None,
+    pbc: bool = False,
+) -> Atoms:
+    atoms = Atoms(
+        numbers=np.asarray(numbers, dtype=int),
+        positions=np.asarray(positions, dtype=np.float64),
+        pbc=pbc,
+    )
+    return _stamp_electronic_state(
+        atoms, charge=charge, spin_multiplicity=spin_multiplicity
+    )
+
+
 def _slice_atoms(
     numbers: np.ndarray,
     positions: np.ndarray,
     start: int,
     stop: int,
+    *,
+    charge: float | None = None,
+    spin_multiplicity: float | None = None,
 ) -> Atoms:
-    return Atoms(
-        numbers=np.asarray(numbers[start:stop], dtype=int),
-        positions=np.asarray(positions[start:stop], dtype=np.float64),
+    return _make_atoms(
+        numbers[start:stop],
+        positions[start:stop],
+        charge=charge,
+        spin_multiplicity=spin_multiplicity,
         pbc=False,
+    )
+
+
+def _fragment_electronic_state(
+    index: int,
+    *,
+    charge: float | None,
+    spin_multiplicity: float | None,
+    monomer_charges: Sequence[float] | None,
+    monomer_spins: Sequence[float] | None,
+) -> tuple[float | None, float | None]:
+    if monomer_charges is None and monomer_spins is None:
+        return charge, spin_multiplicity
+    q = None if monomer_charges is None else float(monomer_charges[index])
+    s = None if monomer_spins is None else float(monomer_spins[index])
+    return q, s
+
+
+def _dimer_electronic_state(
+    i: int,
+    j: int,
+    *,
+    charge: float | None,
+    spin_multiplicity: float | None,
+    monomer_charges: Sequence[float] | None,
+    monomer_spins: Sequence[float] | None,
+) -> tuple[float | None, float | None]:
+    qi, si = _fragment_electronic_state(
+        i,
+        charge=charge,
+        spin_multiplicity=spin_multiplicity,
+        monomer_charges=monomer_charges,
+        monomer_spins=monomer_spins,
+    )
+    qj, sj = _fragment_electronic_state(
+        j,
+        charge=charge,
+        spin_multiplicity=spin_multiplicity,
+        monomer_charges=monomer_charges,
+        monomer_spins=monomer_spins,
+    )
+    q = None if qi is None or qj is None else float(qi) + float(qj)
+    if si is None or sj is None:
+        return q, spin_multiplicity
+    if int(si) == 1:
+        return q, sj
+    if int(sj) == 1:
+        return q, si
+    if spin_multiplicity is not None:
+        return q, spin_multiplicity
+    raise ValueError(
+        "two open-shell fragments in one metatomic dimer; "
+        "set --spin-multiplicity (2S+1) for the pair"
     )
 
 
@@ -166,11 +262,15 @@ def evaluate_whole_system(
     positions: np.ndarray,
     *,
     cell: np.ndarray | float | None = None,
+    charge: float | None = None,
+    spin_multiplicity: float | None = None,
 ) -> FragmentHybridResult:
     """One ASE evaluation on the full ML selection."""
     numbers = np.asarray(atomic_numbers, dtype=int)
     pos = np.asarray(positions, dtype=np.float64)
-    atoms = Atoms(numbers=numbers, positions=pos)
+    atoms = _make_atoms(
+        numbers, pos, charge=charge, spin_multiplicity=spin_multiplicity
+    )
     cell_m = _cell_as_matrix(cell)
     if cell_m is not None:
         atoms.set_cell(cell_m)
@@ -196,6 +296,10 @@ def evaluate_fragment_hybrid(
     cell: np.ndarray | float | None = None,
     mm_switch_on: float = DEFAULT_MM_SWITCH_ON,
     ml_switch_width: float = DEFAULT_ML_SWITCH_WIDTH,
+    charge: float | None = None,
+    spin_multiplicity: float | None = None,
+    monomer_charges: Sequence[float] | None = None,
+    monomer_spins: Sequence[float] | None = None,
 ) -> FragmentHybridResult:
     """Monomer sum plus switched dimer interaction (MMML ML/MM scheme, ML part)."""
     numbers = np.asarray(atomic_numbers, dtype=int)
@@ -217,7 +321,16 @@ def evaluate_fragment_hybrid(
     if do_ml:
         for i, n_i in enumerate(per):
             start, stop = int(offsets[i]), int(offsets[i + 1])
-            frag = _slice_atoms(numbers, pos, start, stop)
+            q_i, s_i = _fragment_electronic_state(
+                i,
+                charge=charge,
+                spin_multiplicity=spin_multiplicity,
+                monomer_charges=monomer_charges,
+                monomer_spins=monomer_spins,
+            )
+            frag = _slice_atoms(
+                numbers, pos, start, stop, charge=q_i, spin_multiplicity=s_i
+            )
             e_i, f_i = _eval_atoms(frag, calculator)
             energy += e_i
             forces[start:stop] += f_i
@@ -253,10 +366,19 @@ def evaluate_fragment_hybrid(
                 )
                 if scale == 0.0 and dscale_dr == 0.0:
                     continue
-                dimer = Atoms(
-                    numbers=np.concatenate([numbers[start_i:stop_i], numbers[start_j:stop_j]]),
-                    positions=np.concatenate([pos_i, pos_j_eval], axis=0),
-                    pbc=False,
+                q_ij, s_ij = _dimer_electronic_state(
+                    i,
+                    j,
+                    charge=charge,
+                    spin_multiplicity=spin_multiplicity,
+                    monomer_charges=monomer_charges,
+                    monomer_spins=monomer_spins,
+                )
+                dimer = _make_atoms(
+                    np.concatenate([numbers[start_i:stop_i], numbers[start_j:stop_j]]),
+                    np.concatenate([pos_i, pos_j_eval], axis=0),
+                    charge=q_ij,
+                    spin_multiplicity=s_ij,
                 )
                 e_ab, f_ab = _eval_atoms(dimer, calculator)
                 if cell_m is None and do_ml:
@@ -265,16 +387,38 @@ def evaluate_fragment_hybrid(
                     e_j = monomer_energies[j]
                     f_j = monomer_forces[j]
                 else:
+                    q_i, s_i = _fragment_electronic_state(
+                        i,
+                        charge=charge,
+                        spin_multiplicity=spin_multiplicity,
+                        monomer_charges=monomer_charges,
+                        monomer_spins=monomer_spins,
+                    )
+                    q_j, s_j = _fragment_electronic_state(
+                        j,
+                        charge=charge,
+                        spin_multiplicity=spin_multiplicity,
+                        monomer_charges=monomer_charges,
+                        monomer_spins=monomer_spins,
+                    )
                     if not do_ml:
-                        frag_i = _slice_atoms(numbers, pos, start_i, stop_i)
+                        frag_i = _slice_atoms(
+                            numbers,
+                            pos,
+                            start_i,
+                            stop_i,
+                            charge=q_i,
+                            spin_multiplicity=s_i,
+                        )
                         e_i, f_i = _eval_atoms(frag_i, calculator)
                     else:
                         e_i = monomer_energies[i]
                         f_i = monomer_forces[i]
-                    frag_j = Atoms(
-                        numbers=numbers[start_j:stop_j],
-                        positions=pos_j_eval,
-                        pbc=False,
+                    frag_j = _make_atoms(
+                        numbers[start_j:stop_j],
+                        pos_j_eval,
+                        charge=q_j,
+                        spin_multiplicity=s_j,
                     )
                     e_j, f_j = _eval_atoms(frag_j, calculator)
                 e_int = e_ab - e_i - e_j
@@ -477,9 +621,16 @@ class AseFragmentHybridCalculator(Calculator):
         numbers = np.asarray(atoms.get_atomic_numbers(), dtype=int)
         positions = np.asarray(atoms.get_positions(), dtype=np.float64)
         cell = np.asarray(atoms.cell.array, dtype=np.float64) if atoms.pbc.any() else None
+        charge = atoms.info.get("charge")
+        spin = atoms.info.get("spin_multiplicity", atoms.info.get("spin"))
         if self.eval_mode == "whole_system":
             result = evaluate_whole_system(
-                self._calc, numbers, positions, cell=cell
+                self._calc,
+                numbers,
+                positions,
+                cell=cell,
+                charge=charge,
+                spin_multiplicity=spin,
             )
         else:
             result = evaluate_fragment_hybrid(
@@ -492,6 +643,8 @@ class AseFragmentHybridCalculator(Calculator):
                 cell=cell,
                 mm_switch_on=self.mm_switch_on,
                 ml_switch_width=self.ml_switch_width,
+                charge=charge,
+                spin_multiplicity=spin,
             )
         energy = result.energy_ev
         forces = result.forces_ev_per_angstrom

@@ -1798,6 +1798,43 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--charge",
+        type=int,
+        default=None,
+        help=(
+            "Total charge for a metatomic model. HEME defaults to −2, or 0 "
+            "with neutralizing --counterions in the same evaluation."
+        ),
+    )
+    parser.add_argument(
+        "--spin-multiplicity",
+        type=int,
+        default=None,
+        help=(
+            "Spin multiplicity 2S+1 for a metatomic model. HEME with no axial "
+            "ligand defaults to 3."
+        ),
+    )
+    parser.add_argument(
+        "--counterions",
+        type=str,
+        default=None,
+        help=(
+            "Protein ion that neutralizes the solute. SOD on HEME adds two "
+            "sodiums, one on each carboxylate."
+        ),
+    )
+    parser.add_argument(
+        "--mm-region",
+        type=str,
+        default=None,
+        choices=("none", "propionates"),
+        help=(
+            "propionates: keep the heme tails and counterions as MM and cap "
+            "the CAA–CBA and CAD–CBD cuts with ghost hydrogens in PET."
+        ),
+    )
+    parser.add_argument(
         "--bonded-intra-damp-onset",
         type=float,
         default=None,
@@ -3524,6 +3561,12 @@ def build_pycharmm_command(args: argparse.Namespace) -> list[str]:
     _append_optional(
         cmd, "--metatomic-eval-mode", getattr(args, "metatomic_eval_mode", None)
     )
+    _append_optional(cmd, "--charge", getattr(args, "charge", None))
+    _append_optional(
+        cmd, "--spin-multiplicity", getattr(args, "spin_multiplicity", None)
+    )
+    _append_optional(cmd, "--counterions", getattr(args, "counterions", None))
+    _append_optional(cmd, "--mm-region", getattr(args, "mm_region", None))
     _append_optional(
         cmd,
         "--bonded-intra-damp-onset",

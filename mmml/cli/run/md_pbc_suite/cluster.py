@@ -108,7 +108,9 @@ def _build_psf_ordered_cluster(
     read_cgenff_toppar(enable_drude=False)
 
     read.sequence_string(sequence)
-    gen.new_segment(seg_name="CLST", setup_ic=True)
+    from mmml.interfaces.pycharmmInterface.heme_library import segment_terminal_patches
+
+    gen.new_segment(seg_name="CLST", setup_ic=True, **segment_terminal_patches())
     ic_prm_fill(replace_all=True)
     ic.build()
 
@@ -304,7 +306,9 @@ def build_minimized_monomer_for_packmol(
     read_cgenff_toppar(enable_drude=False)
     pycharmm.settings.set_bomb_level(-5)
     read.sequence_string(residue)
-    gen.new_segment(seg_name="CLST", setup_ic=True)
+    from mmml.interfaces.pycharmmInterface.heme_library import segment_terminal_patches
+
+    gen.new_segment(seg_name="CLST", setup_ic=True, **segment_terminal_patches())
     ic_prm_fill(replace_all=True)
     ic.build()
 

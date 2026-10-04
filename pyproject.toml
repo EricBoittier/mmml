@@ -367,6 +367,7 @@ mmml = [
     "data/charmm/par_trialanine_backbone_cmap.prm",
     # Full CGENFF pair. A uv tool / wheel install has no setup/charmm/toppar
     # tree; import_pycharmm looks under the installed mmml package.
+    "data/charmm/heme_mbco_coords.txt",
     "data/charmm/top_all36_cgenff.rtf",
     "data/charmm/par_all36_cgenff.prm",
     "data/external/aaa_ama_dataset_summary.json",

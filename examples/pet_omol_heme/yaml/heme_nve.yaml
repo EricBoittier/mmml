@@ -1,0 +1,28 @@
+# One CHARMM RESI HEME, vacuum, PET-OMOL S as the all-ML USER energy.
+#
+#   uv run --no-sync python -c "from upet import save_upet; save_upet(model='pet-omol', size='s', version='1.0.0', output='pet-omol-s-v1.0.0.pt')"
+#   export PET_OMOL_S_CKPT=$PWD/pet-omol-s-v1.0.0.pt
+#   mmml md-system --config examples/pet_omol_heme/yaml/heme_nve.yaml --checkpoint "$PET_OMOL_S_CKPT"
+#
+# RESI HEME is the 6-coordinate planar heme in toppar_all36_prot_heme.str.
+# See examples/pet_omol_heme/README.md.
+
+residue: HEME
+n_molecules: 1
+counterions: SOD
+builder: gas
+backend: pycharmm
+setup: free_nve
+checkpoint: ${PET_OMOL_S_CKPT}
+ml_potential_mode: metatomic
+metatomic_eval_mode: whole_system
+include_mm: false
+charmm_zero_energy_terms: "vdw,elec,bonded"
+temperature: 300.0
+dt_fs: 0.5
+mini_nstep: 20
+ps_nve: 0.05
+output_dir: scratch/pet_omol_heme
+extra_args:
+  - --no-include-mm
+  - --no-echeck

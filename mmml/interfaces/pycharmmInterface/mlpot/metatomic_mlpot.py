@@ -85,6 +85,11 @@ class MetatomicMlpotCalculator:
         cell: float | bool = False,
         ml_atom_indices: Sequence[int] | np.ndarray | None = None,
         batch_evaluator: BatchEvaluator | None = None,
+        charge: float | None = None,
+        spin_multiplicity: float | None = None,
+        monomer_charges: Sequence[float] | None = None,
+        monomer_spins: Sequence[float] | None = None,
+        link_atoms: Sequence[Any] | None = None,
     ) -> None:
         self._calc = calculator
         self._batch_evaluator = batch_evaluator
@@ -107,6 +112,17 @@ class MetatomicMlpotCalculator:
         self.last_ml_forces: np.ndarray | None = None
         self._last_ml_forces: np.ndarray | None = None
         self.n_monomers = len(self._atoms_per_monomer)
+        self.charge = None if charge is None else float(charge)
+        self.spin_multiplicity = (
+            None if spin_multiplicity is None else float(spin_multiplicity)
+        )
+        self._monomer_charges = (
+            None if monomer_charges is None else [float(q) for q in monomer_charges]
+        )
+        self._monomer_spins = (
+            None if monomer_spins is None else [float(s) for s in monomer_spins]
+        )
+        self._link_atoms = tuple(link_atoms or ())
 
     def _resolve_ml_slice(self, n_charmm: int) -> np.ndarray:
         expected = int(self.atomic_numbers.shape[0])
@@ -120,23 +136,41 @@ class MetatomicMlpotCalculator:
             "and ml_atom_indices was not set."
         )
 
+    def _numbers_for_indices(self, n_charmm: int, ml_idx: np.ndarray) -> np.ndarray:
+        z = self.atomic_numbers
+        if int(z.shape[0]) == int(ml_idx.shape[0]):
+            return z
+        if int(z.shape[0]) == int(n_charmm):
+            return z[np.asarray(ml_idx, dtype=int)]
+        raise RuntimeError(
+            f"Metatomic MLpot: atomic_numbers length {z.shape[0]} matches neither "
+            f"the ML slice ({ml_idx.shape[0]}) nor CHARMM Natom={n_charmm}"
+        )
+
     def _evaluate_ml(
         self,
         pos_ml: np.ndarray,
         box_side: float | None,
+        *,
+        atomic_numbers: np.ndarray | None = None,
     ) -> FragmentHybridResult:
         cell = box_side if box_side is not None and box_side > 0.0 else None
-        if self.eval_mode == "whole_system":
+        z = self.atomic_numbers if atomic_numbers is None else atomic_numbers
+        charge = self.charge
+        spin = self.spin_multiplicity
+        if self.eval_mode == "whole_system" or self._link_atoms:
             return evaluate_whole_system(
                 self._calc,
-                self.atomic_numbers,
+                z,
                 pos_ml,
                 cell=cell,
+                charge=charge,
+                spin_multiplicity=spin,
             )
         if self._batch_evaluator is not None:
             return evaluate_fragment_hybrid_batched(
                 self._batch_evaluator,
-                self.atomic_numbers,
+                z,
                 pos_ml,
                 self._atoms_per_monomer,
                 do_ml=self.do_ml,
@@ -147,7 +181,7 @@ class MetatomicMlpotCalculator:
             )
         return evaluate_fragment_hybrid(
             self._calc,
-            self.atomic_numbers,
+            z,
             pos_ml,
             self._atoms_per_monomer,
             do_ml=self.do_ml,
@@ -155,7 +189,36 @@ class MetatomicMlpotCalculator:
             cell=cell,
             mm_switch_on=float(self.cutoff_params.mm_switch_on),
             ml_switch_width=float(self.cutoff_params.ml_switch_width),
+            charge=charge,
+            spin_multiplicity=spin,
+            monomer_charges=self._monomer_charges,
+            monomer_spins=self._monomer_spins,
         )
+
+    def _evaluate_capped(
+        self,
+        pos_full: np.ndarray,
+        ml_idx: np.ndarray,
+        box_side: float | None,
+    ) -> tuple[float, np.ndarray]:
+        """ML energy of the core plus ghost hydrogens, forces on the full system."""
+        from mmml.interfaces.calculators.link_atoms import (
+            capped_ml_system,
+            scatter_capped_forces,
+        )
+
+        n = int(pos_full.shape[0])
+        z_full = self._numbers_for_indices(n, np.arange(n, dtype=int))
+        z_aug, pos_aug = capped_ml_system(z_full, pos_full, ml_idx, self._link_atoms)
+        ml = self._evaluate_ml(pos_aug, box_side, atomic_numbers=z_aug)
+        forces = scatter_capped_forces(
+            ml.forces_ev_per_angstrom,
+            n,
+            ml_idx,
+            self._link_atoms,
+            pos_full,
+        )
+        return float(ml.energy_ev), forces
 
     def _evaluate_mm(
         self,
@@ -217,12 +280,22 @@ class MetatomicMlpotCalculator:
         n = int(Natom)
         pos_full = np.array([x[:n], y[:n], z[:n]], dtype=np.float64).T
         ml_idx = self._resolve_ml_slice(n)
-        pos_ml = pos_full[ml_idx]
         box_side = float(self._cell) if self._cell else None
-        ml = self._evaluate_ml(pos_ml, box_side)
-        e_mm, f_mm = self._evaluate_mm(pos_ml, box_side)
-        energy_ev = ml.energy_ev + e_mm
-        forces_ev = ml.forces_ev_per_angstrom + f_mm
+        if self._link_atoms:
+            e_ml, f_ml = self._evaluate_capped(pos_full, ml_idx, box_side)
+            pos_ml = pos_full[ml_idx]
+            e_mm, f_mm_local = self._evaluate_mm(pos_ml, box_side)
+            energy_ev = e_ml + e_mm
+            forces_ev = f_ml
+            forces_ev[ml_idx] = forces_ev[ml_idx] + f_mm_local
+        else:
+            pos_ml = pos_full[ml_idx]
+            z_ml = self._numbers_for_indices(n, ml_idx)
+            ml = self._evaluate_ml(pos_ml, box_side, atomic_numbers=z_ml)
+            e_mm, f_mm = self._evaluate_mm(pos_ml, box_side)
+            energy_ev = ml.energy_ev + e_mm
+            forces_ev = np.zeros((n, 3), dtype=np.float64)
+            forces_ev[ml_idx] = ml.forces_ev_per_angstrom + f_mm
         energy_kcal = float(energy_ev) * EV_TO_KCAL_MOL
         forces_kcal = np.asarray(forces_ev, dtype=np.float64) * EV_TO_KCAL_MOL
         if not (np.isfinite(energy_kcal) and np.all(np.isfinite(forces_kcal))):
@@ -236,11 +309,12 @@ class MetatomicMlpotCalculator:
             # Forces are host numpy here (synchronised). Same scope as the PhysNet
             # MLpot callback timer: the write-back to CHARMM falls in the gap.
             get_mlpot_profile_stats().record_ml(time.perf_counter() - t0)
-        for local_i, atom_i in enumerate(ml_idx):
-            ai = int(atom_i)
-            dx[ai] -= float(forces_kcal[local_i, 0])
-            dy[ai] -= float(forces_kcal[local_i, 1])
-            dz[ai] -= float(forces_kcal[local_i, 2])
+        # Full-system layout so a ghost-hydrogen force can land on the MM atom
+        # of a cut bond, which is outside the ML index list.
+        for ai in range(n):
+            dx[ai] -= float(forces_kcal[ai, 0])
+            dy[ai] -= float(forces_kcal[ai, 1])
+            dz[ai] -= float(forces_kcal[ai, 2])
         return energy_kcal
 
 
@@ -263,6 +337,12 @@ class MetatomicMlpotModel:
         cell: float | bool = False,
         checkpoint: Path | None = None,
         batch_evaluator: BatchEvaluator | None = None,
+        charge: float | None = None,
+        spin_multiplicity: float | None = None,
+        monomer_charges: Sequence[float] | None = None,
+        monomer_spins: Sequence[float] | None = None,
+        link_atoms: Sequence[Any] | None = None,
+        ml_atom_indices: Sequence[int] | np.ndarray | None = None,
     ) -> None:
         self._calc = calculator
         self._batch_evaluator = batch_evaluator
@@ -276,7 +356,22 @@ class MetatomicMlpotModel:
         self._get_update_fn = get_update_fn
         self._cutoff_params = cutoff_params or CutoffParameters()
         self._cell = float(cell) if cell else False
-        self._ml_atom_indices: np.ndarray | None = None
+        self._ml_atom_indices: np.ndarray | None = (
+            None
+            if ml_atom_indices is None
+            else np.asarray(ml_atom_indices, dtype=int).reshape(-1)
+        )
+        self._charge = None if charge is None else float(charge)
+        self._spin_multiplicity = (
+            None if spin_multiplicity is None else float(spin_multiplicity)
+        )
+        self._monomer_charges = (
+            None if monomer_charges is None else [float(q) for q in monomer_charges]
+        )
+        self._monomer_spins = (
+            None if monomer_spins is None else [float(s) for s in monomer_spins]
+        )
+        self._link_atoms = tuple(link_atoms or ())
         self._registered_calculator: MetatomicMlpotCalculator | None = None
         self.checkpoint = checkpoint
         self._n_monomers = len(self._atoms_per_monomer)
@@ -315,6 +410,11 @@ class MetatomicMlpotModel:
             cell=self._cell,
             ml_atom_indices=self._ml_atom_indices,
             batch_evaluator=self._batch_evaluator,
+            charge=self._charge,
+            spin_multiplicity=self._spin_multiplicity,
+            monomer_charges=self._monomer_charges,
+            monomer_spins=self._monomer_spins,
+            link_atoms=self._link_atoms,
         )
         self._registered_calculator = calc
         return calc
@@ -448,12 +548,50 @@ def build_metatomic_mlpot_model(
             f"atoms_per_monomer length {len(per)} != n_monomers={n_monomers}"
         )
     mode = resolve_metatomic_eval_mode(args, explicit=eval_mode)
+    from mmml.interfaces.pycharmmInterface.heme_electronic import (
+        partition_system,
+        resolve_metatomic_electronic_state,
+    )
+
+    electronic = resolve_metatomic_electronic_state(args)
+    mm_region = str(getattr(args, "mm_region", None) or "none").strip().lower() if args else "none"
+    link_atoms: tuple[Any, ...] = ()
+    ml_indices: np.ndarray | None = None
+    if mm_region == "propionates":
+        names = getattr(args, "_cluster_atom_names", None)
+        if not names or len(names) != int(z.shape[0]):
+            raise RuntimeError(
+                "--mm-region propionates needs the CHARMM atom names from the "
+                "cluster build (HEME, optionally with counterions)"
+            )
+        labels = getattr(args, "_cluster_residue_labels", None)
+        ml_indices, link_atoms = partition_system(names, labels, per)
+        mode = "whole_system"
+    if electronic.reason:
+        print(
+            f"Metatomic electronic state: charge={electronic.charge} "
+            f"spin_multiplicity={electronic.spin_multiplicity} ({electronic.reason})",
+            flush=True,
+        )
+    if link_atoms:
+        print(
+            f"Metatomic ML/MM: {len(ml_indices)} ML atoms, "
+            f"{len(link_atoms)} ghost hydrogen link atoms on the propionate cuts",
+            flush=True,
+        )
     calc = calculator if calculator is not None else load_metatomic_calculator(ckpt)
-    # An injected calculator (tests, custom ASE models) keeps the per-call path.
+    # Charge and spin are stamped on ASE atoms. The batched teacher forwards
+    # only numbers and positions, so a set electronic state stays on the
+    # per-call path.
+    use_batch = (
+        mode == "fragments"
+        and calculator is None
+        and electronic.charge is None
+        and electronic.spin_multiplicity is None
+        and not link_atoms
+    )
     batch_evaluator = (
-        _maybe_batched_fragment_evaluator(ckpt, verbose=verbose)
-        if mode == "fragments" and calculator is None
-        else None
+        _maybe_batched_fragment_evaluator(ckpt, verbose=verbose) if use_batch else None
     )
     cutoff_params = (
         cutoff_parameters_from_args(args) if args is not None else CutoffParameters()
@@ -506,6 +644,12 @@ def build_metatomic_mlpot_model(
         cell=cell,
         checkpoint=ckpt,
         batch_evaluator=batch_evaluator,
+        charge=electronic.charge,
+        spin_multiplicity=electronic.spin_multiplicity,
+        monomer_charges=electronic.monomer_charges,
+        monomer_spins=electronic.monomer_spins,
+        link_atoms=link_atoms,
+        ml_atom_indices=ml_indices,
     )
 
 

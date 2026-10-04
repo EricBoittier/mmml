@@ -139,6 +139,11 @@ def is_cgenff_residue_name(name: str, *, rtf_path: Path | str | None = None) -> 
 def require_cgenff_residue_name(name: str, *, rtf_path: Path | str | None = None) -> str:
     """Normalize and validate a CGenFF residue name; raise ``ValueError`` if unknown."""
     key = normalize_cgenff_residue_name(name)
+    from mmml.interfaces.pycharmmInterface.heme_electronic import is_protein_ion
+    from mmml.interfaces.pycharmmInterface.heme_library import is_heme_library_residue
+
+    if is_heme_library_residue(key) or is_protein_ion(key):
+        return key
     if not is_cgenff_residue_name(key, rtf_path=rtf_path):
         hint = f"(or append via {_EXTRA_RTF_ENV})"
         if key == "CH3CL":

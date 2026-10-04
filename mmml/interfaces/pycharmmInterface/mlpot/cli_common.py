@@ -1533,6 +1533,35 @@ def build_cluster_from_args_with_tag(
     args: argparse.Namespace,
 ) -> Tuple[np.ndarray, np.ndarray, int, str]:
     """Build cluster; returns ``(Z, positions, n_monomers, tag)``."""
+    from mmml.interfaces.pycharmmInterface.heme_library import (
+        residues_from_cluster_args,
+        topology_residue_context,
+    )
+
+    from mmml.interfaces.pycharmmInterface.heme_electronic import expand_counterions
+
+    expand_counterions(args)
+    with topology_residue_context(residues_from_cluster_args(args)):
+        built = _build_cluster_from_args_with_tag(args)
+    _stash_cluster_atom_names(args)
+    return built
+
+
+def _stash_cluster_atom_names(args: argparse.Namespace) -> None:
+    """Remember IUPAC names so a later ML/MM cut can find the propionate bonds."""
+    try:
+        import pycharmm.psf as psf
+
+        names = [str(x).strip() for x in psf.get_atype()]
+    except Exception:
+        return
+    if names:
+        setattr(args, "_cluster_atom_names", names)
+
+
+def _build_cluster_from_args_with_tag(
+    args: argparse.Namespace,
+) -> Tuple[np.ndarray, np.ndarray, int, str]:
     from mmml.cli.run.md_pbc_suite.ase import (
         _build_cluster_from_composition,
         _build_cluster_from_composition_packmol,
@@ -4849,6 +4878,45 @@ def add_mlpot_lr_nonbond_args(parser: argparse.ArgumentParser) -> None:
         help=(
             "Metatomic CHARMM evaluation: fragments (default; ML/MM monomer+dimer "
             "scheme) or whole_system (one eval on the ML selection)."
+        ),
+    )
+    group.add_argument(
+        "--charge",
+        type=int,
+        default=None,
+        help=(
+            "Total charge passed to a metatomic model (PET-OMOL reads "
+            "atoms.info['charge']). HEME defaults to −2, or 0 when neutralizing "
+            "counterions are in the same evaluation."
+        ),
+    )
+    group.add_argument(
+        "--spin-multiplicity",
+        type=int,
+        default=None,
+        help=(
+            "Spin multiplicity 2S+1 passed to a metatomic model "
+            "(atoms.info['spin']). HEME with no axial ligand defaults to 3."
+        ),
+    )
+    group.add_argument(
+        "--counterions",
+        type=str,
+        default=None,
+        help=(
+            "Protein ion used to neutralize the solute (SOD for HEME's charge −2, "
+            "two ions). Seated on the heme carboxylates. 'none' adds nothing."
+        ),
+    )
+    group.add_argument(
+        "--mm-region",
+        type=str,
+        default=None,
+        choices=("none", "propionates"),
+        help=(
+            "none: the metatomic system is the whole cluster. propionates: the "
+            "heme tails (and any counterions) stay MM, and each CAA–CBA / CAD–CBD "
+            "cut is capped by a ghost hydrogen in the PET evaluation."
         ),
     )
     group.add_argument(

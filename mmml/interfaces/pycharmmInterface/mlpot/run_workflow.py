@@ -97,6 +97,20 @@ def _charmm_pre_minimize_before_mlpot(
     """CGENFF SD/ABNR on the built cluster before :func:`register_mlpot`."""
     if not getattr(args, "charmm_pre_minimize", True):
         return get_charmm_positions_array()
+    from mmml.interfaces.pycharmmInterface.mlpot.charmm_energy_policy import (
+        resolve_charmm_energy_term_policies,
+    )
+
+    zeroed = {p.name for p in resolve_charmm_energy_term_policies(args)}
+    if {"vdw", "elec", "bonded"} <= zeroed:
+        if not getattr(args, "quiet", False):
+            print(
+                "CHARMM MM pre-minimize skipped: vdw, elec, and bonded terms are zeroed",
+                flush=True,
+            )
+        if reference_positions is not None:
+            return np.asarray(reference_positions, dtype=float)
+        return get_charmm_positions_array()
 
     n_sd = int(getattr(args, "charmm_sd_steps", 50))
     n_abnr = int(getattr(args, "charmm_abnr_steps", 100))

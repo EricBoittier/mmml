@@ -228,6 +228,61 @@ def _zero_scalar_vdw() -> None:
         pycharmm.lingo.charmm_script("SCALAR VDW14 SET 0.0 SELE ALL END")
 
 
+def _policy_args_use_heme_library(args: argparse.Namespace | None) -> bool:
+    """True when this run's residue is from the protein heme stream, not CGenFF."""
+    if args is None:
+        return False
+    from mmml.interfaces.pycharmmInterface.heme_library import is_heme_library_residue
+
+    names: list[str] = []
+    residue = getattr(args, "residue", None)
+    if residue:
+        names.append(str(residue))
+    extra = getattr(args, "residues", None)
+    if extra:
+        names.extend(str(item) for item in extra)
+    return any(is_heme_library_residue(name) for name in names)
+
+
+def _remediate_heme_without_cgenff_overlay(
+    args: argparse.Namespace | None,
+    violated: Sequence[CharmmEnergyTermPolicy],
+    *,
+    ml_selection: Any,
+    verbose: bool,
+) -> None:
+    """Drop heme CHARMM terms with SKIPE.
+
+    ``RESI HEME`` is parameterized by the protein stream. Appending the CGenFF
+    ε=0 NONBONDED overlay onto that set makes the verification ``ENER`` abort
+    inside CHARMM (no Python traceback; Fortran ``exit``). SKIPE removes VDW
+    the same way the CGenFF path does after its overlay fails to clear the
+    live table.
+    """
+    from mmml.interfaces.pycharmmInterface.mlpot.block_terms import ALL_ML_SKIPE_BONDED
+
+    loud = verbose or not getattr(args, "quiet", False)
+    _skip_policy_terms(violated, verbose=loud)
+    if any(policy.name == "bonded" for policy in violated):
+        _charmm_skipe(ALL_ML_SKIPE_BONDED)
+        if loud:
+            print(
+                f"CHARMM energy policy: SKIPE {' '.join(ALL_ML_SKIPE_BONDED)}",
+                flush=True,
+            )
+    if any(policy.zero_nonbond_prm for policy in violated):
+        _zero_scalar_vdw()
+    if any(policy.zero_ml_charges for policy in violated):
+        _zero_ml_atom_charges(ml_selection)
+    if loud:
+        names = ", ".join(policy.name for policy in violated)
+        print(
+            "CHARMM energy policy: heme library keeps its protein parameters; "
+            f"SKIPE covers {names} (CGenFF nonbond append skipped)",
+            flush=True,
+        )
+
+
 def _policy_scratch_dir(args: argparse.Namespace | None) -> Path:
     if args is not None:
         out = getattr(args, "output_dir", None)
@@ -402,6 +457,15 @@ def enforce_charmm_energy_term_policies(
             "is defined for them."
         )
 
+    if _policy_args_use_heme_library(args):
+        _remediate_heme_without_cgenff_overlay(
+            args,
+            violated,
+            ml_selection=ml_selection,
+            verbose=verbose,
+        )
+        return _verify_policy_reload(args, violated, verbose=verbose)
+
     scratch = _policy_scratch_dir(args)
     scratch.mkdir(parents=True, exist_ok=True)
     policy_tag = "_".join(p.name for p in violated)
@@ -433,6 +497,16 @@ def enforce_charmm_energy_term_policies(
         workflow_args=args,
     )
 
+    return _verify_policy_reload(args, violated, verbose=verbose)
+
+
+def _verify_policy_reload(
+    args: argparse.Namespace | None,
+    violated: Sequence[CharmmEnergyTermPolicy],
+    *,
+    verbose: bool,
+) -> list[str]:
+    """Re-probe ENER and return the policy names that are now within tolerance."""
     _run_silent_ener()
     terms_after = measure_charmm_energy_terms()
     still_bad: list[str] = []

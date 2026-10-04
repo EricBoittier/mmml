@@ -12,6 +12,26 @@ from mmml.interfaces.pycharmmInterface.mlpot.monomer_geometry_limits import (
 )
 
 
+def test_heme_sized_reference_raises_extent_above_legacy_default() -> None:
+    """A planar cofactor already spans more than the 12 Å small-molecule cap."""
+    pos = np.zeros((4, 3), dtype=float)
+    pos[1] = [8.39, 0.0, 0.0]
+    pos[2] = [0.0, 12.92, 0.0]
+    pos[3] = [0.0, 0.0, 11.84]
+    offsets = np.array([0, 4], dtype=int)
+    bonds = [(0, 1), (0, 2), (0, 3)]
+    limits = compute_monomer_geometry_limits(
+        pos,
+        offsets,
+        bond_pairs_12=bonds,
+        excluded_pairs=frozenset(bonds),
+    )
+    assert limits is not None
+    assert limits.reference_max_extent_A > DEFAULT_MAX_MONOMER_EXTENT_A
+    assert limits.max_monomer_extent_A > limits.reference_max_extent_A
+    assert limits.max_monomer_extent_A <= 30.0
+
+
 def test_compute_limits_tighter_than_legacy_defaults() -> None:
     # Linear 4-atom chain along x: bonds ~1.5 Å, extent ~4.5 Å
     pos = np.array(

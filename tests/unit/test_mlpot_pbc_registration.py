@@ -488,6 +488,50 @@ def test_finalize_pbc_skips_dense_exclusions_for_all_ml_jax_mic():
     assert verify.call_args.kwargs.get("require_dense_ml_ml") is False
 
 
+def test_register_mlpot_vacuum_all_ml_skips_dense_exclusions():
+    from mmml.interfaces.pycharmmInterface.mlpot import setup as mlpot_setup
+
+    seen: dict[str, bool] = {}
+    fake_pycharmm = MagicMock()
+    fake_pycharmm.coor.get_natom.return_value = 73
+    fake_sel = MagicMock()
+    fake_sel.get_atom_indexes.return_value = list(range(73))
+
+    class _FakeMLpot:
+        calculator = MagicMock()
+
+        def __init__(self, *, skip_iblo_inb_update=False, **kwargs):
+            seen["skip_iblo_inb_update"] = bool(skip_iblo_inb_update)
+
+    with _FAIL_CLOSED, patch.object(
+        mlpot_setup, "_import_pycharmm", return_value=fake_pycharmm
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.block_terms.apply_mlpot_registration_mm_off",
+        return_value="all",
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.mlpot_limits.validate_mlpot_system_size",
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.charmm_levels.charmm_relaxed_bomlev",
+        return_value=MagicMock(
+            __enter__=MagicMock(return_value=None),
+            __exit__=MagicMock(return_value=False),
+        ),
+    ), patch(
+        "mmml.interfaces.pycharmmInterface.nbonds_config.apply_nbonds_script_kwargs",
+    ) as rebuild:
+        fake_pycharmm.MLpot = _FakeMLpot
+        mlpot_setup.register_mlpot(
+            MagicMock(),
+            [26] + [6] * 72,
+            fake_sel,
+            use_pbc=False,
+            mm_nonbond_mode="jax_mic",
+        )
+
+    assert seen["skip_iblo_inb_update"] is True
+    rebuild.assert_not_called()
+
+
 def test_should_skip_dense_ml_ml_exclusions():
     from mmml.interfaces.pycharmmInterface.mlpot.setup import (
         should_skip_dense_ml_ml_exclusions,

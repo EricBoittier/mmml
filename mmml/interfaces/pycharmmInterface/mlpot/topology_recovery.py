@@ -154,6 +154,18 @@ def _per_atom_resids(natom: int) -> tuple[int, ...]:
     return tuple(out)
 
 
+def coerce_iblo_inb(raw: object) -> tuple[list[int], list[int]]:
+    """Normalize ``psf.get_iblo_inb()`` to ``(iblo, inb)``.
+
+    Older PyCHARMM returned ``[]`` when ``nnb == 0``. Unpacking that empty
+    list raises ``ValueError: not enough values to unpack``.
+    """
+    if isinstance(raw, tuple) and len(raw) == 2:
+        iblo, inb = raw
+        return [int(x) for x in iblo], [int(x) for x in inb]
+    return [], []
+
+
 def capture_topology_fingerprint_from_charmm() -> TopologyFingerprint:
     """Snapshot current CHARMM PSF composition (atom names, residue IDs, counts)."""
     import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401

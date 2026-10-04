@@ -504,6 +504,44 @@ def test_post_remediation_policy_loosens_only_vdw():
     assert elec is POLICY_REGISTRY["elec"]
 
 
+def test_heme_vdw_policy_skips_cgenff_nonbond_append(monkeypatch):
+    from mmml.interfaces.pycharmmInterface.mlpot import charmm_energy_policy as cep
+
+    probes = [{"VDW": 4.30824, "IMNB": 0.0, "ELEC": 0.0}, {}]
+
+    def _measure():
+        return probes.pop(0)
+
+    skipped: list[str] = []
+    monkeypatch.setattr(cep, "measure_charmm_energy_terms", _measure)
+    monkeypatch.setattr(cep, "_run_silent_ener", lambda: None)
+    monkeypatch.setattr(
+        cep,
+        "_skip_policy_terms",
+        lambda policies, verbose=False: skipped.extend(p.name for p in policies),
+    )
+    monkeypatch.setattr(cep, "_zero_scalar_vdw", lambda: skipped.append("scalar"))
+
+    def _boom(*_args, **_kwargs):
+        raise AssertionError("CGenFF overlay must not be reloaded onto heme")
+
+    monkeypatch.setattr(cep, "_reload_prm_overlay", _boom)
+    applied = cep.enforce_charmm_energy_term_policies(
+        argparse.Namespace(
+            periodic_charmm_vdw=True,
+            charmm_zero_energy_terms="vdw,elec,bonded",
+            residue="HEME",
+            quiet=True,
+        ),
+        ml_selection=object(),
+        use_pbc=False,
+        cubic_box_side_A=None,
+    )
+    assert applied == ["vdw"]
+    assert skipped == ["vdw", "scalar"]
+    assert probes == []
+
+
 def test_enforce_hbond_has_no_prm_remediation(monkeypatch):
     from mmml.interfaces.pycharmmInterface.mlpot import charmm_energy_policy as cep
 

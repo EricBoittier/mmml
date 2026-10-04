@@ -163,7 +163,13 @@ def _generate_residue_with_make_res_recipe(
     import pycharmm
     pycharmm.settings.set_bomb_level(-5)
     read.sequence_string(residue)
-    gen.new_segment(seg_name="TMP", setup_ic=True)
+    from mmml.interfaces.pycharmmInterface.heme_library import (
+        heme_reference_positions,
+        is_heme_library_residue,
+        segment_terminal_patches,
+    )
+
+    gen.new_segment(seg_name="TMP", setup_ic=True, **segment_terminal_patches())
     from mmml.interfaces.pycharmmInterface.nbonds_config import ic_prm_fill
 
     ic_prm_fill(replace_all=True)
@@ -176,6 +182,25 @@ def _generate_residue_with_make_res_recipe(
             f"PSF atom-name count mismatch while generating {residue}: "
             f"{len(atom_names)} vs positions {initial.shape[0]}"
         )
+
+    # The heme stream IC table has zero bond lengths, so ic.build places nothing.
+    # A random cloud plus live CHARMM electrostatics is a 10^10 kcal/mol/Å gradient.
+    if is_heme_library_residue(residue):
+        placed = heme_reference_positions(atom_names)
+        if placed is not None:
+            coor.set_positions(pd.DataFrame(placed, columns=["x", "y", "z"]))
+            z = np.asarray(get_Z_from_psf(), dtype=int)
+            return placed, atom_names, z
+
+    from mmml.interfaces.pycharmmInterface.heme_electronic import is_protein_ion
+
+    if is_protein_ion(residue) and initial.shape[0] == 1:
+        # A sodium has no internal geometry. The heme build seats it on a
+        # carboxylate after the cluster is assembled.
+        coords = np.zeros((1, 3), dtype=float)
+        coor.set_positions(pd.DataFrame(coords, columns=["x", "y", "z"]))
+        z = np.asarray(get_Z_from_psf(), dtype=int)
+        return coords, atom_names, z
 
     # make-res deliberately escapes incomplete IC tables by randomizing coordinates
     # before two CHARMM minimization passes.
@@ -387,7 +412,9 @@ def _build_cluster_psf_topology_only(
     prepare_charmm_vacuum()
     _read_cgenff_toppar()
     read.sequence_string(sequence)
-    gen.new_segment(seg_name="CLST", setup_ic=True)
+    from mmml.interfaces.pycharmmInterface.heme_library import segment_terminal_patches
+
+    gen.new_segment(seg_name="CLST", setup_ic=True, **segment_terminal_patches())
     from mmml.interfaces.pycharmmInterface.nbonds_config import ic_prm_fill
 
     ic_prm_fill(replace_all=True)
@@ -427,7 +454,9 @@ def _build_cluster_psf_from_composition(
     prepare_charmm_vacuum()
     _read_cgenff_toppar()
     read.sequence_string(sequence)
-    gen.new_segment(seg_name="CLST", setup_ic=True)
+    from mmml.interfaces.pycharmmInterface.heme_library import segment_terminal_patches
+
+    gen.new_segment(seg_name="CLST", setup_ic=True, **segment_terminal_patches())
     from mmml.interfaces.pycharmmInterface.nbonds_config import ic_prm_fill
 
     ic_prm_fill(replace_all=True)
@@ -1036,6 +1065,11 @@ def _build_cluster_from_composition(
                 internal, random_rotations=True, rng=rng
             )
         shifted[s:e] = internal + centers[i]
+    from mmml.interfaces.pycharmmInterface.heme_electronic import seat_heme_counterions
+
+    shifted = seat_heme_counterions(
+        shifted, atom_names, ordered_residue_names, atoms_per_list
+    )
     coor.set_positions(pd.DataFrame(shifted, columns=["x", "y", "z"]))
     return z, shifted, atoms_per_list, ordered_residue_names
 

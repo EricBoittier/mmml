@@ -549,7 +549,11 @@ def resolve_nonbonded_excluded_pairs(
             nbonds.update_bnbnd()
         except Exception:
             pass
-        iblo, inb = psf.get_iblo_inb()
+        from mmml.interfaces.pycharmmInterface.mlpot.topology_recovery import (
+            coerce_iblo_inb,
+        )
+
+        iblo, inb = coerce_iblo_inb(psf.get_iblo_inb())
         excluded = fully_excluded_pairs(iblo, inb, natom)
     except Exception:
         excluded = frozenset()

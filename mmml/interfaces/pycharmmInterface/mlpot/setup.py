@@ -1220,6 +1220,7 @@ def save_cluster_topology_for_vmd(
     from mmml.interfaces.pycharmmInterface.mlpot.mpi_bridge import mpi_rank_size
     from mmml.interfaces.pycharmmInterface.mlpot.topology_recovery import (
         capture_topology_fingerprint_from_charmm,
+        coerce_iblo_inb,
         save_topology_sidecar,
         topology_fingerprint_path,
     )
@@ -1236,7 +1237,7 @@ def save_cluster_topology_for_vmd(
     if rank0:
         _write_vmd_pdb_from_positions(pdb_path, positions, title=title)
     fingerprint = capture_topology_fingerprint_from_charmm()
-    pre_iblo, pre_inb = psf.get_iblo_inb()
+    pre_iblo, pre_inb = coerce_iblo_inb(psf.get_iblo_inb())
     if rank0:
         save_topology_sidecar(
             topology_fingerprint_path(psf_path),
@@ -2002,6 +2003,15 @@ def load_physnet_mlpot_bundle(
 
     if int(n_monomers) <= 1 and should_use_metatomic_mlpot(ckpt, args):
         per = list(atoms_per_monomer) if atoms_per_monomer is not None else [int(n_atoms)]
+        # Same flag rules as maybe_build_metatomic_mlpot_model. The default
+        # do_mm=True built a JAX LJ/Coulomb term into USER for one heme even
+        # when the CLI said --no-include-mm, and the next CHARMM ENER died in
+        # that callback.
+        include_mm = True if args is None else bool(getattr(args, "include_mm", True))
+        do_ml = True if args is None else bool(getattr(args, "do_ml", True))
+        do_ml_dimer = True if args is None else bool(getattr(args, "do_ml_dimer", True))
+        if args is not None and bool(getattr(args, "skip_ml_dimers", False)):
+            do_ml_dimer = False
         pyCModel = build_metatomic_mlpot_model(
             ckpt,
             z,
@@ -2010,6 +2020,9 @@ def load_physnet_mlpot_bundle(
             cell=float(cell) if cell is not None else False,
             verbose=verbose,
             args=args,
+            do_ml=do_ml,
+            do_ml_dimer=do_ml_dimer,
+            do_mm=include_mm,
         )
         return None, None, pyCModel
 
@@ -2725,6 +2738,21 @@ def register_mlpot(
             skip_iblo_inb_update = True
         else:
             box_side = None
+            # All-ML jax_mic keeps MM pairs in JAX (or skips them). Writing
+            # N(N-1)/2 exclusions and calling upinb here aborts CHARMM; the
+            # vacuum heme run died after MAKINB reported 2628 exclusions.
+            if should_skip_dense_ml_ml_exclusions(
+                ml_selection,
+                periodic_external=bool(periodic_external),
+            ):
+                skip_iblo_inb_update = True
+                n_ml = len(ml_selection.get_atom_indexes())
+                if verbose or not getattr(workflow_args, "quiet", False):
+                    print(
+                        "MLpot vacuum: skipping dense ML–ML exclusions for all-ML jax_mic "
+                        f"(n_ml={n_ml}, would need {_expected_ml_ml_exclusion_pairs(n_ml)} pairs)",
+                        flush=True,
+                    )
         if workflow_args is not None:
             from mmml.interfaces.pycharmmInterface.mlpot.charmm_energy_policy import (
                 enforce_charmm_energy_term_policies,
@@ -2746,6 +2774,8 @@ def register_mlpot(
                 verbose=verbose,
                 reload_on_violation=not bool(use_pbc),
             )
+        if verbose or not getattr(workflow_args, "quiet", False):
+            print("MLpot: installing CHARMM USER callback…", flush=True)
         mlpot = pycharmm.MLpot(
             ml_model=pyCModel,
             ml_Z=z_ml,
@@ -2765,7 +2795,9 @@ def register_mlpot(
         )
 
         install_fail_closed_energy_func(mlpot)
-        if not use_pbc:
+        if verbose or not getattr(workflow_args, "quiet", False):
+            print("MLpot: CHARMM USER callback installed", flush=True)
+        if not use_pbc and not skip_iblo_inb_update:
             # MLpot.__init__ already set iblo/inb and ran update_bnbnd (upinb).
             # Re-running prepare_charmm_vacuum + update_bnbnd here segfaults in upinb
             # for large clusters (e.g. DCM:90) after JAX GPU warmup.
@@ -2775,6 +2807,16 @@ def register_mlpot(
             )
 
             apply_nbonds_script_kwargs(vacuum_nbond_kwargs(nbxmod=5), rebuild=True)
+        elif not use_pbc:
+            # All-ML jax_mic left the verification ENER list in place. UPDATE
+            # after mlpot_set_func calls mlpot_update and aborts on this vacuum
+            # heme PSF; the pair list is already current.
+            if verbose or not getattr(workflow_args, "quiet", False):
+                print(
+                    "MLpot vacuum: keeping the existing nonbond list "
+                    "(all-ML jax_mic)",
+                    flush=True,
+                )
     ml_z = np.asarray(ml_Z, dtype=int)
     reg_box = (
         float(box_side)

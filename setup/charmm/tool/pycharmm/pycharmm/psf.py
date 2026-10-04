@@ -591,17 +591,18 @@ def set_charge(new_charges):
 
 
 def get_iblo_inb():
-    """Get non-bonded exclusion list
+    """Get non-bonded exclusion lists.
 
     Returns
     -------
-    inb : int list
-          non-bonded exclusion list
+    iblo, inb : tuple of int lists
+        PSF ``IBLO`` and ``INB``. A residue with no stored exclusions
+        (``nnb == 0``, typical right after ``GENErate``) returns ``([], [])``.
     """
     natom = get_natom()
     nnb = get_nnb()
     if natom <= 0 or nnb <= 0:
-        return list()
+        return [], []
 
     iblo = (ctypes.c_int * natom)()
     inb = (ctypes.c_int * nnb)()

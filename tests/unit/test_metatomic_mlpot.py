@@ -276,6 +276,37 @@ def test_resolve_hybrid_ml_backend_mode_metatomic(tmp_path: Path) -> None:
     assert "model.pt" in meta["name"]
 
 
+def test_single_monomer_metatomic_honors_no_include_mm(monkeypatch: pytest.MonkeyPatch) -> None:
+    from mmml.interfaces.pycharmmInterface.mlpot import metatomic_mlpot as meta
+    from mmml.interfaces.pycharmmInterface.mlpot.setup import load_physnet_mlpot_bundle
+
+    captured: dict[str, object] = {}
+
+    def _build(*_args, **kwargs):
+        captured.update(kwargs)
+        return "model"
+
+    monkeypatch.setattr(meta, "should_use_metatomic_mlpot", lambda *_a, **_k: True)
+    monkeypatch.setattr(meta, "build_metatomic_mlpot_model", _build)
+
+    class _Atoms:
+        def get_atomic_numbers(self):
+            return [26, 6, 1]
+
+    _physnet, _params, model = load_physnet_mlpot_bundle(
+        "pet-omol-s.pt",
+        3,
+        _Atoms(),
+        n_monomers=1,
+        verbose=True,
+        args=Namespace(include_mm=False, do_ml=True, do_ml_dimer=True, quiet=True),
+    )
+    assert model == "model"
+    assert _physnet is None
+    assert captured["do_mm"] is False
+    assert captured["do_ml"] is True
+
+
 def test_setup_calculator_metatomic_rejects_do_ml() -> None:
     try:
         from jax_md import space as _jax_md_space

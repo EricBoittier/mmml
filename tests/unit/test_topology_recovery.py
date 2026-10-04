@@ -12,11 +12,18 @@ from mmml.interfaces.pycharmmInterface.mlpot.topology_recovery import (
     TopologyFingerprint,
     allow_psf_delete_reload,
     attach_topology_recovery_state,
+    coerce_iblo_inb,
     ensure_composition_unchanged,
     load_topology_sidecar,
     save_topology_sidecar,
     topology_fingerprint_path,
 )
+
+
+def test_coerce_iblo_inb_accepts_an_empty_psf_exclusion_list():
+    assert coerce_iblo_inb([]) == ([], [])
+    assert coerce_iblo_inb(()) == ([], [])
+    assert coerce_iblo_inb(([1, 2], [3])) == ([1, 2], [3])
 
 
 def test_per_atom_resids_expands_from_residue_table():

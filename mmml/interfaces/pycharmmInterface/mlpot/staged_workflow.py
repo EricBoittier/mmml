@@ -2219,6 +2219,20 @@ def run_staged_workflow(args: argparse.Namespace) -> int:
             )
             return 0
 
+        from mmml.interfaces.pycharmmInterface.mlpot.monomer_geometry_limits import (
+            apply_geometry_limits_to_overlap_config,
+        )
+
+        # The 12 Å default is a small-molecule fly-off cap. Heme's axis-aligned
+        # span is already ~19 Å, so the pre-dynamics check must use the
+        # bond/reference limit before NVE starts. The dynamics loop applies the
+        # same helper again.
+        overlap_cfg = apply_geometry_limits_to_overlap_config(
+            overlap_cfg,
+            ctx,
+            args,
+            verbose=not bool(args.quiet),
+        )
         stage_overlap_pre = _overlap_for_stage(
             "heat",
             overlap_cfg,

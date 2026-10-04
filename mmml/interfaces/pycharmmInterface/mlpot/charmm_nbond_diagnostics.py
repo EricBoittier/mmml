@@ -82,7 +82,11 @@ def collect_nbond_state(ctx: Any | None = None, *, context: str = "") -> dict[st
         if box is not None:
             payload["pbound_A"] = {"x": box[0], "y": box[1], "z": box[2]}
         try:
-            iblo, inb = psf.get_iblo_inb()
+            from mmml.interfaces.pycharmmInterface.mlpot.topology_recovery import (
+                coerce_iblo_inb,
+            )
+
+            iblo, inb = coerce_iblo_inb(psf.get_iblo_inb())
             iblo_arr = np.asarray(iblo, dtype=int)
             inb_arr = np.asarray(inb, dtype=int)
             payload["iblo_inb"] = {

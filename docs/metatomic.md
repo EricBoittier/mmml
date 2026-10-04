@@ -184,6 +184,27 @@ Pass: CHARMM `ENER` includes a finite USER term; SD and short NVE complete.
 With `--metatomic-eval-mode fragments` and a monomer `cons_fix`, fixed-monomer
 RMSD ≈ 0 after SD pass 2 (same criterion as PhysNet MLpot).
 
+CHARMM `RESI HEME` (protein heme stream, not CGenFF) with PET-OMOL S:
+
+```bash
+uv run --no-sync python -c "from upet import save_upet; save_upet(model='pet-omol', size='s', version='1.0.0', output='pet-omol-s-v1.0.0.pt')"
+uv run --no-sync mmml md-system --backend pycharmm --ml-potential-mode metatomic \
+  --metatomic-eval-mode whole_system --checkpoint pet-omol-s-v1.0.0.pt \
+  --residue HEME --n-molecules 1 --counterions SOD --builder gas --no-include-mm \
+  --charmm-zero-energy-terms vdw,elec,bonded --setup free_nve
+```
+
+PET-OMOL is given the total charge and the spin multiplicity (`2S+1`). One
+`RESI HEME` is charge −2 and multiplicity 3 (four-coordinate Fe(II); the
+residue has no axial ligand). `--counterions SOD` adds two sodiums, one on
+each carboxylate, so the whole-system charge is 0 and the multiplicity stays
+3. `--mm-region propionates` leaves those tails and the ions on MM and caps
+the CAA–CBA and CAD–CBD cuts with ghost hydrogens inside PET.
+
+A HEME build reads `top_all36_prot.rtf`, `par_all36m_prot.prm`, and
+`toppar_all36_prot_heme.str` (plus `toppar_water_ions.str` when ions are
+present). Details: `examples/pet_omol_heme/README.md`.
+
 ## Periodic liquid ethanol (32 Å, 300 K, 0.5 fs)
 
 Worked example: neat `ETOH:338` in a 32 Å cube at 0.789 g/cm³ (experimental

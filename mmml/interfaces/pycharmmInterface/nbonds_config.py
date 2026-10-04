@@ -434,7 +434,20 @@ def read_cgenff_toppar(*, enable_drude: bool = False) -> None:
     are read after the main topology so custom residues (e.g. example CH3CL) are
     available to Packmol / ``md-system`` compositions. Extra append PRMs from
     ``MMML_CGENFF_EXTRA_PRM`` are read after the base CGenFF parameter file.
+
+    A heme-only cluster (``topology_residue_context``) reads the protein
+    topology and ``toppar_all36_prot_heme.str`` instead of CGenFF.
     """
+    from mmml.interfaces.pycharmmInterface.heme_library import (
+        active_topology_residues,
+        read_protein_heme_toppar,
+        topology_family,
+    )
+
+    if topology_family(active_topology_residues()) == "heme":
+        read_protein_heme_toppar()
+        return
+
     import pycharmm.read as read
 
     from mmml.interfaces.pycharmmInterface.cgenff_residues import (
