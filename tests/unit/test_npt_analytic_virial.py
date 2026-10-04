@@ -1,9 +1,12 @@
-"""Analytic NpT virial (``make_npt_energy_fn(virial="analytic")``).
+"""NpT barostat virial modes of ``make_npt_energy_fn(virial=...)``.
 
-The barostat's dE/d(perturbation) is the chain rule ``(-F) . dreal/dp + (dE/dbox) . dbox/dp``
-instead of a central difference of the energy along the strain. In float64 both agree;
-in float32 the difference of two large, rounded energies is noise (the hybrid ACO:266
-32 A box gave 0.1-2 katm per call at h = 1e-3), while the analytic form is not.
+* ``analytic``: chain rule ``(-F) . dreal/dp + (dE/dbox) . dbox/dp``;
+* ``fd``: central difference of the energy along the strain in the state dtype;
+* ``fd64``: the same difference with box/positions handed over in float64.
+
+In float64 all agree. With a float32 state the hybrid calculator ran fully in float32 and
+the ``fd`` virial was off by 0.2-2 katm per call (ACO/DCM 32-36 A boxes); ``fd64`` matched
+CHARMM's VIRI to ~3 atm and is the runner default for float32 states.
 """
 
 from __future__ import annotations
@@ -110,3 +113,25 @@ def test_env_selects_virial(monkeypatch):
     monkeypatch.setenv(runner.NPT_VIRIAL_ENV, "bogus")
     with pytest.raises(ValueError):
         runner.make_npt_energy_fn(e, f, dtype=jnp.float64)
+
+
+def test_fd64_virial_matches_float64_reference_under_float32_state():
+    """fd64 promotes the calculator to float64: the float32 offset/rounding no longer matters."""
+    e64, f64 = _make_lj()
+    _, ref = runner.make_npt_energy_fn(e64, f64, dtype=jnp.float64, virial="fd")
+    frac64 = _frac(2)
+    box64 = jnp.eye(3, dtype=jnp.float64) * L_BOX
+    p_ref = float(quantity.pressure(ref, frac64, box64, kinetic_energy=0.0))
+    e, f = _make_lj(offset=5.0e4)
+    _, fd64 = runner.make_npt_energy_fn(e, f, dtype=jnp.float32, virial="fd64")
+    p = float(quantity.pressure(fd64, jnp.asarray(frac64, jnp.float32), jnp.asarray(box64, jnp.float32),
+                                kinetic_energy=0.0))
+    assert abs(p - p_ref) <= 1e-4 * abs(p_ref)
+
+
+def test_runner_default_virial_mode(monkeypatch):
+    monkeypatch.delenv(runner.NPT_VIRIAL_ENV, raising=False)
+    assert runner.default_npt_virial(jnp.float32) == "fd64"
+    assert runner.default_npt_virial(jnp.float64) == "fd"
+    monkeypatch.setenv(runner.NPT_VIRIAL_ENV, "analytic")
+    assert runner.default_npt_virial(jnp.float32) == "analytic"
