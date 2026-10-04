@@ -35,11 +35,29 @@ def charmm_disabled(env: "os._Environ | dict[str, str] | None" = None) -> bool:
     return (environ.get(_DISABLE_ENV_VAR) or "").strip().lower() in _TRUTHY
 
 
-def mmml_repo_root(start: Path | None = None) -> Path:
-    here = (start or Path(__file__)).resolve()
-    for parent in here.parents:
+def _repo_root_from(here: Path) -> Path | None:
+    for parent in (here, *here.parents):
         if (parent / "pyproject.toml").is_file() and (parent / "mmml").is_dir():
             return parent
+    return None
+
+
+def mmml_repo_root(start: Path | None = None) -> Path:
+    """Directory that contains ``pyproject.toml`` and the ``mmml`` package.
+
+    An editable checkout is found from this file. A ``uv tool`` install lives
+    under ``site-packages`` and has no checkout beside it, so the working
+    directory is checked next: ``mmml doctor`` run from the source tree still
+    sees ``setup/charmm``.
+    """
+    here = (start or Path(__file__)).resolve()
+    found = _repo_root_from(here)
+    if found is not None:
+        return found
+    if start is None:
+        found = _repo_root_from(Path.cwd().resolve())
+        if found is not None:
+            return found
     return Path(__file__).resolve().parents[3]
 
 
@@ -58,10 +76,17 @@ def find_charmm_lib_in_dir(lib_dir: Path) -> Path | None:
 
 
 def default_repo_charmm_home(repo_root: Path | None = None) -> Path | None:
-    """``setup/charmm`` when a ``libcharmm`` shared library is present there."""
+    """``setup/charmm`` when it holds a library or the MLpot source tree.
+
+    Out-of-tree builds keep ``libcharmm`` in ``~/.cache/mmml-charmm-build`` and
+    leave this directory without a shared library. It is still ``CHARMM_HOME``:
+    ``source/api/api_func.F90`` is what the limit check reads.
+    """
     root = repo_root or mmml_repo_root()
     candidate = root / "setup" / "charmm"
     if find_charmm_lib_in_dir(candidate):
+        return candidate
+    if (candidate / "source" / "api" / "api_func.F90").is_file():
         return candidate
     return None
 
@@ -480,9 +505,12 @@ def resolve_cgenff_toppar_paths(*, repo_root: Path | None = None) -> CgenffToppa
     )
     raise FileNotFoundError(
         "CGENFF toppar not found. Expected both "
-        f"{_CGENFF_RTF_NAME!r} and {_CGENFF_PRM_NAME!r} in the repo.\n"
+        f"{_CGENFF_RTF_NAME!r} and {_CGENFF_PRM_NAME!r}.\n"
         f"Searched:\n{tried}\n"
-        "Run `git pull` (or `git lfs pull`) on the cluster checkout."
+        "A source checkout keeps them in mmml/data/charmm "
+        "(git pull if that directory is empty). "
+        "A uv tool or wheel install only has them when that pair is in the "
+        "installed package; reinstall mmml from a checkout that includes them."
     )
 
 

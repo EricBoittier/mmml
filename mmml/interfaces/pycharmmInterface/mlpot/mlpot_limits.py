@@ -12,18 +12,10 @@ _CONSERVATIVE_LIMITS = (100, 100_000)
 
 
 def _repo_root() -> Path:
-    """Locate the MMML repo root.
+    """Locate the MMML repo root, including a checkout the tool was launched from."""
+    from mmml.interfaces.pycharmmInterface.charmm_paths import mmml_repo_root
 
-    Uses the same marker as ``charmm_paths.mmml_repo_root``. ``CHARMMSETUP`` is
-    deliberately not a marker: it is no longer a config source, and keying the
-    repo root off an optional file meant deleting it could silently change which
-    ``api_func.F90`` was parsed.
-    """
-    here = Path(__file__).resolve()
-    for parent in here.parents:
-        if (parent / "pyproject.toml").is_file() and (parent / "mmml").is_dir():
-            return parent
-    return here.parents[4]
+    return mmml_repo_root()
 
 
 def _charmm_home() -> Path | None:

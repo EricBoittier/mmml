@@ -1395,6 +1395,11 @@ def test_check_extent_rescue_falls_back_to_repack_when_bonded_sd_leaves_extent(t
         "mmml.interfaces.pycharmmInterface.mlpot.extent_repack_recovery.polish_after_extent_repack",
         return_value=1.0,
     ), mock.patch(
+        # The repack polish is mocked to a clean GRMS; the post-repack hybrid
+        # GRMS probe needs live CHARMM, so report the same clean value.
+        "mmml.interfaces.pycharmmInterface.mlpot.cli_common.measure_hybrid_charmm_grms",
+        return_value=mock.Mock(hybrid=1.0, charmm=1.0, kind="ok"),
+    ), mock.patch(
         "mmml.interfaces.pycharmmInterface.mlpot.bonded_mm_recovery.run_extent_recovery_from_prior_restart",
     ) as flyoff:
         extent, rescued = check_dynamics_overlap(

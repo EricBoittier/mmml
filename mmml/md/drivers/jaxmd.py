@@ -352,46 +352,72 @@ class JaxmdDriver:
             # float64 while positions/box are float32 -- the integrator scan then
             # rejects the mixed carry. Matching kT to ``dtype`` keeps all
             # integrator state in one precision (NVE/NVT benefit too).
-            kT = jnp.asarray(_target_temperature(0) * unit_system["temperature"], dtype=dtype)
-            if ensemble.ensemble == "nvt":
-                thermo = str(ensemble.thermostat or "nhc").strip().lower()
-                if thermo in {"langevin", "lgv"}:
-                    # Prefer Langevin for packed / hybrid umbrellas: NHC couples
-                    # degrees of freedom and one hot window can runaway.
-                    gamma = float(
-                        options.get(
-                            "langevin_gamma",
-                            options.get("gamma", 0.1),
+            # jax-md captures kT in the thermostat closure. One compiled step
+            # per distinct temperature: rebuilding on every block retraces even
+            # when the target has not changed. ``inline=True`` lets the block
+            # ``fori_loop`` absorb this step into one XLA module.
+            _step_by_temp: dict[float, Any] = {}
+
+            def _raw_integrator(kT_value):
+                if ensemble.ensemble == "nvt":
+                    thermo = str(ensemble.thermostat or "nhc").strip().lower()
+                    if thermo in {"langevin", "lgv"}:
+                        # Prefer Langevin for packed / hybrid umbrellas: NHC couples
+                        # degrees of freedom and one hot window can runaway.
+                        gamma = float(
+                            options.get(
+                                "langevin_gamma",
+                                options.get("gamma", 0.1),
+                            )
                         )
-                    )
-                    init_fn, step_fn = simulate.nvt_langevin(
-                        energy_fn,
-                        shift_fn,
-                        dt,
-                        kT,
-                        gamma=gamma,
-                        center_velocity=bool(options.get("center_velocity", False)),
-                    )
-                else:
-                    init_fn, step_fn = simulate.nvt_nose_hoover(
-                        energy_fn, shift_fn, dt, kT,
+                        return simulate.nvt_langevin(
+                            energy_fn,
+                            shift_fn,
+                            dt,
+                            kT_value,
+                            gamma=gamma,
+                            center_velocity=bool(options.get("center_velocity", False)),
+                        )
+                    return simulate.nvt_nose_hoover(
+                        energy_fn, shift_fn, dt, kT_value,
                         thermostat_kwargs=options.get("thermostat_kwargs", {}),
                     )
-            elif is_npt:
+                if is_npt:
+                    return simulate.npt_nose_hoover(
+                        energy_fn, shift_fn, dt, pressure, kT_value,
+                        barostat_kwargs=options.get("barostat_kwargs", {}),
+                        thermostat_kwargs=options.get("thermostat_kwargs", {}),
+                    )
+                return simulate.nve(energy_fn, shift_fn, dt)
+
+            def _compiled_step(temperature_K: float):
+                key = float(temperature_K)
+                cached = _step_by_temp.get(key)
+                if cached is None:
+                    kT_value = jnp.asarray(
+                        key * unit_system["temperature"], dtype=dtype
+                    )
+                    _, raw = _raw_integrator(kT_value)
+                    cached = jax.jit(raw, inline=True)
+                    _step_by_temp[key] = cached
+                return cached
+
+            kT = jnp.asarray(_target_temperature(0) * unit_system["temperature"], dtype=dtype)
+            if is_npt:
                 pressure = jnp.asarray(
                     float(ensemble.pressure_bar) * unit_system["pressure"], dtype=dtype
                 )
-                init_fn, step_fn = simulate.npt_nose_hoover(
-                    energy_fn, shift_fn, dt, pressure, kT,
-                    barostat_kwargs=options.get("barostat_kwargs", {}),
-                    thermostat_kwargs=options.get("thermostat_kwargs", {}),
-                )
-            else:
-                init_fn, step_fn = simulate.nve(energy_fn, shift_fn, dt)
+            init_fn, raw_step = _raw_integrator(kT)
+            step_fn = jax.jit(raw_step, inline=True)
+            if schedule is not None and ensemble.ensemble in {"nvt", "npt"}:
+                _step_by_temp[float(_target_temperature(0))] = step_fn
 
         # Match legacy jaxmd_runner: without jit, NPT force+stress AD is traced
         # every Python step (GPU util ~0, host CPU pegged for tens of minutes).
-        step_fn = jax.jit(step_fn)
+        # FIRE has no temperature cache; the same inline flag keeps a later
+        # block stepper from outlining the step.
+        if ensemble.ensemble == "min":
+            step_fn = jax.jit(step_fn, inline=True)
 
         # ...and batch whole blocks into one dispatch, as jaxmd_runner's
         # `_bind_sim` does. A Python loop over single jitted steps pays a
@@ -465,42 +491,11 @@ class JaxmdDriver:
                 ensemble.n_steps - completed,
                 next_record - completed,
             )
-            # jax-md captures kT in the thermostat step closure. Rebuilding the
-            # closure at block boundaries changes the target without resetting
-            # positions, momenta, or thermostat/barostat state.
+            # A new temperature closes over a new thermostat. Positions,
+            # momenta, and the chain stay on the running state. The same
+            # temperature reuses the step compiled for the previous block.
             if schedule is not None and ensemble.ensemble in {"nvt", "npt"}:
-                block_kT = jnp.asarray(
-                    _target_temperature(completed) * unit_system["temperature"], dtype=dtype
-                )
-                if is_npt:
-                    _, step_fn = simulate.npt_nose_hoover(
-                        energy_fn, shift_fn, dt, pressure, block_kT,
-                        barostat_kwargs=options.get("barostat_kwargs", {}),
-                        thermostat_kwargs=options.get("thermostat_kwargs", {}),
-                    )
-                else:
-                    thermo = str(ensemble.thermostat or "nhc").strip().lower()
-                    if thermo in {"langevin", "lgv"}:
-                        gamma = float(
-                            options.get(
-                                "langevin_gamma",
-                                options.get("gamma", 0.1),
-                            )
-                        )
-                        _, step_fn = simulate.nvt_langevin(
-                            energy_fn,
-                            shift_fn,
-                            dt,
-                            block_kT,
-                            gamma=gamma,
-                            center_velocity=bool(options.get("center_velocity", False)),
-                        )
-                    else:
-                        _, step_fn = simulate.nvt_nose_hoover(
-                            energy_fn, shift_fn, dt, block_kT,
-                            thermostat_kwargs=options.get("thermostat_kwargs", {}),
-                        )
-                step_fn = jax.jit(step_fn)
+                step_fn = _compiled_step(_target_temperature(completed))
             # One dispatch for the whole block. The ragged tail (a final block
             # shorter than block_size) would compile a second variant, so step
             # it the old way rather than paying a compile for one short block.

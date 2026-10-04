@@ -451,6 +451,41 @@ def _write_lib(directory: Path, *, mtime: float, name: str = "libcharmm.so") -> 
     return lib
 
 
+def test_repo_root_uses_cwd_when_the_package_is_installed(tmp_path, monkeypatch):
+    """A uv tool has no checkout next to site-packages; the shell cwd does."""
+    repo = tmp_path / "checkout"
+    (repo / "mmml").mkdir(parents=True)
+    (repo / "pyproject.toml").write_text("[project]\nname = 'mmml'\n", encoding="utf-8")
+    installed = tmp_path / "site-packages" / "mmml" / "charmm_paths.py"
+    installed.parent.mkdir(parents=True)
+    installed.write_text("", encoding="utf-8")
+    monkeypatch.setattr(charmm_paths, "__file__", str(installed))
+    monkeypatch.chdir(repo)
+
+    assert charmm_paths.mmml_repo_root() == repo.resolve()
+
+
+def test_source_tree_is_charmm_home_when_the_library_is_only_cached(tmp_path):
+    repo = tmp_path / "repo"
+    charmm_home = repo / "setup" / "charmm"
+    f90 = charmm_home / "source" / "api" / "api_func.F90"
+    f90.parent.mkdir(parents=True)
+    f90.write_text(
+        "integer, parameter :: max_Nml = 50000\n",
+        encoding="utf-8",
+    )
+    home = tmp_path / "home"
+    cache = home / ".cache" / "mmml-charmm-build" / "linux-x86_64-nompi"
+    _write_lib(cache, mtime=9_000.0)
+
+    resolved_home, lib = charmm_paths.resolve_charmm_paths(
+        repo_root=repo, env={"HOME": str(home)}
+    )
+
+    assert resolved_home == str(charmm_home)
+    assert lib == str(cache)
+
+
 def test_newer_build_cache_lib_wins_over_stale_setup_tree(tmp_path):
     """A fresh ~/.cache build must beat a stale setup/charmm copy.
 

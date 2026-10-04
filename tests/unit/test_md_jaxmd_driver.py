@@ -527,3 +527,39 @@ def test_write_dcd_and_integrator_npz(tmp_path: Path):
     assert "momenta" in saved.files
     assert "integrator_momentum" in saved.files
     assert str(saved["integrator_kind"]) == "nve"
+
+
+def test_temperature_schedule_builds_one_integrator_per_temperature(monkeypatch):
+    """Several blocks at one temperature share one thermostat closure."""
+    import jax_md.simulate as simulate
+
+    from mmml.md.temperature import parse_temperature_schedule
+
+    calls = {"n": 0}
+    real = simulate.nvt_langevin
+
+    def _counting(*args, **kwargs):
+        calls["n"] += 1
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(simulate, "nvt_langevin", _counting)
+    system = _system()
+    energy = HybridEnergy([_HarmonicTerm()], system, EnergyContext())
+    # Blocks start at steps 0, 2, 4 (200 K) and 6 (300 K).
+    result = JaxmdDriver(record_every=2, block_size=2).run(
+        system,
+        energy,
+        EnsembleSpec(
+            ensemble="nvt",
+            space="free",
+            thermostat="langevin",
+            temperature_K=200.0,
+            dt_fs=0.1,
+            n_steps=8,
+            temperature_schedule=parse_temperature_schedule("200:0.5,300:0.5"),
+            params={"masses": np.ones(2), "seed": 1, "langevin_gamma": 1.0},
+        ),
+    )
+    targets = np.asarray(result.metadata["target_temperatures_K"])
+    assert set(np.unique(np.round(targets))) == {200.0, 300.0}
+    assert calls["n"] == 2

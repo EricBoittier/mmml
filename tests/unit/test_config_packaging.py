@@ -136,6 +136,19 @@ def test_no_dangling_references_to_cli_run_configs():
     )
 
 
+def test_cgenff_toppar_ships_in_the_package():
+    """A uv tool install has no setup/charmm/toppar tree."""
+    globs = _package_data_globs()
+    for name in (
+        "data/charmm/top_all36_cgenff.rtf",
+        "data/charmm/par_all36_cgenff.prm",
+    ):
+        assert _is_shipped(name, globs), name
+        path = REPO / "mmml" / name
+        assert path.is_file()
+        assert path.stat().st_size > 500_000
+
+
 def test_generated_resume_bundles_are_not_tracked():
     """`mmml md-system` writes next_run.* after a failure; they are one machine's
     job state, and a committed one has include: paths that go stale at once."""

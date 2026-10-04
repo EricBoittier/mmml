@@ -7,6 +7,27 @@ from unittest.mock import MagicMock, call, patch
 import pytest
 
 
+def _stub_fail_closed_energy_func(mlpot, calc=None, *, pycharmm_mod=None):
+    """Stand in for the CHARMM callback install so registration tests stay offline.
+
+    The real installer imports pycharmm and calls ``mlpot_set_func``. These tests
+    only check registration order, so keep a calculator on the fake and do not
+    touch the shared library.
+    """
+    if calc is None:
+        calc = getattr(mlpot, "calculator", None)
+    if calc is None:
+        calc = MagicMock()
+        mlpot.calculator = calc
+    return calc
+
+
+_FAIL_CLOSED = patch(
+    "mmml.interfaces.pycharmmInterface.mlpot.callback_failstop.install_fail_closed_energy_func",
+    side_effect=_stub_fail_closed_energy_func,
+)
+
+
 def test_register_mlpot_pbc_rebuilds_after_param_swap():
     from mmml.interfaces.pycharmmInterface.mlpot import setup as mlpot_setup
 
@@ -27,12 +48,14 @@ def test_register_mlpot_pbc_rebuilds_after_param_swap():
         return "all"
 
     class _FakeMLpot:
+        calculator = MagicMock()
+
         def __init__(self, *, skip_iblo_inb_update=False, **kwargs):
             call_order.append("mlpot")
             if skip_iblo_inb_update:
                 call_order.append("skip_iblo")
 
-    with patch.object(mlpot_setup, "_import_pycharmm", return_value=fake_pycharmm), patch.object(
+    with _FAIL_CLOSED, patch.object(mlpot_setup, "_import_pycharmm", return_value=fake_pycharmm), patch.object(
         mlpot_setup,
         "_finalize_pbc_mlpot_exclusions_after_param_read",
         side_effect=_finalize,
@@ -105,12 +128,14 @@ def test_register_mlpot_pbc_applies_policy_before_finalize():
         return []
 
     class _FakeMLpot:
+        calculator = MagicMock()
+
         def __init__(self, *, skip_iblo_inb_update=False, **kwargs):
             call_order.append("mlpot")
 
     workflow_args = MagicMock()
 
-    with patch.object(mlpot_setup, "_import_pycharmm", return_value=fake_pycharmm), patch.object(
+    with _FAIL_CLOSED, patch.object(mlpot_setup, "_import_pycharmm", return_value=fake_pycharmm), patch.object(
         mlpot_setup,
         "_finalize_pbc_mlpot_exclusions_after_param_read",
         side_effect=_finalize,
@@ -188,10 +213,12 @@ def test_register_mlpot_pbc_block_skips_crystal_free_before_prm():
         call_order.append("install_exclusions")
 
     class _FakeMLpot:
+        calculator = MagicMock()
+
         def __init__(self, *, skip_iblo_inb_update=False, **kwargs):
             call_order.append("mlpot")
 
-    with patch.object(mlpot_setup, "_import_pycharmm", return_value=fake_pycharmm), patch.object(
+    with _FAIL_CLOSED, patch.object(mlpot_setup, "_import_pycharmm", return_value=fake_pycharmm), patch.object(
         mlpot_setup,
         "_suspend_pbc_for_cgenff_param_read",
         side_effect=_suspend,
@@ -254,7 +281,7 @@ def test_register_mlpot_vacuum_skips_pre_block_exclusions():
             call_order.append("skip_iblo")
         return MagicMock()
 
-    with patch.object(mlpot_setup, "_import_pycharmm", return_value=fake_pycharmm), patch.object(
+    with _FAIL_CLOSED, patch.object(mlpot_setup, "_import_pycharmm", return_value=fake_pycharmm), patch.object(
         mlpot_setup, "_install_ml_exclusions"
     ) as mock_install, patch(
         "mmml.interfaces.pycharmmInterface.mlpot.block_terms.apply_mlpot_registration_mm_off",

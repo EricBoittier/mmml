@@ -83,8 +83,20 @@ def test_the_escape_hatch_disables_the_hook(monkeypatch):
         mmml_conftest._FORCED_EXIT_STATUS.clear()
 
 
-def test_loaded_detection_matches_sys_modules(monkeypatch):
+def test_loaded_detection_requires_init_charmm(monkeypatch):
+    """Importing pycharmm is not enough: the exit-masking finalizer is in init_charmm."""
+    import types
+
     monkeypatch.setitem(sys.modules, "pycharmm.energy", object())
+    monkeypatch.setitem(sys.modules, "pycharmm.dimens", object())
+    assert not mmml_conftest._pycharmm_was_loaded()
+
+    loader = types.ModuleType("pycharmm.loader")
+    loader.is_initialized = lambda: False
+    monkeypatch.setitem(sys.modules, "pycharmm.loader", loader)
+    assert not mmml_conftest._pycharmm_was_loaded()
+
+    loader.is_initialized = lambda: True
     assert mmml_conftest._pycharmm_was_loaded()
 
 

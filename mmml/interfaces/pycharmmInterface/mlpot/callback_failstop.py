@@ -278,8 +278,27 @@ def install_fail_closed_energy_func(mlpot: Any, calc: Any | None = None, *, pych
     mlpot.calculator = calc
     mlpot.energy_func = energy_func
     mlpot._energy_func_keepalive = (calc, energy_func)
-    pycharmm_mod.lib.charmm.mlpot_set_func(energy_func)
+    pycharmm_mod.lib.charmm.mlpot_set_func(energy_func, mlmm_elec_func(mlpot))
     return energy_func
+
+
+def _zero_mlmm_elec() -> float:
+    return 0.0
+
+
+def mlmm_elec_func(mlpot: Any) -> Any:
+    """The ML-MM electrostatics callback c52a1's ``mlpot_set_func`` also takes.
+
+    c52a1 stores a second function pointer and always calls it, so passing only
+    the energy callback leaves it pointing at garbage and CHARMM segfaults in the
+    first ``ENER``. Reuse the one PyCHARMM's ``MLpot`` built; build a zero
+    callback for MLpot objects that predate it, kept alive on ``mlpot``.
+    """
+    func = getattr(mlpot, "mlmm_elec_func", None)
+    if func is None:
+        func = ctypes.CFUNCTYPE(ctypes.c_double)(_zero_mlmm_elec)
+        mlpot.mlmm_elec_func = func
+    return func
 
 
 F = TypeVar("F", bound=Callable[..., Any])
