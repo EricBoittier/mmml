@@ -278,9 +278,10 @@ def _seed_charmm_coords_from_dynamics_restart(
     for candidate in _restart_coord_read_candidates(path):
         if not candidate.is_file():
             continue
-        # positions (XOLD), not the leap-frog step displacement in !X, Y, Z:
-        # seeding the displacement collapsed the box before the force gate
-        # (sparse-dimer cap overflow on an in-place --restart-from equi.res).
+        # Leap-frog NVE restarts store positions in XOLD. ``!X, Y, Z`` is the
+        # ~0.001 Å step displacement; seeding that piles every atom on the
+        # origin and collapsed the box before the force gate (sparse-dimer
+        # cap overflow on an in-place --restart-from equi.res).
         pos = read_restart_positions(candidate)
         if pos is not None:
             used = candidate

@@ -443,6 +443,19 @@ def _load_stage_summary(output_dir: Path) -> dict[str, Any] | None:
         return None
 
 
+def _dynamics_restart_stage(path: Path | None) -> str | None:
+    """``heat`` / ``nve`` / ``equi`` / ``prod`` from a stage restart filename."""
+    if path is None:
+        return None
+    match = re.fullmatch(
+        r"(heat|nve|equi|prod)(?:\.\d+)?\.res",
+        path.name.lower(),
+    )
+    if match is None:
+        return None
+    return match.group(1)
+
+
 def _stage_leg_rank(leg: str) -> int:
     leg_l = leg.lower()
     for i, stage in enumerate(_STAGE_ORDER):
@@ -867,16 +880,12 @@ def build_run_advice(
                 "do not treat this as a full success."
             )
         else:
-            from mmml.interfaces.pycharmmInterface.mlpot.staged_restart_policy import (
-                _stage_of_dynamics_restart,
-            )
-
             continued = (
                 restart.path
                 if restart is not None and restart.is_restart
                 else None
             )
-            continued_stage = _stage_of_dynamics_restart(continued)
+            continued_stage = _dynamics_restart_stage(continued)
             if continued is None or continued_stage is None:
                 suggest_resume = False
                 restart = None

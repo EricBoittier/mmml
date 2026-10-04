@@ -268,11 +268,43 @@ def test_seed_charmm_coords_from_dynamics_restart_loads_heat(tmp_path: Path):
     np.testing.assert_array_equal(sync.call_args[0][0], pos)
 
 
+def test_seed_nve_restart_uses_xold_positions_not_step_displacement(tmp_path: Path):
+    """NVE leap-frog ``!X, Y, Z`` is the step; positions live in ``XOLD``."""
+    res = tmp_path / "nve.res"
+    res.write_text(
+        "\n".join(
+            [
+                "REST",
+                " !NATOM",
+                "          2",
+                " !XOLD, YOLD, ZOLD",
+                "  0.100000000000000D+02  0.200000000000000D+02  0.300000000000000D+02",
+                "  0.110000000000000D+02  0.210000000000000D+02  0.310000000000000D+02",
+                " !X, Y, Z",
+                "  0.100000000000000D-02  0.000000000000000D+00  0.000000000000000D+00",
+                "  0.000000000000000D+00  0.100000000000000D-02  0.000000000000000D+00",
+                "",
+            ]
+        ),
+        encoding="ascii",
+    )
+    with patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.setup.sync_charmm_positions",
+    ) as sync, patch(
+        "mmml.interfaces.pycharmmInterface.mlpot.comp_velocities.clear_comparison_coordinates",
+    ):
+        assert _seed_charmm_coords_from_dynamics_restart(res, quiet=True) is True
+    seeded = np.asarray(sync.call_args[0][0], dtype=np.float64)
+    np.testing.assert_allclose(seeded[0], [10.0, 20.0, 30.0])
+    np.testing.assert_allclose(seeded[1], [11.0, 21.0, 31.0])
+    assert float(np.max(np.abs(seeded))) > 1.0
+
+
 def test_seed_charmm_coords_from_dynamics_restart_skips_handoff_seed(tmp_path: Path):
     seed = tmp_path / "continue_seed.res"
     seed.write_text("seed\n", encoding="utf-8")
     with patch(
-        "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.read_restart_coordinates",
+        "mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation.read_restart_positions",
     ) as read_coords:
         assert _seed_charmm_coords_from_dynamics_restart(seed, quiet=True) is False
     read_coords.assert_not_called()
