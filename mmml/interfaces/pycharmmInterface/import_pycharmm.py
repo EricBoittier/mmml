@@ -242,7 +242,18 @@ def print_charmm_energy_summary() -> None:
         parts: list[str] = []
         for term in ("ENER", "USER"):
             try:
-                val = float(energy.get_property_by_name(term))
+                if term == "USER":
+                    # MLpot lands in USER on c49, in MLPO + MLEL on c52a1.
+                    from mmml.interfaces.pycharmmInterface.mlpot.mlpot_eterms import (
+                        read_mlpot_eterm_kcal,
+                    )
+
+                    user = read_mlpot_eterm_kcal(energy)
+                    if user is None:
+                        continue
+                    val = float(user)
+                else:
+                    val = float(energy.get_property_by_name(term))
             except Exception:
                 continue
             if not math.isfinite(val):

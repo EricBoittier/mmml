@@ -9,6 +9,12 @@ from typing import Any, Optional, Sequence, Union
 import numpy as np
 import pandas as pd
 
+from mmml.interfaces.pycharmmInterface.mlpot.mlpot_eterms import (
+    MLPOT_ETERM_KEYS,
+    mlpot_eterm_kcal_from_terms,
+    read_mlpot_eterm_kcal,
+)
+
 PathLike = Union[str, Path]
 
 
@@ -388,10 +394,10 @@ def _read_mlpot_user_energy_kcal(
         with charmm_silent_command():
             pycharmm.lingo.charmm_script(script)
         terms = _read_mlpot_charmm_energy_terms_kcal()
-        try:
-            user = float(energy.get_term_by_name("USER"))
-        except (ValueError, IndexError, TypeError):
-            user = float(terms.get("USER", 0.0))
+        # USER on c49 builds, MLPO + MLEL on c52a1 (see mlpot_eterms).
+        user = read_mlpot_eterm_kcal(energy)
+        if user is None:
+            user = mlpot_eterm_kcal_from_terms(terms)
         if not math.isfinite(user):
             return None
         if _mlpot_ml_energy_missing_in_charmm(user, terms, zero_tol_kcalmol=zero_tol):
@@ -416,7 +422,7 @@ def _read_mlpot_user_energy_kcal(
 
 
 _MLPOT_CHARMM_HYBRID_ETERM_KEYS: tuple[str, ...] = (
-    "USER",
+    *MLPOT_ETERM_KEYS,
     "VDW",
     "ELEC",
     "IMNB",
@@ -445,11 +451,13 @@ def _read_mlpot_charmm_energy_terms_kcal() -> dict[str, float]:
         import mmml.interfaces.pycharmmInterface.import_pycharmm  # noqa: F401
         import pycharmm.energy as energy
 
-        try:
-            user = float(energy.get_term_by_name("USER"))
-        except (ValueError, IndexError, TypeError, AttributeError):
-            user = 0.0
-        return {"USER": user}
+        out: dict[str, float] = {}
+        for key in MLPOT_ETERM_KEYS:
+            try:
+                out[key] = float(energy.get_term_by_name(key))
+            except (ValueError, IndexError, TypeError, AttributeError):
+                continue
+        return out or {"USER": 0.0}
 
 
 def _mlpot_ml_energy_missing_in_charmm(

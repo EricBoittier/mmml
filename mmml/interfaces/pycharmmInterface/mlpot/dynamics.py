@@ -572,7 +572,11 @@ def _log_bonded_term_diagnostics(*, verbose: bool) -> None:
                 f"WARN: ANGL=0 after ENER (MM-only); energy terms: {keys}",
                 flush=True,
             )
-        user = _charmm_eterm_value("USER")
+        user = None
+        for _name in ("USER", "MLPO", "MLEL"):  # MLpot: USER (c49) / MLPO+MLEL (c52a1)
+            _val = _charmm_eterm_value(_name)
+            if _val is not None:
+                user = (user or 0.0) + _val
         if user is not None and abs(user) > 1e-8:
             print(
                 f"WARN: USER={float(user):.4f} kcal/mol still active during MM-only work",
