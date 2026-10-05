@@ -699,7 +699,7 @@ def run_embedding_phase(
         total = float(energy.get_total())
         if not np.isfinite(total) or abs(total) > 1.0e6:
             terms: dict[str, float] = {}
-            for name in ("USER", "VDW", "ELEC", "BOND", "ANGL", "DIHE", "IMNB", "IMEL"):
+            for name in ("USER", "MLPO", "MLEL", "VDW", "ELEC", "BOND", "ANGL", "DIHE", "IMNB", "IMEL"):
                 try:
                     terms[name] = float(energy.get_term_by_name(name))
                 except Exception:

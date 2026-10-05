@@ -141,3 +141,53 @@ def test_vendored_pycharmm_entries_skip_initless_namespace(tmp_path, monkeypatch
     entries = ip._vendored_pycharmm_sys_path_entries()
     assert str(fake_repo) not in entries
     assert entries == [str(fake_repo / "setup" / "charmm" / "tool" / "pycharmm")]
+
+
+def _fake_lib(lib_dir, version):
+    lib_dir.mkdir(parents=True, exist_ok=True)
+    (lib_dir / "libcharmm.so").write_bytes(b"\0junk\0Developmental Version " + version + b"\0more\0")
+
+
+def _fake_vendored_repo(tmp_path):
+    repo = tmp_path / "mmml"
+    tool = repo / "setup" / "charmm" / "tool" / "pycharmm" / "pycharmm"
+    tool.mkdir(parents=True)
+    (tool / "__init__.py").write_text("", encoding="utf-8")
+    src = repo / "setup" / "charmm" / "source" / "charmm"
+    src.mkdir(parents=True)
+    (src / "charmm_main.F90").write_text(
+        "  !      Version 52 - Developmental Version (c52a1) - August 15, 2026\n", encoding="utf-8"
+    )
+    return repo
+
+
+def test_charmm_version_detection(tmp_path):
+    from mmml.interfaces.pycharmmInterface import import_pycharmm as ip
+
+    _fake_lib(tmp_path / "lib49", b"49b1")
+    assert ip._charmm_lib_major(tmp_path / "lib49") == 49
+    assert ip._charmm_lib_major(tmp_path / "missing") is None
+    assert ip._vendored_pycharmm_major(_fake_vendored_repo(tmp_path)) == 52
+
+
+def test_mismatched_library_prefers_charmm_home_pycharmm(tmp_path, monkeypatch):
+    import sys
+
+    from mmml.interfaces.pycharmmInterface import import_pycharmm as ip
+
+    repo = _fake_vendored_repo(tmp_path)
+    home = tmp_path / "c49"
+    (home / "tool" / "pycharmm" / "pycharmm").mkdir(parents=True)
+    (home / "tool" / "pycharmm" / "pycharmm" / "__init__.py").write_text("", encoding="utf-8")
+    _fake_lib(home / "lib", b"49b1")
+    monkeypatch.setattr(ip, "_REPO_ROOT", repo)
+    monkeypatch.setattr(ip, "CHARMM_HOME", str(home))
+    monkeypatch.setattr(ip, "CHARMM_LIB_DIR", str(home / "lib"))
+    monkeypatch.setattr(sys, "path", list(sys.path))
+    ip._ensure_vendored_pycharmm_on_path()
+    assert sys.path[0] == str(home / "tool" / "pycharmm")
+    assert str(repo / "setup" / "charmm" / "tool" / "pycharmm") not in sys.path
+
+    _fake_lib(home / "lib", b"52a1")
+    ip._ensure_vendored_pycharmm_on_path()
+    assert sys.path[0] == str(repo / "setup" / "charmm" / "tool" / "pycharmm")

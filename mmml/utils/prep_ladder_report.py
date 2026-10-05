@@ -37,7 +37,11 @@ def try_user_energy_kcal(mlpot_ctx: Any | None = None) -> float | None:
         )
 
         terms = _read_mlpot_charmm_energy_terms_kcal()
-        user = float(terms.get("USER", 0.0))
+        from mmml.interfaces.pycharmmInterface.mlpot.mlpot_eterms import (
+            mlpot_eterm_kcal_from_terms,
+        )
+
+        user = mlpot_eterm_kcal_from_terms(terms)
         effective = _effective_mlpot_user_kcal(user, terms)
         if not np.isfinite(effective):
             return None

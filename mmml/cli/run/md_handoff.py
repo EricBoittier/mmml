@@ -14,6 +14,11 @@ import numpy as np
 _handoff_in: ContextVar["MdHandoffState | None"] = ContextVar("md_handoff_in", default=None)
 _handoff_out: ContextVar["MdHandoffState | None"] = ContextVar("md_handoff_out", default=None)
 
+# CHARMM ``TIMFAC`` (source/ltm/consta_ltm.F90): one AKMA time unit in ps.
+# CHARMM ``WRIDYN`` restarts store plain velocities in Å per AKMA time unit
+# (``!VX, VY, VZ``); KE = 0.5 * sum(m v^2) in kcal/mol with m in amu.
+CHARMM_AKMA_TIME_PS = 4.88882129e-02
+
 _FORTRAN_FLOAT_RE = re.compile(
     r"[+-]?(?:\d+\.\d*|\.\d+)[DEde][+-]?\d+",
     re.IGNORECASE,
@@ -477,6 +482,7 @@ def prepare_pycharmm_handoff_continuation(
     )
     if handoff.velocities is not None and not getattr(args, "continue_velocities", True):
         payload = replace(payload, velocities=None)
+    payload = handoff_in_charmm_velocity_units(payload)
 
     # Whether we wrote the restart synthetically (bypasses CHARMM ``read restart``
     # since CHARMM's Fortran reader may not accept the synthetic header).
@@ -859,6 +865,19 @@ def _kinetic_temperature_k_from_ase_velocities(
     return 2.0 * ke_kcal / (float(dof) * _KCALMOL_PER_K)
 
 
+def _kinetic_temperature_k_from_akma_velocities(
+    velocities_akma: np.ndarray,
+    masses_amu: np.ndarray,
+) -> float | None:
+  """Kinetic T (3N dof) for CHARMM restart velocities (Å / AKMA time)."""
+  v = np.asarray(velocities_akma, dtype=np.float64).reshape(-1, 3)
+  m = np.asarray(masses_amu, dtype=np.float64).reshape(-1)
+  if v.shape[0] != m.shape[0] or v.shape[0] == 0 or not np.all(np.isfinite(v)):
+    return None
+  k_b_kcal = 0.0019872041  # CHARMM KBOLTZ
+  return float(np.sum(m[:, None] * v * v)) / (3.0 * v.shape[0] * k_b_kcal)
+
+
 def resolve_handoff_velocity_units(
     handoff: MdHandoffState,
     masses_amu: np.ndarray,
@@ -903,11 +922,13 @@ def resolve_handoff_velocity_units(
     from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
         MAX_REASONABLE_VELOCITY_TEMP_K,
         MIN_VELOCITY_ASSIGNMENT_TEMP_K,
-        estimate_kinetic_temperature_k,
     )
 
-    t_akma = estimate_kinetic_temperature_k(vel, masses_amu)
-    t_ase = _kinetic_temperature_k_from_ase_velocities(vel, masses_amu)
+    t_akma = _kinetic_temperature_k_from_akma_velocities(vel, masses_amu)
+    try:
+        t_ase = kinetic_temperature_k_from_jaxmd_metal_velocities(vel, masses_amu)
+    except ValueError:
+        t_ase = None
     akma_ok = (
         t_akma is not None
         and MIN_VELOCITY_ASSIGNMENT_TEMP_K <= float(t_akma) <= MAX_REASONABLE_VELOCITY_TEMP_K
@@ -928,11 +949,18 @@ def handoff_velocities_as_ang_ps(
     *,
     velocity_units: str = "auto",
 ) -> np.ndarray | None:
-    """Return handoff velocities in Å/ps, the convention used by JAX-MD here.
+    """Return handoff velocities in plain Å/ps.
 
-    CHARMM restart components are mass-weighted AKMA values.  Despite the
-    historical helper name used below, dividing by ``sqrt(mass) * 1000``
-    produces Å/ps, not ASE-native velocity units and not Å/fs.
+    CHARMM restart components (``!VX, VY, VZ``) are plain velocities in
+    Å per AKMA time unit (``TIMFAC`` = 0.0488882 ps), *not* mass-weighted:
+    Å/ps = v_akma / TIMFAC.  JAX-MD / ASE handoffs store metal-unit velocities
+    (Å per ASE time unit): Å/ps = v_metal * 1000 * ase.units.fs.
+
+    The previous conversion divided CHARMM velocities by ``sqrt(m) * 1000``
+    (a 300 K restart read back as ~5e-7 K) and returned metal velocities
+    unchanged as "Å/ps" (98x too slow), so every cross-engine continuation
+    fell below the cold-handoff floor and silently re-drew Maxwell-Boltzmann
+    velocities.
     """
     if handoff.velocities is None:
         return None
@@ -943,12 +971,30 @@ def handoff_velocities_as_ang_ps(
     units = resolve_handoff_velocity_units(handoff, masses, velocity_units=velocity_units)
     vel = np.asarray(handoff.velocities, dtype=np.float64).reshape(-1, 3)
     if units == "ase":
-        return vel
-    from mmml.interfaces.pycharmmInterface.mlpot.charmm_ase_velocities import (
-        charmm_akma_to_ang_fs_velocities,
-    )
+        from ase import units as ase_units
 
-    return charmm_akma_to_ang_fs_velocities(vel, masses)
+        return vel * (1000.0 * float(ase_units.fs))
+    return vel / CHARMM_AKMA_TIME_PS
+
+
+def handoff_velocities_as_jaxmd_metal(
+    handoff: MdHandoffState,
+    *,
+    velocity_units: str = "auto",
+) -> np.ndarray | None:
+    """Handoff velocities in ASE / JAX-MD metal units (what ``Atoms.set_velocities`` takes)."""
+    v = handoff_velocities_as_ang_ps(handoff, velocity_units=velocity_units)
+    return None if v is None else ang_ps_velocities_to_jaxmd_metal(v)
+
+
+def handoff_velocities_as_charmm_akma(
+    handoff: MdHandoffState,
+    *,
+    velocity_units: str = "auto",
+) -> np.ndarray | None:
+    """Handoff velocities as CHARMM restart ``!VX, VY, VZ`` values (Å / AKMA time)."""
+    v = handoff_velocities_as_ang_ps(handoff, velocity_units=velocity_units)
+    return None if v is None else v * CHARMM_AKMA_TIME_PS
 
 
 def handoff_velocities_as_ase_ang_fs(
@@ -1064,7 +1110,7 @@ def atoms_from_handoff(
     if handoff.cell is not None:
         atoms.set_cell(np.asarray(handoff.cell, dtype=np.float64))
     atoms.set_pbc(bool(handoff.pbc))
-    vel = handoff_velocities_as_ase_ang_fs(handoff, velocity_units=velocity_units)
+    vel = handoff_velocities_as_jaxmd_metal(handoff, velocity_units=velocity_units)
     if vel is not None:
         atoms.set_velocities(vel)
     if handoff.step is not None:
@@ -1299,7 +1345,7 @@ def apply_handoff_to_atoms(
         atoms.set_pbc(False)
     if handoff.velocities is not None:
         atoms.set_velocities(
-            handoff_velocities_as_ase_ang_fs(handoff, velocity_units=velocity_units)
+            handoff_velocities_as_jaxmd_metal(handoff, velocity_units=velocity_units)
         )
 
 
@@ -1574,8 +1620,8 @@ def _cell_from_scalar(side_a: float | None) -> np.ndarray | None:
 
 def load_handoff_from_res(path: Path, *, atomic_numbers: np.ndarray | None = None) -> MdHandoffState:
   from mmml.interfaces.pycharmmInterface.mlpot.dynamics_validation import (
-    read_restart_coordinates,
     read_restart_last_step,
+    read_restart_positions,
     read_restart_velocities,
   )
   from mmml.interfaces.pycharmmInterface.mlpot.pbc_env import (
@@ -1583,7 +1629,10 @@ def load_handoff_from_res(path: Path, *, atomic_numbers: np.ndarray | None = Non
   )
 
   p = Path(path).expanduser().resolve()
-  pos = read_restart_coordinates(p)
+  # A leap-frog dynamics restart keeps positions in ``!XOLD`` and the per-step
+  # displacement in ``!X, Y, Z``; reading ``!X`` collapsed every atom to ~1e-3 Å
+  # ("Cluster not 3D").  ``read_restart_positions`` picks the right block.
+  pos = read_restart_positions(p)
   if pos is None:
     raise ValueError(f"Could not read coordinates from restart: {p}")
   vel = read_restart_velocities(p)
@@ -2241,6 +2290,21 @@ def _patch_handoff_into_restart_template(
     text = template.read_text(errors="ignore")
     coord_lines = _format_coord_lines(handoff.positions)
     coord_block = " !X, Y, Z\n" + "\n".join(coord_lines) + "\n"
+    if " !XOLD, YOLD, ZOLD" in text:
+        # Leap-frog dynamics template: CHARMM WRIDYN keeps the positions in
+        # !XOLD and the step displacement in !X.  Writing positions into !X made
+        # every reader (and READYN) see position-sized "displacements" next to
+        # the template's stale !XOLD geometry.  The handoff has no leap-frog
+        # step, so the displacement block is zeroed.
+        text = re.sub(
+            r" !XOLD, YOLD, ZOLD.*?(?=\n !|\Z)",
+            (" !XOLD, YOLD, ZOLD\n" + "\n".join(coord_lines)).replace("\\", "\\\\"),
+            text,
+            count=1,
+            flags=re.DOTALL,
+        )
+        coord_lines = _format_coord_lines(np.zeros_like(np.asarray(handoff.positions, dtype=float)))
+        coord_block = " !X, Y, Z\n" + "\n".join(coord_lines) + "\n"
     if " !X, Y, Z" in text:
         text = re.sub(
             r" !X, Y, Z.*?(?=\n !|\Z)",
@@ -2353,6 +2417,24 @@ def _find_usable_fallback_template(failed_template: Path, expected_natom: int) -
     return None
 
 
+def handoff_in_charmm_velocity_units(handoff: MdHandoffState) -> MdHandoffState:
+  """Copy of ``handoff`` whose velocities are CHARMM ``!VX`` values (Å / AKMA time).
+
+  JAX-MD / ASE handoffs carry metal-unit velocities; writing those verbatim
+  into a CHARMM restart (or the COMP set) gives the wrong kinetic energy.
+  """
+  if handoff.velocities is None:
+    return handoff
+  from dataclasses import replace
+
+  if not np.any(handoff.atomic_numbers):
+    return handoff
+  v = handoff_velocities_as_charmm_akma(handoff)
+  meta = dict(handoff.metadata or {})
+  meta["velocity_units"] = "akma"
+  return replace(handoff, velocities=v, metadata=meta)
+
+
 def save_handoff_to_res(
   handoff: MdHandoffState,
   path: Path,
@@ -2366,6 +2448,7 @@ def save_handoff_to_res(
 
   path = Path(path).expanduser().resolve()
   path.parent.mkdir(parents=True, exist_ok=True)
+  handoff = handoff_in_charmm_velocity_units(handoff)
 
   if template_res is not None:
       template = Path(template_res).expanduser().resolve()

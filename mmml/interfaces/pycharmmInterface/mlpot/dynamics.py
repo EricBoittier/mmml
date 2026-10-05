@@ -99,6 +99,11 @@ def _apply_dynamics_io_setters(
     iunrea = kw.get("iunrea")
     if isinstance(iunrea, str):
         if kw.get("restart"):
+            from mmml.interfaces.pycharmmInterface.mlpot.charmm_restart_compat import (
+                restart_with_seed_count,
+            )
+
+            iunrea = str(restart_with_seed_count(iunrea))
             if not charm_dyn.set_iunrea(iunrea):
                 raise RuntimeError(f"dynamics iunrea open failed: {iunrea}")
             if os.environ.get("MMML_TRACE_DYNAMICS_COMMAND") == "1":
@@ -116,7 +121,26 @@ def _apply_dynamics_io_setters(
         if isinstance(val, str):
             if not setter(val):
                 raise RuntimeError(f"dynamics {key} open failed: {val}")
-            kw.pop(key, None)
+            # CHARMM c52a1 DCNTRL defaults IUNCRD/IUNWRI to -1 unless the unit is
+            # on the DYNA line (c49 KEY_LIBRARY kept the unit the setter opened),
+            # so script-path runs lost the DCD and restart. Pass the opened unit.
+            unit = _charmm_reawri_unit(key)
+            if unit is not None and unit > 0:
+                kw[key] = unit
+            else:
+                kw.pop(key, None)
+
+
+def _charmm_reawri_unit(key: str) -> int | None:
+    """Fortran unit held in ``reawri::<key>`` (``iuncrd``/``iunwri``/``iunrea``), or None."""
+    try:
+        import ctypes
+
+        import pycharmm.lib as charmm_lib
+
+        return int(ctypes.c_int.in_dll(charmm_lib.charmm, f"__reawri_MOD_{key}").value)
+    except (ImportError, OSError, ValueError, AttributeError):
+        return None
 
 
 def _emit_overlap_log(
@@ -160,8 +184,12 @@ class CharmmTrajectoryFiles:
         if self.restart_read is not None:
             import pycharmm
 
+            from mmml.interfaces.pycharmmInterface.mlpot.charmm_restart_compat import (
+                restart_with_seed_count,
+            )
+
             fortran_path, alias = _dynamics_io_fortran_path(
-                self.restart_read,
+                restart_with_seed_count(self.restart_read),
                 for_write=False,
             )
             if alias is not None:
@@ -572,7 +600,11 @@ def _log_bonded_term_diagnostics(*, verbose: bool) -> None:
                 f"WARN: ANGL=0 after ENER (MM-only); energy terms: {keys}",
                 flush=True,
             )
-        user = _charmm_eterm_value("USER")
+        user = None
+        for _name in ("USER", "MLPO", "MLEL"):  # MLpot: USER (c49) / MLPO+MLEL (c52a1)
+            _val = _charmm_eterm_value(_name)
+            if _val is not None:
+                user = (user or 0.0) + _val
         if user is not None and abs(user) > 1e-8:
             print(
                 f"WARN: USER={float(user):.4f} kcal/mol still active during MM-only work",
@@ -4948,6 +4980,7 @@ def run_dynamics(dynamics_kwargs: dict[str, Any]) -> Any:
         init_velocities=init_velocities,
     )
     _apply_dynamics_io_setters(kw, restart_read_unit=restart_read_unit)
+    _put_api_rngseeds_on_script_line(kw, use_c_api=use_c_api)
     _prepare_dynamics_list_frequencies(kw, nstep=nstep)
     heat_append = _dynamics_script_append_for_heat_ramp(kw)
     from mmml.interfaces.pycharmmInterface.mlpot.strain_virial import (
@@ -6992,6 +7025,57 @@ def _refresh_charmm_dynamics_rng(*, base: int | None, salt: int) -> None:
         rng = np.random.default_rng(int(base) + int(salt) * 1_000_003)
     seeds = [int(x) for x in rng.integers(1, 2**31, size=nrand)]
     dyn.set_rngseeds(seeds)
+    global _pending_api_rngseeds
+    _pending_api_rngseeds = list(seeds)
+
+
+# Seeds last set with ``dynamics_set_rngseeds``, not yet handed to a DYNA call.
+_pending_api_rngseeds: list[int] | None = None
+
+
+def _take_pending_api_rngseeds() -> list[int] | None:
+    global _pending_api_rngseeds
+    seeds, _pending_api_rngseeds = _pending_api_rngseeds, None
+    return seeds
+
+
+def _put_api_rngseeds_on_script_line(kw: dict[str, Any], *, use_c_api: bool) -> None:
+    """Make the DYNA script path honour seeds set through ``dynamics_set_rngseeds``.
+
+    c49 KEY_LIBRARY DCNTRL always used ``dyn_init_rng`` (honours the API seeds).
+    c52a1 does that only for the C-API (``options``) path; the DYNA script path
+    calls ``dyn_parse_iseed``, which ignores ``qapi_seed_set`` and, without ISEED
+    on the line, seeds a START from the system clock -- so the same ``--seed``
+    gave different velocities every run. ISEED on the line is what c52a1 reads;
+    on c49 it sets the same seeds the API call already set.
+
+    Not on a restart (``REST``): READYN restores the generator state saved in
+    the restart file, and ISEED on the line would re-initialise it (c52a1
+    ``dyn_parse_iseed`` -> ``rngmodseeds``), so the Langevin piston / thermostat
+    noise after the restart would differ from the uninterrupted run. c49
+    likewise continued from the file seeds on a restart.
+    """
+    seeds = _take_pending_api_rngseeds()
+    if use_c_api or not seeds or "iseed" in kw or kw.get("restart"):
+        return
+    if not _charmm_dyna_script_parses_iseed():
+        return
+    kw["iseed"] = " ".join(str(int(s)) for s in seeds)
+
+
+def _charmm_dyna_script_parses_iseed() -> bool:
+    """True for CHARMM libraries (c52a1+) whose DYNA script path reads ISEED.
+
+    c49 KEY_LIBRARY builds ignore ISEED there (it would only print an
+    "extraneous characters" warning) and already honour the API seeds.
+    ``api_keywords_count`` first appears in the c52a1 library API.
+    """
+    try:
+        import pycharmm.lib as charmm_lib
+
+        return hasattr(charmm_lib.charmm, "api_keywords_count")
+    except (ImportError, OSError):
+        return False
 
 
 def _rng_salt_for_dynamics(
@@ -7001,7 +7085,12 @@ def _rng_salt_for_dynamics(
     steps_done: int,
     retry_count: int = 0,
 ) -> int:
-    ctx_hash = abs(hash(str(overlap_context))) & 0x7FFF_FFFF
+    # zlib.crc32, not hash(): str hashes are salted per process (PYTHONHASHSEED),
+    # which made CHARMM's velocity/thermostat seeds differ between two runs with
+    # the same --seed, so no two pycharmm runs were reproducible.
+    import zlib
+
+    ctx_hash = zlib.crc32(str(overlap_context).encode("utf-8")) & 0x7FFF_FFFF
     return int(
         ctx_hash
         + chunk_index * 1_000_003

@@ -733,28 +733,34 @@ _build_jobs() {
   fi
 }
 
+# Print the most recently modified existing file among the arguments
+# (with -x first: executables only). Prints nothing if none exists.
+_newest_file() {
+  local want_x=0 f best=""
+  if [[ "${1:-}" == "-x" ]]; then want_x=1; shift; fi
+  for f in "$@"; do
+    [[ -f "$f" ]] || continue
+    [[ "$want_x" == 0 || -x "$f" ]] || continue
+    if [[ -z "$best" || "$f" -nt "$best" ]]; then best="$f"; fi
+  done
+  printf '%s' "$best"
+}
+
 if [[ "$NATIVE_EXEC" == 1 ]]; then
   EXE_OUT="$CHARMM_HOME/charmm"
   echo "Building charmm executable in $BUILD_DIR ..."
   cmake --build "$BUILD_DIR" -j "$(_build_jobs)"
-  cmake --install "$BUILD_DIR" || true
+  cmake --install "$BUILD_DIR" || echo "rebuild_charmm_mlpot: warning: cmake --install failed; using the newest built charmm" >&2
 
-  # Find the newly-installed binary.
-  # cmake --install copies to $CHARMM_HOME/bin/charmm; check that FIRST so a stale
-  # $CHARMM_HOME/charmm from a previous build doesn't shadow it.
-  BUILT=""
-  for candidate in \
+  # Take the newest executable, so neither a failed install nor a stale
+  # $CHARMM_HOME/charmm from a previous build shadows the fresh binary.
+  BUILT="$(_newest_file -x \
     "$CHARMM_HOME/bin/charmm" \
     "$CHARMM_HOME/exec/charmm" \
     "$BUILD_DIR/charmm" \
     "$BUILD_DIR/bin/charmm" \
     "$BUILD_DIR/exec/charmm" \
-    "$CHARMM_HOME/charmm"; do
-    if [[ -f "$candidate" && -x "$candidate" ]]; then
-      BUILT="$candidate"
-      break
-    fi
-  done
+    "$CHARMM_HOME/charmm")"
   if [[ -z "$BUILT" ]]; then
     BUILT="$(find "$BUILD_DIR" -type f -name charmm -perm -111 -print -quit 2>/dev/null || true)"
   fi
@@ -795,20 +801,16 @@ echo "Building $LIB_BASENAME in $BUILD_DIR ..."
 # managed system interpreter, so `pip install` aborts the library build.
 # The shared library target is `chmm` (OUTPUT_NAME=charmm → libcharmm.so).
 cmake --build "$BUILD_DIR" -j "$(_build_jobs)" --target chmm
-cmake --install "$BUILD_DIR" || true
+cmake --install "$BUILD_DIR" || echo "rebuild_charmm_mlpot: warning: cmake --install failed; using the newest built $LIB_BASENAME" >&2
 
-BUILT=""
-# Prefer cmake --install output under lib/ over a stale top-level copy.
-for candidate in \
+# Take the newest candidate. When `cmake --install` fails (common on incremental
+# builds) the installed copies under $CHARMM_HOME are stale, and a fixed
+# preference order would copy the old library over the freshly built one.
+BUILT="$(_newest_file \
   "$CHARMM_HOME/lib/$LIB_BASENAME" \
   "$BUILD_DIR/lib/$LIB_BASENAME" \
   "$BUILD_DIR/$LIB_BASENAME" \
-  "$CHARMM_HOME/$LIB_BASENAME"; do
-  if [[ -f "$candidate" ]]; then
-    BUILT="$candidate"
-    break
-  fi
-done
+  "$CHARMM_HOME/$LIB_BASENAME")"
 if [[ -z "$BUILT" ]]; then
   BUILT="$(find "$BUILD_DIR" -name "$LIB_BASENAME" -print -quit || true)"
 fi

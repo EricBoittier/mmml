@@ -4235,7 +4235,12 @@ def assert_dynamics_ready(
         grms = charmm_grms()
     if require_mlpot_user:
         try:
-            user_kcal = float(energy.get_term_by_name("USER"))
+            from mmml.interfaces.pycharmmInterface.mlpot.mlpot_eterms import (
+                read_mlpot_eterm_kcal,
+            )
+
+            # USER on c49 builds, MLPO + MLEL on c52a1.
+            user_kcal = read_mlpot_eterm_kcal(energy)
         except Exception:
             user_kcal = None
         user_missing = (
