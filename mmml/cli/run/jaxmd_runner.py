@@ -977,6 +977,20 @@ def apply_npt_perturbation(box, perturbation, dtype=None):
     return p @ box_m
 
 
+NPT_VIRIAL_ENV = "MMML_NPT_VIRIAL"
+
+
+def default_npt_virial(dtype) -> str:
+    """Runner's barostat virial mode: ``$MMML_NPT_VIRIAL``, else ``fd64`` for a
+    float32 state under x64 (float64-promoted difference), else ``fd``."""
+    env = os.environ.get(NPT_VIRIAL_ENV, "").strip().lower()
+    if env:
+        return env
+    if jnp.dtype(dtype) != jnp.float64 and bool(jax.config.read("jax_enable_x64")):
+        return "fd64"
+    return "fd"
+
+
 def _npt_fd_step(dtype) -> float:
     return 1.0e-3 if jnp.dtype(dtype) == jnp.float32 else 1.0e-5
 
@@ -988,6 +1002,7 @@ def make_npt_energy_fn(
     dtype=None,
     fd_step: float | None = None,
     apply_perturbation: Callable = None,
+    virial: str | None = None,
 ):
     """Build the fractional-coordinate NpT energy handed to ``npt_nose_hoover``.
 
@@ -1010,12 +1025,37 @@ def make_npt_energy_fn(
         * perturbation: dE/dp for the LINEAR strain box -> box * p. At p = 1
           that is ``-sum_i F_i . r_i`` plus the explicit box dependence of the
           calculator (minimum-image shifts, cutoffs/switching, Ewald/PME). The
-          atomic-virial form alone misses the MIC image term under PBC, so the
-          derivative is taken as a central difference of the real energy along
-          the strain, which includes every channel by construction.
+          atomic-virial form alone misses the MIC image term under PBC.
+          ``virial="analytic"`` takes the chain rule through the
+          strained positions and box: ``(-F) . dreal/dp + (dE/dbox) . dbox/dp``,
+          with ``dE/dbox`` at fixed real positions by forward-mode AD (the
+          calculator's lattice shifts are ``-stop_gradient(n) @ box``) -- the
+          ``-F^T R + G^T h`` that CHARMM CPT gets from ``strain_virial.py``.
+          It needs ``energy_of_real`` to be correctly differentiable in the box at
+          fixed real positions (true for the hybrid calculator, verified against
+          the strain difference and CHARMM's VIRI in float64; NOT true for an
+          energy that maps real -> fractional through jax-md's custom-JVP
+          ``space.transform``). ``virial="fd64"`` is the central difference with
+          box and positions handed to the calculator in float64 (h = 1e-5), so the
+          calculator's arithmetic is promoted to float64 under a float32 ML dtype
+          -- the CHARMM callback gets that promotion from its float64 box.
+          ``virial="fd"`` (default here, or
+          ``MMML_NPT_VIRIAL=fd`` for the runner) is the central
+          difference of the real energy along the strain. In float32 that
+          difference is dominated by the hybrid energy's rounding noise
+          (0.05-0.3 eV between E(1+h) and E(1-h) on ACO:266 / DCM:308 32 A
+          boxes, i.e. 0.1-2 katm per call at h = 1e-3); the analytic form
+          differences no energies. A non-finite analytic value falls back to
+          the difference.
     """
     dtype = _JAXMD_DTYPE if dtype is None else dtype
     h_default = _npt_fd_step(dtype) if fd_step is None else float(fd_step)
+    if virial is None:
+        virial = os.environ.get(NPT_VIRIAL_ENV, "").strip().lower() or "fd"
+    if virial not in ("analytic", "fd", "fd64"):
+        raise ValueError(f"virial must be 'analytic', 'fd' or 'fd64', got {virial!r}")
+    if virial == "fd64" and not bool(jax.config.read("jax_enable_x64")):
+        raise ValueError("virial='fd64' needs JAX_ENABLE_X64=1")
     if apply_perturbation is None:
         apply_perturbation = apply_npt_perturbation
 
@@ -1054,20 +1094,68 @@ def make_npt_energy_fn(
             grad_pert = None
         else:
             p = jnp.asarray(perturbation, dtype=dtype)
-            flat = p.reshape(-1)
-            h = jnp.asarray(h_default, dtype=dtype)
-            comps = []
-            for k in range(flat.size):
-                e_k = jnp.zeros_like(flat).at[k].set(h)
-                e_plus = raw_fn(frac_pos, box=box, neighbor=neighbor,
-                                perturbation=(flat + e_k).reshape(p.shape))
-                e_minus = raw_fn(frac_pos, box=box, neighbor=neighbor,
-                                 perturbation=(flat - e_k).reshape(p.shape))
-                comps.append((e_plus - e_minus) / (2.0 * h))
-            grad_pert = jnp.asarray(
-                jnp.stack(comps).reshape(p.shape) * g,
-                dtype=jnp.asarray(perturbation).dtype,
-            )
+
+            def fd_dE_dp():
+                flat = p.reshape(-1)
+                h = jnp.asarray(h_default, dtype=dtype)
+                comps = []
+                for k in range(flat.size):
+                    e_k = jnp.zeros_like(flat).at[k].set(h)
+                    e_plus = raw_fn(frac_pos, box=box, neighbor=neighbor,
+                                    perturbation=(flat + e_k).reshape(p.shape))
+                    e_minus = raw_fn(frac_pos, box=box, neighbor=neighbor,
+                                     perturbation=(flat - e_k).reshape(p.shape))
+                    comps.append((e_plus - e_minus) / (2.0 * h))
+                return jnp.asarray(jnp.stack(comps).reshape(p.shape), dtype=dtype)
+
+            def fd64_dE_dp():
+                # Same central difference, but box/positions enter the calculator in
+                # float64, so its arithmetic is promoted to float64 (what CHARMM's
+                # callback does: it hands the calculator a float64 box). Forces and
+                # the integrator state stay in ``dtype``.
+                f64 = jnp.float64
+                flat = jnp.asarray(p, dtype=f64).reshape(-1)
+                h = jnp.asarray(_npt_fd_step(f64), dtype=f64)
+                frac64 = jnp.asarray(frac_pos, dtype=f64)
+
+                def e64(pp):
+                    b_eff = apply_perturbation(jnp.asarray(box, dtype=f64), pp.reshape(p.shape), f64)
+                    return energy_of_real(space.transform(b_eff, frac64), b_eff, neighbor)
+
+                comps = []
+                for k in range(flat.size):
+                    e_k = jnp.zeros_like(flat).at[k].set(h)
+                    comps.append((e64(flat + e_k) - e64(flat - e_k)) / (2.0 * h))
+                return jnp.asarray(jnp.stack(comps).reshape(p.shape), dtype=dtype)
+
+            if virial == "fd":
+                dE_dp = fd_dE_dp()
+            elif virial == "fd64":
+                dE_dp = fd64_dE_dp()
+            else:
+                frac_d = jnp.asarray(frac_pos, dtype=dtype)
+                # Positions channel: dE/dreal = -F pulled back through real(p).
+                _, vjp_real = jax.vjp(
+                    lambda pp: space.transform(apply_perturbation(box, pp, dtype), frac_d), p
+                )
+                (d_pos,) = vjp_real(-F)
+                # Box channel: d/dp E(real fixed, box(p)), forward mode (one JVP per
+                # component of p; reverse mode through the hybrid calculator needed
+                # ~9 GB extra on ACO:379 36 A).
+                def e_of_p(pp):
+                    return energy_of_real(real_pos, apply_perturbation(box, pp, dtype), neighbor)
+
+                flat_p = p.reshape(-1)
+                comps_box = []
+                for k in range(flat_p.size):
+                    t_k = jnp.zeros_like(flat_p).at[k].set(1.0).reshape(p.shape)
+                    comps_box.append(jax.jvp(e_of_p, (p,), (t_k,))[1])
+                d_box = jnp.stack(comps_box).reshape(p.shape)
+                analytic = jnp.asarray(d_pos + d_box, dtype=dtype)
+                dE_dp = jax.lax.cond(
+                    jnp.all(jnp.isfinite(analytic)), lambda: analytic, fd_dE_dp
+                )
+            grad_pert = jnp.asarray(dE_dp * g, dtype=jnp.asarray(perturbation).dtype)
         return (grad_frac, None, None, grad_pert, None, None)
 
     npt_energy_fn.defvjp(fwd, bwd)
@@ -1819,8 +1907,14 @@ def set_up_nhc_sim_routine(
         # ``perturbation`` is jax-md's LINEAR strain (box -> box * p); see
         # make_npt_energy_fn. It used to be applied as p**(1/3), which made
         # the barostat see P_kin + P_vir/3.
+        # Barostat virial (MMML_NPT_VIRIAL=fd|fd64|analytic overrides). With a
+        # float32 state the calculator ran entirely in float32 and the float32
+        # energy difference was off by 0.2-2 katm per call; fd64 hands it a
+        # float64 box/positions (promoted arithmetic, as in CHARMM's callback):
+        # within ~3 atm of CHARMM's VIRI for ~1.4x the cost of the old difference.
         _npt_energy_fn_raw, npt_energy_fn = make_npt_energy_fn(
             _npt_energy_of_real, _npt_force_of_real, dtype=_JAXMD_DTYPE,
+            virial=default_npt_virial(_JAXMD_DTYPE),
         )
         npt_energy_fn = jit(npt_energy_fn)
         init_fn, apply_fn = simulate.npt_nose_hoover(
