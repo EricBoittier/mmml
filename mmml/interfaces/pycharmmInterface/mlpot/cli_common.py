@@ -2420,35 +2420,193 @@ _VMD_PROTEIN_RESNAMES = (
 )
 _VMD_ION_RESNAMES = "LIT SOD MG POT CAL RUB CES BAR ZN2 CD2 CLA"
 _VMD_WATER_SELECTION = "water or resname TIP3 TIP4 HOH WAT"
+# Heavy-atom contacts in MbCO put His93, His64, and Val68 inside 4 Å of HEME.
+_VMD_HEME_POCKET_A = 4
+# First-shell solvent around the protein, drawn as lines.
+_VMD_SOLVENT_NEAR_A = 4
+# C–C / C–H stay under 1.75 Å. Fe–N is ~2.0 Å and uses the longer cutoff.
+_VMD_COVALENT_BOND_A = 1.75
+_VMD_DYNAMIC_BOND_A = 2.4
+_VMD_BOND_RADIUS = 0.22
+_VMD_VDW_SCALE = 0.3
+# Jmol element colors (jmol.sourceforge.net), RGB in 0–1. Hydrogen is Jmol
+# white darkened just enough to read on the white background.
+_VMD_JMOL_COLORS: tuple[tuple[str, str, tuple[float, float, float]], ...] = (
+    ("H", "silver", (0.780, 0.780, 0.800)),
+    ("C", "gray", (0.565, 0.565, 0.565)),
+    ("N", "blue", (0.188, 0.314, 0.973)),
+    ("O", "red", (1.000, 0.051, 0.051)),
+    ("S", "yellow", (1.000, 1.000, 0.188)),
+    ("P", "orange", (1.000, 0.502, 0.000)),
+    ("Fe", "orange2", (0.878, 0.400, 0.200)),
+    ("Na", "purple", (0.671, 0.361, 0.949)),
+    ("K", "violet", (0.561, 0.251, 0.831)),
+    ("Cl", "green", (0.122, 0.941, 0.122)),
+    ("Mg", "lime", (0.541, 1.000, 0.000)),
+    ("Ca", "green2", (0.239, 1.000, 0.000)),
+    ("Zn", "iceblue", (0.490, 0.502, 0.690)),
+)
+# CHARMM masses. Windows do not overlap (Na/Mg, K/Ca).
+_VMD_MASS_ELEMENTS: tuple[tuple[float, float, str], ...] = (
+    (0.50, 2.50, "H"),
+    (11.50, 12.60, "C"),
+    (13.50, 14.60, "N"),
+    (15.50, 16.60, "O"),
+    (22.40, 23.50, "Na"),
+    (23.80, 24.90, "Mg"),
+    (30.50, 32.70, "S"),
+    (34.80, 36.00, "Cl"),
+    (38.60, 39.50, "K"),
+    (39.70, 40.60, "Ca"),
+    (54.50, 56.50, "Fe"),
+    (64.50, 66.50, "Zn"),
+)
 
 
-def _vmd_rep_lines(representation: str, color: str, selection: str) -> list[str]:
+def _vmd_rep_lines(
+    representation: str,
+    color: str,
+    selection: str,
+    material: str,
+) -> list[str]:
     return [
         f"mol representation {representation}",
         f"mol color {color}",
         f"mol selection {{{selection}}}",
-        "mol material Opaque",
+        f"mol material {material}",
         "mol addrep top",
     ]
 
 
-def _vmd_style_lines() -> list[str]:
-    """One representation per chemical selection.
+def _vmd_scene_lines() -> list[str]:
+    """White page, orthographic view, Jmol element colors, DSSP cartoon colors.
 
-    Protein is a cartoon, heme is CPK, ions are VDW spheres, water is points,
-    and everything else (ligands such as CO) is licorice.
+    A CHARMM PSF leaves VMD's element field as X, so element coloring is one
+    purple until masses are copied onto the element field. The background
+    stays the untouched ``white`` entry.
+    """
+    lines = [
+        "color Display Background white",
+        "axes location Off",
+        "display projection Orthographic",
+        "display depthcue off",
+        "display ambientocclusion on",
+        "display shadows on",
+        "display aoambient 0.80",
+        "display aodirect 0.35",
+    ]
+    for symbol, color_name, (red, green, blue) in _VMD_JMOL_COLORS:
+        lines.append(
+            f"color change rgb {color_name} {red:.3f} {green:.3f} {blue:.3f}"
+        )
+        lines.append(f"color Element {symbol} {color_name}")
+    lines.extend(
+        [
+            "color change rgb red2 0.80 0.16 0.26",
+            "color change rgb mauve 0.92 0.48 0.52",
+            "color change rgb red3 0.58 0.10 0.20",
+            "color change rgb yellow2 0.90 0.68 0.16",
+            "color change rgb yellow3 0.78 0.55 0.22",
+            "color change rgb blue2 0.48 0.58 0.72",
+            "color change rgb cyan2 0.62 0.64 0.68",
+            "color Structure {Alpha Helix} red2",
+            "color Structure 3_10_Helix mauve",
+            "color Structure Pi_Helix red3",
+            "color Structure Extended_Beta yellow2",
+            "color Structure Bridge_Beta yellow3",
+            "color Structure Turn blue2",
+            "color Structure Coil cyan2",
+        ]
+    )
+    return lines
+
+
+def _vmd_element_assignment_lines() -> list[str]:
+    """Copy CHARMM mass to VMD's element field so Jmol colors apply."""
+    lines = [
+        "proc mmml_set_element {lo hi symbol} {",
+        '  set sel [atomselect top "mass >= $lo and mass < $hi"]',
+        "  $sel set element $symbol",
+        "  $sel delete",
+        "}",
+    ]
+    for lo, hi, symbol in _VMD_MASS_ELEMENTS:
+        lines.append(f"mmml_set_element {lo:.2f} {hi:.2f} {symbol}")
+    return lines
+
+
+def _vmd_dynamic_bond_lines(selection: str, cutoff_A: float) -> list[str]:
+    radius = f"{_VMD_BOND_RADIUS:.6f}"
+    return _vmd_rep_lines(
+        f"DynamicBonds {cutoff_A:.6f} {radius} 12.000000",
+        "Element",
+        selection,
+        "AOShiny",
+    )
+
+
+def _vmd_style_lines() -> list[str]:
+    """DSSP cartoon, Jmol ball-and-stick, and line solvent near the protein.
+
+    Spheres include hydrogens. Covalent bonds, including X–H, use the shorter
+    cutoff. Fe–N uses the longer cutoff on heavy atoms only, so hydrogen bonds
+    are not drawn as sticks. Solvent farther than the shell cutoff is omitted.
     """
     protein = f"protein or resname {_VMD_PROTEIN_RESNAMES}"
     heme = "resname HEME"
     ions = f"resname {_VMD_ION_RESNAMES}"
-    water = _VMD_WATER_SELECTION
-    other = f"not ({protein}) and not ({heme}) and not ({ions}) and not ({water})"
+    chemistry = (
+        f"((({protein}) and same residue as within {_VMD_HEME_POCKET_A} of {heme}"
+        f" and not backbone)"
+        f" or {heme}"
+        f" or (not ({protein}) and not ({heme}) and not ({ions})"
+        f" and not ({_VMD_WATER_SELECTION})))"
+    )
+    iron = f"{heme} and name FE"
+    coordination = (
+        f"({chemistry}) and noh and ({iron} or within {_VMD_DYNAMIC_BOND_A} of ({iron}))"
+    )
+    solvent = (
+        f"({_VMD_WATER_SELECTION})"
+        f" and within {_VMD_SOLVENT_NEAR_A} of ({protein})"
+    )
     lines = ["mol delrep 0 top"]
-    lines.extend(_vmd_rep_lines("NewCartoon", "Structure", protein))
-    lines.extend(_vmd_rep_lines("CPK", "Element", heme))
-    lines.extend(_vmd_rep_lines("Licorice 0.15 12 12", "Name", other))
-    lines.extend(_vmd_rep_lines("VDW 0.8 12", "Name", ions))
-    lines.extend(_vmd_rep_lines("Points 2", "Name", water))
+    lines.extend(_vmd_scene_lines())
+    lines.extend(_vmd_element_assignment_lines())
+    lines.extend(
+        _vmd_rep_lines(
+            "NewCartoon 0.270000 16.000000 2.800000 0",
+            "Structure",
+            protein,
+            "AOChalky",
+        )
+    )
+    lines.extend(
+        _vmd_rep_lines(
+            f"VDW {_VMD_VDW_SCALE:.6f} 16.000000",
+            "Element",
+            chemistry,
+            "AOShiny",
+        )
+    )
+    lines.extend(_vmd_dynamic_bond_lines(chemistry, _VMD_COVALENT_BOND_A))
+    lines.extend(_vmd_dynamic_bond_lines(coordination, _VMD_DYNAMIC_BOND_A))
+    lines.extend(
+        _vmd_rep_lines(
+            f"VDW {_VMD_VDW_SCALE:.6f} 16.000000",
+            "Element",
+            ions,
+            "AOShiny",
+        )
+    )
+    lines.extend(
+        _vmd_rep_lines(
+            "Lines 1.000000",
+            "Element",
+            solvent,
+            "AOChalky",
+        )
+    )
     return lines
 
 
@@ -2474,6 +2632,7 @@ def write_vmd_load_script(
     topology_psf = Path(topology_psf)
     lines = [
         "# cd into this directory first, then: vmd -e view.vmd.tcl",
+        "# Shared mmml style: DSSP cartoon, Jmol spheres, dynamic bonds, line solvent.",
         "# Basenames only (sshfs / compute nodes).",
         f"# Atoms: {n_atoms} — must match trajectory frame count.",
         f"mol new {{{topology_psf.name}}}",
@@ -2485,6 +2644,7 @@ def write_vmd_load_script(
         )
     if trajectories:
         lines.append("animate goto 0")
+    lines.append("mol ssrecalc top")
     lines.extend(_vmd_style_lines())
     lines.append("display update")
     tcl_path = Path(out_dir) / VMD_TCL

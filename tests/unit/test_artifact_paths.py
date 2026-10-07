@@ -91,7 +91,21 @@ def test_vmd_script_uses_basename_paths(tmp_path: Path) -> None:
     assert "mol new {model.psf}" in text
     assert "mol addfile {heat.0000.dcd}" in text
     assert "mol representation NewCartoon" in text
-    assert "mol representation CPK" in text
+    assert "mol representation VDW 0.300000" in text
+    assert "Shared mmml style" in text
+    assert "mol representation DynamicBonds 1.750000 0.220000" in text
+    assert "mol representation DynamicBonds 2.400000 0.220000" in text
+    assert "color Element H silver" in text
+    assert "name FE" in text
+    assert "mol representation Lines" in text
+    assert "and same residue as within 4 of resname HEME" in text
+    assert "within 4 of (protein or resname ALA" in text
+    assert "color Display Background white" in text
+    assert "color Structure {Alpha Helix} red2" in text
+    assert "color change rgb gray 0.565 0.565 0.565" in text
+    assert "color Element Fe orange2" in text
+    assert "mmml_set_element 54.50 56.50 Fe" in text
+    assert "mol ssrecalc top" in text
     assert "resname HEME" in text
     assert "resname ALA ARG ASN ASP CYS GLN GLU GLY HIS HSD HSE HSP" in text
     assert str(tmp_path) not in text
